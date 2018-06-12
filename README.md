@@ -1,4 +1,5 @@
-# Visonic Custom Component for integration with Home Assistant
+# Visonic Alarm Panel for Home Assistant
+Custom Component for integration with Home Assistant
 
 # Introduction
 Visonic produces the Powermax alarm panel series (PowerMax, PowerMax+, PowerMaxExpress, PowerMaxPro and PowerMaxComplete) and the Powermaster alarm series (PowerMaster 10 and PowerMaster 30). This binding allows you to control the alarm panel (arm/disarm) and allows you to use the Visonic sensors (movement, door contact, ...) within Home Assistant.
