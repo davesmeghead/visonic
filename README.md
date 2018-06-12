@@ -24,8 +24,7 @@ It currently connects to the panel in powerlink and it creates an HA:
 - "alarm_control_panel" badge so you can arm and disarm the alarm (only in powerlink mode)
 
 ### The configuration.yaml file
-This is an example from my configuration.yaml files
-
+This is an example from my configuration.yaml file:
 ```
 visonic:
   device:
@@ -39,22 +38,21 @@ visonic:
   sync_time: 'yes'
   allow_remote_arm: 'yes'
   allow_remote_disarm: 'yes'
-  allow_sensor_bypass: 'yes'
 ```
 
 You can also have a USB (for RS232) connection:
-
 ```
   device:
     type: usb
     path: '/dev/ttyUSB1'
-    baud: 9600
 ```
 
 
 It tries to connect in Powerlink mode by default (unless you set force_standard to 'yes').
 
 Set debug to 'yes' or 'no' to output more or less in the log file
+Language can be either EN for english or NL for Dutch
+
 
 ### Running it in Home Assistant
 Put the files in your custom_components directory that is within your HA config directory.
