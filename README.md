@@ -50,8 +50,13 @@ You can also have a USB (for RS232) connection:
 
 It tries to connect in Powerlink mode by default (unless you set force_standard to 'yes').
 
-Set debug to 'yes' or 'no' to output more or less in the log file
+Set debug to 'yes' or 'no' to output more or less in the log file.
+
 Language can be either EN for english or NL for Dutch
+
+sync_time attempts to synchronise the time between the device you run HA on and the alarm panel
+
+motion_off is in seconds, it is the time to keep the zone trigger True after it is triggered
 
 
 ### Running it in Home Assistant
