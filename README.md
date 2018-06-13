@@ -61,6 +61,12 @@ motion_off is in seconds, it is the time to keep the zone trigger True after it 
 
 ### Running it in Home Assistant
 Put the files in your custom_components directory that is within your HA config directory.
+You will need some python libraries installing
+```
+sudo pip3 install pyserial
+sudo pip3 install datetime
+sudo pip3 install pyserial_asyncio
+```
 
 ## Notes
 - You need to specify either a USB connection or a TCP connection. 
