@@ -162,9 +162,9 @@ def setup(hass, base_config):
         sleep(10.0)
         _LOGGER.error(" ........... attempting reconnection")
         panel_reset_counter = panel_reset_counter + 1
-        connect_to_alarm()
-        discovery.load_platform(hass, "switch", DOMAIN)   
-        discovery.load_platform(hass, "alarm_control_panel", DOMAIN)   
+        if connect_to_alarm():
+            discovery.load_platform(hass, "switch", DOMAIN)   
+            discovery.load_platform(hass, "alarm_control_panel", DOMAIN)   
 
         
     def connect_to_alarm():
@@ -199,6 +199,8 @@ def setup(hass, base_config):
         hass.data[VISONIC_PLATFORM]["command_queue"] = command_queue
         
         _LOGGER.info("Visonic Connection Device Type is {0}".format(device_type))
+
+        comm = None
         
         # Connect in the way defined by the user in the config file, ethernet or usb
         if device_type["type"] == "ethernet":
@@ -207,18 +209,27 @@ def setup(hass, base_config):
            
             comm = visonicApi.create_tcp_visonic_connection(address = host, port = port, event_callback = add_visonic_device, command_queue = command_queue,
                                                            disconnect_callback = disconnect_callback, loop = hass.loop, excludes = exclude_ids)
-            if comm is not None:
-                notused = hass.loop.create_task(comm)
-           
         elif device_type["type"] == "usb":
             path = device_type[CONF_PATH]
             baud = device_type[CONF_DEVICE_BAUD]
            
             comm = visonicApi.create_usb_visonic_connection(port = path, baud = baud, event_callback = add_visonic_device, command_queue = command_queue,
                                                          disconnect_callback = disconnect_callback, excludes = exclude_ids, loop = hass.loop)
-            if comm is not None:
-                notused = hass.loop.create_task(comm)
 
+        if comm is not None:
+            notused = hass.loop.create_task(comm)
+            return True
+
+        message = 'Failed to connect into Visonic Alarm. Check Settings.'
+        _LOGGER.error(message)
+        hass.components.persistent_notification.create(
+            message,
+            title=NOTIFICATION_TITLE,
+            notification_id=NOTIFICATION_ID)
+        return False
+                
+                
+                
     # start of main function
     try:
         hass.data[VISONIC_PLATFORM] = {}
@@ -226,12 +237,14 @@ def setup(hass, base_config):
         # Establish a callback to stop the component when the stop event occurs
         hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, stop_subscription)
 
-        connect_to_alarm()
-
-        # these 2 calls will create a partition "alarm control panel" and a switch that represents the panel information
-        #   eventually there will be an "alarm control panel" for each partition but we only support 1 partition at the moment
-        discovery.load_platform(hass, "switch", DOMAIN)   
-        discovery.load_platform(hass, "alarm_control_panel", DOMAIN)   
+        success = connect_to_alarm()
+        
+        if success:
+            # these 2 calls will create a partition "alarm control panel" and a switch that represents the panel information
+            #   eventually there will be an "alarm control panel" for each partition but we only support 1 partition at the moment
+            discovery.load_platform(hass, "switch", DOMAIN)   
+            discovery.load_platform(hass, "alarm_control_panel", DOMAIN)   
+            return True
         
     except (ConnectTimeout, HTTPError) as ex:
         _LOGGER.error("Unable to connect to Visonic Alarm Panel: %s", str(ex))
@@ -241,8 +254,5 @@ def setup(hass, base_config):
             ''.format(ex),
             title=NOTIFICATION_TITLE,
             notification_id=NOTIFICATION_ID)
-        return False
-        
-    #_LOGGER.info("Done Setup")
     
-    return True
+    return False

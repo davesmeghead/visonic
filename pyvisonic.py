@@ -50,6 +50,8 @@ RESEND_MESSAGE_TIMEOUT = timedelta(seconds=10)
 # We must get specific messages from the panel, if we do not in this time period then trigger a restore/status request
 WATCHDOG_TIMEOUT = 60
 
+WATCHDOG_MAXIMUM_EVENTS = 10
+
 # When we send a download command wait for DownloadMode to become false.
 #   If this timesout then I'm not sure what to do, we really need to just start again
 #     In Vera, if we timeout we just assume we're in Standard mode by default
@@ -84,7 +86,7 @@ PanelStatus = {
 
 # A5 message decode
    "PanelStatus"        : "Unknown",
-   "PanelStatusCode"    : 0,
+   "PanelStatusCode"    : -1,
    "PanelReady"         : False,
    "PanelAlertInMemory" : False,
    "PanelTrouble"       : False,
@@ -667,6 +669,7 @@ class ProtocolBase(asyncio.Protocol):
         self.reset_watchdog_timeout()
         self.reset_keep_alive_messages()
         status_counter = 1000  # trigger first time!
+        watchdog_events = 0
         
         while not self.suspendAllOperations:
         
@@ -680,9 +683,15 @@ class ProtocolBase(asyncio.Protocol):
             #log.debug("[WatchDogTimeout] is {0}".format(self.watchdog_counter))
             if self.watchdog_counter >= WATCHDOG_TIMEOUT:   #  the clock runs at 1 second
                 log.info("[WatchDogTimeout] ****************************** WatchDog Timer Expired ********************************")
-                self.triggerRestoreStatus()
                 status_counter = 0  # delay status requests
+                self.reset_watchdog_timeout()
                 self.reset_keep_alive_messages()
+                watchdog_events = watchdog_events + 1
+                if watchdog_events >= WATCHDOG_MAXIMUM_EVENTS:
+                    watchdog_events = 0
+                    self.gotoStandardMode()
+                else:
+                    self.triggerRestoreStatus()
 
             # Keep alive functionality
             self.keep_alive_counter = self.keep_alive_counter + 1
@@ -774,6 +783,7 @@ class ProtocolBase(asyncio.Protocol):
     def gotoStandardMode(self):
         PanelStatus["Mode"] = "Standard"
         self.pmPowerlinkMode = False
+        self.coordinating_powerlink = False
         self.resetPanelSequence()
         self.SendCommand("MSG_STATUS")
 
@@ -782,60 +792,61 @@ class ProtocolBase(asyncio.Protocol):
     # I attempted to coordinate it through variables and state and it was tricky
     #   having an async function to coordinate it works better
     async def coordinate_powerlink_startup(self, cyclecount):
-        self.coordinate_powerlink_startup_count = self.coordinate_powerlink_startup_count + 1
-        if self.coordinate_powerlink_startup_count > POWERLINK_RETRIES:
-            # just go in to standard mode
-            self.coordinating_powerlink = False
-            self.pmExpectedResponse = []
-            self.reset_keep_alive_messages()
-            self.reset_watchdog_timeout()
-            self.gotoStandardMode()
-        elif self.coordinate_powerlink_startup_count <= POWERLINK_RETRIES:
-            # TRY POWERLINK MODE
-            # by setting this, we do not process incoming data, 
-            #     all we do is collect it in self.receive_log
-            self.coordinating_powerlink = True
-
-            # walk through sending INIT and waiting for just an ack, we are trying to establish quiet time with the panel
-            count = 0
-            while not self.suspendAllOperations and count < cyclecount:
-                log.info("[Startup] Trying to initialise panel")
+        if not self.ForceStandardMode:
+            self.coordinate_powerlink_startup_count = self.coordinate_powerlink_startup_count + 1
+            if self.coordinate_powerlink_startup_count > POWERLINK_RETRIES:
+                # just go in to standard mode
+                self.coordinating_powerlink = False
+                self.pmExpectedResponse = []
                 self.reset_keep_alive_messages()
                 self.reset_watchdog_timeout()
+                self.gotoStandardMode()
+            else: # self.coordinate_powerlink_startup_count <= POWERLINK_RETRIES:
+                # TRY POWERLINK MODE
+                # by setting this, we do not process incoming data, 
+                #     all we do is collect it in self.receive_log
+                self.coordinating_powerlink = True
 
-                # send EXIT and INIT and then wait to make certain they have been sent
+                # walk through sending INIT and waiting for just an ack, we are trying to establish quiet time with the panel
+                count = 0
+                while not self.suspendAllOperations and count < cyclecount:
+                    log.info("[Startup] Trying to initialise panel")
+                    self.reset_keep_alive_messages()
+                    self.reset_watchdog_timeout()
+
+                    # send EXIT and INIT and then wait to make certain they have been sent
+                    self.receive_log = []
+                    self.resetPanelSequence()
+                    self.pmExpectedResponse = []
+                    # Wait to gather any panel responses
+                    await asyncio.sleep(4.0)
+
+                    # check that all received messages are either 02 (ack) or A5 (status).
+                    #   status is sent when in standard or powerlink modes but not in download mode
+                    #   status is sent by the panel approx every 15 seconds.
+                    #   sometimes between init and download we can get an A5 message
+                    rec_ok = True
+                    for p in self.receive_log:
+                        if p[1] != 0x02 and p[1] != 0xA5:
+                            log.info("[Startup]    Got at least 1 unexpected message, so starting count again from zero")
+                            log.info("[Startup]        " + self.toString(p))
+                            rec_ok = False
+                    if rec_ok:
+                        log.debug("[Startup]       Success: Got only the required messages")
+                        count = count + 1
+                    else:
+                        count = 0
+                    # can the damn panel be quiet!!!  If not then try again
+                    log.info("[Startup]   count is " + str(count))
+
+                log.debug("[Startup] Sending Download Start")
+                # allow the processing of incoming data packets as normal
+                self.coordinating_powerlink = False
                 self.receive_log = []
-                self.resetPanelSequence()
                 self.pmExpectedResponse = []
-                # Wait to gather any panel responses
-                await asyncio.sleep(4.0)
-
-                # check that all received messages are either 02 (ack) or A5 (status).
-                #   status is sent when in standard or powerlink modes but not in download mode
-                #   status is sent by the panel approx every 15 seconds.
-                #   sometimes between init and download we can get an A5 message
-                rec_ok = True
-                for p in self.receive_log:
-                    if p[1] != 0x02 and p[1] != 0xA5:
-                        log.info("[Startup]    Got at least 1 unexpected message, so starting count again from zero")
-                        log.info("[Startup]        " + self.toString(p))
-                        rec_ok = False
-                if rec_ok:
-                    log.debug("[Startup]       Success: Got only the required messages")
-                    count = count + 1
-                else:
-                    count = 0
-                # can the damn panel be quiet!!!  If not then try again
-                log.info("[Startup]   count is " + str(count))
-
-            log.debug("[Startup] Sending Download Start")
-            # allow the processing of incoming data packets as normal
-            self.coordinating_powerlink = False
-            self.receive_log = []
-            self.pmExpectedResponse = []
-            self.reset_keep_alive_messages()
-            self.reset_watchdog_timeout()
-            self.Start_Download()
+                self.reset_keep_alive_messages()
+                self.reset_watchdog_timeout()
+                self.Start_Download()
 
     # Process any received bytes (in data as a bytearray)            
     def data_received(self, data):
@@ -926,7 +937,7 @@ class ProtocolBase(asyncio.Protocol):
                         #log.debug("[data receiver] Sending an ack as needed by last panel status message " + hex(msgType).upper())
                         self.pmSendAck()
                     # Handle the message
-                    #log.debug("[data receiver] Received message " + hex(msgType).upper())
+                    log.debug("[data receiver] Received message " + hex(msgType).upper() + "   data " + self.toString(self.ReceiveData))
                     self.handle_packet(self.ReceiveData)
                     # Check response
                     if len(self.pmExpectedResponse) > 0 and msgType != 2:   # 2 is a simple acknowledge from the panel so ignore those
@@ -1798,7 +1809,7 @@ class PacketHandling(ProtocolBase):
             self.receive_log.append(packet)
             return
 
-        #log.debug("[handle_packet] Parsing complete valid packet: %s", self.toString(packet))
+        log.debug("[handle_packet] Parsing complete valid packet: %s", self.toString(packet))
 
         if len(packet) < 4:  # there must at least be a header, command, checksum and footer
             log.warning("[handle_packet] Received invalid packet structure, not processing it " + self.toString(packet))
@@ -2425,7 +2436,7 @@ class PacketHandling(ProtocolBase):
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
     def pmGetPin(self, pin):
         """ Get pin and convert to bytearray """
-        if pin == "" or pin is None or len(pin) != 4:
+        if pin is None or pin == "" or len(pin) != 4:
             if self.OverrideCode is not None and len(self.OverrideCode) > 0:
                 pin = self.OverrideCode
             elif self.pmPowerlinkMode:
@@ -2516,7 +2527,7 @@ class EventHandling(PacketHandling):
             armCode = pmArmMode_t[state]
             armCodeA.append(armCode)
 
-        log.info("RequestArmMode " + (state or "N/A"))
+        log.info("RequestArmMode " + (state or "N/A") + "  using pin " + self.toString(bpin))
         if armCode is not None:
             if isValidPL:
                 if (state == "Disarmed" and self.pmRemoteDisArm) or (state != "Disarmed" and self.pmRemoteArm):

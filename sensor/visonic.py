@@ -37,7 +37,7 @@ class VisonicSensor(BinarySensorDevice):
         self._name = "Visonic " + self.visonic_device.dname
         # Append device id to prevent name clashes in HA.
         self.visonic_id = slugify(self._name) # VISONIC_ID_FORMAT.format( slugify(self._name), visonic_device.getDeviceID())
-        self.update()
+        #self.update()
         self.entity_id = ENTITY_ID_FORMAT.format(self.visonic_id)
         self.current_value = "T" if self.visonic_device.triggered else "O" if self.visonic_device.status else "-"
         self.visonic_device.install_change_handler(self.onChange)

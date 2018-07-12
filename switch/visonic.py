@@ -12,8 +12,8 @@ import custom_components.pyvisonic as visonicApi
 
 from datetime import timedelta
 from homeassistant.helpers.entity import Entity
+from homeassistant.const import ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED, ATTR_CODE, STATE_STANDBY, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING
 from homeassistant.util import convert
-from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED)
 from homeassistant.components.switch import SwitchDevice
 
 DEPENDENCIES = ['visonic']
@@ -28,8 +28,9 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     
     # Listener to handle fired events
     def handle_event_switch_status(event):
-        _LOGGER.debug('alarm state panel received update event')
-        va.doUpdate()
+        _LOGGER.info('alarm state panel received update event')
+        if va is not None:
+            va.doUpdate()
 
     hass.bus.listen('alarm_panel_state_update', handle_event_switch_status)
     
@@ -51,7 +52,7 @@ class VisonicAlarm(SwitchDevice):
         self.current_value = self._name
 
     def doUpdate(self):    
-        self.schedule_update_ha_state(True)
+        self.schedule_update_ha_state(False)
         
     @property
     def name(self):
@@ -61,7 +62,7 @@ class VisonicAlarm(SwitchDevice):
     @property
     def should_poll(self):
         """Get polling requirement from visonic device."""
-        return True # self.visonic_device.should_poll
+        return False # self.visonic_device.should_poll
 
     @property
     def unique_id(self) -> str:
@@ -69,15 +70,45 @@ class VisonicAlarm(SwitchDevice):
         return self._address
         
     @property
-    def state(self):
-        """Return the name of the sensor."""
-        return self.current_value
+    def state(self):    
+        """Return the state of the device."""
+        #isArmed = visonicApi.PanelStatus["PanelArmed"]
+        
+        armcode = visonicApi.PanelStatus["PanelStatusCode"]
+        
+        # -1  Not yet defined
+        # 0   Disarmed
+        # 1   Exit Delay Arm Home
+        # 2   Exit Delay Arm Away
+        # 4   Armed Home
+        # 5   Armed Away
+        
+        #_LOGGER.warning("alarm armcode is " + str(armcode))
+        
+        if armcode == 0:
+            return STATE_ALARM_DISARMED
+        elif armcode == 1:
+            return STATE_ALARM_PENDING
+        elif armcode == 2:
+            return STATE_ALARM_ARMING
+        elif armcode == 4:
+            return STATE_ALARM_ARMED_HOME
+        elif armcode == 5:
+            return STATE_ALARM_ARMED_AWAY
+        
+        return STATE_STANDBY
 
     #def entity_picture(self):
     #    return "/config/myimages/20160807_183340.jpg"
         
     @property
-    def state_attributes(self):  #device_
+    def state_attributes(self):  #
+        """Return the state attributes of the device."""
+        # maybe should filter rather than sending them all
+        return visonicApi.PanelStatus
+        
+    @property
+    def device_state_attributes(self):  #
         """Return the state attributes of the device."""
         # maybe should filter rather than sending them all
         return visonicApi.PanelStatus
