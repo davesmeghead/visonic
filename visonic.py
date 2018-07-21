@@ -24,7 +24,7 @@ from homeassistant.helpers.entity import Entity
 from requests import ConnectTimeout, HTTPError
 from time import sleep
 
-#REQUIREMENTS = ['pyvisonic==0.0.1']
+REQUIREMENTS = ['pyserial', 'pyserial_asyncio', 'datetime']
 
 DOMAIN = 'visonic'
 VISONIC_CONTROLLER = 'visonic_controller'
