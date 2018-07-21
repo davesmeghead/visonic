@@ -26,10 +26,12 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is the second Alpha release 0.0.2
+This is Alpha release 0.0.3
 
 Please be gentle with me, this is my first HA adventure
 
+0.0.2: Made some bug fixes
+0.0.3: Removed some test code that would prevent arming. Commented out phone number decoding as creating exceptions
 
 ## Instructions and what works so far
 It currently connects to the panel in Powerlink and it creates an HA:
