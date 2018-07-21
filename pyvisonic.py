@@ -37,7 +37,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.1"
+PLUGIN_VERSION = "0.0.2"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -470,10 +470,10 @@ if not HOMEASSISTANT:
     log.addHandler(fhandler)
     log.addHandler(shandler)
 
-level = logging.getLevelName('INFO')
-if PanelSettings["PluginDebug"]:
-    level = logging.getLevelName('DEBUG')  # INFO, DEBUG
-log.setLevel(level)
+    level = logging.getLevelName('INFO')
+    if PanelSettings["PluginDebug"]:
+        level = logging.getLevelName('DEBUG')  # INFO, DEBUG
+    log.setLevel(level)
 
 class LogEvent:
     def __init__(self):
@@ -1127,7 +1127,7 @@ class ProtocolBase(asyncio.Protocol):
         elif len(self.SendList) > 0:    # This will send commands from the list, oldest first
             if interval is not None and len(self.pmExpectedResponse) == 0: # we are ready to send
                 # check if the last command was sent at least 500 ms ago
-                td = timedelta(milliseconds=1000)
+                td = timedelta(milliseconds=800)
                 ok_to_send = (interval > td) # pmMsgTiming_t[pmTiming].wait)
                 #log.debug("[SendCommand]        ok_to_send {0}    {1}  {2}".format(ok_to_send, interval, td))
                 if ok_to_send:
@@ -1167,8 +1167,10 @@ class ProtocolBase(asyncio.Protocol):
         # if we're still doing download then do something
         if self.DownloadMode:
             log.warning("********************** Download Timer has Expired, Download has taken too long *********************")
-            log.warning("********************** Not sure what to do for a download timeout so do nothing ********************")
+            #log.warning("********************** Not sure what to do for a download timeout so do nothing ********************")
             # what to do here??????????????
+            DownloadMode = False
+            self.gotoStandardMode()
 
     # This puts the panel in to download mode. It is the start of determining powerlink access
     def Start_Download(self):
@@ -2360,7 +2362,8 @@ class PacketHandling(ProtocolBase):
             if eventType == 0x60: # system restart
                 log.warning("handle_msgtypeA7:         Panel has been reset")
                 self.Start_Download()
-                self.event_callback( 4 )   # push changes through to the host, the panel itself has been reset
+                if self.event_callback is not None:
+                    self.event_callback( 4 )   # push changes through to the host, the panel itself has been reset
 
         if self.event_callback is not None:
             if self.pmSirenActive is not None:
@@ -2609,14 +2612,14 @@ def setConfig(key, val):
         PanelSettings[key] = val
     else:
         log.warning("ERROR: ************************ Cannot find key {0} in panel settings".format(key))
-    if key == "PluginDebug":
-        log.debug("Setting Logger Debug to {0}".format(val))
-        if val == True:
-            level = logging.getLevelName('DEBUG')  # INFO, DEBUG
-            log.setLevel(level)
-        else:
-            level = logging.getLevelName('INFO')  # INFO, DEBUG
-            log.setLevel(level)
+#    if key == "PluginDebug":
+#        log.debug("Setting Logger Debug to {0}".format(val))
+#        if val == True:
+#            level = logging.getLevelName('DEBUG')  # INFO, DEBUG
+#            log.setLevel(level)
+#        else:
+#            level = logging.getLevelName('INFO')  # INFO, DEBUG
+#            log.setLevel(level)
 
 # Create a connection using asyncio using an ip and port
 def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, command_queue = None, event_callback=None, disconnect_callback=None, loop=None, excludes=None):
