@@ -150,17 +150,17 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     def alarm_arm_home(self, code = None):
         """Send arm home command."""
         if self.queue is not None:
-            _LOGGER.info("alarm arm home")
-            self.queue.put_nowait(["Stay", "1111"])
+            _LOGGER.info("alarm arm home=" + code)
+            self.queue.put_nowait(["Stay", self.decode_code(code)])
 
     def alarm_arm_away(self, code = None):
         """Send arm away command."""
         if self.queue is not None:
-            _LOGGER.info("alarm arm away")
-            self.queue.put_nowait(["Armed", "1111"])
+            _LOGGER.info("alarm arm away=" + code)
+            self.queue.put_nowait(["Armed", self.decode_code(code)])
 
     def alarm_arm_night(self, code = None):
         """Send arm night command."""
         if self.queue is not None:
-            _LOGGER.info("alarm night")
-            self.queue.put_nowait(["Night", "1111"])
+            _LOGGER.info("alarm night=" + code)
+            self.queue.put_nowait(["Night", self.decode_code(code)])

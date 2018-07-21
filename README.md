@@ -4,9 +4,23 @@ Custom Component for integration with Home Assistant
 # Introduction
 Visonic produce the Powermax alarm panel series (PowerMax, PowerMax+, PowerMaxExpress, PowerMaxPro and PowerMaxComplete) and the Powermaster alarm series (PowerMaster 10 and PowerMaster 30). This binding allows you to control the alarm panel (arm/disarm) and allows you to use the Visonic sensors (movement, door contact, ...) within Home Assistant.
 
-The PowerMax provides support for a serial interface that can be connected to the machine running Home Assistant. The serial interface is not installed by default but can be ordered from any PowerMax vendor (called the Visonic RS-232 Adaptor Kit).
 
-I have a device that connects to the RS232 interface inside the panel (without using the RS-232 Adapter Kit) and creates an Ethernet TCP connection with a web server to set it up. The interface hardware that I have connects to TTL RS-232.
+# What hardware will you need?
+You have a choice, you either connect using RS232/USB or using Ethernet (Wired or Wireless)
+
+
+If you choose USB then the PowerMax provides direct support for an RS232 serial interface that can be connected to the machine running Home Assistant. The serial interface is not installed by default but can be ordered from any PowerMax vendor (called the Visonic RS-232 Adaptor Kit). The RS232 internal panel interface uses TTL signal levels, this adaptor kit makes it "proper" TTL signal levels.  You may not need the Adaptor Kit if you use a USB interface with TTL RS232 logic levels.
+
+
+If you choose Ethernet then I can help a bit more as that is what I have. I have a device that connects to the RS232 TTL interface inside the panel (without using the RS-232 Adapter Kit) and creates an Ethernet TCP connection with a web server to set it up. I bought [this](https://www.aliexpress.com/item/USR-TCP232-E-Serial-Server-RS232-RS485-To-Ethernet-TTL-Level-DHCP-Web-Module/32687581169.html)
+
+There is a wifi version available like [this](https://www.amazon.co.uk/USR-WIFI232-D2-Module-Ethernet-802-11/dp/B00R2J3O1Y) that's a bit more expensive but essentially it's the same. Although you will need to also buy an aerial for it remember!
+
+You do not need to buy anything else apart from 4 wires. You connect it in to your Visonic alarm panel like [this](https://www.domoticaforum.eu/viewtopic.php?f=68&t=7152)
+
+I connected the 3.75v pin on the panel to the Vcc (3.3v) on this device, gnd to gnd and Tx to Rx, Rx to Tx. 4 wires and that's it.
+
+This allows you to connect your alarm panel to your ethernet home network. There is a webserver running on this and you need to set it up for TCP in STA (station) mode as transparent. The RS232 side is 9600 baud, disable control flow i.e CTS/RTS, no parity and 1 stop bit. In the HA configuration file you set the ip address and port for this device.
 
 Visonic does not provide a specification of the RS232 protocol and, thus, the binding uses the available protocol specification given at the ​domoticaforum. The binding implementation of this protocol is largely inspired by the Vera and OpenHab plugins.
 

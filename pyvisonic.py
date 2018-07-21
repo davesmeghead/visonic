@@ -37,7 +37,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.2"
+PLUGIN_VERSION = "0.0.3"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -1495,20 +1495,20 @@ class PacketHandling(ProtocolBase):
                 setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_PHONENRS"])
                 log.debug("[Process Settings] Phone Numbers")
                 phoneStr = ""
-                for i in range(0, 4):
-                    if i not in self.pmPhoneNr_t:
-                        self.pmPhoneNr_t[i] = bytearray()
-                    for j in range(0, 8):
-                        #log.debug("[Process Settings] pos " + str((8 * i) + j))
-                        nr = setting[(8 * i) + j]
-                        if nr is not None and nr != 0xFF:
-                            #if j == 0:
-                            #    self.pmPhoneNr_t[i] = bytearray()
-                            #if self.pmPhoneNr_t[i] != None:
-                            self.pmPhoneNr_t[i] = self.pmPhoneNr_t[i].append(nr)
-                    if len(self.pmPhoneNr_t[i]) > 0:
-                        phoneStr = phonestr + self.toString(self.pmPhoneNr_t[i]) + ", "
-                        log.debug("[Process Settings]      Phone nr " + str(i) + " = " + self.toString(self.pmPhoneNr_t[i]))
+                #for i in range(0, 4):
+                #    if i not in self.pmPhoneNr_t:
+                #        self.pmPhoneNr_t[i] = bytearray()
+                #    for j in range(0, 8):
+                #        #log.debug("[Process Settings] pos " + str((8 * i) + j))
+                #        nr = setting[(8 * i) + j]
+                #        if nr is not None and nr != 0xFF:
+                #            if j == 0:
+                #                self.pmPhoneNr_t[i] = bytearray()
+                #            #if self.pmPhoneNr_t[i] != None:
+                #            self.pmPhoneNr_t[i] = self.pmPhoneNr_t[i].append(nr)
+                #    if len(self.pmPhoneNr_t[i]) > 0:
+                #        phoneStr = phonestr + self.toString(self.pmPhoneNr_t[i]) + ", "
+                #        log.debug("[Process Settings]      Phone nr " + str(i) + " = " + self.toString(self.pmPhoneNr_t[i]))
                 
                 # INTERFACE : Add these phone numbers to the status panel
                 PanelStatus["PhoneNumbers"] = "{0}".format("" if len(phoneStr) == 0 else phoneStr[:-2])
