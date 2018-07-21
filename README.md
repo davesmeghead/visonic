@@ -6,25 +6,28 @@ Visonic produce the Powermax alarm panel series (PowerMax, PowerMax+, PowerMaxEx
 
 The PowerMax provides support for a serial interface that can be connected to the machine running Home Assistant. The serial interface is not installed by default but can be ordered from any PowerMax vendor (called the Visonic RS-232 Adaptor Kit).
 
-I have a device that connects to the RS232 interface inside the panel and creates an Ethernet TCP connection with a web server to set it up.
+I have a device that connects to the RS232 interface inside the panel (without using the RS-232 Adapter Kit) and creates an Ethernet TCP connection with a web server to set it up. The interface hardware that I have connects to TTL RS-232.
 
 Visonic does not provide a specification of the RS232 protocol and, thus, the binding uses the available protocol specification given at the ​domoticaforum. The binding implementation of this protocol is largely inspired by the Vera and OpenHab plugins.
 
 
 ## Release
-This is the first Alpha release 0.0.1
+This is the second Alpha release 0.0.2
 
 Please be gentle with me, this is my first HA adventure
 
 
 ## Instructions and what works so far
-It currently connects to the panel in powerlink and it creates an HA:
+It currently connects to the panel in Powerlink and it creates an HA:
 - Sensor for each alarm sensor.
-- Switch so you can look at the internal state values, the switch itself doesn't do anything. I would like to do a frontend card but I don't currently know how.
-- "alarm_control_panel" badge so you can arm and disarm the alarm (only in powerlink mode)
+- Switch so you can look at the internal state values, the switch itself doesn't do anything.
+- "alarm_control_panel" badge so you can arm and disarm the alarm.
+
+You do not need to use the Master Installer Code. To connect in Powerlink mode, the plugin uses a special Powerlink Code.
+
 
 ### The configuration.yaml file
-This is an example from my configuration.yaml file:
+This is an example from my configuration.yaml file (with values such as host and port changed):
 ```
 visonic:
   device:
@@ -33,11 +36,11 @@ visonic:
     port: 10628
   motion_off: 120
   language: 'EN'
-  debug: 'yes'
   force_standard: 'no'
   sync_time: 'yes'
   allow_remote_arm: 'yes'
   allow_remote_disarm: 'yes'
+#  override_code: '1234'
 ```
 
 You can also have a USB (for RS232) connection:
@@ -50,32 +53,39 @@ You can also have a USB (for RS232) connection:
 
 It tries to connect in Powerlink mode by default (unless you set force_standard to 'yes').
 
-Set debug to 'yes' or 'no' to output more or less in the log file.
-
-Language can be either EN for English or NL for Dutch
-
-sync_time attempts to synchronise the time between the device you run HA on and the alarm panel
-
-motion_off is in seconds, it is the time to keep the zone trigger True after it is triggered
+- 'motion_off' is in seconds, it is the time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period.
+- 'language' can be either EN for English or NL for Dutch
+- 'force_standard' determine whether it tries to connect in Powerlink mode or just goes to Standard
+- 'sync_time' attempts to synchronise the time between the device you run HA on and the alarm panel
+- 'allow_remote_arm' determines whether the panel can be armed from within HA
+- 'allow_remote_disarm' determines whether the panel can be disarmed from within HA
+- 'override_code' If in Powerlink mode then this is not used. If in Standard mode, then this is the 4 digit code used to arm and disarm. If in Standard mode and the override_code is not set then you will have to enter your 4 digit code every time you arm and disarm. It depends on how secure you make your system and how much you trust it!
 
 
 ### Running it in Home Assistant
-Put the files in your custom_components directory that is within your HA config directory.
-You will need some python libraries installing
+Put the files in your custom_components directory that is within your HA config directory. 
+I have included the python library REQUIREMENTS in visonic.py but in case that doesn't work you would need to install some python libraries yourself:
 ```
 sudo pip3 install pyserial
-sudo pip3 install datetime
+sudo pip3 install python-datetime
 sudo pip3 install pyserial_asyncio
 ```
 
+You can force it in to Standard mode.
+If the plugin connects in Powerlink mode then it automatically gets the user codes from the panel to arm and disarm.
+If the plugin connects in Standard mode then you must provide the user code to arm and disarm. You can either use 'override_code' in the HA configuration or manually enter it each time.
+If the mode stays at Download for more than 5 minutes then something has gone wrong.
+
+
 ## Notes
-- You need to specify either a USB connection or a TCP connection. 
+- You need to specify either a USB connection or a TCP connection as the device type, this setting is mandatory. 
 - For Powerlink mode to work the enrollment procedure has to be followed. If you don't enroll the Powerlink on the PowerMax the binding will operate in Standard mode. On the newer software versions of the PowerMax the Powerlink enrollment is automatic, and the binding should only operate in 'Powerlink' mode (if enrollment is successful).
 - You can force the binding to use the Standard mode. In this mode, the binding will not download the alarm panel setup and so the binding will not know what your PIN code is for example.
 - An HA Event 'alarm_panel_state_update' is sent through HA for:
     - 1 is a zone update, 2 is a panel update, 3 is a panel update AND the alarm is active!!!!!
     - The data associated with the event is { 'condition': X }   where X is 1, 2 or 3
     - I may add more information to the event later if required
+- You should be able to stop and start your HA. Once you manage to get it in to Powerlink mode then it should keep working through restarting HA, this is because the powerlink code has successfully registered with the panel.
 
 
 ## What it doesn't do in Home Assistant
@@ -85,3 +95,35 @@ sudo pip3 install pyserial_asyncio
 - The USB connection is implemented but was not tested.
 - You cannot bypass / arm individual sensors using the HA interface
 - The Event Log is not yet implemented. It works but I don't know what to do with it in HA.
+
+
+## Troubleshooting
+OK, so it partially works but it's not quite there.... what can you do.
+
+The first thing to say is that it's a PITA to get it in to Powerlink mode from within HA. I believe the problem is to do with timing issues and the way HA works with asyncio. If I use my python (pyvisonic.py) with a test program from a command line it works every time. When I put it in to HA it works some of the time and I just keep trying until it goes in to Powerlink mode. Is this ideal, No.  Do I have a choice, No.
+
+- I try to get it in to Powerlink mode but it only goes in to Standard mode
+  - Check that force_standard is set to 'no'
+  - If you have had anything connected to the panel in the past that has been in Powerlink mode then Do a Full Restart (see below what I mean *).
+  - The plugin will try a few times to get in to powerlink mode but then gives up and goes in to Standard mode. If this happens and you want powerlink mode then Do a Full Restart Sequence as defined below. 
+  
+- I try to get it in to Powerlink mode but it only goes in to Download mode
+  - Has it been like this for less than 5 minutes, then wait as it can take a long time
+  - So it's more than 5 minutes, OK. Do a Full Restart Sequence as defined below.
+  - If there are still problems then set your logger to output debug data to the log file for the visonic components and send it to me. Something like this:
+
+```
+logger:
+  default: critical
+  logs:
+    custom_components.visonic: debug
+    custom_components.alarm_control_panel.visonic: critical
+    custom_components.sensor.visonic: critical
+    custom_components.pyvisonic: debug
+```
+
+(*) Full Restart Sequence for Powerlink:
+- Stop HA
+- Restart the panel: Restart your Visonic panel by going in to and out of installer mode. Do not do any panel resets, the act of exiting installer mode is enough. 
+- Wait for a couple of minutes for the panel to restart
+- Start HA.
