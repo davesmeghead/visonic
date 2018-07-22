@@ -23,11 +23,14 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     """Set up the Visonic alarms."""
 
     queue = None
+    uawc = False
     if VISONIC_PLATFORM in hass.data:
         if "command_queue" in hass.data[VISONIC_PLATFORM]:
             queue = hass.data[VISONIC_PLATFORM]["command_queue"]
+        if "arm_without_code" in hass.data[VISONIC_PLATFORM]:
+            uawc = hass.data[VISONIC_PLATFORM]["arm_without_code"]
 
-    va = VisonicAlarm(hass, 1, queue)  
+    va = VisonicAlarm(hass, 1, queue, uawc)  
 
     # Listener to handle fired events
     def handle_event_alarm_panel(event):
@@ -46,11 +49,12 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
 class VisonicAlarm(alarm.AlarmControlPanel):
     """Representation of a Visonic alarm control panel."""
 
-    def __init__(self, hass, partition_id, queue):
+    def __init__(self, hass, partition_id, queue, uawc):
         """Initialize a Visonic security camera."""
         #self._data = data
         self.partition_id = partition_id
         self.queue = queue
+        self.user_arm_without_code = uawc
         self.mystate = STATE_UNKNOWN
         self.myname = "Visonic Alarm"
         # Listen for when my_cool_event is fired
@@ -75,25 +79,28 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     @property
     def code_format(self):
         """Regex for code format or None if no code is required."""
-        # try powerlink mode first, if in powerlink then it already has the user codes
         #_LOGGER.info("code format called *****************************") 
-        
-        # If currently Disarmed then no need to show the numbers (the panel can be set without the code)
-        armcode = visonicApi.PanelStatus["PanelStatusCode"]
-        if armcode == 0:
-            return None
-        
+
+        # try powerlink mode first, if in powerlink then it already has the user codes
         panelmode = visonicApi.PanelStatus["Mode"]
         if panelmode is not None:
             if panelmode == "Powerlink":
                 #_LOGGER.info("code format none as powerlink *****************************") 
                 return None
+                
         # we aren't in powerlink
+        
+        # If currently Disarmed and user setting to not show panel to arm
+        armcode = visonicApi.PanelStatus["PanelStatusCode"]
+        if armcode == 0 and self.user_arm_without_code:
+            return None
+
         overridecode = visonicApi.PanelSettings["OverrideCode"]
         if overridecode is not None:
             if len(overridecode) == 4:
                 #_LOGGER.info("code format none as code set in config file *****************************") 
                 return None
+
         #_LOGGER.info("code format number *****************************") 
         return "Number"
 
