@@ -56,6 +56,7 @@ CONF_ENABLE_REMOTE_ARM = "allow_remote_arm"
 CONF_ENABLE_REMOTE_DISARM = "allow_remote_disarm"
 CONF_ENABLE_SENSOR_BYPASS = "allow_sensor_bypass"
 CONF_OVERRIDE_CODE = "override_code"
+CONF_ARM_CODE_AUTO = "arm_without_usercode"
 
 # Schema for config file parsing and access
 DEVICE_SOCKET_SCHEMA = vol.Schema({
@@ -75,6 +76,7 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Optional(CONF_MOTION_OFF_DELAY,     180 ) : cv.positive_int,
         vol.Optional(CONF_OVERRIDE_CODE,        "" )  : cv.string,
         vol.Optional(CONF_LANGUAGE,             "EN" ): cv.string,
+        vol.Optional(CONF_ARM_CODE_AUTO,        False): cv.boolean,
         vol.Optional(CONF_DEBUG,                False): cv.boolean,   # Can be '1', 'true', 'yes', 'on', 'enable'
         vol.Optional(CONF_FORCE_STANDARD,       False): cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
         vol.Optional(CONF_AUTO_SYNC_TIME,       True ): cv.boolean,
@@ -197,6 +199,7 @@ def setup(hass, base_config):
         device_type = config.get(CONF_DEVICE)
         
         hass.data[VISONIC_PLATFORM]["command_queue"] = command_queue
+        hass.data[VISONIC_PLATFORM]["arm_without_code"] = config.get(CONF_ARM_CODE_AUTO)
         
         _LOGGER.info("Visonic Connection Device Type is {0}".format(device_type))
 

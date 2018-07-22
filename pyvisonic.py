@@ -37,7 +37,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.3"
+PLUGIN_VERSION = "0.0.4"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -1438,6 +1438,9 @@ class PacketHandling(ProtocolBase):
         otherZoneStr = ""
         deviceStr = ""
         pmPanelTypeNr = None
+        
+        # ------------------------------------------------------------------------------------------------------------------------------------------------
+        # Panel type and serial number
         panelSerialType = self.pmReadSettings(pmDownloadItem_t["MSG_DL_SERIAL"])
         if panelSerialType is not None:
             pmPanelTypeNr = panelSerialType[7]
@@ -1448,6 +1451,8 @@ class PacketHandling(ProtocolBase):
             PanelStatus["Model"] = model
             self.dump_settings()
 
+        # ------------------------------------------------------------------------------------------------------------------------------------------------
+        # Need the panel type to be valid so we can decode some of the remaining downloaded data correctly
         if pmPanelTypeNr is not None and 0 <= pmPanelTypeNr <= 8:
             #log.debug("[Process Settings] Panel Type Number " + str(pmPanelTypeNr) + "    serial string " + self.toString(panelSerialType))
             zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][pmPanelTypeNr] + pmPanelConfig_t["CFG_WIRED"][pmPanelTypeNr]
@@ -1462,6 +1467,7 @@ class PacketHandling(ProtocolBase):
             devices = ""
 
             if self.pmPowerlinkMode:
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Check if time sync was OK
                 #  if (pmSyncTimeCheck ~= nil) then
                 #     setting = pmReadSettings(pmDownloadItem_t.MSG_DL_TIME)
@@ -1479,6 +1485,7 @@ class PacketHandling(ProtocolBase):
 
                 visonic_devices = defaultdict(list)
 
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process zone names of this panel
                 setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_ZONESTR"])
                 log.debug("[Process Settings] Zone Type Names")
@@ -1491,28 +1498,29 @@ class PacketHandling(ProtocolBase):
                         # Following line commented out as "TypeError: 'tuple' object does not support item assignment" exception. I'm not sure that we should override these anyway
                         #pmZoneName_t[i] = s.decode().strip()  # Update predefined list with the proper downloaded values
 
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process communication settings
-                setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_PHONENRS"])
-                log.debug("[Process Settings] Phone Numbers")
                 phoneStr = ""
-                #for i in range(0, 4):
-                #    if i not in self.pmPhoneNr_t:
-                #        self.pmPhoneNr_t[i] = bytearray()
-                #    for j in range(0, 8):
-                #        #log.debug("[Process Settings] pos " + str((8 * i) + j))
-                #        nr = setting[(8 * i) + j]
-                #        if nr is not None and nr != 0xFF:
-                #            if j == 0:
-                #                self.pmPhoneNr_t[i] = bytearray()
-                #            #if self.pmPhoneNr_t[i] != None:
-                #            self.pmPhoneNr_t[i] = self.pmPhoneNr_t[i].append(nr)
-                #    if len(self.pmPhoneNr_t[i]) > 0:
-                #        phoneStr = phonestr + self.toString(self.pmPhoneNr_t[i]) + ", "
-                #        log.debug("[Process Settings]      Phone nr " + str(i) + " = " + self.toString(self.pmPhoneNr_t[i]))
-                
+                try:
+                    setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_PHONENRS"])
+                    log.debug("[Process Settings] Phone Numbers")
+                    for i in range(0, 4):
+                        self.pmPhoneNr_t[i] = bytearray()
+                        for j in range(0, 8):
+                            #log.debug("[Process Settings] pos " + str((8 * i) + j))
+                            nr = setting[(8 * i) + j]
+                            if nr is not None and nr != 0xFF:
+                                self.pmPhoneNr_t[i].append(nr)
+                        if len(self.pmPhoneNr_t[i]) > 0:
+                            phoneStr = phonestr + self.toString(self.pmPhoneNr_t[i]) + ", "
+                            log.debug("[Process Settings]      Phone nr " + str(i) + " = " + self.toString(self.pmPhoneNr_t[i]))
+                except:
+                    log.debug("Exception Handler: Process Settings - Did not process Phone Numbers correctly")
+                    
                 # INTERFACE : Add these phone numbers to the status panel
-                PanelStatus["PhoneNumbers"] = "{0}".format("" if len(phoneStr) == 0 else phoneStr[:-2])
+                PanelStatus["PhoneNumbers"] = "{0}".format("" if len(phoneStr) < 3 else phoneStr[:-2])  # ignore the ", " at the end
 
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process alarm settings
                 setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_COMMDEF"])
                 self.pmEntryDelay1 = setting[0x00]
@@ -1535,6 +1543,7 @@ class PacketHandling(ProtocolBase):
                 log.debug("[Process Settings] Alarm Settings pmBellTime {0} minutes     pmSilentPanic {1}   pmQuickArm {2}    pmBypassOff {3}  pmForcedDisarmCode {4}".format(self.pmBellTime,
                           self.pmSilentPanic, self.pmQuickArm, self.pmBypassOff, self.toString(self.pmForcedDisarmCode)))
 
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process user pin codes
                 if self.PowerMaster:
                     setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_MR_PINCODES"])
@@ -1548,6 +1557,7 @@ class PacketHandling(ProtocolBase):
                     self.pmPincode_t[i] = code
                 #    log.debug("[Process Settings]      User {0} has code {1}".format(i, self.toString(code)))
 
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process software information
                 setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_PANELFW"])
                 panelEprom = setting[0x00 : 0x10]
@@ -1556,11 +1566,13 @@ class PacketHandling(ProtocolBase):
                 #PanelStatus["PanelEprom"] = panelEprom.decode()
                 PanelStatus["PanelSoftware"] = panelSoftware.decode()
 
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process panel type and serial
                 idx = "{0:0>2}{1:0>2}".format(hex(panelSerialType[7]).upper()[2:], hex(panelSerialType[6]).upper()[2:])
                 if idx in pmPanelName_t:
                     pmPanelName = pmPanelName_t[idx]
                 else:
+                    log.debug("[Process Settings] Unknown panel name, id code is {0}".format(idx))
                     pmPanelName = "Unknown"
 
                 pmPanelSerial = ""
@@ -1571,17 +1583,20 @@ class PacketHandling(ProtocolBase):
                     else:
                         s = "{0:0>2}".format(hex(nr).upper()[2:])
                     pmPanelSerial = pmPanelSerial + s
+                
                 log.debug("[Process Settings] Panel Name {0} with serial <{1}>".format(pmPanelName, pmPanelSerial))
 
                 #  INTERFACE : Add these 2 params to the status panel
                 PanelStatus["PanelName"] = pmPanelName
                 PanelStatus["PanelSerial"] = pmPanelSerial
 
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Store partition info & check if partitions are on
                 partition = self.pmReadSettings(pmDownloadItem_t["MSG_DL_PARTITIONS"])
                 if partition is None or partition[0] == 0:
                     partitionCnt = 1
 
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process zone settings
                 zoneNames = bytearray()
                 settingMr = bytearray()
@@ -1674,6 +1689,7 @@ class PacketHandling(ProtocolBase):
                                 del self.pmSensorDev_t[i]
                                 #self.pmSensorDev_t[i] = None # remove zone if needed
 
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process PGM/X10 settings
                 setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_PGMX10"])
                 x10Names = self.pmReadSettings(pmDownloadItem_t["MSG_DL_X10NAMES"])
@@ -1691,6 +1707,7 @@ class PacketHandling(ProtocolBase):
                         else:
                             deviceStr = "{0},X{1:0>2}".format(deviceStr, i)
 
+                # ------------------------------------------------------------------------------------------------------------------------------------------------
                 if not self.PowerMaster:
                     # Process keypad settings
                     setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_1WKEYPAD"])
