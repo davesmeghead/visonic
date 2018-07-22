@@ -62,6 +62,7 @@ visonic:
   allow_remote_arm: 'yes'
   allow_remote_disarm: 'yes'
 #  override_code: '1234'
+#  arm_without_usercode: 'yes'
 ```
 
 You can also have a USB (for RS232) connection:
