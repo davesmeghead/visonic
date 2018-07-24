@@ -37,7 +37,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.4"
+PLUGIN_VERSION = "0.0.5"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -2519,7 +2519,7 @@ class EventHandling(PacketHandling):
         self.command_queue = command_queue
         if command_queue is not None:
             asyncio.ensure_future(self.process_command_queue(), loop=self.loop)
-
+        
     # implement commands from the queue            
     async def process_command_queue(self):
         while not self.suspendAllOperations:

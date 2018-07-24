@@ -57,7 +57,6 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         self.user_arm_without_code = uawc
         self.mystate = STATE_UNKNOWN
         self.myname = "Visonic Alarm"
-        # Listen for when my_cool_event is fired
 
     def doUpdate(self):    
         self.schedule_update_ha_state(False)
@@ -113,8 +112,17 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         # 0   Disarmed
         # 1   Exit Delay Arm Home
         # 2   Exit Delay Arm Away
+        # 3   Entry Delay
         # 4   Armed Home
         # 5   Armed Away
+        # 10  Home Bypass
+        # 11  Away Bypass
+        # 20  Armed Home Instant
+        # 21  Armed Away Instant
+        #   "Disarmed", "Home Exit Delay", "Away Exit Delay", "Entry Delay", "Armed Home", "Armed Away", "User Test",
+        #   "Downloading", "Programming", "Installer", "Home Bypass", "Away Bypass", "Ready", "Not Ready", "??", "??",
+        #   "Disarmed Instant", "Home Instant Exit Delay", "Away Instant Exit Delay", "Entry Delay Instant", "Armed Home Instant",
+        #   "Armed Away Instant"
         
         #_LOGGER.warning("alarm armcode is " + str(armcode))
         
@@ -122,13 +130,13 @@ class VisonicAlarm(alarm.AlarmControlPanel):
             self.mystate = STATE_UNKNOWN
         elif armcode == 0:
             self.mystate = STATE_ALARM_DISARMED
-        elif armcode == 1:
+        elif armcode == 1 or armcode == 3:          # Exit delay home or entry delay. This should allow user to enter code
             self.mystate = STATE_ALARM_PENDING
         elif armcode == 2:
             self.mystate = STATE_ALARM_ARMING
-        elif armcode == 4:
+        elif armcode == 4 or armcode == 10 or armcode == 20:
             self.mystate = STATE_ALARM_ARMED_HOME
-        elif armcode == 5:
+        elif armcode == 5 or armcode == 11 or armcode == 21:
             self.mystate = STATE_ALARM_ARMED_AWAY
         else:
             self.mystate = STATE_UNKNOWN
