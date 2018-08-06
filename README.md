@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is Alpha release 0.0.5
+This is Alpha release 0.0.6
 
 Please be gentle with me, this is my first HA adventure
 
@@ -39,6 +39,9 @@ Please be gentle with me, this is my first HA adventure
 0.0.4: Added arm_without_usercode. Include phone number decode with an exception handler just in case
 
 0.0.5: Updated the state return values for the generic alarm panel for entry delay (as pending)
+
+0.0.6: Extracts much more info from EPROM in powerlink. Added more Dutch translations. Handle Access Denied (when entering wrong pin code). A few bug fixes.
+
 
 ## Instructions and what works so far
 It currently connects to the panel in Powerlink and it creates an HA:

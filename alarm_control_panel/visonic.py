@@ -90,7 +90,13 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         # we aren't in powerlink
         
         # If currently Disarmed and user setting to not show panel to arm
-        armcode = visonicApi.PanelStatus["PanelStatusCode"]
+        armcode = None
+        if "Panel Status Code" in visonicApi.PanelStatus:
+            armcode = visonicApi.PanelStatus["Panel Status Code"]
+            
+        if armcode is None:
+            return None
+
         if armcode == 0 and self.user_arm_without_code:
             return None
 
@@ -106,7 +112,9 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     @property
     def state(self):
         """Return the state of the device."""
-        armcode = visonicApi.PanelStatus["PanelStatusCode"]
+        armcode = None
+        if "Panel Status Code" in visonicApi.PanelStatus:
+            armcode = visonicApi.PanelStatus["Panel Status Code"]
         
         # -1  Not yet defined
         # 0   Disarmed
@@ -159,23 +167,23 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     def alarm_disarm(self, code = None):
         """Send disarm command."""
         if self.queue is not None:
-            _LOGGER.info("alarm disarm code=" + code)        
+            _LOGGER.info("alarm disarm code=" + self.decode_code(code))        
             self.queue.put_nowait(["Disarmed", self.decode_code(code)])
 
     def alarm_arm_home(self, code = None):
         """Send arm home command."""
         if self.queue is not None:
-            _LOGGER.info("alarm arm home=" + code)
+            _LOGGER.info("alarm arm home=" + self.decode_code(code))
             self.queue.put_nowait(["Stay", self.decode_code(code)])
 
     def alarm_arm_away(self, code = None):
         """Send arm away command."""
         if self.queue is not None:
-            _LOGGER.info("alarm arm away=" + code)
+            _LOGGER.info("alarm arm away=" + self.decode_code(code))
             self.queue.put_nowait(["Armed", self.decode_code(code)])
 
     def alarm_arm_night(self, code = None):
         """Send arm night command."""
         if self.queue is not None:
-            _LOGGER.info("alarm night=" + code)
+            _LOGGER.info("alarm night=" + self.decode_code(code))
             self.queue.put_nowait(["Night", self.decode_code(code)])

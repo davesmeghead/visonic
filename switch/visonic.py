@@ -17,7 +17,6 @@ from homeassistant.util import convert
 from homeassistant.components.switch import SwitchDevice
 
 DEPENDENCIES = ['visonic']
-#REQUIREMENTS = ['pyvisonic==0.0.1']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,9 +71,9 @@ class VisonicAlarm(SwitchDevice):
     @property
     def state(self):    
         """Return the state of the device."""
-        #isArmed = visonicApi.PanelStatus["PanelArmed"]
+        #isArmed = visonicApi.PanelStatus["Panel Armed"]
         
-        armcode = visonicApi.PanelStatus["PanelStatusCode"]
+        armcode = visonicApi.PanelStatus["Panel Status Code"]
         
         # -1  Not yet defined
         # 0   Disarmed

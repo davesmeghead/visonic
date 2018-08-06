@@ -15,7 +15,6 @@ from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_
 from custom_components.visonic import VISONIC_SENSORS
 
 DEPENDENCIES = ['visonic']
-#REQUIREMENTS = ['pyvisonic==0.0.1']
 
 _LOGGER = logging.getLogger(__name__)
 
