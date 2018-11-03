@@ -142,7 +142,7 @@ def setup(hass, base_config):
                 
             # trigger discovery which will add the sensor and set up a new device
             #    this discovers new sensors, existing ones will remain and are not removed
-            discovery.load_platform(hass, "sensor", DOMAIN, {}, None)
+            discovery.load_platform(hass, "sensor", DOMAIN, {}, base_config)
             
         elif type(visonic_devices) == visonicApi.SensorDevice:
             # This is an update of an existing device
@@ -165,8 +165,8 @@ def setup(hass, base_config):
         _LOGGER.error(" ........... attempting reconnection")
         panel_reset_counter = panel_reset_counter + 1
         if connect_to_alarm():
-            discovery.load_platform(hass, "switch", DOMAIN)   
-            discovery.load_platform(hass, "alarm_control_panel", DOMAIN)   
+            discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
+            discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
 
         
     def connect_to_alarm():
@@ -245,8 +245,8 @@ def setup(hass, base_config):
         if success:
             # these 2 calls will create a partition "alarm control panel" and a switch that represents the panel information
             #   eventually there will be an "alarm control panel" for each partition but we only support 1 partition at the moment
-            discovery.load_platform(hass, "switch", DOMAIN)   
-            discovery.load_platform(hass, "alarm_control_panel", DOMAIN)   
+            discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
+            discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
             return True
         
     except (ConnectTimeout, HTTPError) as ex:
