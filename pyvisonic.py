@@ -38,7 +38,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.6"
+PLUGIN_VERSION = "0.0.6.2"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -2366,18 +2366,45 @@ class PacketHandling(ProtocolBase):
             sarm_detail = "Unknown"
             if 0 <= sysStatus < len(pmSysStatus_t[self.pmLang]):
                 sarm_detail = pmSysStatus_t[self.pmLang][sysStatus]
-            
-            if sysStatus in [0x03, 0x04, 0x05, 0x0A, 0x0B, 0x13, 0x14, 0x15]:
+
+            # -1  Not yet defined
+            # 0   Disarmed
+            # 1   Exit Delay Arm Home
+            # 2   Exit Delay Arm Away
+            # 3   Entry Delay
+            # 4   Armed Home
+            # 5   Armed Away
+            # 6   Special ("User Test", "Downloading", "Programming", "Installer")
+			
+            if sysStatus in [0x03]:
                 sarm = "Armed"
+                PanelStatus["Panel Status Code"] = 3   # Entry Delay
+            elif sysStatus in [0x04, 0x0A, 0x13, 0x14]:
+                sarm = "Armed"
+                PanelStatus["Panel Status Code"] = 4   # Armed Home
+            elif sysStatus in [0x05, 0x0B, 0x13, 0x15]:
+                sarm = "Armed"
+                PanelStatus["Panel Status Code"] = 5   # Armed Away
+            elif sysStatus in [0x01, 0x11]:
+                sarm = "Arming"
+                PanelStatus["Panel Status Code"] = 1   # Arming Home
+            elif sysStatus in [0x02, 0x12]:
+                sarm = "Arming"
+                PanelStatus["Panel Status Code"] = 2   # Arming Away
+            elif sysStatus in [0x06, 0x07, 0x08, 0x09]:
+                sarm = "Disarmed"
+                PanelStatus["Panel Status Code"] = 6   # Special ("User Test", "Downloading", "Programming", "Installer")
             elif sysStatus > 0x15:
                 log.debug("[handle_msgtypeA5]      Unknown state, assuming Disarmed")
                 sarm = "Disarmed"
+                PanelStatus["Panel Status Code"] = 0   # Disarmed
             else:
                 sarm = "Disarmed"
+                PanelStatus["Panel Status Code"] = 0   # Disarmed
 
             log.debug("[handle_msgtypeA5]      log: {0}, arm: {1}".format(slog + "(" + sarm_detail + ")", sarm))
 
-            PanelStatus["Panel Status Code"]    = sysStatus
+            #PanelStatus["Panel Status Code"]    = sysStatus
             PanelStatus["Panel Status"]        = sarm_detail
             PanelStatus["Panel Ready"]         = 'Yes' if sysFlags & 0x01 != 0 else 'No'
             PanelStatus["Panel Alert In Memory"] = 'Yes' if sysFlags & 0x02 != 0 else 'No'
@@ -2397,7 +2424,18 @@ class PacketHandling(ProtocolBase):
             #if len(cond) > 0:
             #    cond = cond[:-2]
             #PanelStatus["PanelStatusText"] = cond
-            
+
+            if not self.pmPowerlinkMode:
+                # if the system status has the panel armed and there has been an alarm event, assume that the alarm is sounding
+                #   Normally this would only be directly available in Powerlink mode with A7 messages, but an assumption is made here
+                if sarm == "Armed" and sysFlags & 0x80 != 0:
+                    # Alarm Event 
+                    self.pmSirenActive = self.getTimeFunction()
+                    self.sendResponseEvent ( 3 )   # Alarm Event
+                if self.pmSirenActive is not None and sarm == "Disarmed":
+                    self.pmSirenActive = None
+                PanelStatus["Panel Siren Active"] = 'Yes' if self.pmSirenActive != None else 'No'
+
             if sysFlags & 0x20 != 0:
                 sEventLog = pmEventType_t[self.pmLang][eventType]
                 log.debug("[handle_msgtypeA5]      Bit 5 set, Zone Event")
@@ -2498,20 +2536,23 @@ class PacketHandling(ProtocolBase):
 
             # Update siren status
             noSiren = ((eventType == 0x0B) or (eventType == 0x0C)) and self.pmSilentPanic
-
+			
+            # log.info("[handle_msgtypeA7] no siren = " + str(noSiren) + "    self.pmSilentPanic=" + str(self.pmSilentPanic) + "      eventType=" + str(eventType))
+            
             if (alarmStatus is not None) and (eventType != 0x04) and (not noSiren):
                 self.pmSirenActive = self.getTimeFunction()
-                log.debug("Alarm Active")
+                log.info("[handle_msgtypeA7] ******************** Alarm Active *******************")
+            
             if eventType == 0x1B and self.pmSirenActive is not None: # Cancel Alarm
                 self.pmSirenActive = None
-                log.debug("Alarm Cancelled")
+                log.info("[handle_msgtypeA7] ******************** Alarm Cancelled ****************")
             # INTERFACE Indicate whether siren active
             PanelStatus["Panel Siren Active"] = 'Yes' if self.pmSirenActive != None else 'No'
 
-            log.debug("[handle_msgtypeA7]                self.pmSirenActive={0}   noSiren={1}   eventType={2}   self.pmSilentPanic={3}".format(self.pmSirenActive, noSiren, hex(eventType), self.pmSilentPanic) )
+            log.info("[handle_msgtypeA7]                self.pmSirenActive={0}   noSiren={1}   eventType={2}   self.pmSilentPanic={3}".format(self.pmSirenActive, noSiren, hex(eventType), self.pmSilentPanic) )
             
             if eventType == 0x60: # system restart
-                log.warning("handle_msgtypeA7:         Panel has been reset")
+                log.warning("[handle_msgtypeA7]         Panel has been reset")
                 self.Start_Download()
                 self.sendResponseEvent ( 4 )   # push changes through to the host, the panel itself has been reset
 
@@ -2519,7 +2560,6 @@ class PacketHandling(ProtocolBase):
             self.sendResponseEvent ( 3 )   # push changes through to the host to get it to update, alarm is active!!!!!!!!!
         else:
             self.sendResponseEvent ( 2 )   # push changes through to the host to get it to update
-
 
     # pmHandlePowerlink (0xAB)
     def handle_msgtypeAB(self, data): # PowerLink Message

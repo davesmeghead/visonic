@@ -12,7 +12,7 @@ import custom_components.pyvisonic as visonicApi
 
 from datetime import timedelta
 from homeassistant.helpers.entity import Entity
-from homeassistant.const import ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED, ATTR_CODE, STATE_STANDBY, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING
+from homeassistant.const import ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED, ATTR_CODE, STATE_STANDBY, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_DISARMING, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED
 from homeassistant.util import convert
 from homeassistant.components.switch import SwitchDevice
 
@@ -74,22 +74,29 @@ class VisonicAlarm(SwitchDevice):
         #isArmed = visonicApi.PanelStatus["Panel Armed"]
         
         armcode = visonicApi.PanelStatus["Panel Status Code"]
+        sirenActive = visonicApi.PanelStatus["Panel Siren Active"]
         
         # -1  Not yet defined
         # 0   Disarmed
         # 1   Exit Delay Arm Home
         # 2   Exit Delay Arm Away
+        # 3   Entry Delay
         # 4   Armed Home
         # 5   Armed Away
+        # 6   Special ("User Test", "Downloading", "Programming", "Installer")
         
         #_LOGGER.warning("alarm armcode is " + str(armcode))
         
-        if armcode == 0:
+        if sirenActive == 'Yes':
+            return STATE_ALARM_TRIGGERED
+        elif armcode == 0 or armcode == 6:
             return STATE_ALARM_DISARMED
         elif armcode == 1:
             return STATE_ALARM_PENDING
         elif armcode == 2:
             return STATE_ALARM_ARMING
+        elif armcode == 3:
+            return STATE_ALARM_DISARMING
         elif armcode == 4:
             return STATE_ALARM_ARMED_HOME
         elif armcode == 5:

@@ -12,7 +12,7 @@ import custom_components.pyvisonic as visonicApi   # Connection to python Librar
 import homeassistant.components.alarm_control_panel as alarm
 
 #from homeassistant.components.alarm_control_panel import AlarmControlPanel
-from homeassistant.const import STATE_UNKNOWN, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING
+from homeassistant.const import STATE_UNKNOWN, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED
 from custom_components.visonic import VISONIC_PLATFORM
 
 DEPENDENCIES = ['visonic']
@@ -112,6 +112,14 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     @property
     def state(self):
         """Return the state of the device."""
+        sirenactive = 'No'
+        if "Panel Siren Active" in visonicApi.PanelStatus:
+            sirenactive = visonicApi.PanelStatus["Panel Siren Active"]
+
+        if sirenactive == 'Yes':
+            self.mystate = STATE_ALARM_TRIGGERED
+            return STATE_ALARM_TRIGGERED
+            
         armcode = None
         if "Panel Status Code" in visonicApi.PanelStatus:
             armcode = visonicApi.PanelStatus["Panel Status Code"]

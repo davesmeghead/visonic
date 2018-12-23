@@ -42,6 +42,8 @@ Please be gentle with me, this is my first HA adventure
 
 0.0.6: Extracts much more info from EPROM in powerlink. Added more Dutch translations. Handle Access Denied (when entering wrong pin code). A few bug fixes.
 
+0.0.6.2: Added code to indicate when alarm is triggered (and sounding). This works best in powerlink mode. In Standard mode I make a guess that when the panel is armed and a device is triggered then the alarm must be sounding.
+
 
 ## Instructions and what works so far
 It currently connects to the panel in Powerlink and it creates an HA:
