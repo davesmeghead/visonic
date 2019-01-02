@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is Alpha release 0.0.6
+This is Alpha release 0.0.6.3
 
 Please be gentle with me, this is my first HA adventure
 
@@ -43,6 +43,8 @@ Please be gentle with me, this is my first HA adventure
 0.0.6: Extracts much more info from EPROM in powerlink. Added more Dutch translations. Handle Access Denied (when entering wrong pin code). A few bug fixes.
 
 0.0.6.2: Added code to indicate when alarm is triggered (and sounding). This works best in powerlink mode. In Standard mode I make a guess that when the panel is armed and a device is triggered then the alarm must be sounding.
+
+0.0.6.3: Fix bug in SetConfig, prevent "None" values being accepted 
 
 
 ## Instructions and what works so far
@@ -82,7 +84,7 @@ You can also have a USB (for RS232) connection:
 
 It tries to connect in Powerlink mode by default (unless you set force_standard to 'yes').
 
-- 'motion_off' (default 180) is in seconds, it is the time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period.
+- 'motion_off' (default 120) is in seconds, it is the time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period.
 - 'language' (default 'EN') can be either EN for English or NL for Dutch
 - 'force_standard' (default 'no') determine whether it tries to connect in Powerlink mode or just goes to Standard
 - 'sync_time' (default 'yes') attempts to synchronise the time between the device you run HA on and the alarm panel
