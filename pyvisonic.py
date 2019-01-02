@@ -38,7 +38,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.6.2"
+PLUGIN_VERSION = "0.0.6.3"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -2801,8 +2801,9 @@ class VisonicProtocol(EventHandling):
 
 def setConfig(key, val):
     if key in PanelSettings:
-        log.info("Setting key {0} to value {1}".format(key, val))
-        PanelSettings[key] = val
+        if val is not None:
+            log.info("Setting key {0} to value {1}".format(key, val))
+            PanelSettings[key] = val
     else:
         log.warning("ERROR: ************************ Cannot find key {0} in panel settings".format(key))
 #    if key == "PluginDebug":
