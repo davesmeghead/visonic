@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is Alpha release 0.0.6.3
+This is Alpha release 0.0.6.4
 
 Please be gentle with me, this is my first HA adventure
 
@@ -45,6 +45,8 @@ Please be gentle with me, this is my first HA adventure
 0.0.6.2: Added code to indicate when alarm is triggered (and sounding). This works best in powerlink mode. In Standard mode I make a guess that when the panel is armed and a device is triggered then the alarm must be sounding.
 
 0.0.6.3: Fix bug in SetConfig, prevent "None" values being accepted 
+
+0.0.6.4: Removed push change in A3 message as causing exception in HA
 
 
 ## Instructions and what works so far
