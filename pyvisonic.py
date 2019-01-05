@@ -38,7 +38,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.6.3"
+PLUGIN_VERSION = "0.0.6.4"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -2184,17 +2184,18 @@ class PacketHandling(ProtocolBase):
             
     def handle_msgtypeA3(self, data):
         """ MsgType=A3 - Zone Names """
-        log.info("[handle_MsgTypeA3] Wibble Packet = {0}".format(self.toString(data)))
-        msgCnt = int(data[0])
-        offset = 8 * (int(data[1]) - 1)
-        for i in range(0, 8):
-            zoneName = pmZoneName_t[int(data[2+i])]
-            log.info("                        Zone name for {0} is {1}".format( offset+i+1, zoneName ))
-            if offset+i in self.pmSensorDev_t:
-                if not self.pmSensorDev_t[offset+i].zname:     # if not already set
-                    self.pmSensorDev_t[offset+i].zname = zoneName
-                    self.pmSensorDev_t[offset+i].pushChange()
-                    log.info("                        Found Sensor")
+        log.info("[handle_MsgTypeA3] Packet = {0}".format(self.toString(data)))
+        if not self.pmPowerlinkMode:
+            msgCnt = int(data[0])
+            offset = 8 * (int(data[1]) - 1)
+            for i in range(0, 8):
+                zoneName = pmZoneName_t[int(data[2+i])]
+                log.info("                        Zone name for zone {0} is {1}     Message Count is {2}".format( offset+i+1, zoneName, msgCnt ))
+                if offset+i in self.pmSensorDev_t:
+                    if not self.pmSensorDev_t[offset+i].zname:     # if not already set
+                        self.pmSensorDev_t[offset+i].zname = zoneName
+                        # self.pmSensorDev_t[offset+i].pushChange()
+                        # log.info("                        Found Sensor")
         
     def handle_msgtypeA6(self, data):
         """ MsgType=A6 - Zone Types I think """
@@ -2217,7 +2218,7 @@ class PacketHandling(ProtocolBase):
                 zoneInfo = int(data[2+i]) - 0x1E        #  in other code data[2+i] - 0x1E;
                 zoneType = (zoneInfo & 0x0F) + 1        #  in other code add one
                 zoneChime = ((zoneInfo >> 4) & 0x03)
-                log.debug("Zone type for {0} is {1}   chime {2}".format( offset+i+1, pmZoneType_t[self.pmLang][zoneType], pmZoneChime_t[self.pmLang][zoneChime]))
+                log.debug("                        Zone type for {0} is {1}   chime {2}".format( offset+i+1, pmZoneType_t[self.pmLang][zoneType], pmZoneChime_t[self.pmLang][zoneChime]))
         #        if offset+i in self.pmSensorDev_t:
         #            self.pmSensorDev_t[offset+i].ztype = zoneType
         #            self.pmSensorDev_t[offset+i].ztypeName = pmZoneType_t[self.pmLang][zoneType]
