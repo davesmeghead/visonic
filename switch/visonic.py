@@ -5,7 +5,6 @@ Currently, there is only support for a single partition
   Initial setup by David Field
 
 """
-#ExitDelay_ArmHome(Home Exit Delay)
 import logging
 import asyncio
 import custom_components.pyvisonic as visonicApi
@@ -14,7 +13,8 @@ from datetime import timedelta
 from homeassistant.helpers.entity import Entity
 from homeassistant.const import ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED, ATTR_CODE, STATE_STANDBY, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_DISARMING, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED
 from homeassistant.util import convert
-from homeassistant.components.switch import SwitchDevice
+#from homeassistant.components.switch import SwitchDevice
+from homeassistant.helpers.entity import Entity
 
 DEPENDENCIES = ['visonic']
 
@@ -41,7 +41,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     add_devices(devices, True)
 
 
-class VisonicAlarm(SwitchDevice):
+class VisonicAlarm(Entity):
     """Representation of a Visonic Panel."""
 
     def __init__(self, hass, partition):
@@ -54,11 +54,6 @@ class VisonicAlarm(SwitchDevice):
         self.schedule_update_ha_state(False)
         
     @property
-    def name(self):
-        """Return the name of the device."""
-        return self._name
-
-    @property
     def should_poll(self):
         """Get polling requirement from visonic device."""
         return False # self.visonic_device.should_poll
@@ -68,6 +63,26 @@ class VisonicAlarm(SwitchDevice):
         """Return a unique ID."""
         return self._address
         
+    @property
+    def name(self):
+        """Return the name of the device."""
+        return self._name
+
+    def getStatus(self, s : str):
+        if visonicApi is None:
+            return "Unknown"
+        return "Unknown" if s not in visonicApi.PanelStatus else visonicApi.PanelStatus[s]
+        
+    @property
+    def device_info(self):
+        """Return information about the device."""
+        return {
+            'manufacturer': 'Visonic',
+            'name': self.getStatus("Panel Name"),
+            'sw_version': self.getStatus("Panel Software"),
+            'model': self.getStatus("Model"),
+        }
+
     @property
     def state(self):    
         """Return the state of the device."""
@@ -108,13 +123,13 @@ class VisonicAlarm(SwitchDevice):
     #    return "/config/myimages/20160807_183340.jpg"
         
     @property
-    def state_attributes(self):  #
+    def device_state_attributes(self):  #
         """Return the state attributes of the device."""
         # maybe should filter rather than sending them all
-        return visonicApi.PanelStatus
+        return None
         
     @property
-    def device_state_attributes(self):  #
+    def state_attributes(self):  #
         """Return the state attributes of the device."""
         # maybe should filter rather than sending them all
         return visonicApi.PanelStatus

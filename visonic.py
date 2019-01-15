@@ -73,7 +73,7 @@ CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
         vol.Required(CONF_DEVICE): vol.Any( DEVICE_SOCKET_SCHEMA, DEVICE_USB_SCHEMA),
         vol.Optional(CONF_EXCLUDE,              default=[]): VISONIC_ID_LIST_SCHEMA,
-        vol.Optional(CONF_MOTION_OFF_DELAY,     180 ) : cv.positive_int,
+        vol.Optional(CONF_MOTION_OFF_DELAY,     120 ) : cv.positive_int,
         vol.Optional(CONF_OVERRIDE_CODE,        "" )  : cv.string,
         vol.Optional(CONF_LANGUAGE,             "EN" ): cv.string,
         vol.Optional(CONF_ARM_CODE_AUTO,        False): cv.boolean,
@@ -162,18 +162,32 @@ def setup(hass, base_config):
         global panel_reset_counter
         _LOGGER.error("PyVisonic has caused an exception {0}".format(excep))
         sleep(10.0)
-        _LOGGER.error(" ........... attempting reconnection")
         panel_reset_counter = panel_reset_counter + 1
+        _LOGGER.error(" ........... attempting reconnection")
         if connect_to_alarm():
             discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
             discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
-
         
     def connect_to_alarm():
         global panel_reset_counter
         # Get the list of excluded raw identifiers
         exclude_ids = config.get(CONF_EXCLUDE)
 
+        # remove any existing visonic related sensors (so we don't get entity id already exists exceptions on a restart)
+        retval = hass.states.async_remove('switch.visonic_alarm_panel')
+        if retval:
+            _LOGGER.info("Removed existing HA Entity ID: switch.visonic_alarm_panel")
+        retval = hass.states.async_remove('alarm_control_panel.visonic_alarm')
+        if retval:
+            _LOGGER.info("Removed existing HA Entity ID: alarm_control_panel.visonic_alarm")
+        sensor_list = hass.states.async_entity_ids("sensor")
+        if sensor_list is not None:
+            for x in sensor_list:
+                if x.startswith( 'sensor.visonic' ):
+                    retval = hass.states.async_remove(x)
+                    if retval:
+                        _LOGGER.info("Removed existing HA Entity ID: {0}".format(x))
+        
         # Set the Sensors list as empty
         hass.data[VISONIC_SENSORS] = {}
         for domain in VISONIC_COMPONENTS:
@@ -220,6 +234,9 @@ def setup(hass, base_config):
                                                          disconnect_callback = disconnect_callback, excludes = exclude_ids, loop = hass.loop)
 
         if comm is not None:
+            #wibble = hass.states.entity_ids()
+            #for x in wibble:
+            #    _LOGGER.info("Wibble is {0}".format(x))            
             notused = hass.loop.create_task(comm)
             return True
 

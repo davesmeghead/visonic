@@ -33,12 +33,11 @@ from datetime import timedelta
 from dateutil.relativedelta import *
 from functools import partial
 from typing import Callable, List
-from serial_asyncio import create_serial_connection
 from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.6.4"
+PLUGIN_VERSION = "0.0.6.5"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -1990,10 +1989,10 @@ class PacketHandling(ProtocolBase):
         """ MsgType=06 - Time out
         Timeout message from the PM, most likely we are/were in download mode """
         log.info("[handle_msgtype06] Timeout Received  data {0}".format(self.toString(data)))
+        self.pmExpectedResponse = []
+        self.DownloadMode = False
+        self.ClearList()
         self.pmSendAck()
-#        if self.DownloadMode:
-#            self.DownloadMode = False
-#            self.SendCommand("MSG_EXIT")
         self.SendCommand("MSG_EXIT")
         if self.pmPowerlinkMode:
             self.SendCommand("MSG_RESTORE")
@@ -2028,7 +2027,7 @@ class PacketHandling(ProtocolBase):
             log.debug("[handle_msgtype0B]                last command {0}".format(self.toString(lastCommandData)))
             if lastCommandData is not None:
                 if lastCommandData[0] == 0x0A:
-                    log.info("[handle_msgtype0B] We're in powerlink mode *****************************************")
+                    log.info("[handle_msgtype0B] We're almost in powerlink mode *****************************************")
                     self.pmPowerlinkMode = True  # INTERFACE set State to "PowerLink"
                     # We received a download exit message, restart timer
                     self.reset_watchdog_timeout()
@@ -2840,9 +2839,10 @@ def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, comma
 
 # Create a connection using asyncio through a linux port (usb or rs232)
 def create_usb_visonic_connection(port, baud=9600, protocol=VisonicProtocol, command_queue = None, event_callback=None, disconnect_callback=None, loop=None, excludes=None):
-     """Create Visonic manager class, returns rs232 transport coroutine."""
-     # use default protocol if not specified
-     protocol = partial(
+    """Create Visonic manager class, returns rs232 transport coroutine."""
+    from serial_asyncio import create_serial_connection
+    # use default protocol if not specified
+    protocol = partial(
         protocol,
         loop=loop if loop else asyncio.get_event_loop(),
         event_callback=event_callback,
@@ -2850,14 +2850,14 @@ def create_usb_visonic_connection(port, baud=9600, protocol=VisonicProtocol, com
         excludes=excludes,
         command_queue = command_queue, 
  #        ignore=ignore if ignore else [],
-     )
+    )
 
-     # setup serial connection
-     port = port
-     baud = baud
-     conn = create_serial_connection(loop, protocol, port, baud)
+    # setup serial connection
+    port = port
+    baud = baud
+    conn = create_serial_connection(loop, protocol, port, baud)
 
-     return conn
+    return conn
 
 
 # # Do not call this directly, it is the thread that creates and keeps going the asyncio. It repackages an asyncio in to a task

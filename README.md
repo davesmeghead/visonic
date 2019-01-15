@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is Alpha release 0.0.6.4
+This is Alpha release 0.0.6.5
 
 Please be gentle with me, this is my first HA adventure
 
@@ -47,6 +47,8 @@ Please be gentle with me, this is my first HA adventure
 0.0.6.3: Fix bug in SetConfig, prevent "None" values being accepted 
 
 0.0.6.4: Removed push change in A3 message as causing exception in HA
+
+0.0.6.5: Sensors are based on the HA Entity. Moved "from serial_asyncio import create_serial_connection" to create_usb_visonic_connection so only used for USB connections.
 
 
 ## Instructions and what works so far

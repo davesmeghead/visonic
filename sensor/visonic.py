@@ -9,10 +9,12 @@ import datetime
 from datetime import timedelta
 
 from homeassistant.util import convert, slugify
-from homeassistant.components.binary_sensor import BinarySensorDevice
+#from homeassistant.components.binary_sensor import BinarySensorDevice
+from homeassistant.helpers.entity import Entity
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
 from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED)
 from custom_components.visonic import VISONIC_SENSORS
+#from homeassistant.const import (STATE_ON, STATE_OFF)
 
 DEPENDENCIES = ['visonic']
 
@@ -27,7 +29,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         for device in hass.data[VISONIC_SENSORS]['sensor'])
 
 #   Each Sensor in Visonic Alarms can be Armed/Bypassed individually
-class VisonicSensor(BinarySensorDevice):
+class VisonicSensor(Entity):
     """Representation of a Visonic Sensor."""
 
     def __init__(self, visonic_device):
@@ -50,11 +52,6 @@ class VisonicSensor(BinarySensorDevice):
         #})        
 
     @property
-    def name(self):
-        """Return the name of the device."""
-        return self._name
-
-    @property
     def should_poll(self):
         """Get polling requirement from visonic device."""
         return False # self.visonic_device.should_poll
@@ -65,9 +62,27 @@ class VisonicSensor(BinarySensorDevice):
         return self.visonic_id
 
     @property
+    def name(self):
+        """Return the name of the device."""
+        return self._name
+
+    @property
     def state(self) -> bool:
-        """Return the name of the sensor."""
+        """Return the state of the sensor."""
+        #return STATE_ON if (self.current_value == "T" or self.current_value == "O") else STATE_OFF
         return self.current_value
+        
+    @property
+    def device_info(self):
+        """Return information about the device."""
+        return {
+            'manufacturer': 'Visonic',
+        }
+
+    @property
+    def device_class(self):
+        """Return the class of this sensor."""
+        return self.visonic_device.stype.lower()
 
     @property
     def icon(self):
@@ -76,14 +91,29 @@ class VisonicSensor(BinarySensorDevice):
             return 'mdi:magnet-on'
         return 'mdi:magnet'
 
+    @property
+    def entity_picture(self):
+        """Return the entity picture to use in the frontend, if any."""
+        return None
+        
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return self.visonic_device.enrolled
+
     # convert the date and time to a string
     def pmTimeFunctionStr(self, d : datetime.datetime) -> str:
         return d.strftime("%a %d/%m/%Y at %H:%M:%S")
-        
+
     @property
-    def state_attributes(self): #device_
+    def device_state_attributes(self):
+        """Return device specific state attributes. Implemented by platform classes. """
+        return None
+
+    @property
+    def state_attributes(self):
         """Return the state attributes of the device."""
-        #_LOGGER.warning("in device_state_attributes")
+        #_LOGGER.warning("in state_attributes")
         attr = {}
 
         attr[ATTR_TRIPPED] = "Yes" if self.visonic_device.triggered else "No"
@@ -94,7 +124,7 @@ class VisonicSensor(BinarySensorDevice):
         else:
             attr[ATTR_LAST_TRIP_TIME] = self.pmTimeFunctionStr(self.visonic_device.triggertime)
         attr["Device Name"] = self.visonic_device.dname
-        attr["Sensor Type"] = self.visonic_device.stype
+        #attr["Sensor Type"] = self.visonic_device.stype  commented out as this is returned as the device_class now
         attr["Zone Type"] = self.visonic_device.ztype
         attr["Zone Name"] = self.visonic_device.zname
         attr["Zone Type Name"] = self.visonic_device.ztypeName
@@ -107,7 +137,3 @@ class VisonicSensor(BinarySensorDevice):
         #    self.partition = kwargs.get('partition', None)  # set   partition set (could be in more than one partition)
         return attr
 
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return self.visonic_device.enrolled
