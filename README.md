@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is Alpha release 0.0.6.5
+This is Alpha release 0.0.6.6
 
 Please be gentle with me, this is my first HA adventure
 
@@ -50,6 +50,7 @@ Please be gentle with me, this is my first HA adventure
 
 0.0.6.5: Sensors are based on the HA Entity. Moved "from serial_asyncio import create_serial_connection" to create_usb_visonic_connection so only used for USB connections.
 
+0.0.6.6: Bug fix to sensor device_class, part of HA Entity update
 
 ## Instructions and what works so far
 It currently connects to the panel in Powerlink and it creates an HA:
