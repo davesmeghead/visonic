@@ -82,13 +82,17 @@ class VisonicSensor(Entity):
     @property
     def device_class(self):
         """Return the class of this sensor."""
-        return self.visonic_device.stype.lower()
+        if self.visonic_device is not None:
+            if self.visonic_device.stype is not None:
+                return self.visonic_device.stype.lower()
+        return None;
 
     @property
     def icon(self):
         """Return the icon of this device."""
-        if self.visonic_device.triggered:
-            return 'mdi:magnet-on'
+        if self.visonic_device is not None:
+            if self.visonic_device.triggered:
+                return 'mdi:magnet-on'
         return 'mdi:magnet'
 
     @property
@@ -99,7 +103,9 @@ class VisonicSensor(Entity):
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        return self.visonic_device.enrolled
+        if self.visonic_device is not None:
+            return self.visonic_device.enrolled
+        return False;
 
     # convert the date and time to a string
     def pmTimeFunctionStr(self, d : datetime.datetime) -> str:
