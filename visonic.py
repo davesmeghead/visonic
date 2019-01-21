@@ -88,7 +88,7 @@ CONFIG_SCHEMA = vol.Schema({
 
 # We only have 2 components, sensors and switches
 VISONIC_COMPONENTS = [
-    'sensor', 'switch'   # keep switches here to eventually support X10 devices
+    'binary_sensor', 'switch'   # keep switches here to eventually support X10 devices
 ]
 
 # we can exclude specific devices if the user doesn't want them all
@@ -134,7 +134,7 @@ def setup(hass, base_config):
             sensor_devices = defaultdict(list)
             for dev in visonic_devices["sensor"]:
                 if dev.getDeviceID() not in exclude_ids:
-                    sensor_devices["sensor"].append(dev)                
+                    sensor_devices["binary_sensor"].append(dev)                
             
             hass.data[VISONIC_SENSORS] = sensor_devices
 
@@ -142,7 +142,7 @@ def setup(hass, base_config):
                 
             # trigger discovery which will add the sensor and set up a new device
             #    this discovers new sensors, existing ones will remain and are not removed
-            discovery.load_platform(hass, "sensor", DOMAIN, {}, base_config)
+            discovery.load_platform(hass, "binary_sensor", DOMAIN, {}, base_config)
             
         elif type(visonic_devices) == visonicApi.SensorDevice:
             # This is an update of an existing device
@@ -180,10 +180,10 @@ def setup(hass, base_config):
         retval = hass.states.async_remove('alarm_control_panel.visonic_alarm')
         if retval:
             _LOGGER.info("Removed existing HA Entity ID: alarm_control_panel.visonic_alarm")
-        sensor_list = hass.states.async_entity_ids("sensor")
+        sensor_list = hass.states.async_entity_ids("binary_sensor")
         if sensor_list is not None:
             for x in sensor_list:
-                if x.startswith( 'sensor.visonic' ):
+                if x.startswith( 'binary_sensor.visonic' ):
                     retval = hass.states.async_remove(x)
                     if retval:
                         _LOGGER.info("Removed existing HA Entity ID: {0}".format(x))
