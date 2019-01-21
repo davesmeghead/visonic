@@ -9,7 +9,7 @@ Visonic produce the Powermax alarm panel series (PowerMax, PowerMax+, PowerMaxEx
 You have a choice, you either connect using RS232/USB or using Ethernet (Wired or Wireless)
 
 
-If you choose USB then the PowerMax provides direct support for an RS232 serial interface that can be connected to the machine running Home Assistant. The serial interface is not installed by default but can be ordered from any PowerMax vendor (called the Visonic RS-232 Adaptor Kit). The RS232 internal panel interface uses TTL signal levels, this adaptor kit makes it "proper" TTL signal levels.  You may not need the Adaptor Kit if you use a USB interface with TTL RS232 logic levels.
+If you choose USB then the PowerMax provides direct support for an RS232 serial interface that can be connected to the machine running Home Assistant. The serial interface is not installed by default but can be ordered from any PowerMax vendor (called the Visonic RS-232 Adaptor Kit). The RS232 internal panel interface uses TTL signal levels, this adaptor kit makes it "proper" signal levels.  You may not need the Adaptor Kit if you use a USB interface with TTL RS232 logic levels.
 
 
 If you choose Ethernet then I can help a bit more as that is what I have. I have a device that connects to the RS232 TTL interface inside the panel (without using the RS-232 Adapter Kit) and creates an Ethernet TCP connection with a web server to set it up. I bought [this](https://www.aliexpress.com/item/USR-TCP232-E-Serial-Server-RS232-RS485-To-Ethernet-TTL-Level-DHCP-Web-Module/32687581169.html)
@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is Alpha release 0.0.6.6
+This is Alpha release 0.0.7.0 : *** This represents a potential breaking change ***
 
 Please be gentle with me, this is my first HA adventure
 
@@ -52,9 +52,11 @@ Please be gentle with me, this is my first HA adventure
 
 0.0.6.6: Bug fix to sensor device_class, part of HA Entity update
 
+0.0.7.0: *** Breaking change *** Conversion of all sensors from a sensor Entity to a binary_sensor entity type. This means that a sensor can only have 2 states, off or on. The interpretation in the frontend depends on what is provided by device_class. I have done what I can to get the device class correct but you can change this in your customize configuration section, see below. Remember that the state is now off or on and not "-", "T" or "O".
+
 ## Instructions and what works so far
 It currently connects to the panel in Powerlink and it creates an HA:
-- Sensor for each alarm sensor.
+- Sensor for each alarm sensor - As of release 0.0.7.0 this is a binary sensor with state off or on.
 - Switch so you can look at the internal state values, the switch itself doesn't do anything.
 - "alarm_control_panel" badge so you can arm and disarm the alarm.
 
@@ -108,10 +110,24 @@ sudo pip3 install python-datetime
 sudo pip3 install pyserial_asyncio
 ```
 
-You can force it in to Standard mode.
+###You can force it in to Standard mode.
 If the plugin connects in Powerlink mode then it automatically gets the user codes from the panel to arm and disarm.
 If the plugin connects in Standard mode then you must provide the user code to arm and disarm. You can either use 'override_code' in the HA configuration or manually enter it each time. Some panels allow arming without the user code. If the mode stays at Download for more than 5 minutes then something has gone wrong.
 
+### How to change the device class
+I try to set the device class correctly by default however I don't know if a particular perimeter sensor "magnet" is on a door or window for example.
+By default I set all:
+- "PIRs" to device_class "motion"
+- "magnet" to device_class "window"
+- "wired" to device_class "door"
+
+You can change this in your customize configuration like this for example
+
+```
+    "binary_sensor.visonic_z04":
+      friendly_name: 'Kitchen Door'
+      device_class: door
+```
 
 ### How to use it in Home Assistant Automations
 ```
@@ -141,8 +157,13 @@ Of course you'll have to write your own scripts!
 - For Powerlink mode to work the enrollment procedure has to be followed. If you don't enroll the Powerlink on the PowerMax the binding will operate in Standard mode. On the newer software versions of the PowerMax the Powerlink enrollment is automatic, and the binding should only operate in 'Powerlink' mode (if enrollment is successful). It will attempt to connect in Powerlink mode 3 times before giving up and going to Standard mode. The 2 advantages of Powerlink mode are that it shows you detailed information about the panel and you do not have to enter your user code to arm and disarm the panel.
 - You can force the binding to use the Standard mode. In this mode, the binding will not download the alarm panel setup and so the binding will not know your user code.
 - An HA Event 'alarm_panel_state_update' (that you will probably never use) is sent through HA for:
-    - 1 is a zone update, 2 is a panel update, 3 is a panel update AND the alarm is active!!!!!
-    - The data associated with the event is { 'condition': X }   where X is 1, 2 or 3
+    - An event type
+        - 1 is a zone update
+        - 2 is a panel update
+        - 3 is a panel update AND the alarm is active!!!!!
+        - 4 is a panel reset
+        - 5 is a pin rejected
+    - The data associated with the event is { 'condition': X }   where X is 1, 2, 3, 4 or 5
     - I may add more information to the event later if required
 - You should be able to stop and start your HA. Once you manage to get it in to Powerlink mode then it should keep working through restarting HA, this is because the powerlink code has successfully registered with the panel.
 
@@ -177,7 +198,7 @@ logger:
   logs:
     custom_components.visonic: debug
     custom_components.alarm_control_panel.visonic: critical
-    custom_components.sensor.visonic: critical
+    custom_components.binary_sensor.visonic: critical
     custom_components.pyvisonic: debug
 ```
 
