@@ -110,7 +110,7 @@ sudo pip3 install python-datetime
 sudo pip3 install pyserial_asyncio
 ```
 
-###You can force it in to Standard mode.
+### You can force it in to Standard mode.
 If the plugin connects in Powerlink mode then it automatically gets the user codes from the panel to arm and disarm.
 If the plugin connects in Standard mode then you must provide the user code to arm and disarm. You can either use 'override_code' in the HA configuration or manually enter it each time. Some panels allow arming without the user code. If the mode stays at Download for more than 5 minutes then something has gone wrong.
 
