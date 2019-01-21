@@ -88,8 +88,7 @@ You can also have a USB (for RS232) connection:
     path: '/dev/ttyUSB1'
 ```
 
-
-It tries to connect in Powerlink mode by default (unless you set force_standard to 'yes').
+The default settings if you miss it out of the configuration.yaml file:
 
 - 'motion_off' (default 120) is in seconds, it is the time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period.
 - 'language' (default 'EN') can be either EN for English or NL for Dutch
@@ -111,6 +110,8 @@ sudo pip3 install pyserial_asyncio
 ```
 
 ### You can force it in to Standard mode.
+It tries to connect in Powerlink mode by default (unless you set force_standard to 'yes').
+
 If the plugin connects in Powerlink mode then it automatically gets the user codes from the panel to arm and disarm.
 If the plugin connects in Standard mode then you must provide the user code to arm and disarm. You can either use 'override_code' in the HA configuration or manually enter it each time. Some panels allow arming without the user code. If the mode stays at Download for more than 5 minutes then something has gone wrong.
 
