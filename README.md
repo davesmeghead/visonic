@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is Alpha release 0.0.7.0 : *** This represents a potential breaking change ***
+This is Alpha release 0.0.7.1 : *** 0.0.7.0 represents a potential breaking change ***
 
 Please be gentle with me, this is my first HA adventure
 
@@ -53,6 +53,8 @@ Please be gentle with me, this is my first HA adventure
 0.0.6.6: Bug fix to sensor device_class, part of HA Entity update
 
 0.0.7.0: *** Breaking change *** Conversion of all sensors from a sensor Entity to a binary_sensor entity type. This means that a sensor can only have 2 states, off or on. The interpretation in the frontend depends on what is provided by device_class. I have done what I can to get the device class correct but you can change this in your customize configuration section, see below. Remember that the state is now off or on and not "-", "T" or "O".
+
+0.0.7.1: Updated device attributes for battery level, tripped state, armed state (bypassed or not) and last tripped time to all conform with similar settings within HA itself
 
 ## Instructions and what works so far
 It currently connects to the panel in Powerlink and it creates an HA:

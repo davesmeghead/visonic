@@ -9,12 +9,11 @@ import datetime
 from datetime import timedelta
 
 from homeassistant.util import convert, slugify
+from homeassistant.util.dt import utc_from_timestamp
 from homeassistant.components.binary_sensor import BinarySensorDevice
-#from homeassistant.helpers.entity import Entity
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
 from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED)
 from custom_components.visonic import VISONIC_SENSORS
-#from homeassistant.const import (STATE_ON, STATE_OFF)
 
 DEPENDENCIES = ['visonic']
 
@@ -28,6 +27,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         VisonicSensor(device)
         for device in hass.data[VISONIC_SENSORS]['binary_sensor'])
 
+
 #   Each Sensor in Visonic Alarms can be Armed/Bypassed individually
 class VisonicSensor(BinarySensorDevice):
     """Representation of a Visonic Sensor."""
@@ -39,23 +39,18 @@ class VisonicSensor(BinarySensorDevice):
         self._name = "Visonic " + self.visonic_device.dname
         # Append device id to prevent name clashes in HA.
         self.visonic_id = slugify(self._name) # VISONIC_ID_FORMAT.format( slugify(self._name), visonic_device.getDeviceID())
-        #self.update()
         self.entity_id = ENTITY_ID_FORMAT.format(self.visonic_id)
-        self.current_value = "T" if self.visonic_device.triggered else "O" if self.visonic_device.status else "-"
+        self.current_value = self.visonic_device.triggered or self.visonic_device.status
         self.visonic_device.install_change_handler(self.onChange)
     
     def onChange(self):
-        self.current_value = "T" if self.visonic_device.triggered else "O" if self.visonic_device.status else "-"
+        self.current_value = self.visonic_device.triggered or self.visonic_device.status
         self.schedule_update_ha_state()
-        # Fire event my_cool_event with event data answer=42
-        #self.hass.bus.fire('alarm_sensor', {
-        #    self._name: self.current_value
-        #})        
 
     @property
     def should_poll(self):
         """Get polling requirement from visonic device."""
-        return False # self.visonic_device.should_poll
+        return False
 
     @property
     def unique_id(self) -> str:
@@ -70,14 +65,8 @@ class VisonicSensor(BinarySensorDevice):
     @property
     def is_on(self):
         """Return true if the binary sensor is on."""
-        return self.current_value != "-"
+        return self.current_value
 
-#    @property
-#    def state(self) -> bool:
-#        """Return the state of the sensor."""
-#        #return STATE_ON if (self.current_value == "T" or self.current_value == "O") else STATE_OFF
-#        return self.current_value
-        
     @property
     def device_info(self):
         """Return information about the device."""
@@ -110,39 +99,31 @@ class VisonicSensor(BinarySensorDevice):
             return self.visonic_device.enrolled
         return False;
 
-    # convert the date and time to a string
-    def pmTimeFunctionStr(self, d : datetime.datetime) -> str:
-        return d.strftime("%a %d/%m/%Y at %H:%M:%S")
-
     @property
     def device_state_attributes(self):
-        """Return device specific state attributes. Implemented by platform classes. """
-        return None
-
-    @property
-    def state_attributes(self):
         """Return the state attributes of the device."""
-        #_LOGGER.warning("in state_attributes")
+        #_LOGGER.warning("in device_state_attributes")
         attr = {}
 
-        attr[ATTR_TRIPPED] = "Yes" if self.visonic_device.triggered else "No"
-        attr[ATTR_BATTERY_LEVEL] = 'Low' if self.visonic_device.lowbatt else 'Normal'
-        attr[ATTR_ARMED] = 'Bypass' if self.visonic_device.bypass else 'Armed'
+        attr[ATTR_TRIPPED] = 'True' if self.visonic_device.triggered else 'False'
+        attr[ATTR_BATTERY_LEVEL] = 0 if self.visonic_device.lowbatt else 100
+        attr[ATTR_ARMED] = 'False' if self.visonic_device.bypass else 'True'
         if self.visonic_device.triggertime is None:
-            attr[ATTR_LAST_TRIP_TIME] = ""
+            attr[ATTR_LAST_TRIP_TIME] = None
         else:
-            attr[ATTR_LAST_TRIP_TIME] = self.pmTimeFunctionStr(self.visonic_device.triggertime)
-        attr["Device Name"] = self.visonic_device.dname
-        #attr["Sensor Type"] = self.visonic_device.stype  commented out as this is returned as the device_class now
-        attr["Zone Type"] = self.visonic_device.ztype
-        attr["Zone Name"] = self.visonic_device.zname
-        attr["Zone Type Name"] = self.visonic_device.ztypeName
-        attr["Zone Chime"] = self.visonic_device.zchime
-        attr["Zone Tamper"] = "Yes" if self.visonic_device.tamper else "No"
-        attr["Zone Open"] = "Yes" if self.visonic_device.status else "No"
-        attr['Visonic Device Id'] = self.visonic_device.id
+            attr[ATTR_LAST_TRIP_TIME] = self.visonic_device.triggertime.isoformat()
+            #attr[ATTR_LAST_TRIP_TIME] = self.pmTimeFunctionStr(self.visonic_device.triggertime)
+        
+        attr["device name"] = self.visonic_device.dname
+        attr["sensor type"] = self.visonic_device.stype
+        attr["zone type"] = self.visonic_device.ztype
+        attr["zone name"] = self.visonic_device.zname
+        attr["zone type name"] = self.visonic_device.ztypeName
+        attr["zone chime"] = self.visonic_device.zchime
+        attr["zone tamper"] = "Yes" if self.visonic_device.tamper else "No"
+        attr["zone open"] = "Yes" if self.visonic_device.status else "No"
+        attr['visonic device'] = self.visonic_device.id
         
         # Not added
         #    self.partition = kwargs.get('partition', None)  # set   partition set (could be in more than one partition)
         return attr
-
