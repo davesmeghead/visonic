@@ -92,14 +92,16 @@ You can also have a USB (for RS232) connection:
 
 The default settings if you miss it out of the configuration.yaml file:
 
-- 'motion_off' (default 120) is in seconds, it is the time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period.
-- 'language' (default 'EN') can be either EN for English or NL for Dutch
-- 'force_standard' (default 'no') determine whether it tries to connect in Powerlink mode or just goes to Standard
-- 'sync_time' (default 'yes') attempts to synchronise the time between the device you run HA on and the alarm panel
-- 'allow_remote_arm' (default 'no') determines whether the panel can be armed from within HA
-- 'allow_remote_disarm' (default 'no') determines whether the panel can be disarmed from within HA
-- 'override_code' (default '') If in Powerlink mode then this is not used. If in Standard mode, then this is the 4 digit code used to arm and disarm. If in Standard mode and the override_code is not set then you will have to enter your 4 digit code every time you arm and disarm. It depends on how secure you make your system and how much you trust it!
-- 'arm_without_usercode' (default 'no') This is only used when in Standard mode. Some panels will arm without entering the 4 digit user code but some will not. So if your panel does not need a user code to arm then set this to 'yes' in your HA configuration files
+| Name                    | Default | Description | List of values |
+|-------------------------|  :---:  |-------------|----------------|
+| motion_off              |  120    | The time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period | Integer Seconds |
+| language                | 'EN'    | Set the Langauge | 'EN' for English or 'NL' for Dutch |
+| force_standard          | 'no'    | Determine whether it tries to connect in Powerlink mode or just goes to Standard | 'no' or 'yes' |
+| sync_time               | 'yes'   | Attempt to synchronise the time between the device you run HA on and the alarm panel | 'no' or 'yes' |
+| allow_remote_arm        | 'no'    | Determines whether the panel can be armed from within HA | 'no' or 'yes' |
+| allow_remote_disarm     | 'no'    | Determines whether the panel can be disarmed from within HA | 'no' or 'yes' |
+| override_code           | ''      | If in Powerlink mode then this is not used. If in Standard mode, then this is the 4 digit code used to arm and disarm. If in Standard mode and the override_code is not set then you will have to enter your 4 digit code every time you arm and disarm. It depends on how secure you make your system and how much you trust it | A 4 digit string |
+| arm_without_usercode    | 'no'    | This is only used when in Standard mode. Some panels will arm without entering the 4 digit user code but some will not. So if your panel does not need a user code to arm then set this to 'yes' in your HA configuration files | 'no' or 'yes' |
 
 
 ### Running it in Home Assistant
