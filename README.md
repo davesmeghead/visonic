@@ -32,29 +32,20 @@ This is Alpha release 0.0.7.1 : *** 0.0.7.0 represents a potential breaking chan
 
 Please be gentle with me, this is my first HA adventure
 
-0.0.2: Made some bug fixes
-
-0.0.3: Removed some test code that would prevent arming. Commented out phone number decoding as creating exceptions
-
-0.0.4: Added arm_without_usercode. Include phone number decode with an exception handler just in case
-
-0.0.5: Updated the state return values for the generic alarm panel for entry delay (as pending)
-
-0.0.6: Extracts much more info from EPROM in powerlink. Added more Dutch translations. Handle Access Denied (when entering wrong pin code). A few bug fixes.
-
-0.0.6.2: Added code to indicate when alarm is triggered (and sounding). This works best in powerlink mode. In Standard mode I make a guess that when the panel is armed and a device is triggered then the alarm must be sounding.
-
-0.0.6.3: Fix bug in SetConfig, prevent "None" values being accepted 
-
-0.0.6.4: Removed push change in A3 message as causing exception in HA
-
-0.0.6.5: Sensors are based on the HA Entity. Moved "from serial_asyncio import create_serial_connection" to create_usb_visonic_connection so only used for USB connections.
-
-0.0.6.6: Bug fix to sensor device_class, part of HA Entity update
-
-0.0.7.0: *** Breaking change *** Conversion of all sensors from a sensor Entity to a binary_sensor entity type. This means that a sensor can only have 2 states, off or on. The interpretation in the frontend depends on what is provided by device_class. I have done what I can to get the device class correct but you can change this in your customize configuration section, see below. Remember that the state is now off or on and not "-", "T" or "O".
-
-0.0.7.1: Updated device attributes for battery level, tripped state, armed state (bypassed or not) and last tripped time to all conform with similar settings within HA itself
+|  Release   |    Description   |
+|------------|------------------|
+| 0.0.2      | Made some bug fixes |
+| 0.0.3      | Removed some test code that would prevent arming. Commented out phone number decoding as creating exceptions. |
+| 0.0.4      | Added arm_without_usercode. Include phone number decode with an exception handler just in case. |
+| 0.0.5      | Updated the state return values for the generic alarm panel for entry delay (as pending). |
+| 0.0.6      | Extracts much more info from EPROM in powerlink. Added more Dutch translations. Handle Access Denied (when entering wrong pin code). A few bug fixes. |
+| 0.0.6.2    | Added code to indicate when alarm is triggered (and sounding). This works best in powerlink mode. In Standard mode I make a guess that when the panel is armed and a device is triggered then the alarm must be sounding. |
+| 0.0.6.3    | Fix bug in SetConfig, prevent "None" values being accepted. |
+| 0.0.6.4    | Removed push change in A3 message as causing exception in HA. |
+| 0.0.6.5    | Sensors are based on the HA Entity. Moved "from serial_asyncio import create_serial_connection" to create_usb_visonic_connection so only used for USB connections. |
+| 0.0.6.6    | Bug fix to sensor device_class, part of HA Entity update. |
+| 0.0.7.0    | *** Breaking change *** Conversion of all sensors from a sensor Entity to a binary_sensor entity type. This means that a sensor can only have 2 states, off or on. The interpretation in the frontend depends on what is provided by device_class. I have done what I can to get the device class correct but you can change this in your customize configuration section, see below. Remember that the state is now off or on and not "-", "T" or "O". |
+| 0.0.7.1    | Updated device attributes for battery level, tripped state, armed state (bypassed or not) and last tripped time to all conform with similar settings within HA itself. |
 
 ## Instructions and what works so far
 It currently connects to the panel in Powerlink and it creates an HA:
