@@ -94,14 +94,14 @@ The default settings if you miss it out of the configuration.yaml file:
 
 | Name                    | Default | Description | List of values |
 |-------------------------|  :---:  |-------------|----------------|
-| motion_off              |  120    | The time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period | Integer Seconds |
-| language                | 'EN'    | Set the Langauge. 'EN' for English or 'NL' for Dutch | 'EN' or 'NL' |
-| force_standard          | 'no'    | Determine whether it tries to connect in Powerlink mode or just goes to Standard | 'no' or 'yes' |
-| sync_time               | 'yes'   | Attempt to synchronise the time between the device you run HA on and the alarm panel | 'no' or 'yes' |
-| allow_remote_arm        | 'no'    | Determines whether the panel can be armed from within HA | 'no' or 'yes' |
-| allow_remote_disarm     | 'no'    | Determines whether the panel can be disarmed from within HA | 'no' or 'yes' |
+| motion_off              |  120    | The time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period. | Integer Seconds |
+| language                | 'EN'    | Set the Langauge. 'EN' for English or 'NL' for Dutch. | 'EN' or 'NL' |
+| force_standard          | 'no'    | Determine whether it tries to connect in Powerlink mode or just goes to Standard. | 'no' or 'yes' |
+| sync_time               | 'yes'   | Attempt to synchronise the time between the device you run HA on and the alarm panel. | 'no' or 'yes' |
+| allow_remote_arm        | 'no'    | Determines whether the panel can be armed from within HA. | 'no' or 'yes' |
+| allow_remote_disarm     | 'no'    | Determines whether the panel can be disarmed from within HA. | 'no' or 'yes' |
 | override_code           | ''      | If in Standard mode, then this is the 4 digit code used to arm and disarm. See note 1 below | 4 digit string |
-| arm_without_usercode    | 'no'    | Arm without the usercode (not all panels support this). See note 2 below. | 'no' or 'yes' |
+| arm_without_usercode    | 'no'    | If in Standard mode, Arm without the usercode (not all panels support this). See note 2 below. | 'no' or 'yes' |
 
 Note 1: If in Powerlink mode then this is not used. If in Standard mode and the override_code is not set then you will have to enter your 4 digit code every time you arm and disarm. It depends on how secure you make your system and how much you trust it.
 
