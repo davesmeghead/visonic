@@ -107,7 +107,7 @@ class VisonicAlarm(alarm.AlarmControlPanel):
                 return None
 
         #_LOGGER.info("code format number *****************************") 
-        return "Number"
+        return "number"
 
     @property
     def state(self):
