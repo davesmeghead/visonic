@@ -76,6 +76,18 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         return False;
 
     @property
+    def device_state_attributes(self):  #
+        """Return the state attributes of the device."""
+        # maybe should filter rather than sending them all
+        return None
+        
+    @property
+    def state_attributes(self):  #
+        """Return the state attributes of the device."""
+        # maybe should filter rather than sending them all
+        return visonicApi.PanelStatus
+
+    @property
     def code_format(self):
         """Regex for code format or None if no code is required."""
         #_LOGGER.info("code format called *****************************") 

@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is Alpha release 0.0.7.2 : *** 0.0.7.0 represents a potential breaking change ***
+This is Alpha release 0.0.8.0 : *** 0.0.8.0 represents a potential breaking change ***
 
 Please be gentle with me, this is my first HA adventure
 
@@ -47,6 +47,8 @@ Please be gentle with me, this is my first HA adventure
 | 0.0.7.0    | *** Breaking change *** Conversion of all sensors from a sensor Entity to a binary_sensor Entity type. This means that a sensor can only have 2 states, off or on. The interpretation in the frontend depends on what is provided by device_class. I have done what I can to get the device class correct but you can change this in your customize configuration section, see below. Remember that the state is now off or on and not "-", "T" or "O". |
 | 0.0.7.1    | Updated device attributes for battery level, tripped state, armed state (bypassed or not) and last tripped time to all conform with similar settings within HA itself. |
 | 0.0.7.2    | HA 0.86 made a breaking change, alarm control panel entities must return "number" and not "Number". |
+| 0.0.8.0    | *** Breaking change ***  X10 devices added, they should be created as a switch. I've removed the old switch entity from previous versions and merged its attributes in to "alarm_control_panel.visonic_alarm". Within a sensor, zone tamper and device tamper are now different. Tamper no longer triggers the alarm sounding in HA, only the siren sounding does this now. |
+
 
 ## Instructions and what works so far
 It currently connects to the panel in Powerlink and it creates an HA:

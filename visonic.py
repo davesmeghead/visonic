@@ -14,7 +14,6 @@ import custom_components.pyvisonic as visonicApi   # Connection to python Librar
 import asyncio
 
 from collections import defaultdict
-from custom_components.switch.visonic import VisonicAlarm
 from homeassistant.util.dt import utc_from_timestamp
 from homeassistant.util import convert, slugify
 from homeassistant.helpers import discovery
@@ -24,16 +23,18 @@ from homeassistant.helpers.entity import Entity
 from requests import ConnectTimeout, HTTPError
 from time import sleep
 
+# Visonic has Motion Sensors (PIR and Magnetic contact mainly) and X10 devices
+VISONIC_PLATFORM = 'visonic_platform'
+
+from custom_components.switch.visonic import VisonicAlarm
+from custom_components.switch.visonic import VISONIC_X10
+from custom_components.binary_sensor.visonic import VISONIC_SENSORS
+
 REQUIREMENTS = ['pyserial', 'pyserial_asyncio', 'datetime']
 
 DOMAIN = 'visonic'
 VISONIC_CONTROLLER = 'visonic_controller'
 VISONIC_ID_FORMAT = '{}_{}'
-
-# Visonic has Motion Sensors (PIR and Magnetic contact mainly) and X10 devices
-VISONIC_SENSORS = 'visonic_sensors'
-VISONIC_PLATFORM = 'visonic_platform'
-VISONIC_X10 = 'visonic_x10'
 
 NOTIFICATION_ID = 'visonic_notification'
 NOTIFICATION_TITLE = 'Visonic Panel Setup'
@@ -138,15 +139,34 @@ def setup(hass, base_config):
             
             hass.data[VISONIC_SENSORS] = sensor_devices
 
+            #_LOGGER.info("Dumping X10 Devices")
+            x10_devices = defaultdict(list)
+            for dev in visonic_devices["switch"]:
+                #_LOGGER.info("VS: X10 Switch list {0}".format(dev))
+                if dev.enabled:
+                    x10_devices["switch"].append(dev)
+                
+            hass.data[VISONIC_X10] = x10_devices    
+                
             #_LOGGER.info("VS: Sensor list {0}".format(hass.data[VISONIC_SENSORS]))
                 
             # trigger discovery which will add the sensor and set up a new device
             #    this discovers new sensors, existing ones will remain and are not removed
             discovery.load_platform(hass, "binary_sensor", DOMAIN, {}, base_config)
             
+            discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)
+            
         elif type(visonic_devices) == visonicApi.SensorDevice:
-            # This is an update of an existing device
+            # This is an update of an existing sensor device
             _LOGGER.info("Sensor update {0}".format( visonic_devices ))
+            
+        elif type(visonic_devices) == visonicApi.X10Device:
+            # This is an update of an existing x10 device
+            _LOGGER.info("X10 update {0}".format( visonic_devices ))
+            
+        elif type(visonic_devices) == visonicApi.LogPanelEvent:
+            # This is an update of the event log
+            _LOGGER.info("Event Log update {0}".format( visonic_devices ))
             
         elif visonic_devices >= 1 and visonic_devices <= 10:   
             # General update trigger

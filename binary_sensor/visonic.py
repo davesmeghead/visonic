@@ -13,9 +13,10 @@ from homeassistant.util.dt import utc_from_timestamp
 from homeassistant.components.binary_sensor import BinarySensorDevice
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
 from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED)
-from custom_components.visonic import VISONIC_SENSORS
 
 DEPENDENCIES = ['visonic']
+
+VISONIC_SENSORS = 'visonic_sensors'
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,9 +24,10 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     """Set up the visonic controller devices."""
     _LOGGER.info("In setup_platform the sensor config file")
     
-    add_devices(
-        VisonicSensor(device)
-        for device in hass.data[VISONIC_SENSORS]['binary_sensor'])
+    if VISONIC_SENSORS in hass.data:
+        add_devices(
+            VisonicSensor(device)
+            for device in hass.data[VISONIC_SENSORS]['binary_sensor'])
 
 
 #   Each Sensor in Visonic Alarms can be Armed/Bypassed individually
@@ -120,7 +122,8 @@ class VisonicSensor(BinarySensorDevice):
         attr["zone name"] = self.visonic_device.zname
         attr["zone type name"] = self.visonic_device.ztypeName
         attr["zone chime"] = self.visonic_device.zchime
-        attr["zone tamper"] = "Yes" if self.visonic_device.tamper else "No"
+        attr["zone tamper"] = "Yes" if self.visonic_device.ztamper else "No"
+        attr["device tamper"] = "Yes" if self.visonic_device.tamper else "No"
         attr["zone open"] = "Yes" if self.visonic_device.status else "No"
         attr['visonic device'] = self.visonic_device.id
         
