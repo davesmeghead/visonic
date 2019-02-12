@@ -48,6 +48,7 @@ Please be gentle with me, this is my first HA adventure
 | 0.0.7.1    | Updated device attributes for battery level, tripped state, armed state (bypassed or not) and last tripped time to all conform with similar settings within HA itself. |
 | 0.0.7.2    | HA 0.86 made a breaking change, alarm control panel entities must return "number" and not "Number". |
 | 0.0.8.0    | *** Breaking change ***  X10 devices added, they should be created as a switch. I've removed the old switch entity from previous versions and merged its attributes in to "alarm_control_panel.visonic_alarm". Within a sensor, zone tamper and device tamper are now different. Tamper no longer triggers the alarm sounding in HA, only the siren sounding does this now. |
+| 0.0.8.1    | Updated for bugfix to A7 data decode using Powermaster 10 |
 
 
 ## Instructions and what works so far
