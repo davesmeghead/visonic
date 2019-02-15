@@ -49,6 +49,7 @@ Please be gentle with me, this is my first HA adventure
 | 0.0.7.2    | HA 0.86 made a breaking change, alarm control panel entities must return "number" and not "Number". |
 | 0.0.8.0    | *** Breaking change ***  X10 devices added, they should be created as a switch. I've removed the old switch entity from previous versions and merged its attributes in to "alarm_control_panel.visonic_alarm". Within a sensor, zone tamper and device tamper are now different. Tamper no longer triggers the alarm sounding in HA, only the siren sounding does this now. |
 | 0.0.8.1    | Updated for bugfix to A7 data decode using Powermaster 10 |
+| 0.0.8.2    | Added Powermaster Sensor MC-302V PG2 and additional zone status decoding |
 
 
 ## Instructions and what works so far

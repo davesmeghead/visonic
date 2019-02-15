@@ -37,7 +37,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.8.1"
+PLUGIN_VERSION = "0.0.8.2"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -300,7 +300,7 @@ pmSysStatusFlags_t = {
 #}
 
 pmArmMode_t = {
-   "Disarmed" : 0x00, "Stay" : 0x04, "Armed" : 0x05, "UserTest" : 0x06, "StayInstant" : 0x14, "ArmedInstant" : 0x15, "Night" : 0x04, "NightInstant" : 0x14
+   "Disarmed" : 0x00, "Stay" : 0x04, "Armed" : 0x05, "UserTest" : 0x06, "Alarm" : 0x07, "StayInstant" : 0x14, "ArmedInstant" : 0x15, "Night" : 0x04, "NightInstant" : 0x14
 }
 
 pmDetailedArmMode_t = (
@@ -580,7 +580,7 @@ pmZoneChime_t = {
 
 # Note: names need to match to VAR_xxx
 pmZoneSensor_t = {
-   0x3 : "Motion", 0x4 : "Motion", 0x5 : "Magnet", 0x6 : "Magnet", 0x7 : "Magnet", 0xA : "Smoke", 0xB : "Gas", 0xC : "Motion", 0xF : "Wired"
+   0x0 : "Vibration", 0x2 : "Shock", 0x3 : "Motion", 0x4 : "Motion", 0x5 : "Magnet", 0x6 : "Magnet", 0x7 : "Magnet", 0xA : "Smoke", 0xB : "Gas", 0xC : "Motion", 0xF : "Wired"
 } # unknown to date: Push Button, Flood, Universal
 
 ZoneSensorMaster = collections.namedtuple("ZoneSensorMaster", 'name func' )
@@ -589,6 +589,7 @@ pmZoneSensorMaster_t = {
    0x04 : ZoneSensorMaster("Next CAM PG2", "Camera" ),
    0x16 : ZoneSensorMaster("SMD-426 PG2", "Smoke" ),
    0x1A : ZoneSensorMaster("TMD-560 PG2", "Temperature" ),
+   0x29 : ZoneSensorMaster("MC-302V PG2", "Magnet"),
    0x2A : ZoneSensorMaster("MC-302 PG2", "Magnet"),
    0xFE : ZoneSensorMaster("Wired", "Wired" )
 }
@@ -1413,14 +1414,15 @@ class ProtocolBase(asyncio.Protocol):
         self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_PANELFW"]] )     # Request the panel FW
         self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_SERIAL"]] )      # Request serial & type (not always sent by default)
         self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_ZONESTR"]] )     # Read the names of the zones
-        #self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_ZONESIGNAL"]] )  # Read Signal Strength of the wireless zones
+        #fred = bytearray.fromhex('03 00 03 00 03')
+        #self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_ZONESIGNAL"], 6, fred] )  # Read Signal Strength of the wireless zones
         if self.PowerMaster:
             self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_SIRKEYZON"]] )
         self.SendCommand("MSG_START")      # Start sending all relevant settings please
         self.SendCommand("MSG_EXIT")       # Exit download mode
 
     # We can only use this function when the panel has sent a "installing powerlink" message i.e. AB 0A 00 01
-    #   We need to clear the send queue ans reset the send parameters to immediately send an MSG_ENROLL
+    #   We need to clear the send queue and reset the send parameters to immediately send an MSG_ENROLL
     def SendMsg_ENROLL(self):
         """ Auto enroll the PowerMax/Master unit """
         if not self.doneAutoEnroll:
@@ -1811,8 +1813,8 @@ class PacketHandling(ProtocolBase):
 
                 setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_ZONES"])
                 
-                zonesignalstrength = self.pmReadSettings(pmDownloadItem_t["MSG_DL_ZONESIGNAL"])
-                log.debug("ZoneSignal " + self.toString(zonesignalstrength))
+                #zonesignalstrength = self.pmReadSettings(pmDownloadItem_t["MSG_DL_ZONESIGNAL"])
+                #log.debug("ZoneSignal " + self.toString(zonesignalstrength))
                 log.debug("[Process Settings] DL Zone settings " + self.toString(setting))
                 log.debug("[Process Settings] Zones Names Buffer :  {0}".format(self.toString(zoneNames)))
 
@@ -2519,7 +2521,13 @@ class PacketHandling(ProtocolBase):
                 log.debug("[handle_msgtypeA5]            Zone: {0}, {1}".format(eventZone, sEventLog))
                 for key, value in self.pmSensorDev_t.items():
                     if value.id == eventZone:      # look for the device name
-                        if eventType == 3: # Zone Open
+                        if eventType == 1: # Tamper Alarm
+                            self.pmSensorDev_t[key].tamper = True
+                            self.pmSensorDev_t[key].pushChange()
+                        elif eventType == 2: # Tamper Restore
+                            self.pmSensorDev_t[key].tamper = False
+                            self.pmSensorDev_t[key].pushChange()
+                        elif eventType == 3: # Zone Open
                             self.pmSensorDev_t[key].triggered = True
                             self.pmSensorDev_t[key].status = True
                             self.pmSensorDev_t[key].triggertime = self.getTimeFunction()
@@ -2532,6 +2540,33 @@ class PacketHandling(ProtocolBase):
                             self.pmSensorDev_t[key].triggered = True
                             self.pmSensorDev_t[key].triggertime = self.getTimeFunction()
                             self.pmSensorDev_t[key].pushChange()
+                        #elif eventType == 6: # Panic Alarm
+                        #elif eventType == 7: # RF Jamming
+                        #elif eventType == 8: # Tamper Open
+                        #    self.pmSensorDev_t[key].pushChange()
+                        #elif eventType == 9: # Comms Failure
+                        #elif eventType == 10: # Line Failure
+                        #elif eventType == 11: # Fuse
+                        #elif eventType == 12: # Not Active
+                        #    self.pmSensorDev_t[key].triggered = False
+                        #    self.pmSensorDev_t[key].status = False
+                        #    self.pmSensorDev_t[key].pushChange()
+                        elif eventType == 13: # Low Battery
+                            self.pmSensorDev_t[key].lowbatt = True
+                            self.pmSensorDev_t[key].pushChange()
+                        #elif eventType == 14: # AC Failure
+                        #elif eventType == 15: # Fire Alarm
+                        #elif eventType == 16: # Emergency
+                        #elif eventType == 17: # Siren Tamper
+                        #    self.pmSensorDev_t[key].tamper = True
+                        #    self.pmSensorDev_t[key].pushChange()
+                        #elif eventType == 18: # Siren Tamper Restore
+                        #    self.pmSensorDev_t[key].tamper = False
+                        #    self.pmSensorDev_t[key].pushChange()
+                        #elif eventType == 19: # Siren Low Battery
+                        #    self.pmSensorDev_t[key].lowbatt = True
+                        #    self.pmSensorDev_t[key].pushChange()
+                        #elif eventType == 20: # Siren AC Fail
 
             self.sendResponseEvent ( 1 )   # push changes through to the host to get it to update
             
