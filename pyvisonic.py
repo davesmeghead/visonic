@@ -37,7 +37,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.8.3"
+PLUGIN_VERSION = "0.0.8.4"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -2444,15 +2444,12 @@ class PacketHandling(ProtocolBase):
                         log.debug("X10 device {0} changed to {1}".format(i, status))
                         self.pmX10Dev_t[i].pushChange()
                 else:
-                    x10Name = 0x1F
                     if i == 0:
                         x10Location = "PGM"
                         x10DeviceName = "PGM"
                         x10Type = "onoff"
                     else:
-                        if i-1 in x10Names:
-                            x10Name = x10Names[i-1]
-                        x10Location = pmZoneName_t[x10Name]
+                        x10Location = "Unknown"
                         x10DeviceName = "X{0:0>2}".format(i)
                         x10Type = "dim"
                     self.pmX10Dev_t[i] = X10Device(name = x10DeviceName, type = x10Type, location = x10Location, id=i, enabled=True)

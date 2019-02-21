@@ -51,6 +51,7 @@ Please be gentle with me, this is my first HA adventure
 | 0.0.8.1    | Updated for bugfix to A7 data decode using Powermaster 10 |
 | 0.0.8.2    | Added Powermaster Sensor MC-302V PG2 and additional zone status decoding |
 | 0.0.8.3    | Bug fixes for X10 Devices when in Standard Mode |
+| 0.0.8.4    | Bug fix to the Bug fix for X10 Devices when in Standard Mode |
 
 
 ## Instructions and what works so far
