@@ -37,7 +37,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.8.2"
+PLUGIN_VERSION = "0.0.8.3"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -300,7 +300,8 @@ pmSysStatusFlags_t = {
 #}
 
 pmArmMode_t = {
-   "Disarmed" : 0x00, "Stay" : 0x04, "Armed" : 0x05, "UserTest" : 0x06, "Alarm" : 0x07, "StayInstant" : 0x14, "ArmedInstant" : 0x15, "Night" : 0x04, "NightInstant" : 0x14
+# "Alarm" : 0x07, 
+   "Disarmed" : 0x00, "Stay" : 0x04, "Armed" : 0x05, "UserTest" : 0x06, "StayInstant" : 0x14, "ArmedInstant" : 0x15, "Night" : 0x04, "NightInstant" : 0x14
 }
 
 pmDetailedArmMode_t = (
@@ -2431,15 +2432,35 @@ class PacketHandling(ProtocolBase):
                         log.debug("[handle_msgtypeA5]      unable to locate zone device " + str(eventZone))
 
             # Examine X10 status
+            visonic_devices = defaultdict(list)
             for i in range(0, 16):
                 status = x10status & (1 << i)
-                # INTERFACE : use this to set X10 status
-                oldstate = self.pmX10Dev_t[i].state
-                self.pmX10Dev_t[i].state = bool(status)
-                # Check to see if the state has changed
-                if ( oldstate and not self.pmX10Dev_t[i].state ) or (not oldstate and self.pmX10Dev_t[i].state):
-                    log.debug("X10 device {0} changed to {1}".format(i, status))
-                    self.pmX10Dev_t[i].pushChange()
+                if i in self.pmX10Dev_t:
+                    # INTERFACE : use this to set X10 status
+                    oldstate = self.pmX10Dev_t[i].state
+                    self.pmX10Dev_t[i].state = bool(status)
+                    # Check to see if the state has changed
+                    if ( oldstate and not self.pmX10Dev_t[i].state ) or (not oldstate and self.pmX10Dev_t[i].state):
+                        log.debug("X10 device {0} changed to {1}".format(i, status))
+                        self.pmX10Dev_t[i].pushChange()
+                else:
+                    x10Name = 0x1F
+                    if i == 0:
+                        x10Location = "PGM"
+                        x10DeviceName = "PGM"
+                        x10Type = "onoff"
+                    else:
+                        if i-1 in x10Names:
+                            x10Name = x10Names[i-1]
+                        x10Location = pmZoneName_t[x10Name]
+                        x10DeviceName = "X{0:0>2}".format(i)
+                        x10Type = "dim"
+                    self.pmX10Dev_t[i] = X10Device(name = x10DeviceName, type = x10Type, location = x10Location, id=i, enabled=True)
+                    self.pmX10Dev_t[i].state = bool(status)
+                    visonic_devices['switch'].append(self.pmX10Dev_t[i])
+             
+            if len(visonic_devices) > 0:
+                self.sendResponseEvent ( visonic_devices )
                     
             slog = pmDetailedArmMode_t[sysStatus]
             sarm_detail = "Unknown"
@@ -2887,11 +2908,13 @@ class EventHandling(PacketHandling):
             isValidPL, bpin = self.pmGetPin(pin)
 
             if isValidPL:
-                bypassint = int(2 ^ (zone - 1))
+                bypassint = 1 << (zone - 1)
+                log.info("SetSensorArmedState A " + hex(bypassint))
                 # is it big or little endian, i'm not sure, needs testing
-                y1, y2, y3, y4 = (bypassint & 0xFFFFFFFF).to_bytes(4, 'big')
+                y1, y2, y3, y4 = (bypassint & 0xFFFFFFFF).to_bytes(4, 'little')
                 # These could be the wrong way around, needs testing
                 bypass = bytearray([y1, y2, y3, y4])
+                log.info("SetSensorArmedState B " + self.toString(bypass))
                 if len(bpin) == 2 and len(bypass) == 4:
                     if armedValue:
                         self.SendCommand("MSG_BYPASSDI", options = [1, bpin, 7, bypass])

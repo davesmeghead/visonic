@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is Alpha release 0.0.8.0 : *** 0.0.8.0 represents a potential breaking change ***
+This is Alpha release 0.0.8.3 : *** 0.0.8.0 represents a potential breaking change ***
 
 Please be gentle with me, this is my first HA adventure
 
@@ -50,12 +50,14 @@ Please be gentle with me, this is my first HA adventure
 | 0.0.8.0    | *** Breaking change ***  X10 devices added, they should be created as a switch. I've removed the old switch entity from previous versions and merged its attributes in to "alarm_control_panel.visonic_alarm". Within a sensor, zone tamper and device tamper are now different. Tamper no longer triggers the alarm sounding in HA, only the siren sounding does this now. |
 | 0.0.8.1    | Updated for bugfix to A7 data decode using Powermaster 10 |
 | 0.0.8.2    | Added Powermaster Sensor MC-302V PG2 and additional zone status decoding |
+| 0.0.8.3    | Bug fixes for X10 Devices when in Standard Mode |
 
 
 ## Instructions and what works so far
 It currently connects to the panel in Powerlink and it creates an HA:
 - Sensor for each alarm sensor - As of release 0.0.7.0 this is a binary sensor with state off or on.
-- Switch so you can look at the internal state values, the switch itself doesn't do anything.
+- Alarm Panel integration "alarm_control_panel.visonic_alarm" so you can look at the internal state values
+- Switch for each X10 device
 - "alarm_control_panel" badge so you can arm and disarm the alarm.
 
 You do not need to use the Master Installer Code. To connect in Powerlink mode, the plugin uses a special Powerlink Code.
@@ -161,13 +163,13 @@ Of course you'll have to write your own scripts!
 - For Powerlink mode to work the enrollment procedure has to be followed. If you don't enroll the Powerlink on the PowerMax the binding will operate in Standard mode. On the newer software versions of the PowerMax the Powerlink enrollment is automatic, and the binding should only operate in 'Powerlink' mode (if enrollment is successful). It will attempt to connect in Powerlink mode 3 times before giving up and going to Standard mode. The 2 advantages of Powerlink mode are that it shows you detailed information about the panel and you do not have to enter your user code to arm and disarm the panel.
 - You can force the binding to use the Standard mode. In this mode, the binding will not download the alarm panel setup and so the binding will not know your user code.
 - An HA Event 'alarm_panel_state_update' (that you will probably never use) is sent through HA for:
-    - An event type
+    - The data associated with the event is { 'condition': X }   where X is 1, 2, 3, 4 or 5
         - 1 is a zone update
         - 2 is a panel update
         - 3 is a panel update AND the alarm is active!!!!!
         - 4 is a panel reset
         - 5 is a pin rejected
-    - The data associated with the event is { 'condition': X }   where X is 1, 2, 3, 4 or 5
+        - 6 is a tamper alarm
     - I may add more information to the event later if required
 - You should be able to stop and start your HA. Once you manage to get it in to Powerlink mode then it should keep working through restarting HA, this is because the powerlink code has successfully registered with the panel.
 
@@ -176,8 +178,8 @@ Of course you'll have to write your own scripts!
 - Partitions, it assumes a single partition
 - What happens when the alarm is actually triggered (apart from sending an event in HA and setting the Alarm Status state)
 - The compatibility of the binding with the Powermaster alarm panel series is probably only partial.
-- The USB connection is implemented but was not tested.
-- You cannot bypass / arm individual sensors using the HA interface
+- The USB connection is implemented but was not tested (although other users have got it working).
+- You cannot bypass / arm individual sensors using the HA interface.
 - The Event Log is not yet implemented. It works but I don't know what to do with it in HA.
 
 
