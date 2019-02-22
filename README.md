@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is Alpha release 0.0.8.3 : *** 0.0.8.0 represents a potential breaking change ***
+This is release 0.0.8.5 : *** 0.0.8.0 represents a potential breaking change ***
 
 Please be gentle with me, this is my first HA adventure
 
@@ -52,6 +52,7 @@ Please be gentle with me, this is my first HA adventure
 | 0.0.8.2    | Added Powermaster Sensor MC-302V PG2 and additional zone status decoding |
 | 0.0.8.3    | Bug fixes for X10 Devices when in Standard Mode |
 | 0.0.8.4    | Bug fix to the Bug fix for X10 Devices when in Standard Mode |
+| 0.0.8.5    | Bug fix for the number format to be displayed on standard mode |
 
 
 ## Instructions and what works so far
