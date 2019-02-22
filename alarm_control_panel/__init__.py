@@ -11,7 +11,7 @@ import logging
 import voluptuous as vol
 
 from homeassistant.const import (
-    ATTR_CODE, ATTR_CODE_FORMAT, ATTR_ENTITY_ID, SERVICE_ALARM_TRIGGER,
+    ATTR_CODE, ATTR_CODE_FORMAT, ATTR_ENTITY_ID, ATTR_COMMAND, SERVICE_ALARM_TRIGGER,
     SERVICE_ALARM_DISARM, SERVICE_ALARM_ARM_HOME, SERVICE_ALARM_ARM_AWAY,
     SERVICE_ALARM_ARM_NIGHT, SERVICE_ALARM_ARM_CUSTOM_BYPASS)
 from homeassistant.loader import bind_hass
@@ -43,7 +43,10 @@ ATTR_TO_PROPERTY = [
 ALARM_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
     vol.Optional(ATTR_CODE): cv.string,
+    vol.Optional(ATTR_COMMAND): cv.boolean,
 })
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @bind_hass

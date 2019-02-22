@@ -14,6 +14,7 @@ import homeassistant.components.alarm_control_panel as alarm
 #from homeassistant.components.alarm_control_panel import AlarmControlPanel
 from homeassistant.const import STATE_UNKNOWN, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED
 from custom_components.visonic import VISONIC_PLATFORM
+from homeassistant.core import valid_entity_id, split_entity_id
 
 DEPENDENCIES = ['visonic']
 
@@ -52,6 +53,7 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     def __init__(self, hass, partition_id, queue, uawc):
         """Initialize a Visonic security camera."""
         #self._data = data
+        self.hass = hass
         self.partition_id = partition_id
         self.queue = queue
         self.user_arm_without_code = uawc
@@ -79,14 +81,17 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     def device_state_attributes(self):  #
         """Return the state attributes of the device."""
         # maybe should filter rather than sending them all
-        return None
-        
-    @property
-    def state_attributes(self):  #
-        """Return the state attributes of the device."""
-        # maybe should filter rather than sending them all
         return visonicApi.PanelStatus
 
+#    @property
+#    def state_attributes(self):
+#        """Return the state attributes."""
+#        state_attr = {
+#            "code format": self.code_format,
+#            "changed by": self.changed_by
+#        }
+#        return state_attr
+        
     @property
     def code_format(self):
         """Regex for code format or None if no code is required."""
@@ -182,10 +187,14 @@ class VisonicAlarm(alarm.AlarmControlPanel):
             if type(data) == str:
                 if len(data) == 4:                
                     return data
+            elif type(data) is dict:
+                if 'code' in data:
+                    if len(data['code']) == 4:                
+                        return data['code']
         return ""
 
     def alarm_disarm(self, code = None):
-        """Send disarm command."""
+        """Send disarm command."""  
         if self.queue is not None:
             _LOGGER.info("alarm disarm code=" + self.decode_code(code))        
             self.queue.put_nowait(["Disarmed", self.decode_code(code)])
@@ -207,3 +216,36 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         if self.queue is not None:
             _LOGGER.info("alarm night=" + self.decode_code(code))
             self.queue.put_nowait(["Night", self.decode_code(code)])
+
+    def alarm_arm_custom_bypass(self, data=None):
+        if self.queue is not None:
+            _LOGGER.info("alarm bypass = " + str(data))
+            if type(data) is dict:
+                if 'entity_id' in data:                 
+                    eid = data['entity_id']                    
+                    mystate = self.hass.states.get(eid[0])
+                    if mystate is not None:
+                        _LOGGER.info("alarm mystate1 = " + str(mystate))
+                        _LOGGER.info("alarm mystate2 = " + str(mystate.as_dict()))
+                    #mystate = self.hass.states.get('binary_sensor.visonic_Z02')
+                    #if mystate is not None:
+                    #    _LOGGER.info("alarm mystate3 = " + str(mystate))
+                    #    _LOGGER.info("alarm mystate4 = " + str(mystate.as_dict()))
+                    
+                    if valid_entity_id('binary_sensor.visonic_z02'):
+                        _LOGGER.info("its valid")
+                    else:
+                        _LOGGER.info("its not valid")
+                    
+                    mystate = self.hass.states.get('binary_sensor.visonic_z02')
+                    if mystate is not None:
+                        _LOGGER.info("alarm mystate5 = " + str(mystate))
+                        _LOGGER.info("alarm mystate6 = " + str(mystate.as_dict()))
+                        devid = mystate.attributes['visonic device']
+                        if 'command' in data:
+                            comm = data['command']
+                            _LOGGER.info("alarm mystate7 = " + str(devid) + "  command " + str(comm))
+                            self.queue.put_nowait(["bypass", devid, comm, self.decode_code(data)])
+                        else:
+                            _LOGGER.info("alarm mystate8 = " + str(devid))
+                            self.queue.put_nowait(["bypass", devid, False, self.decode_code(data)])

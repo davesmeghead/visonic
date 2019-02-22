@@ -37,7 +37,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.8.4"
+PLUGIN_VERSION = "0.0.8.5"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
