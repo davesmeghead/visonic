@@ -25,7 +25,6 @@ import time
 import copy
 import math
 
-from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict
 from datetime import datetime
 from time import sleep
@@ -37,7 +36,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.0.8.5"
+PLUGIN_VERSION = "0.0.9.0"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -3049,41 +3048,3 @@ def create_usb_visonic_connection(port, baud=9600, protocol=VisonicProtocol, com
     conn = create_serial_connection(loop, protocol, port, baud)
 
     return conn
-
-
-# # Do not call this directly, it is the thread that creates and keeps going the asyncio. It repackages an asyncio in to a task
-# def visonicworker(tcp, address, port, event_callback=None, disconnect_callback=None, excludes=None):
-    # mynewloop = asyncio.new_event_loop()
-    # asyncio.set_event_loop(mynewloop)
-
-    # log.debug("visonic worker")
-    # try:
-        # if tcp:
-            # conn = create_tcp_visonic_connection(address=address, port=port, event_callback=event_callback, disconnect_callback=disconnect_callback, loop=mynewloop, excludes=excludes)
-        # else:
-            # conn = create_usb_visonic_connection(port=port, event_callback=event_callback, disconnect_callback=disconnect_callback, loop=mynewloop, excludes=excludes)
-        # mynewloop.create_task(conn)
-        # mynewloop.run_forever()
-
-    # except KeyboardInterrupt:
-        # # cleanup connection
-        # conn.close()
-        # mynewloop.run_forever()
-    # finally:
-        # mynewloop.close()
-
-# # Create a task and start it
-# def create_tcp_visonic_connection_task(address, port, event_callback=None, disconnect_callback=None, excludes=None):
-    # #pool = ProcessPoolExecutor(1)
-    # #future = pool.submit(visonicworker, True, address, port, event_callback, disconnect_callback)
-    # #return pool
-
-    # t = threading.Thread(target=visonicworker, args=(True, address, port, event_callback, disconnect_callback, excludes))
-    # t.start()
-    # return t
-
-# # Create a task and start it
-# def create_usb_visonic_connection_task(port, event_callback=None, disconnect_callback=None, excludes=None):
-    # t = threading.Thread(target=visonicworker, args=(False, "dummy", port, event_callback, disconnect_callback, excludes))
-    # t.start()
-    # return t

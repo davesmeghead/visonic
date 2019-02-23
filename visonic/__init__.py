@@ -1,5 +1,6 @@
 """
 This component is used to create a connection to a Visonic Power Max or PowerMaster Alarm SystemError
+Currently, there is only support for a single partition
 
 The Connection can be made using Ethernet TCP, USB (connection to RS232) or directly by RS232
 
@@ -10,7 +11,7 @@ The Connection can be made using Ethernet TCP, USB (connection to RS232) or dire
 import logging
 import voluptuous as vol
 #import homeassistant.helpers.entity_registry
-import custom_components.pyvisonic as visonicApi   # Connection to python Library
+import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
 import asyncio
 
 from collections import defaultdict
@@ -26,15 +27,12 @@ from time import sleep
 # Visonic has Motion Sensors (PIR and Magnetic contact mainly) and X10 devices
 VISONIC_PLATFORM = 'visonic_platform'
 
-from custom_components.switch.visonic import VisonicAlarm
-from custom_components.switch.visonic import VISONIC_X10
-from custom_components.binary_sensor.visonic import VISONIC_SENSORS
+from custom_components.visonic.switch import VISONIC_X10
+from custom_components.visonic.binary_sensor import VISONIC_SENSORS
 
 REQUIREMENTS = ['pyserial', 'pyserial_asyncio', 'datetime']
 
 DOMAIN = 'visonic'
-VISONIC_CONTROLLER = 'visonic_controller'
-VISONIC_ID_FORMAT = '{}_{}'
 
 NOTIFICATION_ID = 'visonic_notification'
 NOTIFICATION_TITLE = 'Visonic Panel Setup'
@@ -50,7 +48,6 @@ DEFAULT_DEVICE_BAUD = 9600
 
 CONF_MOTION_OFF_DELAY = "motion_off"
 CONF_LANGUAGE = "language"
-CONF_DEBUG = "debug"
 CONF_FORCE_STANDARD = "force_standard"
 CONF_AUTO_SYNC_TIME = "sync_time"
 CONF_ENABLE_REMOTE_ARM = "allow_remote_arm"
@@ -78,7 +75,6 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Optional(CONF_OVERRIDE_CODE,        "" )  : cv.string,
         vol.Optional(CONF_LANGUAGE,             "EN" ): cv.string,
         vol.Optional(CONF_ARM_CODE_AUTO,        False): cv.boolean,
-        vol.Optional(CONF_DEBUG,                False): cv.boolean,   # Can be '1', 'true', 'yes', 'on', 'enable'
         vol.Optional(CONF_FORCE_STANDARD,       False): cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
         vol.Optional(CONF_AUTO_SYNC_TIME,       True ): cv.boolean,
         vol.Optional(CONF_ENABLE_REMOTE_ARM,    False): cv.boolean,
@@ -216,7 +212,6 @@ def setup(hass, base_config):
         # set up config parameters in the visonic library
         visonicApi.setConfig("MotionOffDelay", config.get(CONF_MOTION_OFF_DELAY))
         visonicApi.setConfig("PluginLanguage", config.get(CONF_LANGUAGE))
-        visonicApi.setConfig("PluginDebug", config.get(CONF_DEBUG))
         visonicApi.setConfig("ForceStandard", config.get(CONF_FORCE_STANDARD))
         visonicApi.setConfig("AutoSyncTime", config.get(CONF_AUTO_SYNC_TIME))
         visonicApi.setConfig("EnableRemoteArm", config.get(CONF_ENABLE_REMOTE_ARM))
@@ -225,10 +220,6 @@ def setup(hass, base_config):
         visonicApi.setConfig("OverrideCode", config.get(CONF_OVERRIDE_CODE))
         visonicApi.setConfig("ResetCounter", panel_reset_counter)
 
-        if config.get(CONF_DEBUG):
-            level = logging.getLevelName('DEBUG')  # INFO, DEBUG
-            _LOGGER.setLevel(level)
-        
         # Get Visonic specific configuration.
         device_type = config.get(CONF_DEVICE)
         

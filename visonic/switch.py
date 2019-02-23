@@ -7,25 +7,20 @@ Currently, there is only support for a single partition
 """
 import logging
 import asyncio
-import custom_components.pyvisonic as visonicApi
 
+from homeassistant.util import slugify
+from homeassistant.helpers.entity import Entity
 from homeassistant.components.switch import ( SwitchDevice, ENTITY_ID_FORMAT)
-
-from datetime import timedelta
-from homeassistant.helpers.entity import Entity
-from homeassistant.const import ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED, ATTR_CODE, STATE_STANDBY, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_DISARMING, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED
-from homeassistant.util import convert, slugify
-#from homeassistant.components.sensor import ENTITY_ID_FORMAT
-#from homeassistant.components.switch import SwitchDevice
-from homeassistant.helpers.entity import Entity
+from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED, 
+     ATTR_CODE, STATE_STANDBY, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_DISARMING, 
+     STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED)
+from custom_components.visonic import VISONIC_PLATFORM
 
 DEPENDENCIES = ['visonic']
 
-from custom_components.visonic import VISONIC_PLATFORM
+VISONIC_X10 = 'visonic_x10'
 
 _LOGGER = logging.getLogger(__name__)
-
-VISONIC_X10 = 'visonic_x10'
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
     """Set up the visonic controller devices."""
@@ -35,7 +30,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         if "command_queue" in hass.data[VISONIC_PLATFORM]:
             queue = hass.data[VISONIC_PLATFORM]["command_queue"]
 
-    #va = VisonicAlarm(hass, 1)
+    #va = VisonicPartition(hass, 1)
     #
     ## Listener to handle fired events
     #def handle_event_switch_status(event):
@@ -47,10 +42,6 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     
     if VISONIC_X10 in hass.data:
         devices = []
-    
-        # currently only supports partition 1
-        #devices.append(va)
-
         for device in hass.data[VISONIC_X10]['switch']:
             _LOGGER.info('X10 Switch ' + device.name + '    type is ' + str(type(device)))
             if device.enabled:
@@ -141,95 +132,95 @@ class VisonicSwitch(SwitchDevice):
         return attr
             
 
-class VisonicAlarm(Entity):
-    """Representation of a Visonic Panel."""
+# class VisonicPartition(Entity):
+    # """Representation of a Visonic Partition."""
 
-    def __init__(self, hass, partition):
-        """Initialise a Visonic device."""
-        self._name = "Visonic Alarm Panel"
-        self._address = "Visonic_Partition_" + str(partition)     # the only thing that is available on startup, eventually need to start all partitions
-        self.current_value = self._name
+    # def __init__(self, hass, partition):
+        # """Initialise a Visonic device."""
+        # self._name = "Visonic Alarm Partition"
+        # self._address = "Visonic_Partition_" + str(partition)     # the only thing that is available on startup, eventually need to start all partitions
+        # self.current_value = self._name
 
-    def doUpdate(self):    
-        self.schedule_update_ha_state(False)
+    # def doUpdate(self):    
+        # self.schedule_update_ha_state(False)
         
-    @property
-    def should_poll(self):
-        """Get polling requirement from visonic device."""
-        return False # self.visonic_device.should_poll
+    # @property
+    # def should_poll(self):
+        # """Get polling requirement from visonic device."""
+        # return False # self.visonic_device.should_poll
 
-    @property
-    def unique_id(self) -> str:
-        """Return a unique ID."""
-        return self._address
+    # @property
+    # def unique_id(self) -> str:
+        # """Return a unique ID."""
+        # return self._address
         
-    @property
-    def name(self):
-        """Return the name of the device."""
-        return self._name
+    # @property
+    # def name(self):
+        # """Return the name of the device."""
+        # return self._name
 
-    def getStatus(self, s : str):
-        if visonicApi is None:
-            return "Unknown"
-        return "Unknown" if s not in visonicApi.PanelStatus else visonicApi.PanelStatus[s]
+    # def getStatus(self, s : str):
+        # if visonicApi is None:
+            # return "Unknown"
+        # return "Unknown" if s not in visonicApi.PanelStatus else visonicApi.PanelStatus[s]
         
-    @property
-    def device_info(self):
-        """Return information about the device."""
-        return {
-            'manufacturer': 'Visonic',
-            'name': self.getStatus("Panel Name"),
-            'sw_version': self.getStatus("Panel Software"),
-            'model': self.getStatus("Model"),
-        }
+    # @property
+    # def device_info(self):
+        # """Return information about the device."""
+        # return {
+            # 'manufacturer': 'Visonic',
+            # 'name': self.getStatus("Panel Name"),
+            # 'sw_version': self.getStatus("Panel Software"),
+            # 'model': self.getStatus("Model"),
+        # }
 
-    @property
-    def state(self):    
-        """Return the state of the device."""
-        #isArmed = visonicApi.PanelStatus["Panel Armed"]
+    # @property
+    # def state(self):    
+        # """Return the state of the device."""
+        # #isArmed = visonicApi.PanelStatus["Panel Armed"]
         
-        armcode = visonicApi.PanelStatus["Panel Status Code"]
-        sirenActive = visonicApi.PanelStatus["Panel Siren Active"]
+        # armcode = visonicApi.PanelStatus["Panel Status Code"]
+        # sirenActive = visonicApi.PanelStatus["Panel Siren Active"]
         
-        # -1  Not yet defined
-        # 0   Disarmed
-        # 1   Exit Delay Arm Home
-        # 2   Exit Delay Arm Away
-        # 3   Entry Delay
-        # 4   Armed Home
-        # 5   Armed Away
-        # 6   Special ("User Test", "Downloading", "Programming", "Installer")
+        # # -1  Not yet defined
+        # # 0   Disarmed
+        # # 1   Exit Delay Arm Home
+        # # 2   Exit Delay Arm Away
+        # # 3   Entry Delay
+        # # 4   Armed Home
+        # # 5   Armed Away
+        # # 6   Special ("User Test", "Downloading", "Programming", "Installer")
         
-        #_LOGGER.warning("alarm armcode is " + str(armcode))
+        # #_LOGGER.warning("alarm armcode is " + str(armcode))
         
-        if sirenActive == 'Yes':
-            return STATE_ALARM_TRIGGERED
-        elif armcode == 0 or armcode == 6:
-            return STATE_ALARM_DISARMED
-        elif armcode == 1:
-            return STATE_ALARM_PENDING
-        elif armcode == 2:
-            return STATE_ALARM_ARMING
-        elif armcode == 3:
-            return STATE_ALARM_DISARMING
-        elif armcode == 4:
-            return STATE_ALARM_ARMED_HOME
-        elif armcode == 5:
-            return STATE_ALARM_ARMED_AWAY
+        # if sirenActive == 'Yes':
+            # return STATE_ALARM_TRIGGERED
+        # elif armcode == 0 or armcode == 6:
+            # return STATE_ALARM_DISARMED
+        # elif armcode == 1:
+            # return STATE_ALARM_PENDING
+        # elif armcode == 2:
+            # return STATE_ALARM_ARMING
+        # elif armcode == 3:
+            # return STATE_ALARM_DISARMING
+        # elif armcode == 4:
+            # return STATE_ALARM_ARMED_HOME
+        # elif armcode == 5:
+            # return STATE_ALARM_ARMED_AWAY
         
-        return STATE_STANDBY
+        # return STATE_STANDBY
 
-    #def entity_picture(self):
-    #    return "/config/myimages/20160807_183340.jpg"
+    # #def entity_picture(self):
+    # #    return "/config/myimages/20160807_183340.jpg"
         
-    @property
-    def device_state_attributes(self):  #
-        """Return the state attributes of the device."""
-        # maybe should filter rather than sending them all
-        return None
+    # @property
+    # def device_state_attributes(self):  #
+        # """Return the state attributes of the device."""
+        # # maybe should filter rather than sending them all
+        # return None
         
-    @property
-    def state_attributes(self):  #
-        """Return the state attributes of the device."""
-        # maybe should filter rather than sending them all
-        return visonicApi.PanelStatus
+    # @property
+    # def state_attributes(self):  #
+        # """Return the state attributes of the device."""
+        # # maybe should filter rather than sending them all
+        # return visonicApi.PanelStatus

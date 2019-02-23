@@ -1,15 +1,13 @@
 """
 Support for visonic sensors when used with a connection to a Visonic Alarm Panel.
+Currently, there is only support for a single partition
 
   Initial setup by David Field
 
 """
 import logging
-import datetime
-from datetime import timedelta
 
-from homeassistant.util import convert, slugify
-from homeassistant.util.dt import utc_from_timestamp
+from homeassistant.util import slugify
 from homeassistant.components.binary_sensor import BinarySensorDevice
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
 from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED)

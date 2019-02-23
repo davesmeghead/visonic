@@ -28,9 +28,20 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is release 0.0.8.5 : *** 0.0.8.0 represents a potential breaking change ***
+This is release 0.1.0 : *** 0.1.0 represents a potential breaking change ***
 
-Please be gentle with me, this is my first HA adventure
+If you have used this Component before, please delete the following files before you copy across version 0.1.0
+```
+    custom_components/visonic.py
+    custom_components/pyvisonic.py
+    custom_components/test.py
+    custom_components/switch/visonic.py
+    custom_components/binary_sensor/visonic.py
+    custom_components/alarm_control_panel/visonic.py
+    custom_components/alarm_control_panel/__init__.py
+```
+
+I have upped the release to what I would call a first Beta version as it is much more robust now. I have converted the Component to the new HA Component file structure
 
 |  Release   |    Description   |
 |------------|------------------|
@@ -53,6 +64,7 @@ Please be gentle with me, this is my first HA adventure
 | 0.0.8.3    | Bug fixes for X10 Devices when in Standard Mode |
 | 0.0.8.4    | Bug fix to the Bug fix for X10 Devices when in Standard Mode |
 | 0.0.8.5    | Bug fix for the number format to be displayed on standard mode |
+| 0.1.0      | *** Breaking change ***  I have converted the Component to the new HA Component file structure. This Component has a different file structure, please delete all previous files. |
 
 
 ## Instructions and what works so far

@@ -5,38 +5,32 @@ Currently, there is only support for a single partition
   Initial setup by David Field
 
 """
-import asyncio
-from datetime import timedelta
 import logging
-
+import asyncio
+import homeassistant.helpers.config_validation as cv
+import homeassistant.components.alarm_control_panel as alarm
 import voluptuous as vol
 
-import custom_components.pyvisonic as visonicApi   # Connection to python Library
+from datetime import timedelta
+from homeassistant.helpers.entity_component import EntityComponent
 
 from homeassistant.const import (
     ATTR_CODE, ATTR_CODE_FORMAT, ATTR_ENTITY_ID, ATTR_COMMAND, SERVICE_ALARM_TRIGGER,
     SERVICE_ALARM_DISARM, SERVICE_ALARM_ARM_HOME, SERVICE_ALARM_ARM_AWAY,
     SERVICE_ALARM_ARM_NIGHT, SERVICE_ALARM_ARM_CUSTOM_BYPASS)
-from homeassistant.loader import bind_hass
-from homeassistant.helpers.config_validation import PLATFORM_SCHEMA  # noqa
-import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.entity_component import EntityComponent
 
-import homeassistant.components.alarm_control_panel as alarm
+from homeassistant.const import (STATE_UNKNOWN, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, 
+    STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED)
 
-#from homeassistant.components.alarm_control_panel import AlarmControlPanel
-from homeassistant.const import STATE_UNKNOWN, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED
 from custom_components.visonic import VISONIC_PLATFORM
 from homeassistant.core import valid_entity_id, split_entity_id
+
+import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
 
 DEPENDENCIES = ['visonic']
 
 DOMAIN = 'alarm_control_panel'
 SCAN_INTERVAL = timedelta(seconds=30)
-ATTR_CHANGED_BY = 'changed_by'
-
-ENTITY_ID_FORMAT = DOMAIN + '.{}'
 
 SERVICE_TO_METHOD = {
     SERVICE_ALARM_DISARM: 'alarm_disarm',
@@ -47,19 +41,14 @@ SERVICE_TO_METHOD = {
     SERVICE_ALARM_TRIGGER: 'alarm_trigger'
 }
 
-#ATTR_TO_PROPERTY = [
-#    ATTR_CODE,
-#    ATTR_CODE_FORMAT
-#]
-
 ALARM_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
     vol.Optional(ATTR_CODE): cv.string,
     vol.Optional(ATTR_COMMAND): cv.boolean,
 })
 
-
 _LOGGER = logging.getLogger(__name__)
+
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
     """Set up the Visonic alarms."""
@@ -85,83 +74,8 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     devices = []
     devices.append(va)
     
-    add_devices(devices, True)   
+    add_devices(devices, True)  
     
-
-_LOGGER = logging.getLogger(__name__)
-
-
-@bind_hass
-def alarm_disarm(hass, code=None, entity_id=None):
-    """Send the alarm the command for disarm."""
-    data = {}
-    if code:
-        data[ATTR_CODE] = code
-    if entity_id:
-        data[ATTR_ENTITY_ID] = entity_id
-
-    hass.services.call(DOMAIN, SERVICE_ALARM_DISARM, data)
-
-
-@bind_hass
-def alarm_arm_home(hass, code=None, entity_id=None):
-    """Send the alarm the command for arm home."""
-    data = {}
-    if code:
-        data[ATTR_CODE] = code
-    if entity_id:
-        data[ATTR_ENTITY_ID] = entity_id
-
-    hass.services.call(DOMAIN, SERVICE_ALARM_ARM_HOME, data)
-
-
-@bind_hass
-def alarm_arm_away(hass, code=None, entity_id=None):
-    """Send the alarm the command for arm away."""
-    data = {}
-    if code:
-        data[ATTR_CODE] = code
-    if entity_id:
-        data[ATTR_ENTITY_ID] = entity_id
-
-    hass.services.call(DOMAIN, SERVICE_ALARM_ARM_AWAY, data)
-
-
-@bind_hass
-def alarm_arm_night(hass, code=None, entity_id=None):
-    """Send the alarm the command for arm night."""
-    data = {}
-    if code:
-        data[ATTR_CODE] = code
-    if entity_id:
-        data[ATTR_ENTITY_ID] = entity_id
-
-    hass.services.call(DOMAIN, SERVICE_ALARM_ARM_NIGHT, data)
-
-
-@bind_hass
-def alarm_trigger(hass, code=None, entity_id=None):
-    """Send the alarm the command for trigger."""
-    data = {}
-    if code:
-        data[ATTR_CODE] = code
-    if entity_id:
-        data[ATTR_ENTITY_ID] = entity_id
-
-    hass.services.call(DOMAIN, SERVICE_ALARM_TRIGGER, data)
-
-
-@bind_hass
-def alarm_arm_custom_bypass(hass, code=None, entity_id=None):
-    """Send the alarm the command for arm custom bypass."""
-    data = {}
-    if code:
-        data[ATTR_CODE] = code
-    if entity_id:
-        data[ATTR_ENTITY_ID] = entity_id
-
-    hass.services.call(DOMAIN, SERVICE_ALARM_ARM_CUSTOM_BYPASS, data)
-
 
 @asyncio.coroutine
 def async_setup(hass, config):
@@ -181,12 +95,12 @@ def async_setup(hass, config):
         method = "async_{}".format(SERVICE_TO_METHOD[service.service])
 
         update_tasks = []
-        for alarm in target_alarms:
-            yield from getattr(alarm, method)(code)
+        for talarm in target_alarms:
+            yield from getattr(talarm, method)(code)
 
-            if not alarm.should_poll:
+            if not talarm.should_poll:
                 continue
-            update_tasks.append(alarm.async_update_ha_state(True))
+            update_tasks.append(talarm.async_update_ha_state(True))
 
         if update_tasks:
             yield from asyncio.wait(update_tasks, loop=hass.loop)
@@ -199,94 +113,6 @@ def async_setup(hass, config):
     return True
 
 
-# pylint: disable=no-self-use
-#class AlarmControlPanel(Entity):
-#    """An abstract class for alarm control devices."""
-#
-#    @property
-#    def code_format(self):
-#        """Regex for code format or None if no code is required."""
-#        return None
-#
-#    @property
-#    def changed_by(self):
-#        """Last change triggered by."""
-#        return None
-#
-#    def alarm_disarm(self, code=None):
-#        """Send disarm command."""
-#        raise NotImplementedError()
-#
-#    def async_alarm_disarm(self, code=None):
-#        """Send disarm command.
-#
-#        This method must be run in the event loop and returns a coroutine.
-#        """
-#        return self.hass.async_add_job(self.alarm_disarm, code)
-#
-#    def alarm_arm_home(self, code=None):
-#        """Send arm home command."""
-#        raise NotImplementedError()
-#
-#    def async_alarm_arm_home(self, code=None):
-#        """Send arm home command.
-#
-#        This method must be run in the event loop and returns a coroutine.
-#        """
-#        return self.hass.async_add_job(self.alarm_arm_home, code)
-#
-#    def alarm_arm_away(self, code=None):
-#        """Send arm away command."""
-#        raise NotImplementedError()
-
-    # def async_alarm_arm_away(self, code=None):
-        # """Send arm away command.
-
-        # This method must be run in the event loop and returns a coroutine.
-        # """
-        # return self.hass.async_add_job(self.alarm_arm_away, code)
-
-    # def alarm_arm_night(self, code=None):
-        # """Send arm night command."""
-        # raise NotImplementedError()
-
-    # def async_alarm_arm_night(self, code=None):
-        # """Send arm night command.
-
-        # This method must be run in the event loop and returns a coroutine.
-        # """
-        # return self.hass.async_add_job(self.alarm_arm_night, code)
-
-    # def alarm_trigger(self, code=None):
-        # """Send alarm trigger command."""
-        # raise NotImplementedError()
-
-    # def async_alarm_trigger(self, code=None):
-        # """Send alarm trigger command.
-
-        # This method must be run in the event loop and returns a coroutine.
-        # """
-        # return self.hass.async_add_job(self.alarm_trigger, code)
-
-    # def alarm_arm_custom_bypass(self, code=None):
-        # """Send arm custom bypass command."""
-        # raise NotImplementedError()
-
-    # def async_alarm_arm_custom_bypass(self, code=None):
-        # """Send arm custom bypass command.
-
-        # This method must be run in the event loop and returns a coroutine.
-        # """
-        # return self.hass.async_add_job(self.alarm_arm_custom_bypass, code)
-
-    # @property
-    # def state_attributes(self):
-        # """Return the state attributes."""
-        # state_attr = {
-            # ATTR_CODE_FORMAT: self.code_format,
-            # ATTR_CHANGED_BY: self.changed_by
-        # }
-        # return state_attr
 
 class VisonicAlarm(alarm.AlarmControlPanel):
     """Representation of a Visonic alarm control panel."""
@@ -324,14 +150,7 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         # maybe should filter rather than sending them all
         return visonicApi.PanelStatus
 
-#    @property
-#    def state_attributes(self):
-#        """Return the state attributes."""
-#        state_attr = {
-#            "code format": self.code_format,
-#            "changed by": self.changed_by
-#        }
-#        return state_attr
+# DO NOT OVERRIDE state_attributes AS IT IS USED IN THE LOVELACE FRONTEND TO DETERMINE code_format
         
     @property
     def code_format(self):
@@ -437,26 +256,30 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     def alarm_disarm(self, code = None):
         """Send disarm command."""  
         if self.queue is not None:
-            _LOGGER.info("alarm disarm code=" + self.decode_code(code))        
+            #_LOGGER.info("alarm disarm code=" + self.decode_code(code))        
             self.queue.put_nowait(["Disarmed", self.decode_code(code)])
 
     def alarm_arm_home(self, code = None):
         """Send arm home command."""
         if self.queue is not None:
-            _LOGGER.info("alarm arm home=" + self.decode_code(code))
+            #_LOGGER.info("alarm arm home=" + self.decode_code(code))
             self.queue.put_nowait(["Stay", self.decode_code(code)])
 
     def alarm_arm_away(self, code = None):
         """Send arm away command."""
         if self.queue is not None:
-            _LOGGER.info("alarm arm away=" + self.decode_code(code))
+            #_LOGGER.info("alarm arm away=" + self.decode_code(code))
             self.queue.put_nowait(["Armed", self.decode_code(code)])
 
     def alarm_arm_night(self, code = None):
         """Send arm night command."""
         if self.queue is not None:
-            _LOGGER.info("alarm night=" + self.decode_code(code))
+            #_LOGGER.info("alarm night=" + self.decode_code(code))
             self.queue.put_nowait(["Night", self.decode_code(code)])
+
+    def alarm_trigger(self, code=None):
+        """Send alarm trigger command."""
+        raise NotImplementedError()
 
     def alarm_arm_custom_bypass(self, data=None):
         if self.queue is not None:
