@@ -6,6 +6,8 @@
     Thanks to everyone who helped decode the data.
 
   Converted to Python module by Wouter Wolkers and David Field
+  
+  The Component now follows the new HA file structure
 """
 
 ########################################################
