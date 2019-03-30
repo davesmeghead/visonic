@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is release 0.1.0 : *** 0.1.0 represents a potential breaking change ***
+This is release 0.1.3 : *** 0.1.0 represents a potential breaking change ***
 
 If you have used this Component before, please delete the following files before you copy across version 0.1.0
 ```
