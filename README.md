@@ -67,6 +67,7 @@ I have upped the release to what I would call a first Beta version as it is much
 | 0.1.0      | *** Breaking change ***  I have converted the Component to the new HA Component file structure. This Component has a different file structure, please delete all previous files. |
 | 0.1.1      | Not officially released |
 | 0.1.2      | Assume Powermaster as default panel and allow CRC to be 1 less than calculated value (I don't know why). Update operation when panel connection is lost. Move when Time is Synchronised to be more accurate (Powermax only). Update A7 decode as Powermaster 10 series sends unknown A7 data. Update powerlink timing to hopefully improve reliability. |
+| 0.1.3      | Quick fix to exit Download mode quicker when trying Powerlink |
 
 
 ## Instructions and what works so far

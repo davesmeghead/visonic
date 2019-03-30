@@ -38,7 +38,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.1.2"
+PLUGIN_VERSION = "0.1.3"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -863,6 +863,7 @@ class ProtocolBase(asyncio.Protocol):
         if self.pmPowerlinkMode:
             # Send RESTORE to the panel
             self.SendCommand("MSG_EXIT")    # exit any ongoing download sequence
+            self.SendCommand("MSG_STOP")        
             self.SendCommand("MSG_RESTORE") # also gives status
         else:
             self.SendCommand("MSG_STATUS")
@@ -2111,6 +2112,7 @@ class PacketHandling(ProtocolBase):
         self.ClearList()
         self.pmSendAck()
         self.SendCommand("MSG_EXIT")
+        self.SendCommand("MSG_STOP")        
         if self.pmPowerlinkMode:
             self.SendCommand("MSG_RESTORE")
         else:
