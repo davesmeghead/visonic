@@ -95,6 +95,8 @@ visonic:
   sync_time: 'yes'
   allow_remote_arm: 'yes'
   allow_remote_disarm: 'yes'
+  exclude_sensor: [2,3]
+  exclude_x10: [1]
 #  override_code: '1234'
 #  arm_without_usercode: 'yes'
 ```
