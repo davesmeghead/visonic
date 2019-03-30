@@ -38,7 +38,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.1.3"
+PLUGIN_VERSION = "0.1.4"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -1477,7 +1477,7 @@ class PacketHandling(ProtocolBase):
     pmBypassOff = False         # Do we allow the user to bypass the sensors
     pmSilentPanic = False
 
-    def __init__(self, *args, packet_callback: Callable=None, excludes=None, **kwargs) -> None:
+    def __init__(self, *args, packet_callback: Callable=None, **kwargs) -> None:
         """Add packethandling specific initialization.
 
         packet_callback: called with every complete/valid packet
@@ -1486,9 +1486,6 @@ class PacketHandling(ProtocolBase):
         super().__init__(*args, **kwargs)
         if packet_callback:
             self.packet_callback = packet_callback
-        self.exclude_sensor_list = []
-        if excludes is not None:
-            self.exclude_sensor_list = excludes
         self.pmPhoneNr_t = {}
         self.pmEventLogDictionary = {}
         # We do not put these pin codes in to the panel status
@@ -1901,7 +1898,7 @@ class PacketHandling(ProtocolBase):
                                 self.pmSensorDev_t[i].dname="Z{0:0>2}".format(i+1)
                                 self.pmSensorDev_t[i].partition = part
                                 self.pmSensorDev_t[i].id=i+1
-                            elif (i+1) not in self.exclude_sensor_list:
+                            else:
                                 self.pmSensorDev_t[i] = SensorDevice(stype = sensorTypeStr, sid = sensorID_c, ztype = zoneType,
                                              ztypeName = pmZoneType_t[self.pmLang][zoneType], zname = zoneName, zchime = pmZoneChime_t[self.pmLang][zoneChime],
                                              dname="Z{0:0>2}".format(i+1), partition = part, id=i+1)
@@ -2400,9 +2397,9 @@ class PacketHandling(ProtocolBase):
 
         elif eventType == 0x02: # Status message - Zone Open Status
             # if in standard mode then use this A5 status message to reset the watchdog timer        
-            #if not self.pmPowerlinkMode:
-            log.debug("Got A5 02 message, resetting watchdog")
-            self.reset_watchdog_timeout()
+            if not self.pmPowerlinkMode:
+                log.debug("Got A5 02 message, resetting watchdog")
+                self.reset_watchdog_timeout()
 
             val = self.makeInt(data[2:6])
             if val != self.status_old:
@@ -2642,7 +2639,7 @@ class PacketHandling(ProtocolBase):
                         # do we already know about the sensor from the EPROM decode
                         if i in self.pmSensorDev_t:
                             self.pmSensorDev_t[i].enrolled = True
-                        elif (i+1) not in self.exclude_sensor_list:
+                        else:
                             # we dont know about it so create it and make it enrolled
                             self.pmSensorDev_t[i] = SensorDevice(dname="Z{0:0>2}".format(i+1), id=i+1, enrolled = True)
                             visonic_devices['sensor'].append(self.pmSensorDev_t[i])
@@ -3058,7 +3055,7 @@ def setConfig(key, val):
 #            log.setLevel(level)
 
 # Create a connection using asyncio using an ip and port
-def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, command_queue = None, event_callback=None, disconnect_callback=None, loop=None, excludes=None):
+def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, command_queue = None, event_callback=None, disconnect_callback=None, loop=None):
     """Create Visonic manager class, returns tcp transport coroutine."""
 
     # use default protocol if not specified
@@ -3067,7 +3064,6 @@ def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, comma
         loop=loop if loop else asyncio.get_event_loop(),
         event_callback=event_callback,
         disconnect_callback=disconnect_callback,
-        excludes=excludes,
         command_queue = command_queue, 
 #        ignore=ignore if ignore else [],
     )
@@ -3080,7 +3076,7 @@ def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, comma
 
 
 # Create a connection using asyncio through a linux port (usb or rs232)
-def create_usb_visonic_connection(port, baud=9600, protocol=VisonicProtocol, command_queue = None, event_callback=None, disconnect_callback=None, loop=None, excludes=None):
+def create_usb_visonic_connection(port, baud=9600, protocol=VisonicProtocol, command_queue = None, event_callback=None, disconnect_callback=None, loop=None):
     """Create Visonic manager class, returns rs232 transport coroutine."""
     from serial_asyncio import create_serial_connection
     # use default protocol if not specified
@@ -3089,7 +3085,6 @@ def create_usb_visonic_connection(port, baud=9600, protocol=VisonicProtocol, com
         loop=loop if loop else asyncio.get_event_loop(),
         event_callback=event_callback,
         disconnect_callback=disconnect_callback,
-        excludes=excludes,
         command_queue = command_queue, 
  #        ignore=ignore if ignore else [],
     )

@@ -19,7 +19,7 @@ from homeassistant.util.dt import utc_from_timestamp
 from homeassistant.util import convert, slugify
 from homeassistant.helpers import discovery
 from homeassistant.helpers import config_validation as cv
-from homeassistant.const import (ATTR_ARMED, EVENT_HOMEASSISTANT_STOP, CONF_HOST, CONF_PORT, CONF_PATH, CONF_DEVICE, CONF_EXCLUDE)
+from homeassistant.const import (ATTR_ARMED, EVENT_HOMEASSISTANT_STOP, CONF_HOST, CONF_PORT, CONF_PATH, CONF_DEVICE)
 from homeassistant.helpers.entity import Entity
 from requests import ConnectTimeout, HTTPError
 from time import sleep
@@ -56,6 +56,9 @@ CONF_ENABLE_SENSOR_BYPASS = "allow_sensor_bypass"
 CONF_OVERRIDE_CODE = "override_code"
 CONF_ARM_CODE_AUTO = "arm_without_usercode"
 
+CONF_EXCLUDE_SENSOR = "exclude_sensor"
+CONF_EXCLUDE_X10 = "exclude_x10"
+
 # Schema for config file parsing and access
 DEVICE_SOCKET_SCHEMA = vol.Schema({
     vol.Required(CONF_DEVICE_TYPE): 'ethernet',
@@ -70,7 +73,8 @@ DEVICE_USB_SCHEMA = vol.Schema({
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
         vol.Required(CONF_DEVICE): vol.Any( DEVICE_SOCKET_SCHEMA, DEVICE_USB_SCHEMA),
-        vol.Optional(CONF_EXCLUDE,              default=[]): VISONIC_ID_LIST_SCHEMA,
+        vol.Optional(CONF_EXCLUDE_SENSOR,       default=[]): VISONIC_ID_LIST_SCHEMA,
+        vol.Optional(CONF_EXCLUDE_X10,          default=[]): VISONIC_ID_LIST_SCHEMA,
         vol.Optional(CONF_MOTION_OFF_DELAY,     120 ) : cv.positive_int,
         vol.Optional(CONF_OVERRIDE_CODE,        "" )  : cv.string,
         vol.Optional(CONF_LANGUAGE,             "EN" ): cv.string,
@@ -88,9 +92,6 @@ VISONIC_COMPONENTS = [
     'binary_sensor', 'switch'   # keep switches here to eventually support X10 devices
 ]
 
-# we can exclude specific devices if the user doesn't want them all
-exclude_ids = []
-
 _LOGGER = logging.getLogger(__name__)
 #level = logging.getLevelName('INFO')  # INFO
 #_LOGGER.setLevel(level)
@@ -99,7 +100,6 @@ command_queue = asyncio.Queue()
 panel_reset_counter = 0
      
 def setup(hass, base_config):
-    global exclude_ids
     """Set up for Visonic devices."""
     
     hass = hass
@@ -115,7 +115,11 @@ def setup(hass, base_config):
     #  it adds it to the list of devices and then calls discovery to fully create it in HA
     #  remember that all the sensors may not be created at the same time
     def visonic_event_callback_handler(visonic_devices):
-        global exclude_ids
+        
+        exclude_sensor_list = config.get(CONF_EXCLUDE_SENSOR)
+        exclude_x10_list = config.get(CONF_EXCLUDE_X10)
+        
+        _LOGGER.info("Exclude sensor list = {0}     Exclude x10 list = {1}".format(exclude_sensor_list, exclude_x10_list))
         
         # Check to ensure variables are set correctly
         if hass == None:
@@ -126,11 +130,10 @@ def setup(hass, base_config):
             return
         if type(visonic_devices) == defaultdict:  
             # a set of sensors and/or switches. 
-            #    X10 switches not yet supported, sorry
             _LOGGER.info("Visonic got new sensors/switches {0}".format( visonic_devices ))
             sensor_devices = defaultdict(list)
             for dev in visonic_devices["sensor"]:
-                if dev.getDeviceID() not in exclude_ids:
+                if dev.getDeviceID() not in exclude_sensor_list:
                     sensor_devices["binary_sensor"].append(dev)                
             
             hass.data[VISONIC_SENSORS] = sensor_devices
@@ -139,30 +142,29 @@ def setup(hass, base_config):
             x10_devices = defaultdict(list)
             for dev in visonic_devices["switch"]:
                 #_LOGGER.info("VS: X10 Switch list {0}".format(dev))
-                if dev.enabled:
+                if dev.enabled and dev.getDeviceID() not in exclude_x10_list:
                     x10_devices["switch"].append(dev)
                 
             hass.data[VISONIC_X10] = x10_devices    
                 
             #_LOGGER.info("VS: Sensor list {0}".format(hass.data[VISONIC_SENSORS]))
                 
-            # trigger discovery which will add the sensor and set up a new device
+            # trigger discovery which will add the sensors and set up a new device
             #    this discovers new sensors, existing ones will remain and are not removed
-            discovery.load_platform(hass, "binary_sensor", DOMAIN, {}, base_config)
-            
+            discovery.load_platform(hass, "binary_sensor", DOMAIN, {}, base_config)            
             discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)
             
         elif type(visonic_devices) == visonicApi.SensorDevice:
             # This is an update of an existing sensor device
-            _LOGGER.info("Sensor update {0}".format( visonic_devices ))
+            _LOGGER.info("Sensor update {0} not yet included".format( visonic_devices ))
             
         elif type(visonic_devices) == visonicApi.X10Device:
             # This is an update of an existing x10 device
-            _LOGGER.info("X10 update {0}".format( visonic_devices ))
+            _LOGGER.info("X10 update {0} not yet included".format( visonic_devices ))
             
         elif type(visonic_devices) == visonicApi.LogPanelEvent:
             # This is an update of the event log
-            _LOGGER.info("Event Log update {0}".format( visonic_devices ))
+            _LOGGER.info("Event Log update {0} not yet implemented".format( visonic_devices ))
             
         elif visonic_devices >= 1 and visonic_devices <= 10:   
             # General update trigger
@@ -191,8 +193,6 @@ def setup(hass, base_config):
         
     def connect_to_alarm():
         global panel_reset_counter
-        # Get the list of excluded raw identifiers
-        exclude_ids = config.get(CONF_EXCLUDE)
 
         # remove any existing visonic related sensors (so we don't get entity id already exists exceptions on a restart)
         retval = hass.states.async_remove('switch.visonic_alarm_panel')
@@ -241,13 +241,13 @@ def setup(hass, base_config):
             port = device_type[CONF_PORT]
            
             comm = visonicApi.create_tcp_visonic_connection(address = host, port = port, event_callback = visonic_event_callback_handler, command_queue = command_queue,
-                                                           disconnect_callback = disconnect_callback, loop = hass.loop, excludes = exclude_ids)
+                                                           disconnect_callback = disconnect_callback, loop = hass.loop)
         elif device_type["type"] == "usb":
             path = device_type[CONF_PATH]
             baud = device_type[CONF_DEVICE_BAUD]
            
             comm = visonicApi.create_usb_visonic_connection(port = path, baud = baud, event_callback = visonic_event_callback_handler, command_queue = command_queue,
-                                                         disconnect_callback = disconnect_callback, excludes = exclude_ids, loop = hass.loop)
+                                                         disconnect_callback = disconnect_callback, loop = hass.loop)
 
         if comm is not None:
             #wibble = hass.states.entity_ids()
