@@ -38,7 +38,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.1.0"
+PLUGIN_VERSION = "0.1.2"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -797,7 +797,7 @@ class ProtocolBase(asyncio.Protocol):
     # The CRC Error Count for Received Messages
     pmCrcErrorCount = 0
     # Whether its a powermax or powermaster
-    PowerMaster = False
+    PowerMaster = True
     # the current receiving message type
     msgType_t = None
     # The last sent message
@@ -1235,6 +1235,11 @@ class ProtocolBase(asyncio.Protocol):
         # Does it end with a footer
         if packet[-1:] != b'\x0A':
             return False
+
+        if self.PowerMaster and packet[-2:-1][0] == self.calculate_crc(packet[1:-2])[0] + 1:
+            log.info("[validatePDU] Validated a Packet with a checksum that is 1 different to the actual checksum, the powermaster 10 seems to do this!!!!")
+            return True
+
         # Check the CRC
         if packet[-2:-1] == self.calculate_crc(packet[1:-2]):
             #log.debug("[validatePDU] VALID PACKET!")
@@ -1303,6 +1308,11 @@ class ProtocolBase(asyncio.Protocol):
     def SendCommand(self, message_type, **kwargs):
         """ Add a command to the send List 
             The List is needed to prevent sending messages too quickly normally it requires 500msec between messages """
+        
+        if self.suspendAllOperations:
+            log.info("[SendCommand] Suspended all operations, not sending PDU")
+            return
+        
         interval = self.getTimeFunction() - self.pmLastTransactionTime
         timeout = (interval > RESEND_MESSAGE_TIMEOUT)
 
@@ -1314,7 +1324,7 @@ class ProtocolBase(asyncio.Protocol):
             options = kwargs.get('options', None)
             e = VisonicListEntry(command = message, options = options)
             self.SendList.append(e)
-            log.info("[QueueMessage] %s" % message.msg)
+            log.info("[SendCommand] %s" % message.msg)
 
         # self.pmExpectedResponse will prevent us sending another message to the panel
         #   If the panel is lazy or we've got the timing wrong........
@@ -1357,17 +1367,23 @@ class ProtocolBase(asyncio.Protocol):
         self.SendList = []
         self.pmLastSentMessage = None
 
-    # This is called by the parent when the connection is lost
+    # This is called by the asyncio parent when the connection is lost
     def connection_lost(self, exc):
         """Log when connection is closed, if needed call callback."""
-        if exc:
-            log.exception("ERROR Connection Lost : disconnected due to exception  <{0}>".format(exc))
-        else:
-            log.debug('ERROR Connection Lost : disconnected because of close/abort.')
         self.suspendAllOperations = True
-        sleep(5.0) # i bit of time for the watchdog timers and keep alive loops to self terminate
+        
+        if exc:
+            #log.exception("ERROR Connection Lost : disconnected due to exception  <{0}>".format(exc))
+            log.error("ERROR Connection Lost : disconnected due to exception")
+        else:
+            log.error('ERROR Connection Lost : disconnected because of close/abort.')
+        
+        sleep(5.0) # a bit of time for the watchdog timers and keep alive loops to self terminate
         if self.disconnect_callback:
+            log.error('                        Calling Exception handler.')
             self.disconnect_callback(exc)
+        else:
+            log.error('                        No Exception handler to call, terminating Component......')
 
     async def download_timer(self):
         # sleep for the duration that download is supposed to take
@@ -1377,7 +1393,11 @@ class ProtocolBase(asyncio.Protocol):
             log.warning("********************** Download Timer has Expired, Download has taken too long *********************")
             #log.warning("********************** Not sure what to do for a download timeout so do nothing ********************")
             # what to do here??????????????
-            DownloadMode = False
+            # Stop download mode
+            self.DownloadMode = False
+            # reset the receiving message data
+            self.ReceiveData = bytearray(b'')
+            # goto standard mode
             self.gotoStandardMode()
 
     # This puts the panel in to download mode. It is the start of determining powerlink access
@@ -1999,14 +2019,27 @@ class PacketHandling(ProtocolBase):
         else:
             log.info("WARNING: Cannot process settings, the panel is too new")
 
+        log.info("[Process Settings] Ready for use")
+        self.DumpSensorsToDisplay()
+        
         if self.pmPowerlinkMode:
             PanelStatus["Mode"] = "Powerlink"
-            self.SendCommand("MSG_RESTORE") # also gives status
+            #self.SendCommand("MSG_RESTORE") # also gives status
+            self.triggerRestoreStatus()
         else:
             PanelStatus["Mode"] = "Standard"
             self.SendCommand("MSG_STATUS")
-        log.info("[Process Settings] Ready for use")
-        self.DumpSensorsToDisplay()
+
+        if PanelSettings["AutoSyncTime"]:  # should we sync time between the HA and the Alarm Panel
+            t = datetime.now()
+            if t.year > 2000:
+                year = t.year - 2000
+                values = [t.second, t.minute, t.hour, t.day, t.month, year]
+                timePdu = bytearray(values)
+                #self.pmSyncTimeCheck = t
+                self.SendCommand("MSG_SETTIME", options = [3, timePdu] )
+            else:
+                log.info("[Enrolling Powerlink] Please correct your local time.")
 
     def handle_packet(self, packet):
         """Handle one raw incoming packet."""
@@ -2190,16 +2223,16 @@ class PacketHandling(ProtocolBase):
             self.lastSendOfDownloadEprom = self.getTimeFunction()
             self.pmPowerlinkEnrolled()
 
-            if PanelSettings["AutoSyncTime"]:  # should we sync time between the HA and the Alarm Panel
-                t = datetime.now()
-                if t.year > 2000:
-                    year = t.year - 2000
-                    values = [t.second, t.minute, t.hour, t.day, t.month, year]
-                    timePdu = bytearray(values)
-                    #self.pmSyncTimeCheck = t
-                    self.SendCommand("MSG_SETTIME", options = [3, timePdu] )
-                else:
-                    log.info("[Enrolling Powerlink] Please correct your local time.")
+#            if PanelSettings["AutoSyncTime"]:  # should we sync time between the HA and the Alarm Panel
+#                t = datetime.now()
+#                if t.year > 2000:
+#                    year = t.year - 2000
+#                    values = [t.second, t.minute, t.hour, t.day, t.month, year]
+#                    timePdu = bytearray(values)
+#                    #self.pmSyncTimeCheck = t
+#                    self.SendCommand("MSG_SETTIME", options = [3, timePdu] )
+#                else:
+#                    log.info("[Enrolling Powerlink] Please correct your local time.")
 
     def handle_msgtype3F(self, data):
         """ MsgType=3F - Download information
@@ -2365,9 +2398,9 @@ class PacketHandling(ProtocolBase):
 
         elif eventType == 0x02: # Status message - Zone Open Status
             # if in standard mode then use this A5 status message to reset the watchdog timer        
-            if not self.pmPowerlinkMode:
-                log.debug("Got A5 02 message, resetting watchdog")
-                self.reset_watchdog_timeout()
+            #if not self.pmPowerlinkMode:
+            log.debug("Got A5 02 message, resetting watchdog")
+            self.reset_watchdog_timeout()
 
             val = self.makeInt(data[2:6])
             if val != self.status_old:
@@ -2645,68 +2678,75 @@ class PacketHandling(ProtocolBase):
 
         pmTamperActive = None
         msgCnt = int(data[0])
-        temp = int(data[1])  # don't know what this is (It is 0x00 in test messages so could be the higher 8 bits for msgCnt)
-        log.debug("[handle_msgtypeA7]      A7 message contains {0} messages".format(msgCnt))
-        for i in range(0, msgCnt):
-            eventZone = int(data[2 + (2 * i)])
-            logEvent  = int(data[3 + (2 * i)])
-            eventType = int(logEvent & 0x7F)
-            s = (pmLogEvent_t[self.pmLang][eventType] or "UNKNOWN") + " / " + (pmLogUser_t[self.pmLang][eventZone] or "UNKNOWN")
+        # don't know what this is (It is 0x00 in test messages so could be the higher 8 bits for msgCnt)
+        #   In a log file I reveiced from UffeNisse, there was this A7 message 0d a7 ff 64 00 60 00 ff 00 0c 00 00 43 45 0a
+        #                                                                          msgCnt is 0xFF and temp is 0x64 ????
+        temp = int(data[1])
+        
+        if msgCnt <= 4:
+            log.debug("[handle_msgtypeA7]      A7 message contains {0} messages".format(msgCnt))
+            for i in range(0, msgCnt):
+                eventZone = int(data[2 + (2 * i)])
+                logEvent  = int(data[3 + (2 * i)])
+                eventType = int(logEvent & 0x7F)
+                s = (pmLogEvent_t[self.pmLang][eventType] or "UNKNOWN") + " / " + (pmLogUser_t[self.pmLang][eventZone] or "UNKNOWN")
 
-            #---------------------------------------------------------------------------------------
-            alarmStatus = None
-            if eventType in pmPanelAlarmType_t:
-                alarmStatus = pmPanelAlarmType_t[eventType]
-            troubleStatus = None
-            if eventType in pmPanelTroubleType_t:
-                troubleStatus = pmPanelTroubleType_t[eventType]
+                #---------------------------------------------------------------------------------------
+                alarmStatus = None
+                if eventType in pmPanelAlarmType_t:
+                    alarmStatus = pmPanelAlarmType_t[eventType]
+                troubleStatus = None
+                if eventType in pmPanelTroubleType_t:
+                    troubleStatus = pmPanelTroubleType_t[eventType]
 
-            PanelStatus["Panel Last Event"]     = s
-            PanelStatus["Panel Alarm Status"]   = "None" if alarmStatus is None else alarmStatus
-            PanelStatus["Panel Trouble Status"] = "None" if troubleStatus is None else troubleStatus
+                PanelStatus["Panel Last Event"]     = s
+                PanelStatus["Panel Alarm Status"]   = "None" if alarmStatus is None else alarmStatus
+                PanelStatus["Panel Trouble Status"] = "None" if troubleStatus is None else troubleStatus
 
-            log.info("[handle_msgtypeA7]         System message " + s + "  alarmStatus " + PanelStatus["Panel Alarm Status"] + "   troubleStatus " + PanelStatus["Panel Trouble Status"])
+                log.info("[handle_msgtypeA7]         System message " + s + "  alarmStatus " + PanelStatus["Panel Alarm Status"] + "   troubleStatus " + PanelStatus["Panel Trouble Status"])
 
-            #---------------------------------------------------------------------------------------
-            # Update tamper and siren status
-            # 0x06 is "Tamper", 0x07 is "Control Panel Tamper", 0x08 is "Tamper Alarm", 0x09 is "Tamper Alarm"
-            tamper = eventType == 0x06 or eventType == 0x07 or eventType == 0x08 or eventType == 0x09
-            
-            # 0x01 is "Interior Alarm", 0x02 is "Perimeter Alarm", 0x03 is "Delay Alarm", 0x05 is "24h Audible Alarm"
-            # 0x04 is "24h Silent Alarm", 0x0B is "Panic From Keyfob", 0x0C is "Panic From Control Panel"
-            siren = eventType == 0x01 or eventType == 0x02 or eventType == 0x03 or eventType == 0x05
-
-            if tamper:
-                pmTamperActive = self.getTimeFunction()
-
-            if not self.pmSilentPanic and siren:
-                self.pmSirenActive = self.getTimeFunction()
-                log.info("[handle_msgtypeA7] ******************** Alarm Active *******************")
-            
-            # 0x1B is a cancel alarm
-            if eventType == 0x1B and self.pmSirenActive is not None: # Cancel Alarm
-                self.pmSirenActive = None
-                log.info("[handle_msgtypeA7] ******************** Alarm Cancelled ****************")
-            
-            # INTERFACE Indicate whether siren active
-            PanelStatus["Panel Siren Active"] = 'Yes' if self.pmSirenActive != None else 'No'
-
-            log.info("[handle_msgtypeA7]           self.pmSirenActive={0}   siren={1}   eventType={2}   self.pmSilentPanic={3}   tamper={4}".format(self.pmSirenActive, siren, hex(eventType), self.pmSilentPanic, tamper) )
-            
-            #---------------------------------------------------------------------------------------
-            if eventType == 0x60: # system restart
-                log.warning("[handle_msgtypeA7]         Panel has been reset. Don't do anything and the comms will fail and then we'll reconnect")
-                self.sendResponseEvent ( 4 )   # push changes through to the host, the panel itself has been reset
-
-        if pmTamperActive is not None:
-            log.info("[handle_msgtypeA7] ******************** Tamper Triggered *******************")
-            self.sendResponseEvent ( 6 )   # push changes through to the host to get it to update, tamper is active!
+                #---------------------------------------------------------------------------------------
+                # Update tamper and siren status
+                # 0x06 is "Tamper", 0x07 is "Control Panel Tamper", 0x08 is "Tamper Alarm", 0x09 is "Tamper Alarm"
+                tamper = eventType == 0x06 or eventType == 0x07 or eventType == 0x08 or eventType == 0x09
                 
-        if self.pmSirenActive is not None:
-            self.sendResponseEvent ( 3 )   # push changes through to the host to get it to update, alarm is active!!!!!!!!!
-        else:
-            self.sendResponseEvent ( 2 )   # push changes through to the host to get it to update
+                # 0x01 is "Interior Alarm", 0x02 is "Perimeter Alarm", 0x03 is "Delay Alarm", 0x05 is "24h Audible Alarm"
+                # 0x04 is "24h Silent Alarm", 0x0B is "Panic From Keyfob", 0x0C is "Panic From Control Panel"
+                siren = eventType == 0x01 or eventType == 0x02 or eventType == 0x03 or eventType == 0x05
 
+                if tamper:
+                    pmTamperActive = self.getTimeFunction()
+
+                if not self.pmSilentPanic and siren:
+                    self.pmSirenActive = self.getTimeFunction()
+                    log.info("[handle_msgtypeA7] ******************** Alarm Active *******************")
+                
+                # 0x1B is a cancel alarm
+                if eventType == 0x1B and self.pmSirenActive is not None: # Cancel Alarm
+                    self.pmSirenActive = None
+                    log.info("[handle_msgtypeA7] ******************** Alarm Cancelled ****************")
+                
+                # INTERFACE Indicate whether siren active
+                PanelStatus["Panel Siren Active"] = 'Yes' if self.pmSirenActive != None else 'No'
+
+                log.info("[handle_msgtypeA7]           self.pmSirenActive={0}   siren={1}   eventType={2}   self.pmSilentPanic={3}   tamper={4}".format(self.pmSirenActive, siren, hex(eventType), self.pmSilentPanic, tamper) )
+                
+                #---------------------------------------------------------------------------------------
+                if eventType == 0x60: # system restart
+                    log.warning("[handle_msgtypeA7]         Panel has been reset. Don't do anything and the comms will fail and then we'll reconnect")
+                    self.sendResponseEvent ( 4 )   # push changes through to the host, the panel itself has been reset
+
+            if pmTamperActive is not None:
+                log.info("[handle_msgtypeA7] ******************** Tamper Triggered *******************")
+                self.sendResponseEvent ( 6 )   # push changes through to the host to get it to update, tamper is active!
+                    
+            if self.pmSirenActive is not None:
+                self.sendResponseEvent ( 3 )   # push changes through to the host to get it to update, alarm is active!!!!!!!!!
+            else:
+                self.sendResponseEvent ( 2 )   # push changes through to the host to get it to update
+        else:  ## message count is more than 4
+            log.warning("[handle_msgtypeA7]      A7 message contains too many messages to process : {0}   data={1}".format(msgCnt, self.toString(data)))
+        
     # pmHandlePowerlink (0xAB)
     def handle_msgtypeAB(self, data): # PowerLink Message
         """ MsgType=AB - Panel Powerlink Messages """
@@ -2770,6 +2810,14 @@ class PacketHandling(ProtocolBase):
             log.debug("[handle_msgtypeB0]      Sending special PowerMaster Commands to the panel")
             self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT1"]])    #
             self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT2"]])    #
+        if msgType == 0x03 and subType == 0x04:
+            # Zone information (probably)
+            log.info("[handle_msgtypeB0] Received PowerMaster message, zone information")
+            #for o in range(1, data[6]):
+                # zone o 
+        if msgType == 0x03 and subType == 0x18:
+            # Open/Close information (probably)
+            log.info("[handle_msgtypeB0] Received PowerMaster message, open/close information")
 
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
     def pmGetPin(self, pin):

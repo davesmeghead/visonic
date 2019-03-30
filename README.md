@@ -65,6 +65,8 @@ I have upped the release to what I would call a first Beta version as it is much
 | 0.0.8.4    | Bug fix to the Bug fix for X10 Devices when in Standard Mode |
 | 0.0.8.5    | Bug fix for the number format to be displayed on standard mode |
 | 0.1.0      | *** Breaking change ***  I have converted the Component to the new HA Component file structure. This Component has a different file structure, please delete all previous files. |
+| 0.1.1      | Not officially released |
+| 0.1.2      | Assume Powermaster as default panel and allow CRC to be 1 less than calculated value (I don't know why). Update operation when panel connection is lost. Move when Time is Synchronised to be more accurate (Powermax only). Update A7 decode as Powermaster 10 series sends unknown A7 data. Update powerlink timing to hopefully improve reliability. |
 
 
 ## Instructions and what works so far
@@ -109,7 +111,7 @@ The default settings if you miss it out of the configuration.yaml file:
 | motion_off              |  120    | The time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period. | Integer Seconds |
 | language                | 'EN'    | Set the Langauge. 'EN' for English or 'NL' for Dutch. | 'EN' or 'NL' |
 | force_standard          | 'no'    | Determine whether it tries to connect in Powerlink mode or just goes to Standard. | 'no' or 'yes' |
-| sync_time               | 'yes'   | Attempt to synchronise the time between the device you run HA on and the alarm panel. | 'no' or 'yes' |
+| sync_time               | 'yes'   | Attempt to synchronise the time between the device you run HA on and the alarm panel. Powermax only, not Powermaster. | 'no' or 'yes' |
 | allow_remote_arm        | 'no'    | Determines whether the panel can be armed from within HA. | 'no' or 'yes' |
 | allow_remote_disarm     | 'no'    | Determines whether the panel can be disarmed from within HA. | 'no' or 'yes' |
 | override_code           | ''      | If in Standard mode, then this is the 4 digit code used to arm and disarm. See note 1 below | 4 digit string |

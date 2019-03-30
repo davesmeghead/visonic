@@ -66,6 +66,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     # Listener to handle fired events
     def handle_event_alarm_panel(event):
         _LOGGER.info('alarm control panel received update event')
+        # There is a "condition value in the data but we don't need it, just do an update for every change
         if va is not None:
             va.doUpdate()
     

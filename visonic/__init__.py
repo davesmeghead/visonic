@@ -92,8 +92,8 @@ VISONIC_COMPONENTS = [
 exclude_ids = []
 
 _LOGGER = logging.getLogger(__name__)
-level = logging.getLevelName('INFO')  # INFO
-_LOGGER.setLevel(level)
+#level = logging.getLevelName('INFO')  # INFO
+#_LOGGER.setLevel(level)
      
 command_queue = asyncio.Queue()
 panel_reset_counter = 0
@@ -114,7 +114,7 @@ def setup(hass, base_config):
     # This is a callback function, called from the visonic library when a new sensor is detected/created
     #  it adds it to the list of devices and then calls discovery to fully create it in HA
     #  remember that all the sensors may not be created at the same time
-    def add_visonic_device(visonic_devices):
+    def visonic_event_callback_handler(visonic_devices):
         global exclude_ids
         
         # Check to ensure variables are set correctly
@@ -166,7 +166,12 @@ def setup(hass, base_config):
             
         elif visonic_devices >= 1 and visonic_devices <= 10:   
             # General update trigger
-            #    1 is a zone update, 2 is a panel update, 3 is a panel update AND the alarm is active, 4 is the panel has been reset
+            #    1 is a zone update, 
+            #    2 is a panel update AND the alarm is not active, 
+            #    3 is a panel update AND the alarm is active, 
+            #    4 is the panel has been reset, 
+            #    5 is pin rejected, 
+            #    6 is tamper triggered
             _LOGGER.info("Visonic update event {0}".format(visonic_devices ))
             hass.bus.fire('alarm_panel_state_update', { 'condition': visonic_devices })
 
@@ -235,13 +240,13 @@ def setup(hass, base_config):
             host = device_type[CONF_HOST]
             port = device_type[CONF_PORT]
            
-            comm = visonicApi.create_tcp_visonic_connection(address = host, port = port, event_callback = add_visonic_device, command_queue = command_queue,
+            comm = visonicApi.create_tcp_visonic_connection(address = host, port = port, event_callback = visonic_event_callback_handler, command_queue = command_queue,
                                                            disconnect_callback = disconnect_callback, loop = hass.loop, excludes = exclude_ids)
         elif device_type["type"] == "usb":
             path = device_type[CONF_PATH]
             baud = device_type[CONF_DEVICE_BAUD]
            
-            comm = visonicApi.create_usb_visonic_connection(port = path, baud = baud, event_callback = add_visonic_device, command_queue = command_queue,
+            comm = visonicApi.create_usb_visonic_connection(port = path, baud = baud, event_callback = visonic_event_callback_handler, command_queue = command_queue,
                                                          disconnect_callback = disconnect_callback, excludes = exclude_ids, loop = hass.loop)
 
         if comm is not None:
