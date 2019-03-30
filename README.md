@@ -225,9 +225,7 @@ logger:
   default: critical
   logs:
     custom_components.visonic: debug
-    custom_components.alarm_control_panel.visonic: critical
-    custom_components.binary_sensor.visonic: critical
-    custom_components.pyvisonic: debug
+    custom_components.visonic.pyvisonic: debug
 ```
 
 (*) Full Restart Sequence for Powerlink:
