@@ -120,8 +120,8 @@ The default settings if you miss it out of the configuration.yaml file:
 | allow_remote_disarm     | 'no'    | Determines whether the panel can be disarmed from within HA. | 'no' or 'yes' |
 | override_code           | ''      | If in Standard mode, then this is the 4 digit code used to arm and disarm. See note 1 below | 4 digit string |
 | arm_without_usercode    | 'no'    | If in Standard mode, Arm without the usercode (not all panels support this). See note 2 below. | 'no' or 'yes' |
-| exclude_sensor          | '[]'    | A list of Zone sensors to exclude e.g to exclude zones Z02 and Z03 then use [2,3] | [1,2 etc] |
-| exclude_x10             | '[]'    | A list of X10 devices to exclude e.g to exclude devices X02 and X03 then use [2,3] | [1,2 etc] |
+| exclude_sensor          | []      | A list of Zone sensors to exclude e.g to exclude zones Z02 and Z03 then use [2,3] | [1,2 etc] |
+| exclude_x10             | []      | A list of X10 devices to exclude e.g to exclude devices X02 and X03 then use [2,3] | [1,2 etc] |
 
 Note 1: If in Powerlink mode then this is not used. If in Standard mode and the override_code is not set then you will have to enter your 4 digit code every time you arm and disarm. It depends on how secure you make your system and how much you trust it.
 
