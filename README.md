@@ -28,7 +28,7 @@ Visonic does not provide a specification of the RS232 protocol and, thus, the bi
 
 
 ## Release
-This is release 0.1.4 : *** 0.1.0 represents a potential breaking change ***
+This is release 0.1.5 : *** 0.1.0 represents a potential breaking change ***
 
 If you have used this Component before, please delete the following files before you copy across version 0.1.0
 ```
@@ -69,6 +69,7 @@ I have upped the release to what I would call a first Beta version as it is much
 | 0.1.2      | Assume Powermaster as default panel and allow CRC to be 1 less than calculated value (I don't know why). Update operation when panel connection is lost. Move when Time is Synchronised to be more accurate (Powermax only). Update A7 decode as Powermaster 10 series sends unknown A7 data. Update powerlink timing to hopefully improve reliability. |
 | 0.1.3      | Quick fix to exit Download mode quicker when trying Powerlink |
 | 0.1.4      | Quick fix to Powerlink, would sometimes take 10 to 15 minutes so put some code back to how it was!! I have also added "exclude" lists for sensors and x10 devices, added additional config parameters, see below |
+| 0.1.5      | A few debug and bug fix additions to hopefully help work out control flow of some of the wider communities panels |
 
 
 ## Instructions and what works so far

@@ -38,7 +38,7 @@ from collections import namedtuple
 
 HOMEASSISTANT = True
 
-PLUGIN_VERSION = "0.1.4"
+PLUGIN_VERSION = "0.1.5"
 
 MAX_CRC_ERROR = 5
 POWERLINK_RETRIES = 4
@@ -912,7 +912,7 @@ class ProtocolBase(asyncio.Protocol):
                 self.SendCommand("MSG_ALIVE")
                 # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
                 # When in powerlink mode, it makes no difference as we get the AB messages from the panel, but this also keeps our status updated
-                if status_counter > 4:
+                if status_counter > 1:  # every twice around the loop i.e every 40 seconds
                     status_counter = 0
                     self.SendCommand("MSG_STATUS")  # Asks the panel to send us the A5 message set
                 status_counter = status_counter + 1
@@ -1136,16 +1136,18 @@ class ProtocolBase(asyncio.Protocol):
 
                 # Unknown Message has been received
                 if self.msgType_t is None:
-                    log.info("[data receiver] Unhandled message {0}".format(hex(msgType)))
+                    log.warning("[data receiver] Unhandled message {0}".format(hex(msgType)))
                     self.pmSendAck()
                 else:
+                    log.debug("[data receiver] *** Received message " + hex(msgType).upper() + "   data " + self.toString(self.ReceiveData))
                     # Send an ACK if needed
                     if not self.coordinating_powerlink and self.msgType_t.ackneeded:
-                        #log.debug("[data receiver] Sending an ack as needed by last panel status message " + hex(msgType).upper())
+                        log.debug("[data receiver] Sending an ack as needed by last panel status message " + hex(msgType).upper())
                         self.pmSendAck()
                     # Handle the message
-                    log.debug("[data receiver] Received message " + hex(msgType).upper() + "   data " + self.toString(self.ReceiveData))
                     self.handle_packet(self.ReceiveData)
+                    # clear our buffer again so we can receive a new packet.
+                    self.ReceiveData = bytearray(b'')
                     # Check response
                     if len(self.pmExpectedResponse) > 0 and msgType != 2:   # 2 is a simple acknowledge from the panel so ignore those
                         # We've sent something and are waiting for a reponse - this is it
@@ -1205,10 +1207,13 @@ class ProtocolBase(asyncio.Protocol):
     # Send an achnowledge back to the panel
     def pmSendAck(self, type_of_ack = False):
         """ Send ACK if packet is valid """
-        lastType = self.pmLastPDU[1]
+        lastType = 0
+        if len(self.pmLastPDU) > 2:
+            lastType = self.pmLastPDU[1]
+
         #normalMode = (lastType >= 0x80) or ((lastType < 0x10) and (self.pmLastPDU[len(self.pmLastPDU) - 2] == 0x43))
 
-        log.debug("[sending ack] Sending an ack back to Alarm powerlink = {0}{1}".format(self.pmPowerlinkMode, type_of_ack))
+        log.debug("[sending ack] Sending ack, PowerlinkMode={0}    Powerlink Ack Required={1}    This is an Ack for message={2}".format(self.pmPowerlinkMode, type_of_ack, hex(lastType).upper()))
         # There are 2 types of acknowledge that we can send to the panel
         #    Normal    : For a normal message
         #    Powerlink : For when we are in powerlink mode
@@ -1734,7 +1739,7 @@ class PacketHandling(ProtocolBase):
             pmPanelTypeNr = int(pmPanelTypeNrStr)
             PanelStatus["Model"] = pmPanelType_t[pmPanelTypeNr] if pmPanelTypeNr in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
             #self.dump_settings()
-            log.info("pmPanelTypeNr {0}    model {1}".format(pmPanelTypeNr, PanelStatus["Model"]))
+            log.info("[Process Settings] pmPanelTypeNr {0}    model {1}".format(pmPanelTypeNr, PanelStatus["Model"]))
 
         # ------------------------------------------------------------------------------------------------------------------------------------------------
         # Need the panel type to be valid so we can decode some of the remaining downloaded data correctly
@@ -2083,8 +2088,6 @@ class PacketHandling(ProtocolBase):
             self.handle_msgtypeB0(packet[2:-2])
         else:
             log.info("[handle_packet] Unknown/Unhandled packet type {0}".format(packet[1:2]))
-        # clear our buffer again so we can receive a new packet.
-        self.ReceiveData = bytearray(b'')
 
     def displayzonebin(self, bits):
         """ Display Zones in reverse binary format
@@ -2098,6 +2101,9 @@ class PacketHandling(ProtocolBase):
         log.debug("[handle_msgtype02] Ack Received  data = {0}".format(self.toString(data)))
         while 0x02 in self.pmExpectedResponse:
             self.pmExpectedResponse.remove(0x02)
+        if not self.pmPowerlinkMode and len(data) > 0:
+            if data[0] == 0x43:
+                log.info("[handle_msgtype02]    Received a powerlink acknowledge but I am in standard mode")
         #self.pmWaitingForAckFromPanel = False
 
     def handle_msgtype06(self, data):
@@ -2113,7 +2119,9 @@ class PacketHandling(ProtocolBase):
         if self.pmPowerlinkMode:
             self.SendCommand("MSG_RESTORE")
         else:
-            self.SendCommand("MSG_STATUS")
+            self.reset_watchdog_timeout()
+            self.gotoStandardMode()
+            #self.SendCommand("MSG_STATUS")
 
     def handle_msgtype08(self, data):
         log.info("[handle_msgtype08] Access Denied  len {0} data {1}".format(len(data), self.toString(data)))
@@ -2130,6 +2138,7 @@ class PacketHandling(ProtocolBase):
                     
                 elif lastCommandData[0] == 0x24:
                     log.debug("[handle_msgtype08] Got an Access Denied and we have sent a Download command to the Panel")
+                    self.DownloadMode = False
 
     def handle_msgtype0B(self, data): # STOP
         """ Handle STOP from the panel """
@@ -2168,8 +2177,8 @@ class PacketHandling(ProtocolBase):
         Message send after a MSG_START. We will store the information in an internal array/collection """
 
         if len(data) != 10:
-            log.info("[handle_msgtype33] ERROR: MSGTYPE=0x33 Expected len=14, Received={0}".format(len(self.ReceiveData)))
-            log.info("[handle_msgtype33]                            " + self.toString(self.ReceiveData))
+            log.info("[handle_msgtype33] ERROR: MSGTYPE=0x33 Expected len=14, Received={0}".format(len(data)))
+            log.info("[handle_msgtype33]                            " + self.toString(data))
             return
 
         # Data Format is: <index> <page> <8 data bytes>
@@ -2247,7 +2256,7 @@ class PacketHandling(ProtocolBase):
         # Check length and data-length
         if iLength != len(data) - 3:  # 3 because -->   index & page & length
             log.info("[handle_msgtype3F] ERROR: Type=3F has an invalid length, Received: {0}, Expected: {1}".format(len(data)-3, iLength))
-            log.info("[handle_msgtype3F]                            " + self.toString(self.ReceiveData))
+            log.info("[handle_msgtype3F]                            " + self.toString(data))
             return
 
         # Write to memory map structure, but remove the first 4 bytes (3F/index/page/length) from the data
@@ -2755,7 +2764,7 @@ class PacketHandling(ProtocolBase):
         # Restart the timer
         self.reset_watchdog_timeout()
 
-        subType = self.ReceiveData[2]
+        subType = data[0]
         if subType == 3: # keepalive message
             # Example 0D AB 03 00 1E 00 31 2E 31 35 00 00 43 2A 0A
             log.info("[handle_msgtypeAB] ***************************** Got PowerLink Keep-Alive ****************************")
@@ -2771,7 +2780,7 @@ class PacketHandling(ProtocolBase):
             else:
                 self.DumpSensorsToDisplay()
         elif subType == 5: # -- phone message
-            action = self.ReceiveData[4]
+            action = data[2]
             if action == 1:
                 log.debug("[handle_msgtypeAB] PowerLink Phone: Calling User")
                 #pmMessage("Calling user " + pmUserCalling + " (" + pmPhoneNr_t[pmUserCalling] +  ").", 2)
@@ -2783,17 +2792,17 @@ class PacketHandling(ProtocolBase):
                 #pmMessage("User " .. pmUserCalling .. " acknowledged by phone.", 2)
                 #pmUserCalling = 1
             else:
-                log.debug("[handle_msgtypeAB] PowerLink Phone: Unknown Action {0}".format(hex(self.ReceiveData[3]).upper()))
-        elif subType == 10 and self.ReceiveData[4] == 0:
+                log.debug("[handle_msgtypeAB] PowerLink Phone: Unknown Action {0}".format(hex(data[1]).upper()))
+        elif subType == 10 and data[2] == 0:
             log.debug("[handle_msgtypeAB] PowerLink telling us what the code is for downloads, currently commented out as I'm not certain of this")
-            #DownloadCode[0] = self.ReceiveData[5]
-            #DownloadCode[1] = self.ReceiveData[6]
-        elif subType == 10 and self.ReceiveData[4] == 1 and not self.doneAutoEnroll:
+            #DownloadCode[0] = data[3]
+            #DownloadCode[1] = data[4]
+        elif subType == 10 and data[2] == 1 and not self.doneAutoEnroll:
             if not self.ForceStandardMode:
                 log.info("[handle_msgtypeAB] PowerLink most likely wants to auto-enroll, only doing auto enroll once")
                 self.DownloadMode = False
                 self.SendMsg_ENROLL()
-        elif subType == 10 and self.ReceiveData[4] == 1:
+        elif subType == 10 and data[2] == 1:
             self.DownloadMode = False
             self.doneAutoEnroll = False
             asyncio.ensure_future(self.coordinate_powerlink_startup(4), loop = self.loop)
