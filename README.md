@@ -10,7 +10,14 @@ You have a choice, you either connect using RS232/USB or using Ethernet (Wired o
 
 
 If you choose USB then the PowerMax provides direct support for an RS232 serial interface that can be connected to the machine running Home Assistant. The serial interface is not installed by default but can be ordered from any PowerMax vendor (called the Visonic RS-232 Adaptor Kit). The RS232 internal panel interface uses TTL signal levels, this adaptor kit makes it "proper" signal levels.  You may not need the Adaptor Kit if you use a USB interface with TTL RS232 logic levels.
+You can also connect the USB cable to a raspberry pi, or any other linux capable device, and use the ser2net program to turn it into a network connected device.
+install ser2net on the linux device. edit the ser2net config file like this:
 
+10628:raw:600:/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A700eRHw-if00-port0:9600 8DATABITS NONE 1STOPBIT
+
+be sure to change it to the proper serial port (/dev/ttyUSB0 in most cases). After editing restart the ser2net service.
+
+Now setup the component like the ethernet setup from below, using the raspberry pi IP as IP address.
 
 If you choose Ethernet then I can help a bit more as that is what I have. I have a device that connects to the RS232 TTL interface inside the panel (without using the RS-232 Adapter Kit) and creates an Ethernet TCP connection with a web server to set it up. I bought [this](https://www.aliexpress.com/item/USR-TCP232-E-Serial-Server-RS232-RS485-To-Ethernet-TTL-Level-DHCP-Web-Module/32687581169.html)
 
