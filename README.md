@@ -17,7 +17,8 @@ install ser2net on the linux device. edit the ser2net config file like this:
 
 be sure to change it to the proper serial port (/dev/ttyUSB0 in most cases). After editing restart the ser2net service.
 
-Now setup the component like the ethernet setup from below, using the raspberry pi IP as IP address.
+Now setup the component like the ethernet setup from below, using the raspberry pi IP as IP address and 10628 as the port.
+Of course you can use any other port you like, but be sure to also change it in the ser2net config file also and to restart ser2net.
 
 If you choose Ethernet then I can help a bit more as that is what I have. I have a device that connects to the RS232 TTL interface inside the panel (without using the RS-232 Adapter Kit) and creates an Ethernet TCP connection with a web server to set it up. I bought [this](https://www.aliexpress.com/item/USR-TCP232-E-Serial-Server-RS232-RS485-To-Ethernet-TTL-Level-DHCP-Web-Module/32687581169.html)
 
