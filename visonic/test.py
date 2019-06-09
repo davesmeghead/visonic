@@ -7,11 +7,6 @@ import argparse
 from time import sleep
 from collections import defaultdict
 
-pyvisonic.HOMEASSISTANT = False
-
-logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger(__name__)
-
 def add_visonic_device(visonic_devices):
     
     if visonic_devices == None:
@@ -27,6 +22,11 @@ def add_visonic_device(visonic_devices):
     
     else:
         log.warning("Visonic attempt to add device with type {0}  device is {1}".format(type(visonic_devices), visonic_devices ))
+
+logging.basicConfig(level=logging.DEBUG)
+log = logging.getLogger(__name__)
+
+pyvisonic.setupLocalLogger()
 
 pyvisonic.setConfig("OverrideCode", -1)
 # pyvisonic.setConfig("PluginDebug", True)

@@ -11,7 +11,6 @@ The Connection can be made using Ethernet TCP, USB (connection to RS232) or dire
 import logging
 import voluptuous as vol
 #import homeassistant.helpers.entity_registry
-import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
 import asyncio
 
 from collections import defaultdict
@@ -54,6 +53,7 @@ CONF_ENABLE_REMOTE_ARM = "allow_remote_arm"
 CONF_ENABLE_REMOTE_DISARM = "allow_remote_disarm"
 CONF_ENABLE_SENSOR_BYPASS = "allow_sensor_bypass"
 CONF_OVERRIDE_CODE = "override_code"
+CONF_DOWNLOAD_CODE = "download_code"
 CONF_ARM_CODE_AUTO = "arm_without_usercode"
 
 CONF_EXCLUDE_SENSOR = "exclude_sensor"
@@ -77,6 +77,7 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Optional(CONF_EXCLUDE_X10,          default=[]): VISONIC_ID_LIST_SCHEMA,
         vol.Optional(CONF_MOTION_OFF_DELAY,     120 ) : cv.positive_int,
         vol.Optional(CONF_OVERRIDE_CODE,        "" )  : cv.string,
+        vol.Optional(CONF_DOWNLOAD_CODE,        "" )  : cv.string,
         vol.Optional(CONF_LANGUAGE,             "EN" ): cv.string,
         vol.Optional(CONF_ARM_CODE_AUTO,        False): cv.boolean,
         vol.Optional(CONF_FORCE_STANDARD,       False): cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
@@ -101,6 +102,8 @@ panel_reset_counter = 0
      
 def setup(hass, base_config):
     """Set up for Visonic devices."""
+    
+    import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
     
     hass = hass
     base_config = base_config
@@ -183,7 +186,10 @@ def setup(hass, base_config):
 
     def disconnect_callback(excep):
         global panel_reset_counter
-        _LOGGER.error("PyVisonic has caused an exception {0}".format(excep))
+        if excep is None:
+            _LOGGER.error("PyVisonic has caused an exception, no exception information is available")
+        else:
+            _LOGGER.error("PyVisonic has caused an exception {0}".format(excep))
         sleep(10.0)
         panel_reset_counter = panel_reset_counter + 1
         _LOGGER.error(" ........... attempting reconnection")
@@ -191,6 +197,15 @@ def setup(hass, base_config):
             discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
             discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
         
+#    def get_entity(name):
+#        # Take 'foo.bar.baz' and return self.entities.foo.bar.baz.
+#        # This makes it easy to convert a string to an arbitrary entity.
+#        elems = name.split(".")
+#        obj = hass.entities
+#        for e in elems:
+#            obj = getattr(obj, e)
+#        return obj
+
     def connect_to_alarm():
         global panel_reset_counter
 
@@ -204,10 +219,13 @@ def setup(hass, base_config):
         sensor_list = hass.states.async_entity_ids("binary_sensor")
         if sensor_list is not None:
             for x in sensor_list:
-                if x.startswith( 'binary_sensor.visonic' ):
-                    retval = hass.states.async_remove(x)
-                    if retval:
-                        _LOGGER.info("Removed existing HA Entity ID: {0}".format(x))
+                _LOGGER.info("Checking HA Entity ID: {0}".format(x))
+                if x.lower().startswith( 'binary_sensor.visonic_z' ):
+                    #device, entity = self.split_entity(x)
+                    #self.entities[device][entity]
+                    _LOGGER.info("   Removed existing HA Entity ID: {0}".format(x))
+#                    entity_object = get_entity(x)
+                    hass.add_job(hass.states.async_remove(x))
         
         # Set the Sensors list as empty
         hass.data[VISONIC_SENSORS] = {}
@@ -223,6 +241,8 @@ def setup(hass, base_config):
         visonicApi.setConfig("EnableRemoteDisArm", config.get(CONF_ENABLE_REMOTE_DISARM))
         visonicApi.setConfig("EnableSensorBypass", config.get(CONF_ENABLE_SENSOR_BYPASS))
         visonicApi.setConfig("OverrideCode", config.get(CONF_OVERRIDE_CODE))
+        visonicApi.setConfig("DownloadCode", config.get(CONF_DOWNLOAD_CODE))
+        visonicApi.setConfig("ArmWithoutCode", config.get(CONF_ARM_CODE_AUTO))
         visonicApi.setConfig("ResetCounter", panel_reset_counter)
 
         # Get Visonic specific configuration.

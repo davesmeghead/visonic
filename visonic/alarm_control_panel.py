@@ -25,8 +25,6 @@ from homeassistant.const import (STATE_UNKNOWN, STATE_ALARM_DISARMED, STATE_ALAR
 from custom_components.visonic import VISONIC_PLATFORM
 from homeassistant.core import valid_entity_id, split_entity_id
 
-import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
-
 DEPENDENCIES = ['visonic']
 
 DOMAIN = 'alarm_control_panel'
@@ -148,6 +146,8 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     @property
     def device_state_attributes(self):  #
         """Return the state attributes of the device."""
+        import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
+ 
         # maybe should filter rather than sending them all
         return visonicApi.PanelStatus
 
@@ -157,11 +157,12 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     def code_format(self):
         """Regex for code format or None if no code is required."""
         #_LOGGER.info("code format called *****************************") 
+        import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
 
         # try powerlink mode first, if in powerlink then it already has the user codes
         panelmode = visonicApi.PanelStatus["Mode"]
         if panelmode is not None:
-            if panelmode == "Powerlink":
+            if panelmode == "Powerlink" or panelmode == "Standard Plus":
                 #_LOGGER.info("code format none as powerlink *****************************") 
                 return None
                 
@@ -190,6 +191,7 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     @property
     def state(self):
         """Return the state of the device."""
+        import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
         sirenactive = 'No'
         if "Panel Siren Active" in visonicApi.PanelStatus:
             sirenactive = visonicApi.PanelStatus["Panel Siren Active"]
