@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.2.0"
+PLUGIN_VERSION = "0.2.1"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -2461,8 +2461,8 @@ class PacketHandling(ProtocolBase):
                     else:
                         log.debug("[handle_msgtypeA5]      unable to locate zone device " + str(eventZone))
 
+
             # Examine X10 status
-            visonic_devices = defaultdict(list)
             for i in range(0, 16):
                 status = x10status & (1 << i)
                 if i in self.pmX10Dev_t:
@@ -2473,28 +2473,14 @@ class PacketHandling(ProtocolBase):
                     if ( oldstate and not self.pmX10Dev_t[i].state ) or (not oldstate and self.pmX10Dev_t[i].state):
                         log.debug("X10 device {0} changed to {1}".format(i, status))
                         self.pmX10Dev_t[i].pushChange()
-                else:
-                    if i == 0:
-                        x10Location = "PGM"
-                        x10DeviceName = "PGM"
-                        x10Type = "onoff"
-                    else:
-                        x10Location = "Unknown"
-                        x10DeviceName = "X{0:0>2}".format(i)
-                        x10Type = "dim"
-                    self.pmX10Dev_t[i] = X10Device(name = x10DeviceName, type = x10Type, location = x10Location, id=i, enabled=True)
-                    self.pmX10Dev_t[i].state = bool(status)
-                    visonic_devices['switch'].append(self.pmX10Dev_t[i])
-             
-            if len(visonic_devices) > 0:
-                self.sendResponseEvent ( visonic_devices )
-                    
+
+
             slog = pmDetailedArmMode_t[sysStatus]
             sarm_detail = "Unknown"
             if 0 <= sysStatus < len(pmSysStatus_t[self.pmLang]):
                 sarm_detail = pmSysStatus_t[self.pmLang][sysStatus]
-            
-            if sysStatus == 7 and self.pmDownloadComplete:
+
+            if sysStatus == 7 and self.pmDownloadComplete:  # sysStatus == 7 means panel "downloading"
                 log.debug("[handle_msgtypeA5]      Sending a STOP and EXIT as we seem to be still in the downloading state and it should have finished")
                 self.SendCommand("MSG_STOP")
                 self.SendCommand("MSG_EXIT")
@@ -2562,12 +2548,16 @@ class PacketHandling(ProtocolBase):
                 # if the system status has the panel armed and there has been an alarm event, assume that the alarm is sounding
                 #   Normally this would only be directly available in Powerlink mode with A7 messages, but an assumption is made here
                 if sarm == "Armed" and sysFlags & 0x80 != 0:
+                    log.info("[handle_msgtypeA5]      Alarm Event Assumed while in Standard Mode")
                     # Alarm Event 
                     self.pmSirenActive = self.getTimeFunction()
                     self.sendResponseEvent ( 3 )   # Alarm Event
-                if self.pmSirenActive is not None and sarm == "Disarmed":
-                    self.pmSirenActive = None
-                PanelStatus["Panel Siren Active"] = 'Yes' if self.pmSirenActive != None else 'No'
+
+            # Clear any alarm event if the panel alarm has been triggered before (while armed) but now that the panel is disarmed (in all modes)
+            if self.pmSirenActive is not None and sarm == "Disarmed":
+                log.info("[handle_msgtypeA5] ******************** Alarm Not Sounding (Disarmed) ****************")
+                self.pmSirenActive = None
+            PanelStatus["Panel Siren Active"] = 'Yes' if self.pmSirenActive != None else 'No'
 
             if sysFlags & 0x20 != 0:
                 sEventLog = pmEventType_t[self.pmLang][eventType]
@@ -2740,6 +2730,11 @@ class PacketHandling(ProtocolBase):
                 if eventType == 0x1B and self.pmSirenActive is not None: # Cancel Alarm
                     self.pmSirenActive = None
                     log.info("[handle_msgtypeA7] ******************** Alarm Cancelled ****************")
+                
+                # Siren has been active but it is no longer active (probably timed out and has then been disarmed)
+                if not siren and self.pmSirenActive is not None: # Alarm Timed Out ????
+                    self.pmSirenActive = None
+                    log.info("[handle_msgtypeA7] ******************** Alarm Not Sounding ****************")
                 
                 # INTERFACE Indicate whether siren active
                 PanelStatus["Panel Siren Active"] = 'Yes' if self.pmSirenActive != None else 'No'

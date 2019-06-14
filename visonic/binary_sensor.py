@@ -120,6 +120,7 @@ class VisonicSensor(BinarySensorDevice):
         attr["zone name"] = self.visonic_device.zname
         attr["zone type name"] = self.visonic_device.ztypeName
         attr["zone chime"] = self.visonic_device.zchime
+        attr["zone tripped"] = "Yes" if self.visonic_device.ztrip else "No"
         attr["zone tamper"] = "Yes" if self.visonic_device.ztamper else "No"
         attr["device tamper"] = "Yes" if self.visonic_device.tamper else "No"
         attr["zone open"] = "Yes" if self.visonic_device.status else "No"
