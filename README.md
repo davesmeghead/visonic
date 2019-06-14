@@ -75,6 +75,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.1.4      | Quick fix to Powerlink, would sometimes take 10 to 15 minutes so put some code back to how it was!! I have also added "exclude" lists for sensors and x10 devices, added additional config parameters, see below |
 | 0.1.5      | A few debug and bug fix additions to hopefully help work out control flow of some of the wider communities panels |
 | 0.2.0      | A change of control flow for startup and the addition of the "Standard Plus" mode. Also added the ability to set the Download Code from the configuration file |
+| 0.2.1      | X10 Devices available in Standard Plus and Powerlink. Added "zone tripped" attribute to the sensors. Assume siren is not active when panel disarmed. |
 
 
 ## Instructions and what works so far
