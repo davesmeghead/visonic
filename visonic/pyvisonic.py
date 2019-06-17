@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.2.1"
+PLUGIN_VERSION = "0.2.2"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -371,7 +371,7 @@ pmX10State_t = {
    "off" : 0x00, "on" : 0x01, "dim" : 0x0A, "brighten" : 0x0B
 }
 
-# Config for each panel type (1-9)
+# Config for each panel type (0-8)
 pmPanelConfig_t = {
    "CFG_PARTITIONS"  : (   1,   1,   1,   1,   3,   3,   1,   3,   3 ),
    "CFG_EVENTS"      : ( 250, 250, 250, 250, 250, 250, 250, 250,1000 ),
@@ -842,6 +842,7 @@ class ProtocolBase(asyncio.Protocol):
         
         # The receive byte array for receiving a message
         self.ReceiveData = bytearray()
+
         # A queue of messages to send
         self.SendList = []
         
@@ -1849,6 +1850,8 @@ class PacketHandling(ProtocolBase):
                 partition = self.pmReadSettings(pmDownloadItem_t["MSG_DL_PARTITIONS"])
                 if partition is None or partition[0] == 0:
                     partitionCnt = 1
+                else:    
+                    log.debug("[Process Settings] Partition settings " + self.toString(partition))
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process zone settings
@@ -1859,6 +1862,7 @@ class PacketHandling(ProtocolBase):
                 else: # PowerMaster models
                     zoneNames = self.pmReadSettings(pmDownloadItem_t["MSG_DL_MR_ZONENAMES"])
                     settingMr = self.pmReadSettings(pmDownloadItem_t["MSG_DL_MR_ZONES"])
+                    log.debug("[Process Settings] MSG_DL_MR_ZONES Buffer " + self.toString(settingMr))
 
                 setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_ZONES"])
                 
@@ -1877,7 +1881,8 @@ class PacketHandling(ProtocolBase):
                             zoneEnrolled = setting[i * 4 : i * 4 + 3] != bytearray.fromhex("00 00 00")
                             #log.debug("      Zone Slice is " + self.toString(setting[i * 4 : i * 4 + 4]))
                         else: # PowerMaster models (check only 5 of 10 bytes)
-                            zoneEnrolled = settingMr[i * 10 : i * 10 + 5] != bytearray.fromhex("00 00 00 00 00")
+                            zoneEnrolled = settingMr[i * 10 + 4 : i * 10 + 9] != bytearray.fromhex("00 00 00 00 00")
+                        
                         if zoneEnrolled:
                             zoneInfo = 0
                             sensorID_c = 0
@@ -1907,10 +1912,10 @@ class PacketHandling(ProtocolBase):
 
                             part = []
                             if partitionCnt > 1:
-                                for j in range (1, partitionCnt):
-                                    if partition[0x11 + i] & (1 << (j - 1)) > 0:
-                                        #log.debug("[Process Settings] Adding to partition list")
-                                        part.append(j)
+                                for j in range (0, partitionCnt):
+                                    if (partition[0x11 + i] & (1 << j)) > 0:
+                                        log.debug("[Process Settings]     Adding to partition list - ref {0}  Z{1:0>2}   Partition {2}".format(i, i+1, j+1))
+                                        part.append(j+1)
                             else:
                                 part = [1]
 
@@ -2029,13 +2034,13 @@ class PacketHandling(ProtocolBase):
 
                 log.debug("[Process Settings] Adding zone devices")
 
-                #  INTERFACE : Add these self.pmSensorDev_t[i] params to the status panel
                 PanelStatus["Door Zones"] = doorZones
                 PanelStatus["Motion Zones"] = motionZones
                 PanelStatus["Smoke Zones"] = smokeZones
                 PanelStatus["Other Zones"] = otherZones
                 PanelStatus["Devices"] = devices
 
+                #  INTERFACE : Add these self.pmSensorDev_t[i] params to the status panel
                 self.sendResponseEvent ( visonic_devices )
 
             # INTERFACE : Create Partitions in the interface
@@ -2680,12 +2685,15 @@ class PacketHandling(ProtocolBase):
     def handle_msgtypeA7(self, data):
         """ MsgType=A7 - Panel Status Change """
         log.info("[handle_msgtypeA7] Panel Status Change " + self.toString(data))
+        # 
+        #   In a log file I reveiced from pocket,    there was this A7 message 0d a7 ff fc 00 60 00 ff 00 0c 00 00 43 45 0a
+        #   In a log file I reveiced from UffeNisse, there was this A7 message 0d a7 ff 64 00 60 00 ff 00 0c 00 00 43 45 0a     msgCnt is 0xFF and temp is 0x64 ????
+        #                                                                          
 
         pmTamperActive = None
         msgCnt = int(data[0])
+
         # don't know what this is (It is 0x00 in test messages so could be the higher 8 bits for msgCnt)
-        #   In a log file I reveiced from UffeNisse, there was this A7 message 0d a7 ff 64 00 60 00 ff 00 0c 00 00 43 45 0a
-        #                                                                          msgCnt is 0xFF and temp is 0x64 ????
         temp = int(data[1])
         
         if msgCnt <= 4:
@@ -2823,19 +2831,53 @@ class PacketHandling(ProtocolBase):
     def handle_msgtypeB0(self, data): # PowerMaster Message
         """ MsgType=B0 - Panel PowerMaster Message """
 #        msgSubTypes = [0x00, 0x01, 0x02, 0x03, 0x04, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x18, 0x19, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x24, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x38, 0x39, 0x3A ]
+        # Format: <Type> <SubType> <Length> <Data>
+
         msgType = data[0] # 00, 01, 04: req; 03: reply, so expecting 0x03
         subType = data[1]
         msgLen  = data[2]
         log.info("[handle_msgtypeB0] Received PowerMaster message {0}/{1} (len = {2})    full data = {3}".format(msgType, subType, msgLen, self.toString(data)))
+        #  Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 06 43
+        #  Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 09 43
+        #  Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0d 43
+        #   Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 06 43 
+        #   Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 09 43 
+        #   Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0d 43 
+        #  Received PowerMaster message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
+        #   Received PowerMaster message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
         if msgType == 0x03 and subType == 0x39:
+            # Movement (probably)
+            #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 04 43
+            #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 07 43
+            #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
+            #   Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 04 43 
+            #   Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 07 43 
+            #   Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
             log.debug("[handle_msgtypeB0]      Sending special PowerMaster Commands to the panel")
             self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT1"]])    #
             self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT2"]])    #
+
         if msgType == 0x03 and subType == 0x04:
             # Zone information (probably)
+            #  Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 0b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 05 43
+            #  Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 0b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 08 43
+            #  Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0c 43
+            #   Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 0b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 05 43 
+            #   Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 0b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 08 43 
+            #   Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0c 43 
             log.info("[handle_msgtypeB0]       Received PowerMaster message, zone information (probably)")
-            #for o in range(1, data[6]):
-                # zone o 
+            for z in range(0, msgLen):
+                # Check if the zone exists and it has to be a PIR
+                # do we already know about the sensor from the EPROM decode
+                if z in self.pmSensorDev_t:
+                    #zone z
+                    if self.pmSensorDev_t[z].stype == "Motion":
+                        s = data[3 + z]
+                        log.debug("[handle_msgtypeB0]           Zone {0}  Motion State {1}".format(z, s))
+                    else:
+                        s = data[3 + z]
+                        log.debug("[handle_msgtypeB0]           Zone {0}  is not a motion stype   State = {1}".format(z, s))
+                    
         if msgType == 0x03 and subType == 0x18:
             # Open/Close information (probably)
             log.info("[handle_msgtypeB0]       Received PowerMaster message, open/close information (probably)")
