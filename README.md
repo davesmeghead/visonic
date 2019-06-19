@@ -78,6 +78,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.2.1      | X10 Devices available in Standard Plus and Powerlink. Added "zone tripped" attribute to the sensors. Assume siren is not active when panel disarmed. |
 | 0.2.2      | Minor updates for PowerMaster Panels, no other changes. |
 | 0.2.3      | Minor updates for PowerMaster Panels, more debug logs for PowerMaster panels, no other changes. |
+| 0.2.4      | Added HA access to watchdog and download timout counters. Process access denied messages from panel better. |
 
 
 ## Instructions and what works so far
@@ -225,13 +226,16 @@ Of course you'll have to write your own scripts!
 - For Powerlink mode to work the enrollment procedure has to be followed. If you don't enroll the Powerlink on the Alarm Panel the binding will operate in Standard or Standard Plus mode. On the newer software versions of the PowerMax panels the Powerlink enrollment is automatic, and the binding should only operate in 'Powerlink' mode (if enrollment is successful).
 - You can force the binding to use the Standard mode. In this mode, the binding will not download the alarm panel EPROM and so the binding will not know your user code.
 - An HA Event 'alarm_panel_state_update' (that you will probably never use) is sent through HA for:
-    - The data associated with the event is { 'condition': X }   where X is 1, 2, 3, 4, 5 or 6
+    - The data associated with the event is { 'condition': X }   where X is 1, 2, 3, 4, 5, 6, 7 or 8
         - 1 is a zone update
         - 2 is a panel update
         - 3 is a panel update AND the alarm is active!!!!!
         - 4 is a panel reset
         - 5 is a pin rejected
         - 6 is a tamper alarm
+        - 7 is an EPROM download timeout, go to Standard Mode
+        - 8 is a watchdog timeout, give up trying to achieve a better mode
+        - 9 is a watchdog timeout, going to try again to get a better mode
     - I may add more information to the event later if required
 
 ## What it doesn't do in Home Assistant

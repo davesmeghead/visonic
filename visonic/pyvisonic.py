@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.2.3"
+PLUGIN_VERSION = "0.2.4"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -93,6 +93,8 @@ PanelStatus = {
    "PluginVersion"         : PLUGIN_VERSION,
    "Comm Exception Count"  : 0,
    "Mode"                  : "Unknown",
+   "Watchdog Timeout"      : 0,
+   "Download Timeout"      : 0,
 
 # A7 message decode
    "Panel Last Event"      : "None",
@@ -849,6 +851,8 @@ class ProtocolBase(asyncio.Protocol):
         # This is the time stamp of the last Send
         self.pmLastTransactionTime = self.getTimeFunction() - timedelta(seconds=1)  # take off 1 second so the first command goes through immediately
 
+        self.giveupTrying = False
+
         ###################################################################
         # Variables that are used and modified throughout derived classes
         ###################################################################
@@ -1003,7 +1007,7 @@ class ProtocolBase(asyncio.Protocol):
             # Second, if not actually doing download but download is incomplete then try every 4 minutes
             # Third, when download had completed successfully, and not ForceStandard from the user, then attempt to connect in powerlink
             # Fourth, check to see if the watchdog timer has expired
-            if self.pmDownloadMode:
+            if not self.giveupTrying and self.pmDownloadMode:
                 # Disable watchdog and keep-alive during download (and keep flushing send queue)
                 self.reset_watchdog_timeout()
                 self.reset_keep_alive_messages()
@@ -1017,8 +1021,10 @@ class ProtocolBase(asyncio.Protocol):
                     self.ClearList()
                     # goto standard mode
                     self.gotoStandardMode()
+                    PanelStatus["Download Timeout"] = PanelStatus["Download Timeout"] + 1
+                    self.sendResponseEvent ( 7 )  # download timer expired
                     
-            elif not self.pmDownloadComplete and not self.ForceStandardMode:
+            elif not self.giveupTrying and not self.pmDownloadComplete and not self.ForceStandardMode:
                 self.reset_watchdog_timeout()
                 download_counter = download_counter + 1
                 if download_counter >= DOWNLOAD_RETRY_DELAY:  # 4 Minutes
@@ -1027,7 +1033,7 @@ class ProtocolBase(asyncio.Protocol):
                     log.info("[WatchDogTimer] Trigger Panel Download Attempt")
                     self.Start_Download()
                     
-            elif self.pmPowerlinkModePending and not self.ForceStandardMode and self.pmDownloadComplete and not self.pmPowerlinkMode:
+            elif not self.giveupTrying and self.pmPowerlinkModePending and not self.ForceStandardMode and self.pmDownloadComplete and not self.pmPowerlinkMode:
                 # Attempt to enter powerlink mode
                 self.reset_watchdog_timeout()
                 powerlink_counter = powerlink_counter + 1
@@ -1054,13 +1060,16 @@ class ProtocolBase(asyncio.Protocol):
                 self.reset_watchdog_timeout()
                 self.reset_keep_alive_messages()
                 watchdog_events = watchdog_events + 1
+                PanelStatus["Watchdog Timeout"] = PanelStatus["Watchdog Timeout"] + 1
                 if watchdog_events >= WATCHDOG_MAXIMUM_EVENTS:
                     log.info("[WatchDogTimeout]               **************** Going to Standard Mode ***************")
                     watchdog_events = 0
                     self.gotoStandardMode()
+                    self.sendResponseEvent ( 8 )  # watchdog timer expired, going to standard mode
                 else:
                     log.info("[WatchDogTimeout]               **************** Trigger Restore Status ***************")
                     self.triggerRestoreStatus()
+                    self.sendResponseEvent ( 9 )  # watchdog timer expired, going to try again
             
             # Fifth, is it time to send an I'm Alive message to the panel
             # Sixth, flush the send queue, send all buffered messages to the panel
@@ -1113,6 +1122,7 @@ class ProtocolBase(asyncio.Protocol):
             log.info("[Standard Mode] Entering Standard Mode")
             PanelStatus["Mode"] = "Standard"
             self.ForceStandardMode = True
+        self.giveupTrying = True
         self.pmPowerlinkMode = False
         self.sendInitCommand()
         self.SendCommand("MSG_STATUS")
@@ -1418,6 +1428,8 @@ class ProtocolBase(asyncio.Protocol):
                 if not self.pmLastSentMessage.triedResendingMessage:
                     # resend the last message
                     log.info("[SendCommand] Re-Sending last message  {0}".format(self.pmLastSentMessage.command.msg))
+                    self.ClearList()
+                    self.pmExpectedResponse = []
                     t = asyncio.ensure_future(self.pmSendPdu(self.pmLastSentMessage), loop=self.loop)
                     asyncio.wait_for(t, None)
                     self.pmLastSentMessage.triedResendingMessage = True
@@ -2176,6 +2188,7 @@ class PacketHandling(ProtocolBase):
             log.debug("[handle_msgtype08]                last command {0}".format( self.toString(lastCommandData)))
             self.reset_watchdog_timeout()
             if lastCommandData is not None:
+                self.pmExpectedResponse = []  ## really we should look at the response from the last command and only remove the appropriate responses from this list
                 if lastCommandData[0] != 0xAB and lastCommandData[0] & 0xA0 == 0xA0:  # this will match A0, A1, A2, A3 etc but not 0xAB
                     log.debug("[handle_msgtype08] Attempt to send a command message to the panel that has been denied, wrong pin code used")
                     # INTERFACE : tell user that wrong pin has been used

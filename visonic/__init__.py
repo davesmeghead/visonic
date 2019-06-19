@@ -177,6 +177,9 @@ def setup(hass, base_config):
             #    4 is the panel has been reset, 
             #    5 is pin rejected, 
             #    6 is tamper triggered
+            #    7 is download timer expired
+            #    8 is watchdog timer expired, give up trying to achieve a better mode
+            #    9 is watchdog timer expired, going to try again to get a better mode
             _LOGGER.info("Visonic update event {0}".format(visonic_devices ))
             hass.bus.fire('alarm_panel_state_update', { 'condition': visonic_devices })
 
