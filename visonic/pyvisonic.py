@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.2.2"
+PLUGIN_VERSION = "0.2.3"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -1462,7 +1462,7 @@ class ProtocolBase(asyncio.Protocol):
     def pmReadPanelSettings(self, isPowerMaster):
         """ Attempt to Enroll as a Powerlink """
         log.info("[Panel Settings] Reading panel settings")
-        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_ALL"]] )         # Request all panel data (but it doesnt give us all)
+        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_ALL"]] )         # Request all panel data (but it doesn't give us all, don't know why?)
         self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_PANELFW"]] )     # Request the panel FW
         self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_SERIAL"]] )      # Request serial & type (not always sent by default)
         self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_ZONESTR"]] )     # Read the names of the zones
@@ -1471,6 +1471,9 @@ class ProtocolBase(asyncio.Protocol):
         #self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_ZONESIGNAL"], 6, fred] )  # Read Signal Strength of the wireless zones
         if isPowerMaster:
             self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_SIRKEYZON"]] )
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONENAMES"]] )
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONES"]] )
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_PINCODES"]] )
 
         self.SendCommand("MSG_START")      # Start sending all relevant settings please
         #self.SendCommand("MSG_EXIT")       # Exit download mode
@@ -1626,6 +1629,7 @@ class PacketHandling(ProtocolBase):
             #log.debug("[Read Settings]  len " + str(settings_len) + " returning " + self.toString(retval))
             return retval
         # return a bytearray filled with 0xFF values
+        log.info("[Read Settings]     Sorry but you havent downloaded that part of the EPROM data     page={0} index={1} length={2}".format(hex(page), hex(index), settings_len))
         retval = bytearray()
         for i in range(0, settings_len):
             retval.append(255)

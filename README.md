@@ -77,6 +77,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.2.0      | A change of control flow for startup and the addition of the "Standard Plus" mode. Also added the ability to set the Download Code from the configuration file |
 | 0.2.1      | X10 Devices available in Standard Plus and Powerlink. Added "zone tripped" attribute to the sensors. Assume siren is not active when panel disarmed. |
 | 0.2.2      | Minor updates for PowerMaster Panels, no other changes. |
+| 0.2.3      | Minor updates for PowerMaster Panels, more debug logs for PowerMaster panels, no other changes. |
 
 
 ## Instructions and what works so far
