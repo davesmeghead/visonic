@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.2.4"
+PLUGIN_VERSION = "0.2.5"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -173,31 +173,35 @@ pmDownloadItem_t = {
    "MSG_DL_TIME"         : bytearray.fromhex('F8 00 06 00'),   # could be F8 00 20 00
    "MSG_DL_COMMDEF"      : bytearray.fromhex('01 01 1E 00'),
    "MSG_DL_PHONENRS"     : bytearray.fromhex('36 01 20 00'),
-   "MSG_DL_PINCODES"     : bytearray.fromhex('FA 01 10 00'),
+   "MSG_DL_PINCODES"     : bytearray.fromhex('FA 01 10 00'),   # used
    "MSG_DL_INSTPIN"      : bytearray.fromhex('0C 02 02 00'),
    "MSG_DL_DOWNLOADPIN"  : bytearray.fromhex('0E 02 02 00'),
-   "MSG_DL_PGMX10"       : bytearray.fromhex('14 02 D5 00'),
-   "MSG_DL_PARTITIONS"   : bytearray.fromhex('00 03 F0 00'),
-   "MSG_DL_PANELFW"      : bytearray.fromhex('00 04 20 00'),
-   "MSG_DL_SERIAL"       : bytearray.fromhex('30 04 08 00'),
-   "MSG_DL_ZONES"        : bytearray.fromhex('00 09 78 00'),
+   "MSG_DL_PGMX10"       : bytearray.fromhex('14 02 D5 00'),   # used
+   "MSG_DL_PARTITIONS"   : bytearray.fromhex('00 03 F0 00'),   # used
+   "MSG_DL_PANELFW"      : bytearray.fromhex('00 04 20 00'),   # used
+   "MSG_DL_SERIAL"       : bytearray.fromhex('30 04 08 00'),   # used
+   "MSG_DL_ZONES"        : bytearray.fromhex('00 09 78 00'),   # used
    "MSG_DL_KEYFOBS"      : bytearray.fromhex('78 09 40 00'),
-   "MSG_DL_2WKEYPAD"     : bytearray.fromhex('00 0A 08 00'),
-   "MSG_DL_1WKEYPAD"     : bytearray.fromhex('20 0A 40 00'),
-   "MSG_DL_SIRENS"       : bytearray.fromhex('60 0A 08 00'),
-   "MSG_DL_X10NAMES"     : bytearray.fromhex('30 0B 10 00'),
-   "MSG_DL_ZONENAMES"    : bytearray.fromhex('40 0B 1E 00'),
+   "MSG_DL_2WKEYPAD"     : bytearray.fromhex('00 0A 08 00'),   # used
+   "MSG_DL_1WKEYPAD"     : bytearray.fromhex('20 0A 40 00'),   # used
+   "MSG_DL_SIRENS"       : bytearray.fromhex('60 0A 08 00'),   # used
+   "MSG_DL_X10NAMES"     : bytearray.fromhex('30 0B 10 00'),   # used
+   "MSG_DL_ZONENAMES"    : bytearray.fromhex('40 0B 1E 00'),   # used
    "MSG_DL_EVENTLOG"     : bytearray.fromhex('DF 04 28 03'),
    "MSG_DL_ZONESTR"      : bytearray.fromhex('00 19 00 02'),
-   "MSG_DL_ZONESIGNAL"   : bytearray.fromhex('DA 09 1C 00'),    # zone signal strength
+   "MSG_DL_ZONESIGNAL"   : bytearray.fromhex('DA 09 1C 00'),   # used    # zone signal strength
    "MSL_DL_ZONECUSTOM"   : bytearray.fromhex('A0 1A 50 00'),
-   "MSG_DL_MR_ZONENAMES" : bytearray.fromhex('60 09 40 00'),
-   "MSG_DL_MR_PINCODES"  : bytearray.fromhex('98 0A 60 00'),
-   "MSG_DL_MR_SIRENS"    : bytearray.fromhex('E2 B6 50 00'),
-   "MSG_DL_MR_KEYPADS"   : bytearray.fromhex('32 B7 40 01'),
-   "MSG_DL_MR_ZONES"     : bytearray.fromhex('72 B8 80 02'),
+   "MSG_DL_MR_ZONENAMES" : bytearray.fromhex('60 09 40 00'),   # used
+   "MSG_DL_MR_PINCODES"  : bytearray.fromhex('98 0A 60 00'),   # used
+   "MSG_DL_MR_SIRENS"    : bytearray.fromhex('E2 B6 50 00'),   # used
+   "MSG_DL_MR_KEYPADS"   : bytearray.fromhex('32 B7 40 01'),   # used
+   "MSG_DL_MR_ZONES"     : bytearray.fromhex('72 B8 80 02'),   # used
+   "MSG_DL_MR_ZONES1"    : bytearray.fromhex('72 B8 A0 00'),   # used
+   "MSG_DL_MR_ZONES2"    : bytearray.fromhex('12 B9 A0 00'),   # used
+   "MSG_DL_MR_ZONES3"    : bytearray.fromhex('B2 B9 A0 00'),   # used
+   "MSG_DL_MR_ZONES4"    : bytearray.fromhex('52 BA A0 00'),   # used
    "MSG_DL_MR_SIRKEYZON" : bytearray.fromhex('E2 B6 10 04'),    # Combines Sirens keypads and sensors
-   "MSG_DL_ALL"          : bytearray.fromhex('00 00 00 00')     # it could be 00 00 00 FF
+   "MSG_DL_ALL"          : bytearray.fromhex('00 00 00 00')     # 
 }
 
 #Private VMSG_DL_MASTER10_EVENTLOG As Byte[] = [&H3E, &HFF, &HFF, &HD2, &H07, &HB0, &H05, &H48, &H01, &H00, &H00] '&H3F
@@ -984,7 +988,7 @@ class ProtocolBase(asyncio.Protocol):
     async def keep_alive_and_watchdog_timer(self):
         self.reset_watchdog_timeout()
         self.reset_keep_alive_messages()
-        status_counter = 1000  # trigger first time!
+        status_counter = 0  # don't trigger first time!
         watchdog_events = 0
         download_counter = 0
         powerlink_counter = 180 # set to 3 minutes so first time it does it after 1 minute
@@ -1478,17 +1482,22 @@ class ProtocolBase(asyncio.Protocol):
         self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_PANELFW"]] )     # Request the panel FW
         self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_SERIAL"]] )      # Request serial & type (not always sent by default)
         self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_ZONESTR"]] )     # Read the names of the zones
-        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_PINCODES"]] )    # Read the pin codes
 
-        #self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_ZONESIGNAL"], 6, fred] )  # Read Signal Strength of the wireless zones
-        if isPowerMaster:
-            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_SIRKEYZON"]] )
-            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONENAMES"]] )
-            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONES"]] )
-            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_PINCODES"]] )
+        if not isPowerMaster:
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_PINCODES"]] )    # Read the pin codes
+
+#        if isPowerMaster:
+#        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_SIRKEYZON"]] )
+#        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONENAMES"]] )
+#        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_PINCODES"]] )
+#        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONES1"]] )
+#        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONES2"]] )
+#        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONES3"]] )
+#        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONES4"]] )
+#        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_SIRENS"]] )
+#        self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_KEYPADS"]] )
 
         self.SendCommand("MSG_START")      # Start sending all relevant settings please
-        #self.SendCommand("MSG_EXIT")       # Exit download mode
 
 
 # This class performs transactions based on messages (ProtocolBase is the raw data)
@@ -1498,6 +1507,8 @@ class PacketHandling(ProtocolBase):
     def __init__(self, *args, event_callback: Callable = None, **kwargs) -> None:
         """ Perform transactions based on messages (and not bytes) """
         super().__init__(*args, packet_callback=self.handle_packet, **kwargs)
+        
+        self.powerMasterDownloadCounter = 0
         
         # set the event callback handler
         self.event_callback = event_callback
@@ -1581,8 +1592,12 @@ class PacketHandling(ProtocolBase):
             self.doneAutoEnroll = True
             self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
             self.Start_Download()
+        elif self.DownloadCode == "DF FD":
+            log.warning("Warning: Trying to re enroll, already tried DFFD and still not successful")
         else:
-            log.warning("Warning: Trying to re enroll and it is only allowed once")
+            log.info("Warning: Trying to re enroll but not triggering download")
+            self.DownloadCode = "DF FD" # Force the Download code to be something different and try again ?????
+            self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
 
     # pmWriteSettings: add a certain setting to the settings table
     #  So, to explain
@@ -1593,14 +1608,16 @@ class PacketHandling(ProtocolBase):
         wrap = (index + settings_len - 0x100)
         sett = [bytearray(b''), bytearray(b'')]
 
+        log.debug("[Write Settings]   Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len)) 
         if settings_len > 0xB1:
-            log.info("[Write Settings] Write Settings too long *****************")
+            log.info("[Write Settings] ********************* Write Settings too long ********************")
             return
+
         if wrap > 0:
             #log.debug("[Write Settings] The write settings data is Split across 2 pages")
             sett[0] = setting[ : settings_len - wrap]  # bug fix in 0.0.6, removed the -1
             sett[1] = setting[settings_len - wrap : ]
-            #log.debug("[Write Settings]         original len {0}   left len {1}   right len {2}".format(len(setting), len(sett[0]), len(sett[1]))) 
+            log.debug("[Write Settings]         Wrapping  original len {0}   left len {1}   right len {2}".format(len(setting), len(sett[0]), len(sett[1]))) 
             wrap = 1
         else:
             sett[0] = setting
@@ -1619,7 +1636,7 @@ class PacketHandling(ProtocolBase):
             settings_len = len(sett[i])
             if i == 1:
                 index = 0
-            #log.debug("[Write Settings] Writing settings page {0}  index {1}    setting {2}".format(page+i, index, self.toString(sett[i])))
+            log.debug("[Write Settings]         Writing settings page {0}  index {1}    length {2}".format(page+i, index, settings_len))
             self.pmRawSettings[page + i] = self.pmRawSettings[page + i][0:index] + sett[i] + self.pmRawSettings[page + i][index + settings_len :]
             if len(self.pmRawSettings[page + i]) != 256:
                 log.info("[Write Settings] OOOOOOOOOOOOOOOOOOOO len = {0}".format(len(self.pmRawSettings[page + i])))
@@ -1631,6 +1648,7 @@ class PacketHandling(ProtocolBase):
     def pmReadSettingsA(self, page, index, settings_len):
         retlen = settings_len
         retval = bytearray()
+        log.debug("[Read Settings]    Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len)) 
         while page in self.pmRawSettings and retlen > 0:
             fred = self.pmRawSettings[page][index : index + retlen]
             retval = retval + fred
@@ -1638,7 +1656,7 @@ class PacketHandling(ProtocolBase):
             retlen = retlen - len(fred)
             index = 0
         if settings_len == len(retval):
-            #log.debug("[Read Settings]  len " + str(settings_len) + " returning " + self.toString(retval))
+            log.debug("[Read Settings]       Length " + str(settings_len) + " returning (just the 1st value) " + self.toString(retval[:1]))
             return retval
         # return a bytearray filled with 0xFF values
         log.info("[Read Settings]     Sorry but you havent downloaded that part of the EPROM data     page={0} index={1} length={2}".format(hex(page), hex(index), settings_len))
@@ -1657,25 +1675,16 @@ class PacketHandling(ProtocolBase):
     # This function was going to save the settings (including EPROM) to a file
     def dump_settings(self):
         log.debug("Dumping EPROM Settings")
-#        if pmLogDebug:
-#            dumpfile = pmSettingsFilename
-#            outf = open(dumpfile , 'w')
-#            if outf == None:
-#                log.debug("Cannot write to debug file.")
-#                return
-#            log.debug("Dumping PowerMax settings to file")
-#            outf.write("PowerMax settings on %s\n", os.date('%Y-%m-%d %H:%M:%S'))
-#            for i in range(0, 0xFF):
-#                if pmRawSettings[i] != None:
-#                    for j in range(0, 0x0F):
-#                        s = ""
-#                        outf.write(string.format("%08X: ", i * 0x100 + j * 0x10))
-#                        for k in range (1, 0x10):
-#                            byte = string.byte(pmRawSettings[i], j * 0x10 + k)
-#                            outf.write(string.format(" %02X", byte))
-#                            s = (byte < 0x20 or (byte >= 0x80 and byte < 0xA0)) and (s + ".") or (s + string.char(byte))
-#                        outf.write("  " + s + "\n")
-#            outf.close()
+        for p in range(0, 0x100):   ## assume page can go from 0 to 255
+            if p in self.pmRawSettings:
+                for j in range(0, 0x100, 0x10):   ## assume that each page can be 256 bytes long, step by 16 bytes
+                    # do not display the rows with pin numbers
+                    #if not (( p == 1 and j == 240 ) or (p == 2 and j == 0) or (p == 10 and j >= 140)):
+                    if ( p != 1 or j != 240 ) and (p != 2 or j != 0) and (p != 10 or j <= 140):
+                        if j <= len(self.pmRawSettings[p]):
+                            s = self.toString(self.pmRawSettings[p][j : j + 0x10])
+                            log.debug("{0:3}:{1:3}  {2}".format(p,j,s))
+
 
     def calcBool(self, val, mask):
         return True if val & mask != 0 else False
@@ -1771,7 +1780,7 @@ class PacketHandling(ProtocolBase):
         if pmPanelTypeNrStr is not None and len(pmPanelTypeNrStr) > 0:
             pmPanelTypeNr = int(pmPanelTypeNrStr)
             PanelStatus["Model"] = pmPanelType_t[pmPanelTypeNr] if pmPanelTypeNr in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
-            #self.dump_settings()
+            self.dump_settings()
             log.info("[Process Settings] pmPanelTypeNr {0}    model {1}".format(pmPanelTypeNr, PanelStatus["Model"]))
 
         # ------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2203,22 +2212,45 @@ class PacketHandling(ProtocolBase):
     def handle_msgtype0B(self, data): # STOP
         """ Handle STOP from the panel """
         log.info("[handle_msgtype0B] Stop    data is {0}".format(self.toString(data)))
-        # This is the message to tell us that the panel has finished download mode, so we too should stop download mode
-        self.pmDownloadMode = False
-        self.pmDownloadComplete = True
-        if self.getLastSentMessage() is not None:
-            lastCommandData = self.getLastSentMessage().command.data
-            log.debug("[handle_msgtype0B]                last command {0}".format(self.toString(lastCommandData)))
-            if lastCommandData is not None:
-                if lastCommandData[0] == 0x0A:  # MSG_START
-                    log.info("[handle_msgtype0B] We're almost in powerlink mode *****************************************")
-                    self.pmPowerlinkModePending = True
+
+        # For the Powermaster there's a lot of EPROM to get and my PowerMax panel wouldn't do it all in 1 go
+        #   Other users are having problems too and I assume it's for the same reason
+        # So, download the EPROM for PowerMaster in 3 chunks
+        # Also, do MSG_DL_MR_ZONES in 4 separate parts too
+        if self.PowerMaster and self.powerMasterDownloadCounter == 0:
+            self.powerMasterDownloadCounter = 1
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_SIRKEYZON"]] )
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONENAMES"]] )
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_PINCODES"]] )
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONES1"]] )
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONES2"]] )
+            
+            self.SendCommand("MSG_START")      # Start sending all relevant settings please
+        elif self.PowerMaster and self.powerMasterDownloadCounter == 1:
+            self.powerMasterDownloadCounter = 2
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONES3"]] )
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_ZONES4"]] )
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_SIRENS"]] )
+            self.SendCommand("MSG_DL", options = [1, pmDownloadItem_t["MSG_DL_MR_KEYPADS"]] )
+
+            self.SendCommand("MSG_START")      # Start sending all relevant settings please
         else:
-            log.debug("[handle_msgtype0B]                no last command")
-        self.SendCommand("MSG_EXIT")       # Exit download mode
-        # We received a download exit message, restart timer
-        self.reset_watchdog_timeout()
-        self.ProcessSettings()
+            # This is the message to tell us that the panel has finished download mode, so we too should stop download mode
+            self.pmDownloadMode = False
+            self.pmDownloadComplete = True
+            if self.getLastSentMessage() is not None:
+                lastCommandData = self.getLastSentMessage().command.data
+                log.debug("[handle_msgtype0B]                last command {0}".format(self.toString(lastCommandData)))
+                if lastCommandData is not None:
+                    if lastCommandData[0] == 0x0A:  # MSG_START
+                        log.info("[handle_msgtype0B] We're almost in powerlink mode *****************************************")
+                        self.pmPowerlinkModePending = True
+            else:
+                log.debug("[handle_msgtype0B]                no last command")
+            self.SendCommand("MSG_EXIT")       # Exit download mode
+            # We received a download exit message, restart timer
+            self.reset_watchdog_timeout()
+            self.ProcessSettings()
 
 
     def handle_msgtype25(self, data): # Download retry
