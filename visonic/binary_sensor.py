@@ -7,6 +7,7 @@ Currently, there is only support for a single partition
 """
 import logging
 
+from collections import defaultdict
 from homeassistant.util import slugify
 from homeassistant.components.binary_sensor import BinarySensorDevice
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
@@ -27,7 +28,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         add_devices(
             VisonicSensor(device)
             for device in hass.data[VISONIC_SENSORS]['binary_sensor'])
-
+        hass.data[VISONIC_SENSORS] = defaultdict(list)
 
 #   Each Sensor in Visonic Alarms can be Armed/Bypassed individually
 class VisonicSensor(BinarySensorDevice):

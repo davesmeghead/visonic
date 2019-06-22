@@ -8,6 +8,7 @@ Currently, there is only support for a single partition
 import logging
 import asyncio
 
+from collections import defaultdict
 from homeassistant.util import slugify
 from homeassistant.helpers.entity import Entity
 from homeassistant.components.switch import ( SwitchDevice, ENTITY_ID_FORMAT)
@@ -48,7 +49,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
                 devices.append(VisonicSwitch(hass, device, queue))
     
         add_devices(devices, True)
-
+        hass.data[VISONIC_X10] = defaultdict(list)
 
 class VisonicSwitch(SwitchDevice):
     """Representation of a Visonic X10 Switch."""

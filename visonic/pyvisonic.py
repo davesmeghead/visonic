@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.2.7"
+PLUGIN_VERSION = "0.2.8"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -1666,7 +1666,7 @@ class PacketHandling(ProtocolBase):
         wrap = (index + settings_len - 0x100)
         sett = [bytearray(b''), bytearray(b'')]
 
-        log.debug("[Write Settings]   Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len)) 
+        #log.debug("[Write Settings]   Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len)) 
         if settings_len > 0xB1:
             log.info("[Write Settings] ********************* Write Settings too long ********************")
             return
@@ -1675,7 +1675,7 @@ class PacketHandling(ProtocolBase):
             #log.debug("[Write Settings] The write settings data is Split across 2 pages")
             sett[0] = setting[ : settings_len - wrap]  # bug fix in 0.0.6, removed the -1
             sett[1] = setting[settings_len - wrap : ]
-            log.debug("[Write Settings]         Wrapping  original len {0}   left len {1}   right len {2}".format(len(setting), len(sett[0]), len(sett[1]))) 
+            #log.debug("[Write Settings]         Wrapping  original len {0}   left len {1}   right len {2}".format(len(setting), len(sett[0]), len(sett[1]))) 
             wrap = 1
         else:
             sett[0] = setting
@@ -1694,7 +1694,7 @@ class PacketHandling(ProtocolBase):
             settings_len = len(sett[i])
             if i == 1:
                 index = 0
-            log.debug("[Write Settings]         Writing settings page {0}  index {1}    length {2}".format(page+i, index, settings_len))
+            #log.debug("[Write Settings]         Writing settings page {0}  index {1}    length {2}".format(page+i, index, settings_len))
             self.pmRawSettings[page + i] = self.pmRawSettings[page + i][0:index] + sett[i] + self.pmRawSettings[page + i][index + settings_len :]
             if len(self.pmRawSettings[page + i]) != 256:
                 log.info("[Write Settings] OOOOOOOOOOOOOOOOOOOO len = {0}".format(len(self.pmRawSettings[page + i])))
@@ -1838,7 +1838,7 @@ class PacketHandling(ProtocolBase):
         if pmPanelTypeNrStr is not None and len(pmPanelTypeNrStr) > 0:
             pmPanelTypeNr = int(pmPanelTypeNrStr)
             PanelStatus["Model"] = pmPanelType_t[pmPanelTypeNr] if pmPanelTypeNr in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
-            self.dump_settings()
+            #self.dump_settings()
             log.info("[Process Settings] pmPanelTypeNr {0}    model {1}".format(pmPanelTypeNr, PanelStatus["Model"]))
 
         # ------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1935,8 +1935,8 @@ class PacketHandling(ProtocolBase):
                     partition = self.pmReadSettings(pmDownloadItem_t["MSG_DL_PARTITIONS"])
                     if partition is None or partition[0] == 255:
                         partitionCnt = 1
-                    else:    
-                        log.debug("[Process Settings] Partition settings " + self.toString(partition))
+                    #else:    
+                    #    log.debug("[Process Settings] Partition settings " + self.toString(partition))
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process zone settings
@@ -1947,17 +1947,17 @@ class PacketHandling(ProtocolBase):
                 else: # PowerMaster models
                     zoneNames = self.pmReadSettings(pmDownloadItem_t["MSG_DL_MR_ZONENAMES"])
                     settingMr = self.pmReadSettings(pmDownloadItem_t["MSG_DL_MR_ZONES"])
-                    log.debug("[Process Settings] MSG_DL_MR_ZONES Buffer " + self.toString(settingMr))
+                    #log.debug("[Process Settings] MSG_DL_MR_ZONES Buffer " + self.toString(settingMr))
 
                 setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_ZONES"])
                 
                 #zonesignalstrength = self.pmReadSettings(pmDownloadItem_t["MSG_DL_ZONESIGNAL"])
                 #log.debug("ZoneSignal " + self.toString(zonesignalstrength))
-                log.debug("[Process Settings] DL Zone settings " + self.toString(setting))
-                log.debug("[Process Settings] Zones Names Buffer :  {0}".format(self.toString(zoneNames)))
+                #log.debug("[Process Settings] DL Zone settings " + self.toString(setting))
+                #log.debug("[Process Settings] Zones Names Buffer :  {0}".format(self.toString(zoneNames)))
 
                 if len(setting) > 0 and len(zoneNames) > 0:
-                    log.debug("[Process Settings] Zones:    len settings {0}     len zoneNames {1}    zoneCnt {2}".format(len(setting), len(zoneNames), zoneCnt))
+                    #log.debug("[Process Settings] Zones:    len settings {0}     len zoneNames {1}    zoneCnt {2}".format(len(setting), len(zoneNames), zoneCnt))
                     for i in range(0, zoneCnt):
                         # data in the setting bytearray is in blocks of 4
                         zoneName = pmZoneName_t[zoneNames[i]]
@@ -1999,7 +1999,7 @@ class PacketHandling(ProtocolBase):
                             if partitionCnt > 1:
                                 for j in range (0, partitionCnt):
                                     if (partition[0x11 + i] & (1 << j)) > 0:
-                                        log.debug("[Process Settings]     Adding to partition list - ref {0}  Z{1:0>2}   Partition {2}".format(i, i+1, j+1))
+                                        #log.debug("[Process Settings]     Adding to partition list - ref {0}  Z{1:0>2}   Partition {2}".format(i, i+1, j+1))
                                         part.append(j+1)
                             else:
                                 part = [1]

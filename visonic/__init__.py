@@ -134,7 +134,11 @@ def setup(hass, base_config):
         if type(visonic_devices) == defaultdict:  
             # a set of sensors and/or switches. 
             _LOGGER.info("Visonic got new sensors/switches {0}".format( visonic_devices ))
-            sensor_devices = defaultdict(list)
+            
+            if VISONIC_SENSORS not in hass.data:
+                hass.data[VISONIC_SENSORS] = defaultdict(list)
+            
+            #sensor_devices = defaultdict(list)
             for dev in visonic_devices["sensor"]:
                 if dev.getDeviceID() is not None:
                     _LOGGER.info("   Sensor ID {0} full details {1}".format( dev.getDeviceID(), str(dev) ))
@@ -142,19 +146,30 @@ def setup(hass, base_config):
                     _LOGGER.info("   Sensor ID is None")
                 if dev.getDeviceID() is not None:
                     if dev.getDeviceID() not in exclude_sensor_list:
-                        _LOGGER.info("      Adding Sensor ")
-                        sensor_devices["binary_sensor"].append(dev)                
+                        #sensor_devices["binary_sensor"].append(dev)
+                        if dev not in hass.data[VISONIC_SENSORS]["binary_sensor"]:
+                            _LOGGER.info("      Adding Sensor ")
+                            hass.data[VISONIC_SENSORS]["binary_sensor"].append(dev)   
+                        else:
+                            _LOGGER.info("      Sensor Already in the list")
             
-            hass.data[VISONIC_SENSORS] = sensor_devices
+            #hass.data[VISONIC_SENSORS] = sensor_devices
 
             #_LOGGER.info("Dumping X10 Devices")
-            x10_devices = defaultdict(list)
+            if VISONIC_X10 not in hass.data:
+                hass.data[VISONIC_X10] = defaultdict(list)
+            
+            #x10_devices = defaultdict(list)
             for dev in visonic_devices["switch"]:
                 #_LOGGER.info("VS: X10 Switch list {0}".format(dev))
                 if dev.enabled and dev.getDeviceID() not in exclude_x10_list:
-                    x10_devices["switch"].append(dev)
+                    #x10_devices["switch"].append(dev)
+                    if dev not in hass.data[VISONIC_X10]["switch"]:
+                        hass.data[VISONIC_X10]["switch"].append(dev)
+                    else:
+                        _LOGGER.info("      X10 Already in the list")
                 
-            hass.data[VISONIC_X10] = x10_devices    
+            # hass.data[VISONIC_X10] = x10_devices    
                 
             #_LOGGER.info("VS: Sensor list {0}".format(hass.data[VISONIC_SENSORS]))
                 
