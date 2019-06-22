@@ -136,8 +136,14 @@ def setup(hass, base_config):
             _LOGGER.info("Visonic got new sensors/switches {0}".format( visonic_devices ))
             sensor_devices = defaultdict(list)
             for dev in visonic_devices["sensor"]:
-                if dev.getDeviceID() not in exclude_sensor_list:
-                    sensor_devices["binary_sensor"].append(dev)                
+                if dev.getDeviceID() is not None:
+                    _LOGGER.info("   Sensor ID {0} full details {1}".format( dev.getDeviceID(), str(dev) ))
+                else:
+                    _LOGGER.info("   Sensor ID is None")
+                if dev.getDeviceID() is not None:
+                    if dev.getDeviceID() not in exclude_sensor_list:
+                        _LOGGER.info("      Adding Sensor ")
+                        sensor_devices["binary_sensor"].append(dev)                
             
             hass.data[VISONIC_SENSORS] = sensor_devices
 

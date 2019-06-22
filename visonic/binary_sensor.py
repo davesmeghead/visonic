@@ -23,6 +23,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     _LOGGER.info("In setup_platform the sensor config file")
     
     if VISONIC_SENSORS in hass.data:
+        _LOGGER.info("   In binary sensor setup_platform and there are VISONIC_SENSORS {0}".format(hass.data[VISONIC_SENSORS]['binary_sensor']))
         add_devices(
             VisonicSensor(device)
             for device in hass.data[VISONIC_SENSORS]['binary_sensor'])
@@ -34,7 +35,7 @@ class VisonicSensor(BinarySensorDevice):
 
     def __init__(self, visonic_device):
         """Initialize the sensor."""
-        _LOGGER.info("In setup_platform in binary sensor")
+        _LOGGER.info("In setup_platform in binary sensor {0}".format(visonic_device.dname))
         self.visonic_device = visonic_device
         self._name = "Visonic " + self.visonic_device.dname
         # Append device id to prevent name clashes in HA.
