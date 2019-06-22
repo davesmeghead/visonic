@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.2.5"
+PLUGIN_VERSION = "0.2.6"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -628,9 +628,9 @@ pmZoneSensorMaster_t = {
    0x1A : ZoneSensorMaster("TMD-560 PG2", "Temperature" ),
    0x29 : ZoneSensorMaster("MC-302V PG2", "Magnet"),
    0x2A : ZoneSensorMaster("MC-302 PG2", "Magnet"),
+   0x2D : ZoneSensorMaster("MC-302 PG2 (ID 104-5624)", "Magnet"),
    0xFE : ZoneSensorMaster("Wired", "Wired" )
 }
-
 
 class ElapsedFormatter():
 
@@ -1028,7 +1028,7 @@ class ProtocolBase(asyncio.Protocol):
                     PanelStatus["Download Timeout"] = PanelStatus["Download Timeout"] + 1
                     self.sendResponseEvent ( 7 )  # download timer expired
                     
-            elif not self.giveupTrying and not self.pmDownloadComplete and not self.ForceStandardMode:
+            elif not self.giveupTrying and not self.pmDownloadComplete and not self.ForceStandardMode and not self.pmDownloadMode:
                 self.reset_watchdog_timeout()
                 download_counter = download_counter + 1
                 if download_counter >= DOWNLOAD_RETRY_DELAY:  # 4 Minutes
@@ -1077,7 +1077,7 @@ class ProtocolBase(asyncio.Protocol):
             
             # Fifth, is it time to send an I'm Alive message to the panel
             # Sixth, flush the send queue, send all buffered messages to the panel
-            if len(self.SendList) == 0 and self.keep_alive_counter >= KEEP_ALIVE_PERIOD:   #
+            if len(self.SendList) == 0 and not self.pmDownloadMode and self.keep_alive_counter >= KEEP_ALIVE_PERIOD:   #
                 # Every KEEP_ALIVE_PERIOD seconds, unless watchdog has been reset
                 #log.debug("Send list is empty so sending I'm alive message")
                 # reset counter
@@ -2894,7 +2894,7 @@ class PacketHandling(ProtocolBase):
         #   Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0d 43 
         #  Received PowerMaster message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
         #   Received PowerMaster message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
-        if msgType == 0x03 and subType == 0x39:
+        if not self.pmDownloadMode and msgType == 0x03 and subType == 0x39:
             # Movement (probably)
             #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 04 43
             #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 07 43
