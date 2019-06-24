@@ -319,7 +319,33 @@ pmLogEvent_t = {
            "Gas probleem", "Gas probleem herstel", "Lekkage alarm", "Lekkage herstel", "Probleem", "Probleem herstel",
            "Deelschakeling", "Ingeschakeld", "Snel deelschakeling", "Snel ingeschakeld", "Uitgezet", "Inschakelfout (auto)", "Test gestart",
            "Test gestopt", "Force aan", "Geheel in (auto)", "Onmiddelijk", "Overbruggen", "Inschakelfout",
-           "Log verzenden", "Systeem reset", "Installateur programmeert", "Foutieve code", "Overbruggen" )
+           "Log verzenden", "Systeem reset", "Installateur programmeert", "Foutieve code", "Overbruggen" ),
+   "FR" : (
+           "Aucun", "Alarme Intérieure", "Alarme Périphérie", "Alarme Différée", "Alarme Silencieuse 24H", "Alarme Audible 24H",
+           "Autoprotection", "Alarme Autoprotection Centrale", "Alarme Autoprotection", "Alarme Autoprotection", "Défaut de communication", "Alarme Panique Depuis Memclé",
+           "Alarme Panique depuis Centrale", "Contrainte", "Confirmer l'alarme", "Perte de Communication", "Rétablissement Défaut Supervision",
+           "Rétablissement Alarme Intérieure", "Rétablissement Alarme Périphérie", "Rétablissement Alarme Différée", "Rétablissement Alarme Silencieuse 24H", "Rétablissement Alarme Audible 24H",
+           "Rétablissement Autoprotection", "Rétablissement Alarme Autoprotection Centrale", "Rétablissement Alarme Autoprotection", "Rétablissement Alarme Autoprotection", "Rétablissement des Communications",
+           "Annuler Alarme", "Rétablissement Général", "Rétablissement Défaut", "Pas utilisé", "Evenement Fermeture Récente", "Alarme Incendie", "Rétablissement Alarme Incendie",
+           "Non Actif", "Urgence", "Pas utilisé", "Désarmement Latchkey", "Rétablissement Alarme Panique", "Défaut Supervision (Inactive)",
+           "Rétablissement Supervision (Active)", "Batterie Faible", "Rétablissement Batterie Faible", "Coupure Secteur", "Rétablissement Secteur",
+           "Batterie Centrale Faible", "Rétablissement Batterie Centrale Faible", "Détection Brouillage Radio", "Rétablissement Détection Brouillage Radio",
+           "Défaut Communication", "Rétablissement Communications", "Défaut Ligne Téléphonique", "Rétablissement Ligne Téléphonique",
+           "Auto Test", "Coupure Secteur/Fusible", "Rétablissement Secteur/Fusible", "Memclé Batterie Faible", "Rétablissement Memclé Batterie Faible", "Réinitialisation Technicien",
+           "Batterie Déconnectée ", "Clavier/Télécommande Batterie Faible", "Rétablissement Clavier/Télécommande Batterie Faible", "Clavier/Télécommande Inactif",
+           "Rétablissement Clavier/Télécommande Actif", "Batterie Faible", "Nettoyage Détecteur Incendie", "Alarme incendie", "Batterie Faible", "Rétablissement Batterie",
+           "Coupure Secteur", "Rétablissement Secteur", "Défaut Supervision (Inactive)", "Rétablissement Supervision (Active)", "Alarme Gaz", "Rétablissement Alarme Gaz",
+           "Défaut Gaz", "Rétablissement Défaut Gaz", "Alarme Inondation", "Rétablissement Alarme Inondation", "Défaut X-10", "Rétablissement Défaut X-10",
+           "Armement Partiel", "Armement Total", "Armement Partiel Instantané", "Armement Total Instantané", "Désarmement", "Echec d'armement", "Entrer dans Mode Test",
+           "Sortir du Mode Test", "Fermeture Forcée", "Armement Automatique", "Armement Instantané", "Bypass", "Echec d'Armement", "Porte Ouverte",
+           "Communication établie par le panneau de control", "Réinitialisation du Système", "Installer Programming", "Mauvais code PIN",
+           "Not Sys Event", "Not Sys Event", "Alerte Chaleure Extrême", "Rétablissement Alerte Chaleure Extrême", "Alerte Gel",
+           "Rétablissement Alerte Gel", "Alerte Froid", "Rétablissement Alerte Froid", "Alerte Chaud",
+           "Rétablissement Alerte Chaud", "Défaut Capteur de Température", "Rétablissement Défaut Capteur de Température",
+           # new values partition models
+           "PIR Masqué", "Rétablissement PIR Masqué", "", "", "", "", "", "", "", "", "", "",
+           "Intrusion Vérifiée", "Rétablissement", "Intrusion Vérifiée", "Rétablissement", "", "", "", "", "", "", "", "", "", "",
+           "", "", "", "", "", "Sortir Mode Installeur", "Entrer Mode Installeur", "", "", "", "", "" )
 }
 
 pmLogUser_t = {
@@ -350,6 +376,19 @@ pmLogUser_t = {
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", 
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown"],
+  "FR" : [ "Système", "Zone 01", "Zone 02", "Zone 03", "Zone 04", "Zone 05", "Zone 06", "Zone 07", "Zone 08",
+           "Zone 09", "Zone 10", "Zone 11", "Zone 12", "Zone 13", "Zone 14", "Zone 15", "Zone 16", "Zone 17", "Zone 18",
+           "Zone 19", "Zone 20", "Zone 21", "Zone 22", "Zone 23", "Zone 24", "Zone 25", "Zone 26", "Zone 27", "Zone 28",
+           "Zone 29", "Zone 30", "Memclé  01", "Memclé  02", "Memclé  03", "Memclé  04", "Memclé  05", "Memclé  06", "Memclé  07", "Memclé  08",
+           "User 01", "User 02", "User 03", "User 04", "User 05", "User 06", "User 07", "User 08", "Pad  01", "Pad  02",
+           "Pad  03", "Pad  04", "Pad  05", "Pad  06", "Pad  07", "Pad  08", "Sir  01", "Sir  02", "2Pad 01", "2Pad 02",
+           "2Pad 03", "2Pad 04", "X10  01", "X10  02", "X10  03", "X10  04", "X10  05", "X10  06", "X10  07", "X10  08",
+           "X10  09", "X10  10", "X10  11", "X10  12", "X10  13", "X10  14", "X10  15", "PGM    ", "GSM    ", "P-LINK ",
+           "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "Unknown", "Unknown",
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", 
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown"]
 }
 
 pmSysStatus_t = {
@@ -362,12 +401,20 @@ pmSysStatus_t = {
            "Uitgeschakeld", "Deel uitloopvertraging", "Totaal uitloopvertraging", "Inloopvertraging", "Deel ingeschakeld",
            "Totaal ingeschakeld", "Gebruiker test", "Downloaden", "Programmeren", "Monteurmode", "Deel met overbrugging",
            "Totaal met overbrugging", "Klaar", "Niet klaar", "??", "??", "Direct uitschakelen", "Direct Deel uitloopvertraging",
-           "Direct Totaal uitloopvertraging", "Direct inloopvertraging", "Direct Deel", "Direct Totaal" )
+           "Direct Totaal uitloopvertraging", "Direct inloopvertraging", "Direct Deel", "Direct Totaal" ),
+	"FR" : (
+           "Désarmement", "Délai Armement Partiel", "Délai Armement Total", "Délai d'Entrée", "Armement Partiel", "Armement Total", "Test Utilisateur",
+           "Téléchargement", "Programmation", "Mode Installateur", "Isolation Partielle", "Isolation Total", "Prêt", "Non Prêt", "??", "??",
+           "Désarmement Instantané", "Delais Armement Partiel Instantané", "Delais Armement Total Instantané", "Délai d'Entrée Instantané", "Armement Total Instantané",
+           "Armement Total Instantané" )
+
 }
 
 pmSysStatusFlags_t = {
    "EN" : ( "Ready", "Alert in memory", "Trouble", "Bypass on", "Last 10 seconds", "Zone event", "Status changed", "Alarm event" ),
-   "NL" : ( "Klaar", "Alarm in geheugen", "Probleem", "Overbruggen aan", "Laatste 10 seconden", "Zone verstoord", "Status gewijzigd", "Alarm actief")
+   "NL" : ( "Klaar", "Alarm in geheugen", "Probleem", "Overbruggen aan", "Laatste 10 seconden", "Zone verstoord", "Status gewijzigd", "Alarm actief"),
+   "FR" : ( "Prêt", "Alerte en mémoire", "Défaut/Panne", "Isolation sur", "10 dernières secondes", "Evenement Zone", "Etat modifié", "Evenment Alarme" )
+
 }
 
 #pmArmed_t = {
@@ -392,7 +439,12 @@ pmEventType_t = {
    "NL" : (
            "Geen", "Sabotage alarm", "Sabotage herstel", "Open", "Gesloten", "Verstoord (beweging)", "Paniek alarm", "RF verstoring",
            "Sabotage open", "Communicatie probleem", "Lijnfout", "Zekering", "Niet actief", "Lage batterij", "AC probleem",
-           "Brandalarm", "Noodoproep", "Sirene sabotage", "Sirene sabotage herstel", "Sirene lage batterij", "Sirene AC probleem" )
+           "Brandalarm", "Noodoproep", "Sirene sabotage", "Sirene sabotage herstel", "Sirene lage batterij", "Sirene AC probleem" ),
+   "FR" : (
+           "Aucun", "Alarme Autoprotection", "Rétablissement Alarme Autoprotection", "Ouvert", "Fermé", "Violation (Mouvement)", "Alarme Panique", "Détection Brouillage Radio",
+           "Ouverture Autoprotection", "Echec de Communication", "Echec Ligne Téléphonique", "Fusible", "Pas Active", "Batterie Faible", "Echec Alimentation Secteur",
+           "Alarme Incendie", "Urgence", "Autoprotection Sirène", "Rétablissement Autoprotection Sirène", "Batterie Faible Sirène", "Coupure Secteur Sirène" )
+
 }
 
 pmPanelAlarmType_t = {
@@ -638,7 +690,11 @@ pmZoneType_t = {
            "24 Hours Silent", "24 Hours Audible", "Fire", "Interior", "Home Delay", "Temperature", "Outdoor", "16" ),
    "NL" : (
            "Geen alarm", "Noodtoestand", "Water", "Gas", "Vertraagd 1", "Vertraagd 2", "Interieur volg", "Omtrek", "Omtrek volg",
-           "24 uurs stil", "24 uurs luid", "Brand", "Interieur", "Thuis vertraagd", "Temperatuur", "Buiten", "16" )
+           "24 uurs stil", "24 uurs luid", "Brand", "Interieur", "Thuis vertraagd", "Temperatuur", "Buiten", "16" ),
+   "FR" : (
+           "Non Alarme", "Urgence", "Inondation", "Gaz", "Temporisée 1", "Temporisée 2", "Interior-Follow", "Voie Périphérique", "Voie Périphérique d'Entrée",
+           "24 Heures Silencieuse", "24 Heures Audible", "Incendie", "Intérieure", "Home Delay", "Température", "Extérieure", "16" )
+
 } # "Arming Key", "Guard" ??
 
 # Zone names are taken from the panel, so no langauage support needed
@@ -651,7 +707,9 @@ pmZoneName_t = (
 
 pmZoneChime_t = {
    "EN" : ("Off", "Melody", "Zone", "Invalid"),
-   "NL" : ("Uit", "Muziek", "Zone", "Invalid")
+   "NL" : ("Uit", "Muziek", "Zone", "Invalid"),
+   "FR" : ("Eteint", "Melodie", "Zone", "Invalide")
+
 }
 
 # Note: names need to match to VAR_xxx
