@@ -403,10 +403,10 @@ pmSysStatus_t = {
            "Totaal met overbrugging", "Klaar", "Niet klaar", "??", "??", "Direct uitschakelen", "Direct Deel uitloopvertraging",
            "Direct Totaal uitloopvertraging", "Direct inloopvertraging", "Direct Deel", "Direct Totaal" ),
 	"FR" : (
-           "Désarmement", "Délai Armement Partiel", "Délai Armement Total", "Délai d'Entrée", "Armement Partiel", "Armement Total", "Test Utilisateur",
+           "Désarmé", "Délai Armement Partiel", "Délai Armement Total", "Délai d'Entrée", "Armé Partiel", "Armé Total", "Test Utilisateur",
            "Téléchargement", "Programmation", "Mode Installateur", "Isolation Partielle", "Isolation Total", "Prêt", "Non Prêt", "??", "??",
-           "Désarmement Instantané", "Delais Armement Partiel Instantané", "Delais Armement Total Instantané", "Délai d'Entrée Instantané", "Armement Total Instantané",
-           "Armement Total Instantané" )
+           "Désarmé Instantané", "Temporisation Armement Partiel Instantané", "Temporisation Armement Total Instantané", "Temporisation d'Entrée Instantané", "Armé Total Instantané",
+           "Armé Total Instantané" )
 
 }
 
