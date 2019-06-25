@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.2.8"
+PLUGIN_VERSION = "0.2.9"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -2166,7 +2166,7 @@ class PacketHandling(ProtocolBase):
 
         # Check the current packet against the last packet to determine if they are the same
         if self.lastPacket is not None:
-            if self.lastPacket == packet and packet[1] != 0x02:
+            if self.lastPacket == packet and packet[1] == 0xA5:   # only consider A5 packets for consecutive error
                 self.lastPacketCounter = self.lastPacketCounter + 1
             else:
                 self.lastPacketCounter = 0        
