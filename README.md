@@ -165,7 +165,7 @@ The default settings if you miss it out of the configuration.yaml file:
 | Name                    | Default | Description | List of values |
 |-------------------------|  :---:  |-------------|----------------|
 | motion_off              |  120    | The time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period. | Integer Seconds |
-| language                | 'EN'    | Set the Langauge. 'EN' for English or 'NL' for Dutch. | 'EN' or 'NL' |
+| language                | 'EN'    | Set the Langauge. 'EN' for English or 'NL' for Dutch. | 'EN' or 'NL' or 'FR' |
 | force_standard          | 'no'    | Determine whether it tries to connect in Standard Plus & Powerlink mode or just goes to Standard. | 'no' or 'yes' |
 | sync_time               | 'yes'   | Attempt to synchronise the time between the device you run HA on and the alarm panel. Powermax only, not Powermaster. | 'no' or 'yes' |
 | allow_remote_arm        | 'no'    | Determines whether the panel can be armed from within HA. | 'no' or 'yes' |
