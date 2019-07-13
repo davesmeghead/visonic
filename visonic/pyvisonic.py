@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.2.9"
+PLUGIN_VERSION = "0.3.0"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -59,6 +59,8 @@ WATCHDOG_TIMEOUT = 120
 
 # If there has been a watchdog timeout this many times then go to standard mode
 WATCHDOG_MAXIMUM_EVENTS = 10
+
+RESPONSE_TIMEOUT = 10
 
 # If a message has not been sent to the panel in this time (seconds) then send an I'm alive message
 KEEP_ALIVE_PERIOD = 25  # Seconds
@@ -319,7 +321,33 @@ pmLogEvent_t = {
            "Gas probleem", "Gas probleem herstel", "Lekkage alarm", "Lekkage herstel", "Probleem", "Probleem herstel",
            "Deelschakeling", "Ingeschakeld", "Snel deelschakeling", "Snel ingeschakeld", "Uitgezet", "Inschakelfout (auto)", "Test gestart",
            "Test gestopt", "Force aan", "Geheel in (auto)", "Onmiddelijk", "Overbruggen", "Inschakelfout",
-           "Log verzenden", "Systeem reset", "Installateur programmeert", "Foutieve code", "Overbruggen" )
+           "Log verzenden", "Systeem reset", "Installateur programmeert", "Foutieve code", "Overbruggen" ),
+   "FR" : (
+           "Aucun", "Alarme Intérieure", "Alarme Périphérie", "Alarme Différée", "Alarme Silencieuse 24H", "Alarme Audible 24H",
+           "Autoprotection", "Alarme Autoprotection Centrale", "Alarme Autoprotection", "Alarme Autoprotection", "Défaut de communication", "Alarme Panique Depuis Memclé",
+           "Alarme Panique depuis Centrale", "Contrainte", "Confirmer l'alarme", "Perte de Communication", "Rétablissement Défaut Supervision",
+           "Rétablissement Alarme Intérieure", "Rétablissement Alarme Périphérie", "Rétablissement Alarme Différée", "Rétablissement Alarme Silencieuse 24H", "Rétablissement Alarme Audible 24H",
+           "Rétablissement Autoprotection", "Rétablissement Alarme Autoprotection Centrale", "Rétablissement Alarme Autoprotection", "Rétablissement Alarme Autoprotection", "Rétablissement des Communications",
+           "Annuler Alarme", "Rétablissement Général", "Rétablissement Défaut", "Pas utilisé", "Evenement Fermeture Récente", "Alarme Incendie", "Rétablissement Alarme Incendie",
+           "Non Actif", "Urgence", "Pas utilisé", "Désarmement Latchkey", "Rétablissement Alarme Panique", "Défaut Supervision (Inactive)",
+           "Rétablissement Supervision (Active)", "Batterie Faible", "Rétablissement Batterie Faible", "Coupure Secteur", "Rétablissement Secteur",
+           "Batterie Centrale Faible", "Rétablissement Batterie Centrale Faible", "Détection Brouillage Radio", "Rétablissement Détection Brouillage Radio",
+           "Défaut Communication", "Rétablissement Communications", "Défaut Ligne Téléphonique", "Rétablissement Ligne Téléphonique",
+           "Auto Test", "Coupure Secteur/Fusible", "Rétablissement Secteur/Fusible", "Memclé Batterie Faible", "Rétablissement Memclé Batterie Faible", "Réinitialisation Technicien",
+           "Batterie Déconnectée ", "Clavier/Télécommande Batterie Faible", "Rétablissement Clavier/Télécommande Batterie Faible", "Clavier/Télécommande Inactif",
+           "Rétablissement Clavier/Télécommande Actif", "Batterie Faible", "Nettoyage Détecteur Incendie", "Alarme incendie", "Batterie Faible", "Rétablissement Batterie",
+           "Coupure Secteur", "Rétablissement Secteur", "Défaut Supervision (Inactive)", "Rétablissement Supervision (Active)", "Alarme Gaz", "Rétablissement Alarme Gaz",
+           "Défaut Gaz", "Rétablissement Défaut Gaz", "Alarme Inondation", "Rétablissement Alarme Inondation", "Défaut X-10", "Rétablissement Défaut X-10",
+           "Armement Partiel", "Armement Total", "Armement Partiel Instantané", "Armement Total Instantané", "Désarmement", "Echec d'armement", "Entrer dans Mode Test",
+           "Sortir du Mode Test", "Fermeture Forcée", "Armement Automatique", "Armement Instantané", "Bypass", "Echec d'Armement", "Porte Ouverte",
+           "Communication établie par le panneau de control", "Réinitialisation du Système", "Installer Programming", "Mauvais code PIN",
+           "Not Sys Event", "Not Sys Event", "Alerte Chaleure Extrême", "Rétablissement Alerte Chaleure Extrême", "Alerte Gel",
+           "Rétablissement Alerte Gel", "Alerte Froid", "Rétablissement Alerte Froid", "Alerte Chaud",
+           "Rétablissement Alerte Chaud", "Défaut Capteur de Température", "Rétablissement Défaut Capteur de Température",
+           # new values partition models
+           "PIR Masqué", "Rétablissement PIR Masqué", "", "", "", "", "", "", "", "", "", "",
+           "Intrusion Vérifiée", "Rétablissement", "Intrusion Vérifiée", "Rétablissement", "", "", "", "", "", "", "", "", "", "",
+           "", "", "", "", "", "Sortir Mode Installeur", "Entrer Mode Installeur", "", "", "", "", "" )
 }
 
 pmLogUser_t = {
@@ -350,6 +378,19 @@ pmLogUser_t = {
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", 
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown"],
+  "FR" : [ "Système", "Zone 01", "Zone 02", "Zone 03", "Zone 04", "Zone 05", "Zone 06", "Zone 07", "Zone 08",
+           "Zone 09", "Zone 10", "Zone 11", "Zone 12", "Zone 13", "Zone 14", "Zone 15", "Zone 16", "Zone 17", "Zone 18",
+           "Zone 19", "Zone 20", "Zone 21", "Zone 22", "Zone 23", "Zone 24", "Zone 25", "Zone 26", "Zone 27", "Zone 28",
+           "Zone 29", "Zone 30", "Memclé  01", "Memclé  02", "Memclé  03", "Memclé  04", "Memclé  05", "Memclé  06", "Memclé  07", "Memclé  08",
+           "User 01", "User 02", "User 03", "User 04", "User 05", "User 06", "User 07", "User 08", "Pad  01", "Pad  02",
+           "Pad  03", "Pad  04", "Pad  05", "Pad  06", "Pad  07", "Pad  08", "Sir  01", "Sir  02", "2Pad 01", "2Pad 02",
+           "2Pad 03", "2Pad 04", "X10  01", "X10  02", "X10  03", "X10  04", "X10  05", "X10  06", "X10  07", "X10  08",
+           "X10  09", "X10  10", "X10  11", "X10  12", "X10  13", "X10  14", "X10  15", "PGM    ", "GSM    ", "P-LINK ",
+           "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "Unknown", "Unknown",
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", 
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown"]
 }
 
 pmSysStatus_t = {
@@ -362,12 +403,20 @@ pmSysStatus_t = {
            "Uitgeschakeld", "Deel uitloopvertraging", "Totaal uitloopvertraging", "Inloopvertraging", "Deel ingeschakeld",
            "Totaal ingeschakeld", "Gebruiker test", "Downloaden", "Programmeren", "Monteurmode", "Deel met overbrugging",
            "Totaal met overbrugging", "Klaar", "Niet klaar", "??", "??", "Direct uitschakelen", "Direct Deel uitloopvertraging",
-           "Direct Totaal uitloopvertraging", "Direct inloopvertraging", "Direct Deel", "Direct Totaal" )
+           "Direct Totaal uitloopvertraging", "Direct inloopvertraging", "Direct Deel", "Direct Totaal" ),
+	"FR" : (
+           "Désarmé", "Délai Armement Partiel", "Délai Armement Total", "Délai d'Entrée", "Armé Partiel", "Armé Total", "Test Utilisateur",
+           "Téléchargement", "Programmation", "Mode Installateur", "Isolation Partielle", "Isolation Total", "Prêt", "Non Prêt", "??", "??",
+           "Désarmé Instantané", "Temporisation Armement Partiel Instantané", "Temporisation Armement Total Instantané", "Temporisation d'Entrée Instantané", "Armé Total Instantané",
+           "Armé Total Instantané" )
+
 }
 
 pmSysStatusFlags_t = {
    "EN" : ( "Ready", "Alert in memory", "Trouble", "Bypass on", "Last 10 seconds", "Zone event", "Status changed", "Alarm event" ),
-   "NL" : ( "Klaar", "Alarm in geheugen", "Probleem", "Overbruggen aan", "Laatste 10 seconden", "Zone verstoord", "Status gewijzigd", "Alarm actief")
+   "NL" : ( "Klaar", "Alarm in geheugen", "Probleem", "Overbruggen aan", "Laatste 10 seconden", "Zone verstoord", "Status gewijzigd", "Alarm actief"),
+   "FR" : ( "Prêt", "Alerte en mémoire", "Défaut/Panne", "Isolation sur", "10 dernières secondes", "Evenement Zone", "Etat modifié", "Evenment Alarme" )
+
 }
 
 #pmArmed_t = {
@@ -392,7 +441,12 @@ pmEventType_t = {
    "NL" : (
            "Geen", "Sabotage alarm", "Sabotage herstel", "Open", "Gesloten", "Verstoord (beweging)", "Paniek alarm", "RF verstoring",
            "Sabotage open", "Communicatie probleem", "Lijnfout", "Zekering", "Niet actief", "Lage batterij", "AC probleem",
-           "Brandalarm", "Noodoproep", "Sirene sabotage", "Sirene sabotage herstel", "Sirene lage batterij", "Sirene AC probleem" )
+           "Brandalarm", "Noodoproep", "Sirene sabotage", "Sirene sabotage herstel", "Sirene lage batterij", "Sirene AC probleem" ),
+   "FR" : (
+           "Aucun", "Alarme Autoprotection", "Rétablissement Alarme Autoprotection", "Ouvert", "Fermé", "Violation (Mouvement)", "Alarme Panique", "Détection Brouillage Radio",
+           "Ouverture Autoprotection", "Echec de Communication", "Echec Ligne Téléphonique", "Fusible", "Pas Active", "Batterie Faible", "Echec Alimentation Secteur",
+           "Alarme Incendie", "Urgence", "Autoprotection Sirène", "Rétablissement Autoprotection Sirène", "Batterie Faible Sirène", "Coupure Secteur Sirène" )
+
 }
 
 pmPanelAlarmType_t = {
@@ -638,7 +692,11 @@ pmZoneType_t = {
            "24 Hours Silent", "24 Hours Audible", "Fire", "Interior", "Home Delay", "Temperature", "Outdoor", "16" ),
    "NL" : (
            "Geen alarm", "Noodtoestand", "Water", "Gas", "Vertraagd 1", "Vertraagd 2", "Interieur volg", "Omtrek", "Omtrek volg",
-           "24 uurs stil", "24 uurs luid", "Brand", "Interieur", "Thuis vertraagd", "Temperatuur", "Buiten", "16" )
+           "24 uurs stil", "24 uurs luid", "Brand", "Interieur", "Thuis vertraagd", "Temperatuur", "Buiten", "16" ),
+   "FR" : (
+           "Non Alarme", "Urgence", "Inondation", "Gaz", "Temporisée 1", "Temporisée 2", "Interior-Follow", "Voie Périphérique", "Voie Périphérique d'Entrée",
+           "24 Heures Silencieuse", "24 Heures Audible", "Incendie", "Intérieure", "Home Delay", "Température", "Extérieure", "16" )
+
 } # "Arming Key", "Guard" ??
 
 # Zone names are taken from the panel, so no langauage support needed
@@ -651,7 +709,9 @@ pmZoneName_t = (
 
 pmZoneChime_t = {
    "EN" : ("Off", "Melody", "Zone", "Invalid"),
-   "NL" : ("Uit", "Muziek", "Zone", "Invalid")
+   "NL" : ("Uit", "Muziek", "Zone", "Invalid"),
+   "FR" : ("Eteint", "Melodie", "Zone", "Invalide")
+
 }
 
 # Note: names need to match to VAR_xxx
@@ -762,12 +822,12 @@ class SensorDevice:
         return self.id
         
     def install_change_handler(self, ch):
-        log.info("Installing update handler for device {}".format(self.id))
+        log.info("[SensorDevice] Installing update handler for device {}".format(self.id))
         self._change_handler = ch
 
     def pushChange(self):
         if self._change_handler is not None:
-            #log.info("Calling update handler for device")
+            #log.info("[SensorDevice] Calling update handler for device")
             self._change_handler()
 
 class X10Device:
@@ -804,12 +864,12 @@ class X10Device:
         return self.id
         
     def install_change_handler(self, ch):
-        log.info("Installing update handler for device {}".format(self.id))
+        log.info("[X10Device] Installing update handler for device {}".format(self.id))
         self._change_handler = ch
 
     def pushChange(self):
         if self._change_handler is not None:
-            log.info("Calling update handler for X10 device")
+            log.info("[X10Device] Calling update handler for X10 device")
             self._change_handler()
 
 
@@ -897,6 +957,8 @@ class ProtocolBase(asyncio.Protocol):
         self.pmLastTransactionTime = self.getTimeFunction() - timedelta(seconds=1)  # take off 1 second so the first command goes through immediately
 
         self.giveupTrying = False
+
+        self.expectedResponseTimeout = 0
 
         ###################################################################
         # Variables that are used and modified throughout derived classes
@@ -1012,6 +1074,7 @@ class ProtocolBase(asyncio.Protocol):
         # Reset Send state (clear queue and reset flags)
         self.ClearList()
         self.pmExpectedResponse = []
+        self.expectedResponseTimeout = 0
         # restart the counter
         self.reset_watchdog_timeout()
         self.reset_keep_alive_messages()
@@ -1032,7 +1095,7 @@ class ProtocolBase(asyncio.Protocol):
         status_counter = 0  # don't trigger first time!
         watchdog_events = 0
         download_counter = 0
-        powerlink_counter = 225 # set to 3.75 minutes so first time it does it after 15 seconds
+        powerlink_counter = 230 # set to 3 minutes 50 seconds so first time it does it after 10 seconds
         downloadDuration = 0
         
         while not self.suspendAllOperations:
@@ -1042,11 +1105,14 @@ class ProtocolBase(asyncio.Protocol):
 
             # Keep alive functionality
             self.keep_alive_counter = self.keep_alive_counter + 1
+
+            # The Expected Response Timer
+            self.expectedResponseTimeout = self.expectedResponseTimeout + 1
             
             if not self.pmDownloadMode:
                 downloadDuration = 0
             
-            #log.debug("[WatchDogTimeout] is {0}".format(self.watchdog_counter))
+            #log.debug("[Controller] is {0}".format(self.watchdog_counter))
             
             # First, during actual download keep resetting the watchdogs and timers to prevent any other comms to the panel, check for download timeout
             # Second, if not actually doing download but download is incomplete then try every 4 minutes
@@ -1059,8 +1125,8 @@ class ProtocolBase(asyncio.Protocol):
                 # count in seconds that we've been in download mode
                 downloadDuration = downloadDuration + 1
                 if downloadDuration > DOWNLOAD_TIMEOUT:
-                    log.warning("********************** Download Timer has Expired, Download has taken too long *********************")
-                    log.warning("************************************* Going to standard mode ***************************************")
+                    log.warning("[Controller] ********************** Download Timer has Expired, Download has taken too long *********************")
+                    log.warning("[Controller] ************************************* Going to standard mode ***************************************")
                     # Stop download mode
                     self.pmDownloadMode = False
                     self.ClearList()
@@ -1075,17 +1141,17 @@ class ProtocolBase(asyncio.Protocol):
                 if download_counter >= DOWNLOAD_RETRY_DELAY:  # 4 Minutes
                     download_counter = 0
                     # trigger a download
-                    log.info("[WatchDogTimer] Trigger Panel Download Attempt")
+                    log.info("[Controller] Trigger Panel Download Attempt")
                     self.Start_Download()
                     
             elif not self.giveupTrying and self.pmPowerlinkModePending and not self.ForceStandardMode and self.pmDownloadComplete and not self.pmPowerlinkMode:
                 # Attempt to enter powerlink mode
                 self.reset_watchdog_timeout()
                 powerlink_counter = powerlink_counter + 1
-                log.debug("[WatchDogTimer] Powerlink Counter {0}".format(powerlink_counter))
+                log.debug("[Controller] Powerlink Counter {0}".format(powerlink_counter))
                 if powerlink_counter >= POWERLINK_RETRY_DELAY:  # 4 minutes
                     powerlink_counter = 0
-                    log.info("[WatchDogTimer] Trigger Powerlink Attempt")
+                    log.info("[Controller] Trigger Powerlink Attempt")
                     # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
                     #      this should kick it in to powerlink after we just enrolled
                     self.allowAckToTriggerRestore = True
@@ -1096,31 +1162,36 @@ class ProtocolBase(asyncio.Protocol):
                     #self.SendCommand("MSG_U1")
                     #self.SendCommand("MSG_U2")
                     #self.SendCommand("MSG_U3")   #  to here
-                    self.SendCommand("MSG_RESTORE")
+                    #self.SendCommand("MSG_RESTORE")
                     
             elif self.watchdog_counter >= WATCHDOG_TIMEOUT:   #  the clock runs at 1 second
                 # watchdog timeout
-                log.info("[WatchDogTimeout] ****************************** WatchDog Timer Expired ********************************")
+                log.info("[Controller] ****************************** WatchDog Timer Expired ********************************")
                 status_counter = 0  # delay status requests
                 self.reset_watchdog_timeout()
                 self.reset_keep_alive_messages()
                 watchdog_events = watchdog_events + 1
                 PanelStatus["Watchdog Timeout"] = PanelStatus["Watchdog Timeout"] + 1
                 if watchdog_events >= WATCHDOG_MAXIMUM_EVENTS:
-                    log.info("[WatchDogTimeout]               **************** Going to Standard Mode ***************")
+                    log.info("[Controller]               **************** Going to Standard Mode ***************")
                     watchdog_events = 0
                     self.gotoStandardMode()
                     self.sendResponseEvent ( 8 )  # watchdog timer expired, going to standard mode
                 else:
-                    log.info("[WatchDogTimeout]               **************** Trigger Restore Status ***************")
+                    log.info("[Controller]               **************** Trigger Restore Status ***************")
                     self.triggerRestoreStatus()
                     self.sendResponseEvent ( 9 )  # watchdog timer expired, going to try again
+
+            elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
+                log.debug("[Controller] ****************************** Response Timer Expired ********************************")
+                self.triggerRestoreStatus()
+                
             
             # Fifth, is it time to send an I'm Alive message to the panel
             # Sixth, flush the send queue, send all buffered messages to the panel
             if len(self.SendList) == 0 and not self.pmDownloadMode and self.keep_alive_counter >= KEEP_ALIVE_PERIOD:   #
                 # Every KEEP_ALIVE_PERIOD seconds, unless watchdog has been reset
-                #log.debug("Send list is empty so sending I'm alive message")
+                #log.debug("[Controller]   Send list is empty so sending I'm alive message")
                 # reset counter
                 self.reset_keep_alive_messages()
                 # Send I'm Alive and request status
@@ -1263,6 +1334,7 @@ class ProtocolBase(asyncio.Protocol):
                         self.SendAck(data = self.ReceiveData)
 
                     # Check response
+                    tmplength = len(self.pmExpectedResponse)
                     if len(self.pmExpectedResponse) > 0: # and msgType != 2:   # 2 is a simple acknowledge from the panel so ignore those
                         # We've sent something and are waiting for a reponse - this is it
                         #log.debug("[data receiver] msgType {0}  expected one of {1}".format(hex(msgType).upper(), [hex(no).upper() for no in self.pmExpectedResponse]))
@@ -1273,6 +1345,11 @@ class ProtocolBase(asyncio.Protocol):
                         #else:
                         #    log.debug("[data receiver] msgType not in self.pmExpectedResponse   Waiting for next PDU :  expected {0}   got {1}".format([hex(no).upper() for no in self.pmExpectedResponse], hex(msgType).upper()))
 
+                    if len(self.pmExpectedResponse) == 0:
+                        if tmplength > 0:
+                            log.debug("[data receiver] msgType {0} resetting expected response counter, it got up to {1}".format(hex(msgType).upper(), self.expectedResponseTimeout))
+                        self.expectedResponseTimeout = 0
+                        
                     # Handle the message
                     if self.packet_callback is not None:
                         self.packet_callback(self.ReceiveData)
@@ -1289,7 +1366,7 @@ class ProtocolBase(asyncio.Protocol):
                     if (self.pmCrcErrorCount > MAX_CRC_ERROR):
                         self.pmCrcErrorCount = 0
                         self.PerformDisconnect("CRC errors")
-                else:
+                elif msgType != 0xF1:        # ignore CRC errors on F1 message
                     a = self.calculate_crc(self.ReceiveData[1:-2])[0]
                     log.debug("[data receiver] Building PDU: Length is now %d bytes (apparently PDU not complete)    %s    checksum calcs %02x", len(self.ReceiveData), self.toString(self.ReceiveData), a)
         elif pdu_len <= 0xC0:
@@ -1418,8 +1495,11 @@ class ProtocolBase(asyncio.Protocol):
             self.transport.write(sData)
             #log.debug("[pmSendPdu]      waiting for message response {}".format([hex(no).upper() for no in self.pmExpectedResponse]))
             
-            # update the expected response list straight away (without having to wait for it to be actually sent) to make sure protocol is followed
-            self.pmExpectedResponse.extend(instruction.response) # if an ack is needed it will already be in this list
+            if len(instruction.response) > 0:
+                log.debug("[pmSendPdu] Resetting expected response counter, it got to {0}   Response list before {1}  after {2}".format(self.expectedResponseTimeout, len(self.pmExpectedResponse), len(self.pmExpectedResponse) + len(instruction.response)))
+                self.expectedResponseTimeout = 0
+                # update the expected response list straight away (without having to wait for it to be actually sent) to make sure protocol is followed
+                self.pmExpectedResponse.extend(instruction.response) # if an ack is needed it will already be in this list
 
             if sData[1] != 0x02:   # the message is not an acknowledge back to the panel
                 self.pmLastSentMessage = instruction
@@ -1555,8 +1635,6 @@ class ProtocolBase(asyncio.Protocol):
         
         self.SendCommand("MSG_DL", options = [1, self.myDownloadList.pop(0)] )     # Read the names of the zones
 
-        ####self.SendCommand("MSG_START")      # Start sending all relevant settings please
-
 
 # This class performs transactions based on messages (ProtocolBase is the raw data)
 class PacketHandling(ProtocolBase):
@@ -1651,9 +1729,9 @@ class PacketHandling(ProtocolBase):
             self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
             self.Start_Download()
         elif self.DownloadCode == "DF FD":
-            log.warning("Warning: Trying to re enroll, already tried DFFD and still not successful")
+            log.warning("[SendMsg_ENROLL] Warning: Trying to re enroll, already tried DFFD and still not successful")
         else:
-            log.info("Warning: Trying to re enroll but not triggering download")
+            log.info("[SendMsg_ENROLL] Warning: Trying to re enroll but not triggering download")
             self.DownloadCode = "DF FD" # Force the Download code to be something different and try again ?????
             self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
 
@@ -1893,11 +1971,11 @@ class PacketHandling(ProtocolBase):
                         result = self.lookupEprom(val)
                         if result is not None:
                             if (type(DecodePanelSettings[key].name) is str):
-                                #log.info( "{0:<18}  {1:<40}  {2}".format(key, DecodePanelSettings[key].name, result[0]))
+                                #log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, DecodePanelSettings[key].name, result[0]))
                                 if len(result[0]) > 0:
                                     PanelStatus[DecodePanelSettings[key].name] = result[0]
                             else:
-                                #log.info( "{0:<18}  {1}  {2}".format(key, DecodePanelSettings[key].name, result))
+                                #log.debug( "[Process Settings]      {0:<18}  {1}  {2}".format(key, DecodePanelSettings[key].name, result))
                                 for i in range (0, len(DecodePanelSettings[key].name)):
                                     if len(result[i]) > 0:
                                         PanelStatus[DecodePanelSettings[key].name[i]] = result[i]
@@ -1952,7 +2030,7 @@ class PacketHandling(ProtocolBase):
                 setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_ZONES"])
                 
                 #zonesignalstrength = self.pmReadSettings(pmDownloadItem_t["MSG_DL_ZONESIGNAL"])
-                #log.debug("ZoneSignal " + self.toString(zonesignalstrength))
+                #log.debug("[Process Settings] ZoneSignal " + self.toString(zonesignalstrength))
                 #log.debug("[Process Settings] DL Zone settings " + self.toString(setting))
                 #log.debug("[Process Settings] Zones Names Buffer :  {0}".format(self.toString(zoneNames)))
 
@@ -1964,7 +2042,7 @@ class PacketHandling(ProtocolBase):
                         zoneEnrolled = False
                         if not self.PowerMaster: # PowerMax models
                             zoneEnrolled = setting[i * 4 : i * 4 + 3] != bytearray.fromhex("00 00 00")
-                            #log.debug("      Zone Slice is " + self.toString(setting[i * 4 : i * 4 + 4]))
+                            #log.debug("[Process Settings]       Zone Slice is " + self.toString(setting[i * 4 : i * 4 + 4]))
                         else: # PowerMaster models (check only 5 of 10 bytes)
                             zoneEnrolled = settingMr[i * 10 + 4 : i * 10 + 9] != bytearray.fromhex("00 00 00 00 00")
                         
@@ -1981,7 +2059,7 @@ class PacketHandling(ProtocolBase):
                                 if tmpid in pmZoneSensor_t:
                                     sensorTypeStr = pmZoneSensor_t[tmpid]
                                 else:
-                                    log.info("Found unknown sensor type " + str(sensorID_c))
+                                    log.info("[Process Settings] Found unknown sensor type " + str(sensorID_c))
 
                             else: # PowerMaster models
                                 zoneInfo = int(setting[i])
@@ -1990,7 +2068,7 @@ class PacketHandling(ProtocolBase):
                                 if sensorID_c in pmZoneSensorMaster_t:
                                     sensorTypeStr = pmZoneSensorMaster_t[sensorID_c].func
                                 else:
-                                    log.info("Found unknown sensor type " + str(sensorID_c))
+                                    log.info("[Process Settings] Found unknown sensor type " + str(sensorID_c))
 
                             zoneType = (zoneInfo & 0x0F)
                             zoneChime = ((zoneInfo >> 4) & 0x03)
@@ -2016,11 +2094,12 @@ class PacketHandling(ProtocolBase):
                                 self.pmSensorDev_t[i].zchime = pmZoneChime_t[self.pmLang][zoneChime]
                                 self.pmSensorDev_t[i].dname="Z{0:0>2}".format(i+1)
                                 self.pmSensorDev_t[i].partition = part
-                                self.pmSensorDev_t[i].id=i+1
+                                self.pmSensorDev_t[i].id = i+1
+                                self.pmSensorDev_t[i].enrolled = True
                             else:
                                 self.pmSensorDev_t[i] = SensorDevice(stype = sensorTypeStr, sid = sensorID_c, ztype = zoneType,
                                              ztypeName = pmZoneType_t[self.pmLang][zoneType], zname = zoneName, zchime = pmZoneChime_t[self.pmLang][zoneChime],
-                                             dname="Z{0:0>2}".format(i+1), partition = part, id=i+1)
+                                             dname="Z{0:0>2}".format(i+1), partition = part, id=i+1, enrolled = True)
                                 visonic_devices['sensor'].append(self.pmSensorDev_t[i])
 
                             if i in self.pmSensorDev_t:
@@ -2075,7 +2154,7 @@ class PacketHandling(ProtocolBase):
                         self.pmX10Dev_t[i] = X10Device(name = x10DeviceName, type = x10Type, location = x10Location, id=i, enabled=x10Enabled)
                         visonic_devices['switch'].append(self.pmX10Dev_t[i])
                         
-                    #log.debug("X10 device {0} {1}".format(i, deviceStr))
+                    #log.debug("[Process Settings] X10 device {0} {1}".format(i, deviceStr))
                     
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 if not self.PowerMaster:
@@ -2128,26 +2207,28 @@ class PacketHandling(ProtocolBase):
                 #  INTERFACE : Add these self.pmSensorDev_t[i] params to the status panel
                 self.sendResponseEvent ( visonic_devices )
 
-            # INTERFACE : Create Partitions in the interface
-            #for i in range(1, partitionCnt+1): # TODO
+                # INTERFACE : Create Partitions in the interface
+                #for i in range(1, partitionCnt+1): # TODO
 
+                log.info("[Process Settings] Ready for use")
+            
+            else:
+                log.warning("[Process Settings] WARNING: Cannot process panel EPROM settings, download has not completed")
+            
         elif pmPanelTypeNr is None or pmPanelTypeNr == 0xFF:
-            log.info("WARNING: Cannot process settings, we're probably connected to the panel in standard mode")
+            log.warning("[Process Settings] WARNING: Cannot process panel EPROM settings, we're probably connected to the panel in standard mode")
         else:
-            log.info("WARNING: Cannot process settings, the panel is too new")
+            log.warning("[Process Settings] WARNING: Cannot process panel EPROM settings, the panel is too new")
 
-        log.info("[Process Settings] Ready for use")
         self.DumpSensorsToDisplay()
         
         if self.pmPowerlinkMode:
             PanelStatus["Mode"] = "Powerlink"
         elif self.pmDownloadComplete and self.pmGotUserCode:
-            log.info("[Standard Mode] Entering Standard Plus Mode as we got the pin codes from the EPROM")
+            log.info("[Process Settings] Entering Standard Plus Mode as we got the pin codes from the EPROM")
             PanelStatus["Mode"] = "Standard Plus"
         else:
             PanelStatus["Mode"] = "Standard"
-
-        #self.SendCommand("MSG_STATUS")
 
         if PanelSettings["AutoSyncTime"]:  # should we sync time between the HA and the Alarm Panel
             t = datetime.now()
@@ -2158,7 +2239,7 @@ class PacketHandling(ProtocolBase):
                 #self.pmSyncTimeCheck = t
                 self.SendCommand("MSG_SETTIME", options = [3, timePdu] )
             else:
-                log.info("[Enrolling Powerlink] Please correct your local time.")
+                log.info("[Process Settings] Please correct your local time.")
 
     # This function handles a received message packet and processes it
     def handle_packet(self, packet):
@@ -2413,7 +2494,7 @@ class PacketHandling(ProtocolBase):
             self.pmEventLogDictionary[idx].event = eventStr
             #self.pmEventLogDictionary.items = idx
             #self.pmEventLogDictionary.done = (eventNum == self.eventCount)
-            log.debug("Log Event {0}".format(self.pmEventLogDictionary[idx]))
+            log.debug("[handle_msgtypeA0] Log Event {0}".format(self.pmEventLogDictionary[idx]))
             
             # Send the event log in to HA
             self.sendResponseEvent ( self.pmEventLogDictionary[idx] )
@@ -2490,7 +2571,7 @@ class PacketHandling(ProtocolBase):
         elif eventType == 0x02: # Status message - Zone Open Status
             # if in standard mode then use this A5 status message to reset the watchdog timer        
             if not self.pmPowerlinkMode:
-                log.debug("Got A5 02 message, resetting watchdog")
+                log.debug("[handle_msgtypeA5]      Got A5 02 message, resetting watchdog")
                 self.reset_watchdog_timeout()
 
             val = self.makeInt(data[2:6])
@@ -2566,7 +2647,7 @@ class PacketHandling(ProtocolBase):
                     self.pmX10Dev_t[i].state = bool(status)
                     # Check to see if the state has changed
                     if ( oldstate and not self.pmX10Dev_t[i].state ) or (not oldstate and self.pmX10Dev_t[i].state):
-                        log.debug("X10 device {0} changed to {1}".format(i, status))
+                        log.debug("[handle_msgtypeA5]      X10 device {0} changed to {1}".format(i, status))
                         self.pmX10Dev_t[i].pushChange()
 
 
@@ -2930,19 +3011,13 @@ class PacketHandling(ProtocolBase):
         #  Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 06 43
         #  Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 09 43
         #  Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0d 43
-        #   Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 06 43 
-        #   Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 09 43 
-        #   Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0d 43 
-        #  Received PowerMaster message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
-        #   Received PowerMaster message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
+        #  Received PowerMaster message 3/36 (len = 26)   full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
+        
         if not self.pmDownloadMode and msgType == 0x03 and subType == 0x39:
             # Movement (probably)
             #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 04 43
             #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 07 43
             #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
-            #   Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 04 43 
-            #   Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 07 43 
-            #   Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
             log.debug("[handle_msgtypeB0]      Sending special PowerMaster Commands to the panel")
             self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT1"]])    #
             self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT2"]])    #
@@ -2952,9 +3027,6 @@ class PacketHandling(ProtocolBase):
             #  Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 0b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 05 43
             #  Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 0b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 08 43
             #  Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0c 43
-            #   Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 0b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 05 43 
-            #   Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 0b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 08 43 
-            #   Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0c 43 
             log.info("[handle_msgtypeB0]       Received PowerMaster message, zone information (probably)")
             for z in range(0, msgLen):
                 # Check if the zone exists and it has to be a PIR
@@ -2971,6 +3043,18 @@ class PacketHandling(ProtocolBase):
         if msgType == 0x03 and subType == 0x18:
             # Open/Close information (probably)
             log.info("[handle_msgtypeB0]       Received PowerMaster message, open/close information (probably)")
+#            for z in range(0, msgLen):
+#                if z in self.pmSensorDev_t:
+#                    s = data[3 + z]
+#                    log.debug("[handle_msgtypeB0]           Zone {0}  State {1}".format(z, s))
+
+        if msgType == 0x03 and subType == 0x07:
+            # Unknown information
+            log.info("[handle_msgtypeB0]       Received PowerMaster message, UNKNOWN information")
+#            for z in range(0, msgLen):
+#                if z in self.pmSensorDev_t:
+#                    s = data[3 + z]
+#                    log.debug("[handle_msgtypeB0]           Zone {0}  State {1}".format(z, s))
 
 
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
@@ -3036,7 +3120,7 @@ class EventHandling(PacketHandling):
         super().__init__(*args, **kwargs)
 
         if ignore:
-            log.debug('ignoring: %s', ignore)
+            log.debug('[EventHandling]  ignoring: %s', ignore)
             self.ignore = ignore
         else:
             #log.debug("In __init__")
@@ -3051,18 +3135,18 @@ class EventHandling(PacketHandling):
         while not self.suspendAllOperations:
             command = await self.command_queue.get()
             if command[0] == "log":
-                log.debug("Calling event log")
+                log.debug("[CommandQueue]  Calling event log")
                 self.GetEventLog(command[1])
             elif command[0] == "bypass":
-                log.debug("Calling bypass for individual sensors")
+                log.debug("[CommandQueue]  Calling bypass for individual sensors")
                 self.SetSensorArmedState(command[1], command[2], command[3])
             elif command[0] == "x10":
-                log.debug("Calling x10 command")
+                log.debug("[CommandQueue]  Calling x10 command")
                 self.SendX10Command(command[1], command[2])
             elif command[0] in pmArmMode_t:
                 self.RequestArm(command[0], command[1])
             else:
-                log.warning("Processing unknown queue command {0}".format(command))
+                log.warning("[CommandQueue]  Processing unknown queue command {0}".format(command))
                 
 
     # RequestArm
@@ -3080,7 +3164,7 @@ class EventHandling(PacketHandling):
                 armCode = pmArmMode_t[state]
                 armCodeA.append(armCode)
 
-            log.debug("RequestArmMode " + (state or "N/A"))     # + "  using pin " + self.toString(bpin))
+            log.debug("[RequestArm]  RequestArmMode " + (state or "N/A"))     # + "  using pin " + self.toString(bpin))
             
             if armCode is not None:
     
@@ -3094,13 +3178,13 @@ class EventHandling(PacketHandling):
                         self.SendCommand("MSG_ARM", options = [3, armCodeA, 4, bpin])    #
                         return True
                     else:
-                        log.info("Panel Access Not allowed, user setting prevent access")
+                        log.info("[RequestArm]  Panel Access Not allowed, user setting prevent access")
                 else:
-                    log.info("Panel Access Not allowed without pin")
+                    log.info("[RequestArm]  Panel Access Not allowed without pin")
             else:
-                log.info("RequestArmMode invalid state requested " + (state or "N/A"))
+                log.info("[RequestArm]  RequestArmMode invalid state requested " + (state or "N/A"))
         else:
-            log.info("Request Arm and Disarm only supported when not downloading EPROM.")
+            log.info("[RequestArm]  Request Arm and Disarm only supported when not downloading EPROM.")
         return False
 
     # Individually arm/disarm the sensors
@@ -3124,12 +3208,12 @@ class EventHandling(PacketHandling):
 
                 if isValidPL:
                     bypassint = 1 << (zone - 1)
-                    log.info("SetSensorArmedState A " + hex(bypassint))
+                    log.info("[SensorArmState]  SetSensorArmedState A " + hex(bypassint))
                     # is it big or little endian, i'm not sure, needs testing
                     y1, y2, y3, y4 = (bypassint & 0xFFFFFFFF).to_bytes(4, 'little')
                     # These could be the wrong way around, needs testing
                     bypass = bytearray([y1, y2, y3, y4])
-                    log.info("SetSensorArmedState B " + self.toString(bypass))
+                    log.info("[SensorArmState]  SetSensorArmedState B " + self.toString(bypass))
                     if len(bpin) == 2 and len(bypass) == 4:
                         if armedValue:
                             self.SendCommand("MSG_BYPASSDI", options = [1, bpin, 7, bypass])
@@ -3138,11 +3222,11 @@ class EventHandling(PacketHandling):
                         self.SendCommand("MSG_BYPASSTAT") # request status to check success and update sensor variable
                         return True
                 else:
-                    log.info("Bypass option not allowed, invalid pin")
+                    log.info("[SensorArmState]  Bypass option not allowed, invalid pin")
             else:
-                log.info("Bypass option not enabled in panel settings.")
+                log.info("[SensorArmState]  Bypass option not enabled in panel settings.")
         else:
-            log.info("Bypass setting only supported when not downloading EPROM.")
+            log.info("[SensorArmState]  Bypass setting only supported when not downloading EPROM.")
         return False
 
     # Get the Event Log
@@ -3166,7 +3250,7 @@ class EventHandling(PacketHandling):
         # "MSG_X10PGM"      : VisonicCommand(bytearray.fromhex('A4 00 00 00 00 00 99 99 00 00 00 43'), None  , False, "X10 Data" ),
         if not self.pmDownloadMode:
             if dev >= 0 and dev <= 15:
-                log.debug("Py Visonic : Send X10 Command : id = " + str(dev) + "   state = " + state)
+                log.debug("[SendX10Command]  Py Visonic : Send X10 Command : id = " + str(dev) + "   state = " + state)
                 calc = (1 << dev)
                 byteA = calc & 0xFF
                 byteB = (calc >> 8) & 0xFF
@@ -3175,11 +3259,11 @@ class EventHandling(PacketHandling):
                     self.SendCommand("MSG_X10PGM", options = [6, what, 7, byteA, 8, byteB])
                     return True
                 else:
-                    log.info("Send X10 Command : state not in pmX10State_t " + state)
+                    log.info("[SendX10Command]  Send X10 Command : state not in pmX10State_t " + state)
             else:
-                log.info("Send X10 Command : Device ID not in valid range")
+                log.info("[SendX10Command]  Send X10 Command : Device ID not in valid range")
         else:
-            log.info("Get Event Log only supported when not downloading EPROM.")
+            log.info("[SendX10Command]  Get Event Log only supported when not downloading EPROM.")
         return False
 
 #PowerMax.prototype.writeMessage = function(item, val) {

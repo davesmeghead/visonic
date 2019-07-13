@@ -84,6 +84,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.2.7      | Changes Download EPROM Technique, its much faster. Lots and lots of debug for Adding Sensors and EPROM download (but does not show pin codes) |
 | 0.2.8      | Lots and lots of debug for Adding Sensors and X10. Removed debug logs for EPROM Download. |
 | 0.2.9      | Fixed a bug from when there are 20 or more of the same message, I caused a reset of the Component. I should only do this for A5 messages. |
+| 0.3.0      | New Control Flow working for PowerMaster 10 and 30 and achieves powerlink much quicker. Also, courtesy of olijouve, a French language translation. Tidied up log entries. Trigger restore if expected not received in 10 seconds. |
 
 
 ## Instructions and what works so far
