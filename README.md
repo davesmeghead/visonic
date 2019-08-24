@@ -208,8 +208,11 @@ You can change this in your customize configuration like this for example
 
 ### Home Assistant Visonic Panel Services
 The Component responds to some of the built in HA Alarm Panel Services. Each service begins with "alarm_control_panel."
+
 The first 3 are HA built in, the 4th I have added.
+
 As an aside, I couldn't get the built in service "alarm_arm_custom_bypass" to work and then realised this is for the panel as a whole and not individual sensors. It is not yet implemented.
+
 In all 4 services the "code" service data is optional, depending on the mode that we're connected as i.e. in Standard mode then you will need to set the code.
 
 | Name                    | Description | Example Service Data |
