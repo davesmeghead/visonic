@@ -50,7 +50,7 @@ if len(args.address) > 0:
                         event_callback=add_visonic_device)
 elif len(args.usb) > 0:
     conn = pyvisonic.create_usb_visonic_connection(
-                        port=args.usb,
+                        port='//./' + args.usb,
                         loop=testloop,
                         event_callback=add_visonic_device)
 

@@ -30,15 +30,6 @@ DEPENDENCIES = ['visonic']
 DOMAIN = 'alarm_control_panel'
 SCAN_INTERVAL = timedelta(seconds=30)
 
-SERVICE_TO_METHOD = {
-    SERVICE_ALARM_DISARM: 'alarm_disarm',
-    SERVICE_ALARM_ARM_HOME: 'alarm_arm_home',
-    SERVICE_ALARM_ARM_AWAY: 'alarm_arm_away',
-    SERVICE_ALARM_ARM_NIGHT: 'alarm_arm_night',
-    SERVICE_ALARM_ARM_CUSTOM_BYPASS: 'alarm_arm_custom_bypass',
-    SERVICE_ALARM_TRIGGER: 'alarm_trigger'
-}
-
 ALARM_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
     vol.Optional(ATTR_CODE): cv.string,
@@ -68,50 +59,21 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         if va is not None:
             va.doUpdate()
     
+    # Service call to bypass individual sensors
+    def service_sensor_bypass(call):
+        #_LOGGER.info('alarm control panel service sensor bypass')
+        if va is not None:
+            va.sensor_bypass(call.data)
+    
     hass.bus.listen('alarm_panel_state_update', handle_event_alarm_panel)
     
+    hass.services.register(DOMAIN, 'alarm_sensor_bypass', service_sensor_bypass)
+
     devices = []
     devices.append(va)
     
     add_devices(devices, True)  
     
-
-@asyncio.coroutine
-def async_setup(hass, config):
-    """Track states and offer events for sensors."""
-    component = EntityComponent(
-        logging.getLogger(__name__), DOMAIN, hass, SCAN_INTERVAL)
-
-    yield from component.async_setup(config)
-
-    @asyncio.coroutine
-    def async_alarm_service_handler(service):
-        """Map services to methods on Alarm."""
-        target_alarms = component.async_extract_from_service(service)
-
-        code = service.data.get(ATTR_CODE)
-
-        method = "async_{}".format(SERVICE_TO_METHOD[service.service])
-
-        update_tasks = []
-        for talarm in target_alarms:
-            yield from getattr(talarm, method)(code)
-
-            if not talarm.should_poll:
-                continue
-            update_tasks.append(talarm.async_update_ha_state(True))
-
-        if update_tasks:
-            yield from asyncio.wait(update_tasks, loop=hass.loop)
-
-    for service in SERVICE_TO_METHOD:
-        hass.services.async_register(
-            DOMAIN, service, async_alarm_service_handler,
-            schema=ALARM_SERVICE_SCHEMA)
-
-    return True
-
-
 
 class VisonicAlarm(alarm.AlarmControlPanel):
     """Representation of a Visonic alarm control panel."""
@@ -283,36 +245,50 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     def alarm_trigger(self, code=None):
         """Send alarm trigger command."""
         raise NotImplementedError()
+        
+    def dump_dict(self, mykeys):
+        for key, value in mykeys.items():
+            _LOGGER.info(key + " has value " + value)
+
+    def async_alarm_custom_sensor_bypass(hass, code=None, entity_id=None):
+        return self.hass.async_add_job(self.alarm_custom_sensor_bypass, code, entity_id)
+
+    # Service alarm_control_panel.alarm_sensor_bypass
+    # {"entity_id": "binary_sensor.visonic_z01", "bypass":"True", "code":"1234" }
+    def sensor_bypass(self, data=None):
+        _LOGGER.info("Custom visonic alarm sensor bypass " + str(type(data)))
+        #if type(data) is str:
+        #    _LOGGER.info("  Sensor_bypass = String " + str(data) )
+        if type(data) is dict or str(type(data)) == "<class 'mappingproxy'>":
+            #_LOGGER.info("  Sensor_bypass = " + str(type(data)))
+            self.dump_dict(data)
+
+            if 'entity_id' in data:            
+                eid = str(data['entity_id'])
+                #_LOGGER.info("    A entity id = " + eid)
+                if not eid.startswith('binary_sensor.'):
+                    eid = 'binary_sensor.' + eid
+                #_LOGGER.info("    B entity id = " + eid)
+                if valid_entity_id(eid):
+                    #_LOGGER.info("    C entity id = " + eid)
+                    mystate = self.hass.states.get(eid)
+                    if mystate is not None:
+                        #_LOGGER.info("    alarm mystate5 = " + str(mystate))
+                        #_LOGGER.info("    alarm mystate6 = " + str(mystate.as_dict()))
+                        devid = mystate.attributes['visonic device']
+                        code = ""
+                        if 'code' in data:
+                            code = data['code']
+                        if 'bypass' in data and devid >= 1 and devid <= 64:
+                            comm = data['bypass']
+                            if comm in ['FALSE', 'False', 'false', '0', 'f', 'n', 'no', 'F', 'N', 'No', 'NO']:
+                                _LOGGER.info("Attempt to unbypass/restore sensor device id = " + str(devid))
+                                self.queue.put_nowait(["bypass", devid, False, self.decode_code(code)])
+                            else:
+                                _LOGGER.info("Attempt to bypass sensor device id = " + str(devid))
+                                self.queue.put_nowait(["bypass", devid, True, self.decode_code(code)])
+                        else:
+                            _LOGGER.warning("Attempt to bypass sensor with incorrect parameters device id = " + str(devid))
 
     def alarm_arm_custom_bypass(self, data=None):
-        if self.queue is not None:
-            _LOGGER.info("alarm bypass = " + str(data))
-            if type(data) is dict:
-                if 'entity_id' in data:                 
-                    eid = data['entity_id']                    
-                    mystate = self.hass.states.get(eid[0])
-                    if mystate is not None:
-                        _LOGGER.info("alarm mystate1 = " + str(mystate))
-                        _LOGGER.info("alarm mystate2 = " + str(mystate.as_dict()))
-                    #mystate = self.hass.states.get('binary_sensor.visonic_Z02')
-                    #if mystate is not None:
-                    #    _LOGGER.info("alarm mystate3 = " + str(mystate))
-                    #    _LOGGER.info("alarm mystate4 = " + str(mystate.as_dict()))
-                    
-                    if valid_entity_id('binary_sensor.visonic_z02'):
-                        _LOGGER.info("its valid")
-                    else:
-                        _LOGGER.info("its not valid")
-                    
-                    mystate = self.hass.states.get('binary_sensor.visonic_z02')
-                    if mystate is not None:
-                        _LOGGER.info("alarm mystate5 = " + str(mystate))
-                        _LOGGER.info("alarm mystate6 = " + str(mystate.as_dict()))
-                        devid = mystate.attributes['visonic device']
-                        if 'command' in data:
-                            comm = data['command']
-                            _LOGGER.info("alarm mystate7 = " + str(devid) + "  command " + str(comm))
-                            self.queue.put_nowait(["bypass", devid, comm, self.decode_code(data)])
-                        else:
-                            _LOGGER.info("alarm mystate8 = " + str(devid))
-                            self.queue.put_nowait(["bypass", devid, False, self.decode_code(data)])
+        _LOGGER.info("Alarm Panel Custom Bypass Not Yet Implemented")

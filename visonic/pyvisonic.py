@@ -3190,7 +3190,7 @@ class EventHandling(PacketHandling):
     # Individually arm/disarm the sensors
     #   This sets/clears the bypass for each sensor
     #       zone is the zone number 1 to 31
-    #       armedValue is a boolean ( False then Bypass, True then Arm )
+    #       bypassValue is a boolean ( True then Bypass, False then Arm )
     #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
     #   Return : success or not
     #
@@ -3200,7 +3200,7 @@ class EventHandling(PacketHandling):
     #      bytes 3 to 6 are the Enable bits for the 32 zones
     #      bytes 7 to 10 are the Disable bits for the 32 zones 
     #      byte 11 is 0x43
-    def SetSensorArmedState(self, zone, armedValue, pin = "") -> bool:  # was sensor instead of zone (zone in range 1 to 32).
+    def SetSensorArmedState(self, zone, bypassValue, pin = "") -> bool:  # was sensor instead of zone (zone in range 1 to 32).
         """ Set or Clear Sensor Bypass """
         if not self.pmDownloadMode:
             if not self.pmBypassOff:
@@ -3215,10 +3215,10 @@ class EventHandling(PacketHandling):
                     bypass = bytearray([y1, y2, y3, y4])
                     log.info("[SensorArmState]  SetSensorArmedState B " + self.toString(bypass))
                     if len(bpin) == 2 and len(bypass) == 4:
-                        if armedValue:
-                            self.SendCommand("MSG_BYPASSDI", options = [1, bpin, 7, bypass])
-                        else:
+                        if bypassValue:
                             self.SendCommand("MSG_BYPASSEN", options = [1, bpin, 3, bypass]) 
+                        else:
+                            self.SendCommand("MSG_BYPASSDI", options = [1, bpin, 7, bypass])
                         self.SendCommand("MSG_BYPASSTAT") # request status to check success and update sensor variable
                         return True
                 else:

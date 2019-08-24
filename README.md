@@ -85,6 +85,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.2.8      | Lots and lots of debug for Adding Sensors and X10. Removed debug logs for EPROM Download. |
 | 0.2.9      | Fixed a bug from when there are 20 or more of the same message, I caused a reset of the Component. I should only do this for A5 messages. |
 | 0.3.0      | New Control Flow working for PowerMaster 10 and 30 and achieves powerlink much quicker. Also, courtesy of olijouve, a French language translation. Tidied up log entries. Trigger restore if expected not received in 10 seconds. |
+| 0.3.1      | Added HA service to bypass/rearm individual sensors in the panel. There is no Frontend for this, just a service for you to call. |
 
 
 ## Instructions and what works so far
@@ -93,6 +94,7 @@ This Component currently connects to the panel and it creates an:
 - Alarm Panel integration Entity "alarm_control_panel.visonic_alarm" so you can look at the internal state values
 - HA Switch for each X10 device
 - "alarm_control_panel" badge so you can arm and disarm the alarm.
+- An HA service to bypass/rearm individual sensors
 
 As of version 0.2.0 I have changed the control flow and introduced a new mode "Standard Plus".
 You know which mode you are in by looking at the Entity "alarm_control_panel.visonic_alarm" and the attribute "Mode".
@@ -204,6 +206,19 @@ You can change this in your customize configuration like this for example
       device_class: door
 ```
 
+### Home Assistant Visonic Panel Services
+The Component responds to some of the built in HA Alarm Panel Services. Each service begins with "alarm_control_panel."
+The first 3 are HA built in, the 4th I have added.
+As an aside, I couldn't get the built in service "alarm_arm_custom_bypass" to work and then realised this is for the panel as a whole and not individual sensors. It is not yet implemented.
+In all 4 services the "code" service data is optional, depending on the mode that we're connected as i.e. in Standard mode then you will need to set the code.
+| Name                    | Description | Example Service Data |
+|-------------------------|-------------|----------------|
+| alarm_arm_away          | Arm the panel away | "entity_id": "alarm_control_panel.visonic_alarm" |
+| alarm_arm_home          | Arm the panel home | "entity_id": "alarm_control_panel.visonic_alarm" |
+| alarm_disarm            | Disarm the panel   | "entity_id": "alarm_control_panel.visonic_alarm" |
+| alarm_sensor_bypass     | Bypass/Arm individual sensors (must be done when panel is disarmed).  | "entity_id": "binary_sensor.visonic_z01", "bypass":"True" |
+
+
 ### How to use it in Home Assistant Automations
 ```
 - alias: Alarm Armed So Turn Lights Off
@@ -259,7 +274,8 @@ There are 2 extras that I include in the release
 Disable the Component in HA (or disable HA altogether) and use the test.py script from a command line like this
 ```
 python3 test.py -address 192.168.X.Y -port YourPort
-python3 test.py -usb /dev/ttyUSB1
+On Linux:   python3 test.py -usb /dev/ttyUSB1
+On Windows: python3 test.py -usb COM1
 ```
 It will perform like it does in HA but from the command line. Note that the other settings from the configuration can be changed by editing test.py
 
