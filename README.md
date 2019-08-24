@@ -211,8 +211,9 @@ The Component responds to some of the built in HA Alarm Panel Services. Each ser
 The first 3 are HA built in, the 4th I have added.
 As an aside, I couldn't get the built in service "alarm_arm_custom_bypass" to work and then realised this is for the panel as a whole and not individual sensors. It is not yet implemented.
 In all 4 services the "code" service data is optional, depending on the mode that we're connected as i.e. in Standard mode then you will need to set the code.
+
 | Name                    | Description | Example Service Data |
-|-------------------------|-------------|----------------|
+|-------------------------|-------------|----------------------|
 | alarm_arm_away          | Arm the panel away | "entity_id": "alarm_control_panel.visonic_alarm" |
 | alarm_arm_home          | Arm the panel home | "entity_id": "alarm_control_panel.visonic_alarm" |
 | alarm_disarm            | Disarm the panel   | "entity_id": "alarm_control_panel.visonic_alarm" |
