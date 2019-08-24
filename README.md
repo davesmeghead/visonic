@@ -214,10 +214,10 @@ In all 4 services the "code" service data is optional, depending on the mode tha
 
 | Name                    | Description | Example Service Data |
 |-------------------------|-------------|----------------------|
-| alarm_arm_away          | Arm the panel away | "entity_id": "alarm_control_panel.visonic_alarm" |
-| alarm_arm_home          | Arm the panel home | "entity_id": "alarm_control_panel.visonic_alarm" |
-| alarm_disarm            | Disarm the panel   | "entity_id": "alarm_control_panel.visonic_alarm" |
-| alarm_sensor_bypass     | Bypass/Arm individual sensors (must be done when panel is disarmed).  | "entity_id": "binary_sensor.visonic_z01", "bypass":"True" |
+| alarm_arm_away          | Arm the panel away | "entity_id":"alarm_control_panel.visonic_alarm" |
+| alarm_arm_home          | Arm the panel home | "entity_id":"alarm_control_panel.visonic_alarm" |
+| alarm_disarm            | Disarm the panel   | "entity_id":"alarm_control_panel.visonic_alarm" |
+| alarm_sensor_bypass     | Bypass/Arm individual sensors (must be done when panel is disarmed).  | "entity_id":"binary_sensor.visonic_z01", "bypass":"True" |
 
 
 ### How to use it in Home Assistant Automations
