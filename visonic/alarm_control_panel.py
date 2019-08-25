@@ -13,9 +13,10 @@ import voluptuous as vol
 
 from datetime import timedelta
 from homeassistant.helpers.entity_component import EntityComponent
+from custom_components.visonic import DOMAIN
 
 from homeassistant.const import (
-    ATTR_CODE, ATTR_CODE_FORMAT, ATTR_ENTITY_ID, ATTR_COMMAND, SERVICE_ALARM_TRIGGER,
+    ATTR_CODE, ATTR_CODE_FORMAT, ATTR_ENTITY_ID, SERVICE_ALARM_TRIGGER,
     SERVICE_ALARM_DISARM, SERVICE_ALARM_ARM_HOME, SERVICE_ALARM_ARM_AWAY,
     SERVICE_ALARM_ARM_NIGHT, SERVICE_ALARM_ARM_CUSTOM_BYPASS)
 
@@ -27,17 +28,17 @@ from homeassistant.core import valid_entity_id, split_entity_id
 
 DEPENDENCIES = ['visonic']
 
-DOMAIN = 'alarm_control_panel'
 SCAN_INTERVAL = timedelta(seconds=30)
 
+ATTR_BYPASS = 'bypass'
+
 ALARM_SERVICE_SCHEMA = vol.Schema({
-    vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
+    vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+    vol.Optional(ATTR_BYPASS): cv.boolean,
     vol.Optional(ATTR_CODE): cv.string,
-    vol.Optional(ATTR_COMMAND): cv.boolean,
 })
 
 _LOGGER = logging.getLogger(__name__)
-
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
     """Set up the Visonic alarms."""
@@ -67,7 +68,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     
     hass.bus.listen('alarm_panel_state_update', handle_event_alarm_panel)
     
-    hass.services.register(DOMAIN, 'alarm_sensor_bypass', service_sensor_bypass)
+    hass.services.register(DOMAIN, 'alarm_sensor_bypass', service_sensor_bypass, schema=ALARM_SERVICE_SCHEMA)
 
     devices = []
     devices.append(va)
@@ -248,7 +249,7 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         
     def dump_dict(self, mykeys):
         for key, value in mykeys.items():
-            _LOGGER.info(key + " has value " + value)
+            _LOGGER.info(key + " has value " + str(value))
 
     def async_alarm_custom_sensor_bypass(hass, code=None, entity_id=None):
         return self.hass.async_add_job(self.alarm_custom_sensor_bypass, code, entity_id)
@@ -263,8 +264,8 @@ class VisonicAlarm(alarm.AlarmControlPanel):
             #_LOGGER.info("  Sensor_bypass = " + str(type(data)))
             self.dump_dict(data)
 
-            if 'entity_id' in data:            
-                eid = str(data['entity_id'])
+            if ATTR_ENTITY_ID in data:            
+                eid = str(data[ATTR_ENTITY_ID])
                 #_LOGGER.info("    A entity id = " + eid)
                 if not eid.startswith('binary_sensor.'):
                     eid = 'binary_sensor.' + eid
@@ -276,17 +277,18 @@ class VisonicAlarm(alarm.AlarmControlPanel):
                         #_LOGGER.info("    alarm mystate5 = " + str(mystate))
                         #_LOGGER.info("    alarm mystate6 = " + str(mystate.as_dict()))
                         devid = mystate.attributes['visonic device']
-                        code = ""
-                        if 'code' in data:
-                            code = data['code']
-                        if 'bypass' in data and devid >= 1 and devid <= 64:
-                            comm = data['bypass']
-                            if comm in ['FALSE', 'False', 'false', '0', 'f', 'n', 'no', 'F', 'N', 'No', 'NO']:
-                                _LOGGER.info("Attempt to unbypass/restore sensor device id = " + str(devid))
-                                self.queue.put_nowait(["bypass", devid, False, self.decode_code(code)])
-                            else:
-                                _LOGGER.info("Attempt to bypass sensor device id = " + str(devid))
-                                self.queue.put_nowait(["bypass", devid, True, self.decode_code(code)])
+                        code = ''
+                        if ATTR_CODE in data:
+                            code = data[ATTR_CODE]
+                        bypass = False
+                        if ATTR_BYPASS in data:
+                            bypass = data[ATTR_BYPASS]
+                        if devid >= 1 and devid <= 64:
+                            #if bypass:
+                            #    _LOGGER.info("Attempt to bypass sensor device id = " + str(devid))
+                            #else:
+                            #    _LOGGER.info("Attempt to restore (arm) sensor device id = " + str(devid))
+                            self.queue.put_nowait(["bypass", devid, bypass, self.decode_code(code)])
                         else:
                             _LOGGER.warning("Attempt to bypass sensor with incorrect parameters device id = " + str(devid))
 
