@@ -1,0 +1,12 @@
+alarm_sensor_bypass:
+  description: Bypass a visonic sensor.
+  fields:
+    entity_id:
+      description: Name of the visonic sensor to bypass. This is case sensitive.
+      example: '"binary_sensor.visonic_z02" as a String'
+    bypass:
+      description: An optional bypass ("True") or stop the bypass and re-arm ("False"), defaults to False
+      example: 'True or False as a Boolean (from a String)'
+    code:
+      description: An optional code to send to the panel.
+      example: '"1234" as a String'
