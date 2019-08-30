@@ -34,8 +34,8 @@ ATTR_BYPASS = 'bypass'
 
 ALARM_SERVICE_SCHEMA = vol.Schema({
     vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-    vol.Optional(ATTR_BYPASS): cv.boolean,
-    vol.Optional(ATTR_CODE): cv.string,
+    vol.Optional(ATTR_BYPASS, default=False): cv.boolean,
+    vol.Optional(ATTR_CODE, default=""): cv.string,
 })
 
 _LOGGER = logging.getLogger(__name__)

@@ -4,5 +4,6 @@
   "documentation": "https://github.com/davesmeghead/visonic/wiki",
   "dependencies": [],
   "codeowners": ["@davesmeghead"],
-  "requirements": ["pyserial", "pyserial_asyncio", "datetime"]
+  "requirements": ["pyserial", "pyserial_asyncio", "datetime"],
+  "homeassistant": "0.96.0"
 }

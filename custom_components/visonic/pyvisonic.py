@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.2"
+PLUGIN_VERSION = "0.3.2.1"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -116,7 +116,10 @@ PanelStatus = {
    "Panel Armed"           : 'No',
 
 # 3C message decode
-   "Power Master"       : 'No'
+   "Power Master"          : 'No',
+   
+# Define model type to be unknown
+   "Model"                 : "Unknown"
 }
 
 # Messages left to work out
@@ -164,7 +167,8 @@ pmSendMsg = {
 
 pmSendMsgB0_t = {
    "ZONE_STAT1" : bytearray.fromhex('04 06 02 FF 08 03 00 00'),
-   "ZONE_STAT2" : bytearray.fromhex('07 06 02 FF 08 03 00 00')
+   "ZONE_STAT2" : bytearray.fromhex('07 06 02 FF 08 03 00 00'),
+   "ZONE_STAT3" : bytearray.fromhex('18 06 02 FF 08 03 00 00')
    #"ZONE_NAME"  : bytearray.fromhex('21 02 05 00'),   # not used in Vera Lua Script
    #"ZONE_TYPE"  : bytearray.fromhex('2D 02 05 00')    # not used in Vera Lua Script
 }
@@ -3001,60 +3005,62 @@ class PacketHandling(ProtocolBase):
     # Only Powermasters send this message
     def handle_msgtypeB0(self, data): # PowerMaster Message
         """ MsgType=B0 - Panel PowerMaster Message """
-#        msgSubTypes = [0x00, 0x01, 0x02, 0x03, 0x04, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x18, 0x19, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x24, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x38, 0x39, 0x3A ]
+#        msgSubTypes = [0x00, 0x01, 0x02, 0x03, 0x04, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x11, 0x12, 0x13, 0x14, 0x15, 
+#                       0x16, 0x18, 0x19, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x24, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x38, 0x39, 0x3A ]
         # Format: <Type> <SubType> <Length> <Data>
 
-        msgType = data[0] # 00, 01, 04: req; 03: reply, so expecting 0x03
+        msgType = data[0]
         subType = data[1]
         msgLen  = data[2]
-        log.info("[handle_msgtypeB0] Received PowerMaster message {0}/{1} (len = {2})    full data = {3}".format(msgType, subType, msgLen, self.toString(data)))
-        #  Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 06 43
-        #  Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 09 43
-        #  Received PowerMaster message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0d 43
-        #  Received PowerMaster message 3/36 (len = 26)   full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
+        log.info("[handle_msgtypeB0] Received {0} message {1}/{2} (len = {3})    full data = {4}".format(PanelStatus["Model"] or "UNKNOWN", msgType, subType, msgLen, self.toString(data)))
+        #  Received PowerMaster30 message 3/36 (len = 26)   full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
         
         if not self.pmDownloadMode and msgType == 0x03 and subType == 0x39:
-            # Movement (probably)
-            #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 04 43
-            #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 07 43
-            #  Received PowerMaster message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
-            log.debug("[handle_msgtypeB0]      Sending special PowerMaster Commands to the panel")
-            self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT1"]])    #
-            self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT2"]])    #
+            # Movement detected (probably)
+            #  Received PowerMaster10 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
+            #  Received PowerMaster30 message 3/57 (len = 8)    full data = 03 39 08 ff 08 ff 03 18 24 4b 90 43
+            log.debug("[handle_msgtypeB0]      Sending special {0} Commands to the panel".format(PanelStatus["Model"] or "UNKNOWN"))
+            self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT1"]])    # This asks the panel to send 03 04 messages
+            self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT2"]])    # This asks the panel to send 03 07 messages
+            self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT3"]])    # This asks the panel to send 03 18 messages
 
         if msgType == 0x03 and subType == 0x04:
             # Zone information (probably)
-            #  Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 0b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 05 43
-            #  Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 0b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 08 43
-            #  Received PowerMaster message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0c 43
-            log.info("[handle_msgtypeB0]       Received PowerMaster message, zone information (probably)")
-            for z in range(0, msgLen):
+            #  Received PowerMaster10 message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 <24 * 00> 0c 43
+            #  Received PowerMaster30 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 11 08 08 04 08 08 <58 * 00> 89 43
+            zoneLen = data[6] # The length of the zone data (64 for PM30, 30 for PM10)
+            log.info("[handle_msgtypeB0]       Received {0} message, zone information (probably), zone length = {1}".format(PanelStatus["Model"] or "UNKNOWN", zoneLen))
+            for z in range(0, zoneLen):
                 # Check if the zone exists and it has to be a PIR
                 # do we already know about the sensor from the EPROM decode
                 if z in self.pmSensorDev_t:
                     #zone z
                     if self.pmSensorDev_t[z].stype == "Motion":
-                        s = data[3 + z]
+                        s = data[7 + z]
                         log.debug("[handle_msgtypeB0]           Zone {0}  Motion State {1}".format(z, s))
                     else:
-                        s = data[3 + z]
+                        s = data[7 + z]
                         log.debug("[handle_msgtypeB0]           Zone {0}  is not a motion stype   State = {1}".format(z, s))
                     
         if msgType == 0x03 and subType == 0x18:
             # Open/Close information (probably)
-            log.info("[handle_msgtypeB0]       Received PowerMaster message, open/close information (probably)")
-#            for z in range(0, msgLen):
-#                if z in self.pmSensorDev_t:
-#                    s = data[3 + z]
-#                    log.debug("[handle_msgtypeB0]           Zone {0}  State {1}".format(z, s))
+            zoneLen = data[6] # The length of the zone data (64 for PM30, 30 for PM10)
+            log.info("[handle_msgtypeB0]       Received {0} message, open/close information (probably), zone length = {1}".format(PanelStatus["Model"] or "UNKNOWN", zoneLen))
+            for z in range(0, zoneLen):
+                if z in self.pmSensorDev_t:
+                    s = data[7 + z]
+                    log.debug("[handle_msgtypeB0]           Zone {0}  State {1}".format(z, s))
 
         if msgType == 0x03 and subType == 0x07:
+            #  Received PowerMaster10 message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 <24 * 00> 0d 43
+            #  Received PowerMaster30 message 3/7 (len = 69)    full data = 03 07 45 ff 08 03 40 03 03 03 03 03 03 <58 * 00> 92 43 
             # Unknown information
-            log.info("[handle_msgtypeB0]       Received PowerMaster message, UNKNOWN information")
-#            for z in range(0, msgLen):
-#                if z in self.pmSensorDev_t:
-#                    s = data[3 + z]
-#                    log.debug("[handle_msgtypeB0]           Zone {0}  State {1}".format(z, s))
+            zoneLen = data[6] # The length of the zone data (64 for PM30, 30 for PM10)
+            log.info("[handle_msgtypeB0]       Received {0} message, 03 07 information, zone length = {1}".format(PanelStatus["Model"] or "UNKNOWN", zoneLen))
+            for z in range(0, zoneLen):
+                if z in self.pmSensorDev_t:
+                    s = data[7 + z]
+                    log.debug("[handle_msgtypeB0]           Zone {0}  State {1}".format(z, s))
 
 
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
