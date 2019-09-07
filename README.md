@@ -88,6 +88,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.1      | Added HA service to bypass/rearm individual sensors in the panel. There is no Frontend for this, just a service for you to call. |
 | 0.3.2      | Reworked HA service to bypass/rearm individual sensors in the panel. There is no Frontend for this, just a service for you to call. |
 | 0.3.2.1    | Experimental release looking at the B0 PowerMaster messages and whether we can use them to determine PIR motion without the alarm being armed. |
+| 0.3.2.2    | Experimental release looking at the B0 PowerMaster messages, included some code to detect motion from the "B0 03 04" data. |
 
 
 ## Instructions and what works so far

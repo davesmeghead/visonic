@@ -59,6 +59,11 @@ CONF_ARM_CODE_AUTO = "arm_without_usercode"
 CONF_EXCLUDE_SENSOR = "exclude_sensor"
 CONF_EXCLUDE_X10 = "exclude_x10"
 
+# Temporary B0 Config Items
+CONF_B0_ENABLE_MOTION_PROCESSING   = "b0_enable_motion_processing"
+CONF_B0_MIN_TIME_BETWEEN_TRIGGERS  = "b0_min_time_between_triggers"
+CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT = "b0_max_time_for_trigger_event"
+
 # Schema for config file parsing and access
 DEVICE_SOCKET_SCHEMA = vol.Schema({
     vol.Required(CONF_DEVICE_TYPE): 'ethernet',
@@ -84,7 +89,10 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Optional(CONF_AUTO_SYNC_TIME,       True ): cv.boolean,
         vol.Optional(CONF_ENABLE_REMOTE_ARM,    False): cv.boolean,
         vol.Optional(CONF_ENABLE_REMOTE_DISARM, False): cv.boolean,
-        vol.Optional(CONF_ENABLE_SENSOR_BYPASS, False): cv.boolean
+        vol.Optional(CONF_ENABLE_SENSOR_BYPASS, False): cv.boolean,
+        vol.Optional(CONF_B0_ENABLE_MOTION_PROCESSING, False): cv.boolean,
+        vol.Optional(CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,  5 ) : cv.positive_int,
+        vol.Optional(CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,  30 ) : cv.positive_int
     }),
 }, extra=vol.ALLOW_EXTRA)
 
@@ -257,6 +265,10 @@ def setup(hass, base_config):
         visonicApi.setConfig("DownloadCode", config.get(CONF_DOWNLOAD_CODE))
         visonicApi.setConfig("ArmWithoutCode", config.get(CONF_ARM_CODE_AUTO))
         visonicApi.setConfig("ResetCounter", panel_reset_counter)
+
+        visonicApi.setConfig("B0_Enable", config.get(CONF_B0_ENABLE_MOTION_PROCESSING))
+        visonicApi.setConfig("B0_Min_Interval_Time", config.get(CONF_B0_MIN_TIME_BETWEEN_TRIGGERS))
+        visonicApi.setConfig("B0_Max_Wait_Time", config.get(CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT))
 
         # Get Visonic specific configuration.
         device_type = config.get(CONF_DEVICE)

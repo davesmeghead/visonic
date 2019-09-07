@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.2.1"
+PLUGIN_VERSION = "0.3.2.2"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -77,18 +77,22 @@ DOWNLOAD_RETRY_DELAY = 240
 POWERLINK_RETRY_DELAY = 240
 
 PanelSettings = {
-   "MotionOffDelay"      : 120,
-   "OverrideCode"        : "",
-   "DownloadCode"        : "",
-   "PluginLanguage"      : "EN",
-   "ArmWithoutCode"      : False,
-   "PluginDebug"         : False,
-   "ForceStandard"       : False,
-   "ResetCounter"        : 0,
-   "AutoSyncTime"        : True,
-   "EnableRemoteArm"     : False,
-   "EnableRemoteDisArm"  : False,  #
-   "EnableSensorBypass"  : False   # Does user allow sensor bypass / arming
+   "MotionOffDelay"       : 120,
+   "OverrideCode"         : "",
+   "DownloadCode"         : "",
+   "PluginLanguage"       : "EN",
+   "ArmWithoutCode"       : False,
+   "PluginDebug"          : False,
+   "ForceStandard"        : False,
+   "ResetCounter"         : 0,
+   "AutoSyncTime"         : True,
+   "EnableRemoteArm"      : False,
+   "EnableRemoteDisArm"   : False,  #
+   "EnableSensorBypass"   : False,   # Does user allow sensor bypass / arming
+
+   "B0_Enable"            : False,
+   "B0_Min_Interval_Time" : 30,
+   "B0_Max_Wait_Time"     : 5
 }
 
 PanelStatus = {
@@ -1660,6 +1664,12 @@ class PacketHandling(ProtocolBase):
 
         self.lastSendOfDownloadEprom = self.getTimeFunction() - timedelta(seconds=100)  # take off 100 seconds so the first command goes through immediately
         
+        # Variables to manage the PowerMAster B0 message and the triggering of Motion
+        self.lastRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=100)  # take off 100 seconds so the first command goes through immediately
+        self.firstRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=100)  # take off 100 seconds so the first command goes through immediately
+        self.zoneNumberMasterMotion = 0
+        self.zoneDataMasterMotion = bytearray(b'')
+        
         # Store the sensor details
         self.pmSensorDev_t = {}
 
@@ -3005,6 +3015,8 @@ class PacketHandling(ProtocolBase):
     # Only Powermasters send this message
     def handle_msgtypeB0(self, data): # PowerMaster Message
         """ MsgType=B0 - Panel PowerMaster Message """
+#       Sources of B0 Code
+#                  https://github.com/nlrb/com.visonic.powermax/blob/master/node_modules/powermax-api/lib/handlers.js
 #        msgSubTypes = [0x00, 0x01, 0x02, 0x03, 0x04, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x11, 0x12, 0x13, 0x14, 0x15, 
 #                       0x16, 0x18, 0x19, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x24, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x38, 0x39, 0x3A ]
         # Format: <Type> <SubType> <Length> <Data>
@@ -3021,26 +3033,56 @@ class PacketHandling(ProtocolBase):
             #  Received PowerMaster30 message 3/57 (len = 8)    full data = 03 39 08 ff 08 ff 03 18 24 4b 90 43
             log.debug("[handle_msgtypeB0]      Sending special {0} Commands to the panel".format(PanelStatus["Model"] or "UNKNOWN"))
             self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT1"]])    # This asks the panel to send 03 04 messages
-            self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT2"]])    # This asks the panel to send 03 07 messages
-            self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT3"]])    # This asks the panel to send 03 18 messages
+            #self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT2"]])    # This asks the panel to send 03 07 messages
+            #self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT3"]])    # This asks the panel to send 03 18 messages
 
-        if msgType == 0x03 and subType == 0x04:
+        enable = PanelSettings["B0_Enable"]
+        if enable and msgType == 0x03 and subType == 0x04:
+            log.info("[handle_msgtypeB0]         Received {0} message, continue".format(PanelStatus["Model"] or "UNKNOWN"))
+            min_interval = PanelSettings["B0_Min_Interval_Time"]
+            max_wait_time = PanelSettings["B0_Max_Wait_Time"]
             # Zone information (probably)
             #  Received PowerMaster10 message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 <24 * 00> 0c 43
             #  Received PowerMaster30 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 11 08 08 04 08 08 <58 * 00> 89 43
-            zoneLen = data[6] # The length of the zone data (64 for PM30, 30 for PM10)
-            log.info("[handle_msgtypeB0]       Received {0} message, zone information (probably), zone length = {1}".format(PanelStatus["Model"] or "UNKNOWN", zoneLen))
-            for z in range(0, zoneLen):
-                # Check if the zone exists and it has to be a PIR
-                # do we already know about the sensor from the EPROM decode
-                if z in self.pmSensorDev_t:
-                    #zone z
-                    if self.pmSensorDev_t[z].stype == "Motion":
-                        s = data[7 + z]
-                        log.debug("[handle_msgtypeB0]           Zone {0}  Motion State {1}".format(z, s))
-                    else:
-                        s = data[7 + z]
-                        log.debug("[handle_msgtypeB0]           Zone {0}  is not a motion stype   State = {1}".format(z, s))
+            
+            interval = self.getTimeFunction() - self.lastRecvOfMasterMotionData
+            self.lastRecvOfMasterMotionData = self.getTimeFunction() 
+            td = timedelta(seconds=min_interval)  # 
+            if interval > td:
+                # more than 30 seconds since the last B0 03 04 message so reset variables ready
+                # also, it should enter here first time around as self.lastRecvOfMasterMotionData should be 100 seconds ago
+                log.info("[handle_msgtypeB0]         03 04 Data Reset")
+                self.zoneNumberMasterMotion = False
+                self.firstRecvOfMasterMotionData = self.getTimeFunction() 
+                self.zoneDataMasterMotion = data.copy()
+            elif not self.zoneNumberMasterMotion: 
+                log.info("[handle_msgtypeB0]         Checking if time delay is within {0} seconds".format(max_wait_time))
+                interval = self.getTimeFunction() - self.firstRecvOfMasterMotionData
+                td = timedelta(seconds=max_wait_time)  # 
+                if interval <= td and len(data) == len(self.zoneDataMasterMotion):
+                    # less than or equal to 5 seconds since the last valid trigger message, and the data messages are the same length
+                    zoneLen = data[6] # The length of the zone data (64 for PM30, 30 for PM10)
+                    log.info("[handle_msgtypeB0]         Received {0} message, zone length = {1}".format(PanelStatus["Model"] or "UNKNOWN", zoneLen))
+                    for z in range(0, zoneLen):
+                        # Check if the zone exists and it has to be a PIR
+                        # do we already know about the sensor from the EPROM decode
+                        if z in self.pmSensorDev_t:
+                            #zone z
+                            log.info("[handle_msgtypeB0]           Checking Zone {0}".format(z))
+                            if self.pmSensorDev_t[z].stype == "Motion":
+                                #log.info("[handle_msgtypeB0]             And its motion")
+                                s1 = data[7 + z]
+                                s2 = self.zoneDataMasterMotion[7 + z]
+                                log.debug("[handle_msgtypeB0]             Zone {0}  Motion State Before {1}   After {2}".format(z, s2, s1))
+                                if s1 != s2:
+                                    log.debug("[handle_msgtypeB0]             Triggered Motion Detection")
+                                    self.zoneNumberMasterMotion = True   # this means we wait at least 'min_interval' seconds for the next trigger
+                                    self.pmSensorDev_t[z].triggered = True
+                                    self.pmSensorDev_t[z].triggertime = self.getTimeFunction()
+                                    self.pmSensorDev_t[z].pushChange()
+                            #else:
+                            #    s = data[7 + z]
+                            #    log.debug("[handle_msgtypeB0]           Zone {0}  is not a motion stype   State = {1}".format(z, s))
                     
         if msgType == 0x03 and subType == 0x18:
             # Open/Close information (probably)
