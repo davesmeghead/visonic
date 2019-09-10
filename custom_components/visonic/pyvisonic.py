@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.2.2"
+PLUGIN_VERSION = "0.3.3"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -84,10 +84,11 @@ PanelSettings = {
    "ArmWithoutCode"       : False,
    "PluginDebug"          : False,
    "ForceStandard"        : False,
+   "ForceKeypad"          : False,
    "ResetCounter"         : 0,
    "AutoSyncTime"         : True,
    "EnableRemoteArm"      : False,
-   "EnableRemoteDisArm"   : False,  #
+   "EnableRemoteDisArm"   : False,   #
    "EnableSensorBypass"   : False,   # Does user allow sensor bypass / arming
 
    "B0_Enable"            : False,
@@ -1503,12 +1504,6 @@ class ProtocolBase(asyncio.Protocol):
             self.transport.write(sData)
             #log.debug("[pmSendPdu]      waiting for message response {}".format([hex(no).upper() for no in self.pmExpectedResponse]))
             
-            if len(instruction.response) > 0:
-                log.debug("[pmSendPdu] Resetting expected response counter, it got to {0}   Response list before {1}  after {2}".format(self.expectedResponseTimeout, len(self.pmExpectedResponse), len(self.pmExpectedResponse) + len(instruction.response)))
-                self.expectedResponseTimeout = 0
-                # update the expected response list straight away (without having to wait for it to be actually sent) to make sure protocol is followed
-                self.pmExpectedResponse.extend(instruction.response) # if an ack is needed it will already be in this list
-
             if sData[1] != 0x02:   # the message is not an acknowledge back to the panel
                 self.pmLastSentMessage = instruction
 
@@ -1574,6 +1569,13 @@ class ProtocolBase(asyncio.Protocol):
             elif len(self.SendList) > 0 and len(self.pmExpectedResponse) == 0: # we are ready to send
                 # pop the oldest item from the list, this could be the only item.
                 instruction = self.SendList.pop(0)
+
+                if len(instruction.response) > 0:
+                    log.debug("[pmSendPdu] Resetting expected response counter, it got to {0}   Response list before {1}  after {2}".format(self.expectedResponseTimeout, len(self.pmExpectedResponse), len(self.pmExpectedResponse) + len(instruction.response)))
+                    self.expectedResponseTimeout = 0
+                    # update the expected response list straight away (without having to wait for it to be actually sent) to make sure protocol is followed
+                    self.pmExpectedResponse.extend(instruction.response) # if an ack is needed it will already be in this list
+
                 t = asyncio.ensure_future(self.pmSendPdu(instruction), loop=self.loop)
                 asyncio.wait_for(t, None)
 
@@ -1682,6 +1684,7 @@ class PacketHandling(ProtocolBase):
         self.pmSensorBypass = PanelSettings["EnableSensorBypass"] # INTERFACE : Does the user allow sensor bypass, True or False
         self.MotionOffDelay = PanelSettings["MotionOffDelay"]     # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
         self.OverrideCode = PanelSettings["OverrideCode"]         # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
+        self.ForceNumericKeypad = PanelSettings["ForceKeypad"]    # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
 
         PanelStatus["Comm Exception Count"] = PanelSettings["ResetCounter"]
         
@@ -3109,7 +3112,9 @@ class PacketHandling(ProtocolBase):
     def pmGetPin(self, pin):
         """ Get pin and convert to bytearray """
         if pin is None or pin == "" or len(pin) != 4:
-            if self.OverrideCode is not None and len(self.OverrideCode) > 0:
+            if self.ForceNumericKeypad:
+                return False, bytearray.fromhex("00 00 00 00")
+            elif self.OverrideCode is not None and len(self.OverrideCode) > 0:
                 pin = self.OverrideCode
             elif self.pmGotUserCode:
                 return True, self.pmPincode_t[0]   # if self.pmGotUserCode, then we downloaded the pin codes. Use the first one

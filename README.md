@@ -89,6 +89,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.2      | Reworked HA service to bypass/rearm individual sensors in the panel. There is no Frontend for this, just a service for you to call. |
 | 0.3.2.1    | Experimental release looking at the B0 PowerMaster messages and whether we can use them to determine PIR motion without the alarm being armed. |
 | 0.3.2.2    | Experimental release looking at the B0 PowerMaster messages, included some code to detect motion from the "B0 03 04" data. |
+| 0.3.3      | Added a config parameter to almost always display the numeric keypad, including when the User code has been obtained from the EEPROM. Note that the B0 Experimental function is still in there too. |
 
 
 ## Instructions and what works so far
@@ -153,6 +154,7 @@ visonic:
   allow_remote_disarm: 'yes'
   exclude_sensor: [2,3]
   exclude_x10: [1]
+#  force_numeric_keypad: 'yes'
 #  override_code: '1234'
 #  download_code: '9876'
 #  arm_without_usercode: 'yes'
@@ -177,7 +179,8 @@ The default settings if you miss it out of the configuration.yaml file:
 | allow_remote_disarm     | 'no'    | Determines whether the panel can be disarmed from within HA. | 'no' or 'yes' |
 | override_code           | ''      | If in Standard mode, then this is the 4 digit code used to arm and disarm. See note 1 below | 4 digit string |
 | download_code           | '5650'  | This is the 4 digit code used to download the EPROM and to Enroll for Powerlink. | 4 digit hex string |
-| arm_without_usercode    | 'no'    | If in Standard mode, Arm without the usercode (not all panels support this). See note 2 below. | 'no' or 'yes' |
+| arm_without_usercode    | 'no'    | If the Panel is Disarmed, then Arm without the usercode (not all panels support this). See note 2 below. | 'no' or 'yes' |
+| force_numeric_keypad    | 'no'    | Display the numeric keypad to force the user to enter the correct code (in any Mode). The only exception is the use of arm_without_usercode. | 'no' or 'yes' |
 | exclude_sensor          | []      | A list of Zone sensors to exclude e.g to exclude zones Z02 and Z03 then use [2,3] | [1,2 etc] |
 | exclude_x10             | []      | A list of X10 devices to exclude e.g to exclude devices X02 and X03 then use [2,3]. For PGM use 0 in the list. | [0,1,2 etc] |
 

@@ -55,6 +55,7 @@ CONF_ENABLE_SENSOR_BYPASS = "allow_sensor_bypass"
 CONF_OVERRIDE_CODE = "override_code"
 CONF_DOWNLOAD_CODE = "download_code"
 CONF_ARM_CODE_AUTO = "arm_without_usercode"
+CONF_FORCE_KEYPAD = "force_numeric_keypad"
 
 CONF_EXCLUDE_SENSOR = "exclude_sensor"
 CONF_EXCLUDE_X10 = "exclude_x10"
@@ -86,6 +87,7 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Optional(CONF_LANGUAGE,             "EN" ): cv.string,
         vol.Optional(CONF_ARM_CODE_AUTO,        False): cv.boolean,
         vol.Optional(CONF_FORCE_STANDARD,       False): cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
+        vol.Optional(CONF_FORCE_KEYPAD,         False): cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
         vol.Optional(CONF_AUTO_SYNC_TIME,       True ): cv.boolean,
         vol.Optional(CONF_ENABLE_REMOTE_ARM,    False): cv.boolean,
         vol.Optional(CONF_ENABLE_REMOTE_DISARM, False): cv.boolean,
@@ -265,6 +267,7 @@ def setup(hass, base_config):
         visonicApi.setConfig("DownloadCode", config.get(CONF_DOWNLOAD_CODE))
         visonicApi.setConfig("ArmWithoutCode", config.get(CONF_ARM_CODE_AUTO))
         visonicApi.setConfig("ResetCounter", panel_reset_counter)
+        visonicApi.setConfig("ForceKeypad", config.get(CONF_FORCE_KEYPAD))
 
         visonicApi.setConfig("B0_Enable", config.get(CONF_B0_ENABLE_MOTION_PROCESSING))
         visonicApi.setConfig("B0_Min_Interval_Time", config.get(CONF_B0_MIN_TIME_BETWEEN_TRIGGERS))
@@ -275,6 +278,7 @@ def setup(hass, base_config):
         
         hass.data[VISONIC_PLATFORM]["command_queue"] = command_queue
         hass.data[VISONIC_PLATFORM]["arm_without_code"] = config.get(CONF_ARM_CODE_AUTO)
+        hass.data[VISONIC_PLATFORM]["force_keypad"] = config.get(CONF_FORCE_KEYPAD)
         
         _LOGGER.info("Visonic Connection Device Type is {0}".format(device_type))
 

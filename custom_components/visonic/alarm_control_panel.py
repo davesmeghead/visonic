@@ -45,13 +45,16 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
 
     queue = None
     uawc = False
+    fnc = False
     if VISONIC_PLATFORM in hass.data:
         if "command_queue" in hass.data[VISONIC_PLATFORM]:
             queue = hass.data[VISONIC_PLATFORM]["command_queue"]
         if "arm_without_code" in hass.data[VISONIC_PLATFORM]:
             uawc = hass.data[VISONIC_PLATFORM]["arm_without_code"]
+        if "force_keypad" in hass.data[VISONIC_PLATFORM]:
+            fnc = hass.data[VISONIC_PLATFORM]["force_keypad"]
 
-    va = VisonicAlarm(hass, 1, queue, uawc)  
+    va = VisonicAlarm(hass, 1, queue, uawc, fnc)  
 
     # Listener to handle fired events
     def handle_event_alarm_panel(event):
@@ -79,13 +82,14 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
 class VisonicAlarm(alarm.AlarmControlPanel):
     """Representation of a Visonic alarm control panel."""
 
-    def __init__(self, hass, partition_id, queue, uawc):
+    def __init__(self, hass, partition_id, queue, uawc, fnc):
         """Initialize a Visonic security camera."""
         #self._data = data
         self.hass = hass
         self.partition_id = partition_id
         self.queue = queue
         self.user_arm_without_code = uawc
+        self.force_numeric_keypad = fnc
         self.mystate = STATE_UNKNOWN
         self.myname = "Visonic Alarm"
 
@@ -119,14 +123,14 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     @property
     def code_format(self):
         """Regex for code format or None if no code is required."""
-        #_LOGGER.info("code format called *****************************") 
+        _LOGGER.debug("code format called *****************************") 
         import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
 
         # try powerlink mode first, if in powerlink then it already has the user codes
         panelmode = visonicApi.PanelStatus["Mode"]
-        if panelmode is not None:
+        if not self.force_numeric_keypad and panelmode is not None:
             if panelmode == "Powerlink" or panelmode == "Standard Plus":
-                #_LOGGER.info("code format none as powerlink *****************************") 
+                _LOGGER.debug("code format none as powerlink *****************************") 
                 return None
                 
         # we aren't in powerlink
@@ -137,18 +141,24 @@ class VisonicAlarm(alarm.AlarmControlPanel):
             armcode = visonicApi.PanelStatus["Panel Status Code"]
             
         if armcode is None:
+            _LOGGER.debug("code format none as armcode is none (panel starting up?) *****************************") 
             return None
 
         if armcode == 0 and self.user_arm_without_code:
+            _LOGGER.debug("code format none as armcode is zero (Disarmed) and user arm without code is true *****************************") 
             return None
+
+        if self.force_numeric_keypad:
+            _LOGGER.debug("code format number as force numeric keypad set in config file *****************************") 
+            return "number"
 
         overridecode = visonicApi.PanelSettings["OverrideCode"]
         if overridecode is not None:
             if len(overridecode) == 4:
-                #_LOGGER.info("code format none as code set in config file *****************************") 
+                _LOGGER.debug("code format none as code set in config file *****************************") 
                 return None
 
-        #_LOGGER.info("code format number *****************************") 
+        _LOGGER.debug("code format number *****************************") 
         return "number"
 
     @property
