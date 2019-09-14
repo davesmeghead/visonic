@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.3"
+PLUGIN_VERSION = "0.3.3.1"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -2884,10 +2884,15 @@ class PacketHandling(ProtocolBase):
         # don't know what this is (It is 0x00 in test messages so could be the higher 8 bits for msgCnt)
         temp = int(data[1])
         
+        # If message count is FF then it looks like the first message is valid so decode it (this is experimental)
+        if self.PowerMaster and msgCnt == 0xFF:
+           msgCnt = 1
+        
         if msgCnt <= 4:
             log.debug("[handle_msgtypeA7]      A7 message contains {0} messages".format(msgCnt))
             for i in range(0, msgCnt):
                 eventZone = int(data[2 + (2 * i)])
+                eventZone = int(eventZone & 0x7F)
                 logEvent  = int(data[3 + (2 * i)])
                 eventType = int(logEvent & 0x7F)
                 s = (pmLogEvent_t[self.pmLang][eventType] or "UNKNOWN") + " / " + (pmLogUser_t[self.pmLang][eventZone] or "UNKNOWN")
