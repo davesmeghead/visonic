@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.3.1"
+PLUGIN_VERSION = "0.3.3.2"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -74,7 +74,10 @@ DOWNLOAD_TIMEOUT = 180
 DOWNLOAD_RETRY_DELAY = 240
 
 # Number of seconds delay between trying to achieve powerlink (must have achieved download first)
-POWERLINK_RETRY_DELAY = 240
+POWERLINK_RETRY_DELAY = 180
+
+# Number of seconds between trying to achieve powerlink (must have achieved download first) and giving up. Better to be half way between retry delays
+POWERLINK_TIMEOUT = 4.5 * POWERLINK_RETRY_DELAY
 
 PanelSettings = {
    "MotionOffDelay"       : 120,
@@ -1104,7 +1107,7 @@ class ProtocolBase(asyncio.Protocol):
         status_counter = 0  # don't trigger first time!
         watchdog_events = 0
         download_counter = 0
-        powerlink_counter = 230 # set to 3 minutes 50 seconds so first time it does it after 10 seconds
+        powerlink_counter = POWERLINK_RETRY_DELAY - 10 # set so first time it does it after 10 seconds
         downloadDuration = 0
         
         while not self.suspendAllOperations:
@@ -1138,7 +1141,7 @@ class ProtocolBase(asyncio.Protocol):
                     log.warning("[Controller] ************************************* Going to standard mode ***************************************")
                     # Stop download mode
                     self.pmDownloadMode = False
-                    self.ClearList()
+                    #self.ClearList()
                     # goto standard mode
                     self.gotoStandardMode()
                     PanelStatus["Download Timeout"] = PanelStatus["Download Timeout"] + 1
@@ -1158,8 +1161,8 @@ class ProtocolBase(asyncio.Protocol):
                 self.reset_watchdog_timeout()
                 powerlink_counter = powerlink_counter + 1
                 log.debug("[Controller] Powerlink Counter {0}".format(powerlink_counter))
-                if powerlink_counter >= POWERLINK_RETRY_DELAY:  # 4 minutes
-                    powerlink_counter = 0
+                if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
+                    #powerlink_counter = 0
                     log.info("[Controller] Trigger Powerlink Attempt")
                     # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
                     #      this should kick it in to powerlink after we just enrolled
@@ -1172,6 +1175,14 @@ class ProtocolBase(asyncio.Protocol):
                     #self.SendCommand("MSG_U2")
                     #self.SendCommand("MSG_U3")   #  to here
                     #self.SendCommand("MSG_RESTORE")
+                elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
+                    log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
+                    self.pmExpectedResponse = []
+                    self.expectedResponseTimeout = 0
+                elif powerlink_counter >= POWERLINK_TIMEOUT:
+                    # give up on trying to get to powerlink and goto standard mode (could be either Standard Plus or Standard)
+                    log.info("[Controller] Giving up on Powerlink Attempts, going to one of the standard modes")
+                    self.gotoStandardMode()
                     
             elif self.watchdog_counter >= WATCHDOG_TIMEOUT:   #  the clock runs at 1 second
                 # watchdog timeout
@@ -2338,6 +2349,9 @@ class PacketHandling(ProtocolBase):
         Timeout message from the PM, most likely we are/were in download mode """
         log.info("[handle_msgtype06] Timeout Received  data {0}".format(self.toString(data)))
         
+        # Clear the expected response to ensure that pending messages are sent
+        self.pmExpectedResponse = []
+
         if self.pmDownloadMode:
             self.pmDownloadMode = False
             # exit download mode and try again in DOWNLOAD_RETRY_DELAY seconds
