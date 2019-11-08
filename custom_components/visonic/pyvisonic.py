@@ -15,7 +15,7 @@
 #################################################################
 
 #################################################################
-# Version 0.2.0 is not like any other visonic interface 
+# Version 0.2.0 onwards is not like any other visonic interface 
 #   It downloads from the panel first and then tries powerlink
 #################################################################
 
@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.3.2"
+PLUGIN_VERSION = "0.3.3.3"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -1214,14 +1214,19 @@ class ProtocolBase(asyncio.Protocol):
                 #log.debug("[Controller]   Send list is empty so sending I'm alive message")
                 # reset counter
                 self.reset_keep_alive_messages()
-                # Send I'm Alive and request status
-                self.SendCommand("MSG_ALIVE")
+                
+                if not self.pmPowerlinkMode:
+                    # Send I'm Alive and request status
+                    self.SendCommand("MSG_ALIVE")
                 # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
                 # When in powerlink mode, it makes no difference as we get the AB messages from the panel, but this also keeps our status updated
                 status_counter = status_counter + 1
                 if status_counter >= 3:  # every twice around the loop i.e every KEEP_ALIVE_PERIOD * 3 seconds
                     status_counter = 0
-                    self.SendCommand("MSG_STATUS")  # Asks the panel to send us the A5 message set
+                    if self.pmPowerlinkMode:
+                        self.SendCommand("MSG_RESTORE")  # 
+                    else:
+                        self.SendCommand("MSG_STATUS")  # Asks the panel to send us the A5 message set
             else:
                 # Every 1.0 seconds, try to flush the send queue
                 self.SendCommand(None)  # check send queue
@@ -2066,7 +2071,7 @@ class PacketHandling(ProtocolBase):
                     #log.debug("[Process Settings] Zones:    len settings {0}     len zoneNames {1}    zoneCnt {2}".format(len(setting), len(zoneNames), zoneCnt))
                     for i in range(0, zoneCnt):
                         # data in the setting bytearray is in blocks of 4
-                        zoneName = pmZoneName_t[zoneNames[i]]
+                        zoneName = pmZoneName_t[zoneNames[i] & 0x1F]
                         zoneEnrolled = False
                         if not self.PowerMaster: # PowerMax models
                             zoneEnrolled = setting[i * 4 : i * 4 + 3] != bytearray.fromhex("00 00 00")
@@ -2110,8 +2115,8 @@ class PacketHandling(ProtocolBase):
                             else:
                                 part = [1]
 
-                            log.debug("[Process Settings]      i={0} :    ZTypeName={1}   Chime={2}   SensorID={3}   sensorTypeStr=[{4}]  zoneName=[{5}]".format(
-                                   i, pmZoneType_t[self.pmLang][zoneType], pmZoneChime_t[self.pmLang][zoneChime], sensorID_c, sensorTypeStr, zoneName))
+                            log.debug("[Process Settings]      i={0} :    SensorID={1}   zoneInfo={2}   ZTypeName={3}   Chime={4}   sensorTypeStr={5}   zoneName={6}".format(
+                                   i, hex(sensorID_c), hex(zoneInfo), pmZoneType_t[self.pmLang][zoneType], pmZoneChime_t[self.pmLang][zoneChime], sensorTypeStr, zoneName))
 
                             if i in self.pmSensorDev_t:
                                 self.pmSensorDev_t[i].stype = sensorTypeStr
@@ -2165,7 +2170,7 @@ class PacketHandling(ProtocolBase):
                         x10DeviceName = "PGM"
                         x10Type = "onoff"
                     else:
-                        x10Location = pmZoneName_t[x10Name]
+                        x10Location = pmZoneName_t[x10Name & 0x1F]
                         x10DeviceName = "X{0:0>2}".format(i)
                         x10Type = "dim"
 
@@ -2538,7 +2543,7 @@ class PacketHandling(ProtocolBase):
             msgCnt = int(data[0])
             offset = 8 * (int(data[1]) - 1)
             for i in range(0, 8):
-                zoneName = pmZoneName_t[int(data[2+i])]
+                zoneName = pmZoneName_t[int(data[2+i]) & 0x1F]
                 log.info("                        Zone name for zone {0} is {1}     Message Count is {2}".format( offset+i+1, zoneName, msgCnt ))
                 if offset+i in self.pmSensorDev_t:
                     if not self.pmSensorDev_t[offset+i].zname:     # if not already set

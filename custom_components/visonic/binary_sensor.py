@@ -91,7 +91,10 @@ class VisonicSensor(BinarySensorDevice):
                     return 'smoke'
                 if self.visonic_device.stype.lower() == 'gas':
                     return 'gas'
-        # The only other one is from a PowerMaster and it is a temperature sensor. Do not use this yet (and it isnt a binary sensor)
+                if self.visonic_device.stype.lower() == 'vibration' or self.visonic_device.stype.lower() == 'shock':
+                    return 'vibration'
+                if self.visonic_device.stype.lower() == 'temperature':
+                    return 'heat'
         return None
 
     @property
@@ -117,7 +120,12 @@ class VisonicSensor(BinarySensorDevice):
             #attr[ATTR_LAST_TRIP_TIME] = self.pmTimeFunctionStr(self.visonic_device.triggertime)
         
         attr["device name"] = self.visonic_device.dname
-        attr["sensor type"] = self.visonic_device.stype
+
+        if self.visonic_device.stype is not None:
+            attr["sensor type"] = self.visonic_device.stype
+        else:
+            attr["sensor type"] = "Undefined"
+       
         attr["zone type"] = self.visonic_device.ztype
         attr["zone name"] = self.visonic_device.zname
         attr["zone type name"] = self.visonic_device.ztypeName

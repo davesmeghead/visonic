@@ -34,7 +34,9 @@ If you want to connect your panel to your home ethernet network then you have 2 
 
 There is a newer version out called a USR-TCP232-E2. There is also a wifi version available like [this](https://www.amazon.co.uk/USR-WIFI232-D2-Module-Ethernet-802-11/dp/B00R2J3O1Y) that's a bit more expensive but essentially it's the same. Although you will need to also buy an aerial for it remember!
 
-This allows you to connect your alarm panel to your Ethernet home network. There is a webserver running on this and you need to set it up for TCP in STA (station) mode as transparent. The RS232 side is 9600 baud, disable control flow i.e CTS/RTS, no parity and 1 stop bit. In the HA configuration file you set the IP address and port for this device.
+This allows you to connect your alarm panel to your Ethernet home network. There is a webserver running on this and you need to set it up for TCP in STA (station) mode as transparent. The RS232 side is 9600 baud, disable control flow i.e CTS/RTS, no parity and 1 stop bit. In the HA configuration file you set the IP address and port for this device.  I suggest that you avoid port numbers below 1024 as they tend to be special.
+
+One user has also been successful in using an iTach IP2SL and using its PoE capability to power it.
 
 #### Wiring it all up
 You do not need to buy anything else apart from 4 wires. For some panels you can buy a connector with a cable that you can use to make it easier. I bought an "IDC 10-pin ribbon cable" for my panel but remember that the panels and connectors can be different. I then split the wires to use the 4 that I needed.
@@ -92,6 +94,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.3      | Added a config parameter to almost always display the numeric keypad, including when the User code has been obtained from the EEPROM. Note that the B0 Experimental function is still in there too. |
 | 0.3.3.1    | Experimental release to attempt to decode the A7 FF message for PowerMaster Series alarms. It still also includes the B0 experimental decode for sensors too. Feedback on both of these would be appreciated. |
 | 0.3.3.2    | A minor feature added to stop doing powerlink attempts and to allow sending on panel timeouts. Experimental release from 0.3.3.1 kept in. Feedback on both of these would be appreciated. |
+| 0.3.3.3    | Updated Powerlink operation: removed I'm Alive message and now sending periodic Restore. Experimental release from 0.3.3.1 kept in. Feedback on both of these would be appreciated. |
 
 
 ## Instructions and what works so far

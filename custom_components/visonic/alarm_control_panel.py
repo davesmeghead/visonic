@@ -130,7 +130,7 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         panelmode = visonicApi.PanelStatus["Mode"]
         if not self.force_numeric_keypad and panelmode is not None:
             if panelmode == "Powerlink" or panelmode == "Standard Plus":
-                _LOGGER.debug("code format none as powerlink *****************************") 
+                _LOGGER.debug("code format none as powerlink or standard plus *****************************") 
                 return None
                 
         # we aren't in powerlink
