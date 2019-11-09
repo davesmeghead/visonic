@@ -95,6 +95,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.3.1    | Experimental release to attempt to decode the A7 FF message for PowerMaster Series alarms. It still also includes the B0 experimental decode for sensors too. Feedback on both of these would be appreciated. |
 | 0.3.3.2    | A minor feature added to stop doing powerlink attempts and to allow sending on panel timeouts. Experimental release from 0.3.3.1 kept in. Feedback on both of these would be appreciated. |
 | 0.3.3.3    | Updated Powerlink operation: removed I'm Alive message and now sending periodic Restore. Experimental release from 0.3.3.1 kept in. Feedback on both of these would be appreciated. |
+| 0.3.3.4    | Updated for bug fix in A5 system status message decode. Experimental release from 0.3.3.1 kept in, feedback would be appreciated. |
 
 
 ## Instructions and what works so far

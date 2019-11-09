@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.3.3"
+PLUGIN_VERSION = "0.3.3.4"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -410,17 +410,18 @@ pmSysStatus_t = {
            "Disarmed", "Home Exit Delay", "Away Exit Delay", "Entry Delay", "Armed Home", "Armed Away", "User Test",
            "Downloading", "Programming", "Installer", "Home Bypass", "Away Bypass", "Ready", "Not Ready", "??", "??",
            "Disarmed Instant", "Home Instant Exit Delay", "Away Instant Exit Delay", "Entry Delay Instant", "Armed Home Instant",
-           "Armed Away Instant" ),
+           "Armed Away Instant", "??", "??", "??", "??", "??", "??", "??", "??", "??", "??" ),
    "NL" : (
            "Uitgeschakeld", "Deel uitloopvertraging", "Totaal uitloopvertraging", "Inloopvertraging", "Deel ingeschakeld",
            "Totaal ingeschakeld", "Gebruiker test", "Downloaden", "Programmeren", "Monteurmode", "Deel met overbrugging",
            "Totaal met overbrugging", "Klaar", "Niet klaar", "??", "??", "Direct uitschakelen", "Direct Deel uitloopvertraging",
-           "Direct Totaal uitloopvertraging", "Direct inloopvertraging", "Direct Deel", "Direct Totaal" ),
+           "Direct Totaal uitloopvertraging", "Direct inloopvertraging", "Direct Deel", "Direct Totaal",
+           "??", "??", "??", "??", "??", "??", "??", "??", "??", "??" ),
 	"FR" : (
            "Désarmé", "Délai Armement Partiel", "Délai Armement Total", "Délai d'Entrée", "Armé Partiel", "Armé Total", "Test Utilisateur",
            "Téléchargement", "Programmation", "Mode Installateur", "Isolation Partielle", "Isolation Total", "Prêt", "Non Prêt", "??", "??",
            "Désarmé Instantané", "Temporisation Armement Partiel Instantané", "Temporisation Armement Total Instantané", "Temporisation d'Entrée Instantané", "Armé Total Instantané",
-           "Armé Total Instantané" )
+           "Armé Total Instantané", "??", "??", "??", "??", "??", "??", "??", "??", "??", "??" )
 
 }
 
@@ -442,7 +443,8 @@ pmArmMode_t = {
 
 pmDetailedArmMode_t = (
    "Disarmed", "ExitDelay_ArmHome", "ExitDelay_ArmAway", "EntryDelay", "Stay", "Armed", "UserTest", "Downloading", "Programming", "Installer",
-   "Home Bypass", "Away Bypass", "Ready", "NotReady", "??", "??", "Disarm", "ExitDelay", "ExitDelay", "EntryDelay", "StayInstant", "ArmedInstant"
+   "Home Bypass", "Away Bypass", "Ready", "NotReady", "??", "??", "Disarm", "ExitDelay", "ExitDelay", "EntryDelay", "StayInstant", "ArmedInstant",
+   "??", "??", "??", "??", "??", "??", "??", "??", "??", "??"
 ) # Not used: Night, NightInstant, Vacation
 
 pmEventType_t = {
@@ -2652,7 +2654,7 @@ class PacketHandling(ProtocolBase):
                         self.pmSensorDev_t[i].pushChange()
 
         elif eventType == 0x04: # Zone event
-            sysStatus = data[2]
+            sysStatus = data[2]   # Mark-Mills with a PowerMax Complete Part, sometimes this has 0x20 bit set and I'm not sure why
             sysFlags  = data[3]
             eventZone = data[4]
             eventType  = data[5]
@@ -2662,6 +2664,8 @@ class PacketHandling(ProtocolBase):
             x10status = x10stat1 + (x10stat2 * 0x100)
             
             log.debug("[handle_msgtypeA5]      Zone Event sysStatus {0}   sysFlags {1}   eventZone {2}   eventType {3}   x10status {4}".format(hex(sysStatus), hex(sysFlags), eventZone, eventType, hex(x10status)))
+
+            sysStatus = sysStatus & 0x1F     # Mark-Mills with a PowerMax Complete Part, sometimes this has the 0x20 bit set and I'm not sure why
 
             # Examine zone tripped status
             if eventZone != 0:
