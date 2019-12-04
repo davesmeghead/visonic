@@ -96,6 +96,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.3.2    | A minor feature added to stop doing powerlink attempts and to allow sending on panel timeouts. Experimental release from 0.3.3.1 kept in. Feedback on both of these would be appreciated. |
 | 0.3.3.3    | Updated Powerlink operation: removed I'm Alive message and now sending periodic Restore. Experimental release from 0.3.3.1 kept in. Feedback on both of these would be appreciated. |
 | 0.3.3.4    | Updated for bug fix in A5 system status message decode. Experimental release from 0.3.3.1 kept in, feedback would be appreciated. |
+| 0.3.3.5    | Updated to include flushing the input buffer prior to sending data and updated bridge to include COM to COM transfers. |
 
 
 ## Instructions and what works so far
@@ -284,14 +285,11 @@ Of course you'll have to write your own scripts!
 ## Extra Hidden Functionality
 There are 2 extras that I include in the release
 
-#### For Testing without HA
-Disable the Component in HA (or disable HA altogether) and use the test.py script from a command line like this
-```
-python3 test.py -address 192.168.X.Y -port YourPort
-On Linux:   python3 test.py -usb /dev/ttyUSB1
-On Windows: python3 test.py -usb COM1
-```
-It will perform like it does in HA but from the command line. Note that the other settings from the configuration can be changed by editing test.py
+#### Using owermaster Remote Programmer
+If you connect to your panel using USB then you can plug that USB in to your Windows PC and use the Visonic Remote Programmer software directly
+Download the software [here](https://www.visonic.com/download-center/p=51859/type=59730/page=1)
+The user manual is [here](https://www.visonic.com/Data/Uploads/PowerMax_Remote_Prog%20_English_User_Guide_DE5450S.pdf)
+You'll find the login username and password in the user manual.
 
 #### "Powermaster Remote Programmer" Bridging
 This is a recent addition, you can use the "Powermaster Remote Programmer" (PRP) from a Windows PC to connect to your panel if using the Ethernet option
@@ -303,6 +301,21 @@ python3 bridge.py -address 192.168.X.Y -port YourPort -usb COM1
 - Run PRP and connect to COM2
 
 You can then use PRP with your panel, the bridge command prompt displays the messages going to/from the panel
+
+The bridge can also be used to connect to COM ports together like this
+```
+python3 bridge.py -coma COM1 -comb COM2
+```
+
+#### For Testing without HA
+Disable the Component in HA (or disable HA altogether) and use the test.py script from a command line like this
+```
+python3 test.py -address 192.168.X.Y -port YourPort
+On Linux:   python3 test.py -usb /dev/ttyUSB1
+On Windows: python3 test.py -usb COM1
+```
+It will perform like it does in HA but from the command line. Note that the other settings from the configuration can be changed by editing test.py
+Also note that if you have just installed python3 on to your Windows PC then it may be missing a few libraries. Use "pip3 install libname" to install them.
 
 ## Troubleshooting
 OK, so you've got it partially working but it's not quite there.... what can you do.

@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.3.4"
+PLUGIN_VERSION = "0.3.3.5"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -974,6 +974,7 @@ class ProtocolBase(asyncio.Protocol):
 
         self.expectedResponseTimeout = 0
 
+        self.firstCmdSent = False
         ###################################################################
         # Variables that are used and modified throughout derived classes
         ###################################################################
@@ -1072,8 +1073,6 @@ class ProtocolBase(asyncio.Protocol):
         # Define powerlink seconds timer and start it for PowerLink communication
         self.reset_watchdog_timeout()
         self.reset_keep_alive_messages()
-        #self.ClearList()
-        #self.pmExpectedResponse = []
         self.sendInitCommand()
         if not self.ForceStandardMode:
             self.Start_Download()
@@ -1275,9 +1274,11 @@ class ProtocolBase(asyncio.Protocol):
         """Add incoming data to ReceiveData."""
         if self.suspendAllOperations:
             return
+        if not self.firstCmdSent:
+            log.debug('[data receiver] Ignoring garbage data: ' + self.toString(data))
+            return
         #log.debug('[data receiver] received data: %s', self.toString(data))
         for databyte in data:
-            #log.debug("[data receiver] Processing " + hex(databyte).upper())
             # process a single byte at a time
             self.handle_received_byte(databyte)
 
@@ -1474,7 +1475,7 @@ class ProtocolBase(asyncio.Protocol):
     async def pmSendPdu(self, instruction : VisonicListEntry):
         """Encode and put packet string onto write buffer."""
 
-        if self.suspendAllOperations:
+        if self.suspendAllOperations or instruction is None:
             return
         
         if self.sendlock is None:
@@ -1517,7 +1518,7 @@ class ProtocolBase(asyncio.Protocol):
             
             # no need to send i'm alive message for a while as we're about to send a command anyway
             self.reset_keep_alive_messages()   
-
+            self.firstCmdSent = True
             # Log some useful information in debug mode
             self.transport.write(sData)
             #log.debug("[pmSendPdu]      waiting for message response {}".format([hex(no).upper() for no in self.pmExpectedResponse]))
@@ -1570,7 +1571,7 @@ class ProtocolBase(asyncio.Protocol):
             #   If the panel is lazy or we've got the timing wrong........
             #   If there's a timeout then resend the previous message. If that doesn't work then do a reset using triggerRestoreStatus function
             #  Do not resend during startup or download as the timing is critical anyway
-            if not self.pmDownloadMode and self.pmLastSentMessage != None and timeout and len(self.pmExpectedResponse) > 0:
+            if not self.pmDownloadMode and self.pmLastSentMessage is not None and timeout and len(self.pmExpectedResponse) > 0:
                 if not self.pmLastSentMessage.triedResendingMessage:
                     # resend the last message
                     log.info("[SendCommand] Re-Sending last message  {0}".format(self.pmLastSentMessage.command.msg))

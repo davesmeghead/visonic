@@ -149,12 +149,32 @@ parser = argparse.ArgumentParser(description="Connect to Visonic Alarm Panel")
 parser.add_argument("-usb", help="visonic alarm usb device", default = '')
 parser.add_argument("-address", help="visonic alarm ip address", default = '')
 parser.add_argument("-port", help="visonic alarm ip port", default = '')
+parser.add_argument("-coma", help="visonic COM port (left)", default = '')
+parser.add_argument("-comb", help="visonic COM port (right)", default = '')
 args = parser.parse_args()
 
 testloop = asyncio.get_event_loop()
 
 toalarm_queue = asyncio.Queue()
 fromalarm_queue = asyncio.Queue()
+
+if len(args.comb) > 0:
+    connalarm = create_usb_visonic_connection(
+                        port='//./' + args.comb,
+                        loop=testloop,
+                        name="COM_B",
+                        debs=True,
+                        receiver=toalarm_queue,
+                        sender=fromalarm_queue)
+
+if len(args.coma) > 0:
+    connpc = create_usb_visonic_connection(
+                        port='//./' + args.coma,
+                        loop=testloop,
+                        name="COM_A",
+                        debs=False,
+                        receiver=fromalarm_queue,
+                        sender=toalarm_queue)
 
 if len(args.address) > 0:
     connalarm = create_tcp_visonic_connection(
@@ -169,7 +189,6 @@ if len(args.address) > 0:
 if len(args.usb) > 0:
     connpc = create_usb_visonic_connection(
                         port='//./' + args.usb,
-                        #port=args.usb,
                         loop=testloop,
                         name="PC",
                         debs=False,
