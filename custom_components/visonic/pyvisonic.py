@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.3.5"
+PLUGIN_VERSION = "0.3.3.7"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -267,6 +267,7 @@ pmReceiveMsg_t = {
    0x06 : PanelCallBack( None, False, False ),   # Timeout. See the receiver function for ACK handling
    0x08 : PanelCallBack( None, False, False ),   # Access Denied
    0x0B : PanelCallBack( None,  True, False ),   # Stop --> Download Complete
+   0x22 : PanelCallBack(   14,  True, False ),   # 14 Panel Info (older visonic powermax panels)
    0x25 : PanelCallBack(   14,  True, False ),   # 14 Download Retry
    0x33 : PanelCallBack(   14,  True, False ),   # 14 Download Settings
    0x3C : PanelCallBack(   14,  True, False ),   # 14 Panel Info
@@ -922,6 +923,8 @@ class ProtocolBase(asyncio.Protocol):
             self.loop = loop
         else:
             self.loop = asyncio.get_event_loop()
+
+        self.oldpowermax = False
 
         # 2 callback handlers: packets and disconnections
         self.packet_callback = packet_callback
@@ -2390,11 +2393,31 @@ class PacketHandling(ProtocolBase):
                     self.pmDownloadMode = False
                     self.SendMsg_ENROLL()
 
+    def finishedDownload(self):
+        if self.pmDownloadMode:
+            self.pmDownloadMode = False
+            self.pmDownloadComplete = True
+            if self.getLastSentMessage() is not None:
+                lastCommandData = self.getLastSentMessage().command.data
+                log.debug("[finishedDownload]                last command {0}".format(self.toString(lastCommandData)))
+                if lastCommandData is not None:
+                    if self.oldpowermax and lastCommandData[0] == 0x33:  # Download Data
+                        log.info("[finishedDownload] We're almost in powerlink mode *****************************************")
+                        self.pmPowerlinkModePending = True
+                    elif lastCommandData[0] == 0x3E:  # Download Data
+                        log.info("[finishedDownload] We're almost in powerlink mode *****************************************")
+                        self.pmPowerlinkModePending = True
+            else:
+                log.debug("[finishedDownload]                no last command")
+            self.SendCommand("MSG_EXIT")       # Exit download mode
+            # We received a download exit message, restart timer
+            self.reset_watchdog_timeout()
+            self.ProcessSettings()
 
     def handle_msgtype0B(self, data): # STOP
         """ Handle STOP from the panel """
         log.info("[handle_msgtype0B] Stop    data is {0}".format(self.toString(data)))
-
+        self.finishedDownload()
 
     def handle_msgtype25(self, data): # Download retry
         """ MsgType=25 - Download retry. Unit is not ready to enter download mode """
@@ -2449,8 +2472,12 @@ class PacketHandling(ProtocolBase):
         interval = self.getTimeFunction() - self.lastSendOfDownloadEprom
         td = timedelta(seconds=90)  # prevent multiple requests for the EPROM panel settings, at least 90 seconds 
         if interval > td:
-            self.lastSendOfDownloadEprom = self.getTimeFunction()
-            self.pmReadPanelSettings(self.PowerMaster)
+            if self.oldpowermax:
+                self.lastSendOfDownloadEprom = self.getTimeFunction()
+                self.SendCommand("MSG_START")
+            else:
+                self.lastSendOfDownloadEprom = self.getTimeFunction()
+                self.pmReadPanelSettings(self.PowerMaster)
 
 
     def handle_msgtype3F(self, data):
@@ -2477,21 +2504,7 @@ class PacketHandling(ProtocolBase):
             self.SendCommand("MSG_DL", options = [1, self.myDownloadList.pop(0)] )     # Read the names of the zones
         else:
             # This is the message to tell us that the panel has finished download mode, so we too should stop download mode
-            self.pmDownloadMode = False
-            self.pmDownloadComplete = True
-            if self.getLastSentMessage() is not None:
-                lastCommandData = self.getLastSentMessage().command.data
-                log.debug("[handle_msgtype3F]                last command {0}".format(self.toString(lastCommandData)))
-                if lastCommandData is not None:
-                    if lastCommandData[0] == 0x3E:  # Download Data
-                        log.info("[handle_msgtype3F] We're almost in powerlink mode *****************************************")
-                        self.pmPowerlinkModePending = True
-            else:
-                log.debug("[handle_msgtype3F]                no last command")
-            self.SendCommand("MSG_EXIT")       # Exit download mode
-            # We received a download exit message, restart timer
-            self.reset_watchdog_timeout()
-            self.ProcessSettings()
+            self.finishedDownload()
 
 
     def handle_msgtypeA0(self, data):
