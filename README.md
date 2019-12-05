@@ -99,6 +99,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.3.5    | Updated to include flushing the input buffer prior to sending data and updated bridge to include COM to COM transfers. |
 | 0.3.3.6    | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. |
 | 0.3.3.7    | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. Next try! |
+| 0.3.3.8    | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. Next Next try! |
 
 
 ## Instructions and what works so far
