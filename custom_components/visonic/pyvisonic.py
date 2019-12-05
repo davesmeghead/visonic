@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.3.7"
+PLUGIN_VERSION = "0.3.3.8"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -157,7 +157,7 @@ pmSendMsg = {
    "MSG_INIT"        : VisonicCommand(bytearray.fromhex('AB 0A 00 01 00 00 00 00 00 00 00 43'), None  ,  True, 8.0, "Initializing PowerMax/Master PowerLink Connection" ),
    "MSG_X10NAMES"    : VisonicCommand(bytearray.fromhex('AC 00 00 00 00 00 00 00 00 00 00 43'), [0xAC], False, 0.0, "Requesting X10 Names" ),
    # Command codes (powerlink) do not have the 0x43 on the end and are only 11 values
-   "MSG_DOWNLOAD"    : VisonicCommand(bytearray.fromhex('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C], False, 0.0, "Start Download Mode" ),  # This gets either an acknowledge OR an Access Denied response
+   "MSG_DOWNLOAD"    : VisonicCommand(bytearray.fromhex('24 00 00 99 99 00 00 00 00 00 00')   , None  , False, 0.0, "Start Download Mode" ),  # This gets either an acknowledge OR an Access Denied response, was [0x3C]
    "MSG_WRITE"       : VisonicCommand(bytearray.fromhex('3D 00 00 00 00 00 00 00 00 00 00')   , None  , False, 0.0, "Write Data Set" ),
    "MSG_DL"          : VisonicCommand(bytearray.fromhex('3E 00 00 00 00 B0 00 00 00 00 00')   , [0x3F],  True, 0.0, "Download Data Set" ),
    "MSG_SETTIME"     : VisonicCommand(bytearray.fromhex('46 F8 00 01 02 03 04 05 06 FF FF')   , None  , False, 0.0, "Setting Time" ),   # may not need an ack
