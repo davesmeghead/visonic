@@ -2306,6 +2306,8 @@ class PacketHandling(ProtocolBase):
             self.handle_msgtype08(packet[2:-2])
         elif packet[1] == 0x0B: # Stopped
             self.handle_msgtype0B(packet[2:-2])
+        elif packet[1] == 0x22: # Message when start the download.   Decode a 22 message the same as a 3C, this is intentional !!
+            self.handle_msgtype3C(packet[2:-2])
         elif packet[1] == 0x25: # Download retry
             self.handle_msgtype25(packet[2:-2])
         elif packet[1] == 0x33: # Settings send after a MSGV_START

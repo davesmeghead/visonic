@@ -97,6 +97,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.3.3    | Updated Powerlink operation: removed I'm Alive message and now sending periodic Restore. Experimental release from 0.3.3.1 kept in. Feedback on both of these would be appreciated. |
 | 0.3.3.4    | Updated for bug fix in A5 system status message decode. Experimental release from 0.3.3.1 kept in, feedback would be appreciated. |
 | 0.3.3.5    | Updated to include flushing the input buffer prior to sending data and updated bridge to include COM to COM transfers. |
+| 0.3.3.6    | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. |
 
 
 ## Instructions and what works so far
