@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.3.8"
+PLUGIN_VERSION = "0.3.3.9"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -925,6 +925,11 @@ class ProtocolBase(asyncio.Protocol):
             self.loop = asyncio.get_event_loop()
 
         self.oldpowermax = False
+        if PanelSettings["PluginDebug"]:
+            log.info("Initialising Protocol - *****************************************************************************************")
+            log.info("Initialising Protocol - ************ TEST MODE - Assuming old Powermax panel and engaging test mode *************")
+            log.info("Initialising Protocol - *****************************************************************************************")
+            self.oldpowermax = True
 
         # 2 callback handlers: packets and disconnections
         self.packet_callback = packet_callback
@@ -1076,7 +1081,8 @@ class ProtocolBase(asyncio.Protocol):
         # Define powerlink seconds timer and start it for PowerLink communication
         self.reset_watchdog_timeout()
         self.reset_keep_alive_messages()
-        self.sendInitCommand()
+        if not PanelSettings["PluginDebug"]:
+            self.sendInitCommand()
         if not self.ForceStandardMode:
             self.Start_Download()
         else:
@@ -1268,8 +1274,10 @@ class ProtocolBase(asyncio.Protocol):
             PanelStatus["Mode"] = "Standard"
             self.ForceStandardMode = True
         self.giveupTrying = True
+        self.pmPowerlinkModePending = False
         self.pmPowerlinkMode = False
-        self.sendInitCommand()
+        if not self.oldpowermax:
+            self.sendInitCommand()
         self.SendCommand("MSG_STATUS")
 
     # Process any received bytes (in data as a bytearray)            
@@ -1957,6 +1965,9 @@ class PacketHandling(ProtocolBase):
             PanelStatus["Model"] = pmPanelType_t[pmPanelTypeNr] if pmPanelTypeNr in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
             #self.dump_settings()
             log.info("[Process Settings] pmPanelTypeNr {0}    model {1}".format(pmPanelTypeNr, PanelStatus["Model"]))
+        else:
+            log.info("[Process Settings] Lookup of panel type string and model from the EPROM failed, assuming EPROM download failed")
+            #self.dump_settings()
 
         # ------------------------------------------------------------------------------------------------------------------------------------------------
         # Need the panel type to be valid so we can decode some of the remaining downloaded data correctly
@@ -2269,7 +2280,7 @@ class PacketHandling(ProtocolBase):
         else:
             PanelStatus["Mode"] = "Standard"
 
-        if PanelSettings["AutoSyncTime"]:  # should we sync time between the HA and the Alarm Panel
+        if not self.oldpowermax and PanelSettings["AutoSyncTime"]:  # should we sync time between the HA and the Alarm Panel
             t = datetime.now()
             if t.year > 2000:
                 year = t.year - 2000
@@ -2310,13 +2321,14 @@ class PacketHandling(ProtocolBase):
         elif packet[1] == 0x0B: # Stopped
             self.handle_msgtype0B(packet[2:-2])
         elif packet[1] == 0x22: # Message when start the download.   Decode a 22 message the same as a 3C, this is intentional !!
-            self.handle_msgtype3C(packet[2:-2])
+            self.oldpowermax = True
+            self.handle_msgtypePanelType(packet[2:-2])
         elif packet[1] == 0x25: # Download retry
             self.handle_msgtype25(packet[2:-2])
         elif packet[1] == 0x33: # Settings send after a MSGV_START
             self.handle_msgtype33(packet[2:-2])
         elif packet[1] == 0x3c: # Message when start the download
-            self.handle_msgtype3C(packet[2:-2])
+            self.handle_msgtypePanelType(packet[2:-2])
         elif packet[1] == 0x3f: # Download information
             self.handle_msgtype3F(packet[2:-2])
         elif packet[1] == 0xa0: # Event log
@@ -2402,8 +2414,8 @@ class PacketHandling(ProtocolBase):
                 log.debug("[finishedDownload]                last command {0}".format(self.toString(lastCommandData)))
                 if lastCommandData is not None:
                     if self.oldpowermax and lastCommandData[0] == 0x33:  # Download Data
-                        log.info("[finishedDownload] We're almost in powerlink mode *****************************************")
-                        self.pmPowerlinkModePending = True
+                        log.info("[finishedDownload] - OLDPOWERMAX - Do not attempt powerlink mode yet, try to get it working first *****************************************")
+                        self.gotoStandardMode()
                     elif lastCommandData[0] == 0x3E:  # Download Data
                         log.info("[finishedDownload] We're almost in powerlink mode *****************************************")
                         self.pmPowerlinkModePending = True
@@ -2452,7 +2464,8 @@ class PacketHandling(ProtocolBase):
         self.pmWriteSettings(iPage, iIndex, data[2:])
 
 
-    def handle_msgtype3C(self, data): # Panel Info Messsage when start the download
+    # A 22 or a 3C message provides panel and model type (and firmware version)
+    def handle_msgtypePanelType(self, data): # Panel Info Messsage when start the download
         """ The panel information is in 4 & 5
            5=PanelType e.g. PowerMax, PowerMaster
            4=Sub model type of the panel - just informational, not used
@@ -2466,7 +2479,7 @@ class PacketHandling(ProtocolBase):
         PanelStatus["Model Type"] = self.ModelType
         PanelStatus["Power Master"] = 'Yes' if self.PowerMaster else 'No'
 
-        log.debug("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, modelname, self.PowerMaster))
+        log.debug("[handle_msgtypePanelType] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, modelname, self.PowerMaster))
 
         # We got a first response, now we can Download the panel EPROM settings
         interval = self.getTimeFunction() - self.lastSendOfDownloadEprom

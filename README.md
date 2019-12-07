@@ -100,6 +100,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.3.6    | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. |
 | 0.3.3.7    | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. Next try! |
 | 0.3.3.8    | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. Next Next try! |
+| 0.3.3.9    | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. Next Next Next try! |
 
 
 ## Instructions and what works so far
@@ -282,13 +283,12 @@ Of course you'll have to write your own scripts!
 - What happens when the alarm is actually triggered (apart from sending an event in HA and setting the Alarm Status state)
 - The compatibility of the binding with the Powermaster alarm panel series is probably only partial.
 - The USB connection is implemented but was not tested (although other users have got it working).
-- You cannot bypass / arm individual sensors using the HA interface. I can do it, I just don't know how to interface to it from within HA.
 - The Event Log is not yet implemented. It works but I don't know what to do with it in HA.
 
 ## Extra Hidden Functionality
 There are 2 extras that I include in the release
 
-#### Using owermaster Remote Programmer
+#### Using Powermaster Remote Programmer
 If you connect to your panel using USB then you can plug that USB in to your Windows PC and use the Visonic Remote Programmer software directly
 Download the software [here](https://www.visonic.com/download-center/p=51859/type=59730/page=1)
 The user manual is [here](https://www.visonic.com/Data/Uploads/PowerMax_Remote_Prog%20_English_User_Guide_DE5450S.pdf)

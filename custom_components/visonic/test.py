@@ -26,11 +26,11 @@ def add_visonic_device(visonic_devices):
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
 
-pyvisonic.setupLocalLogger()
-
 pyvisonic.setConfig("OverrideCode", -1)
-# pyvisonic.setConfig("PluginDebug", True)
+pyvisonic.setConfig("PluginDebug", True)
 pyvisonic.setConfig("ForceStandard", False)
+
+pyvisonic.setupLocalLogger()
 
 conn = None
 
