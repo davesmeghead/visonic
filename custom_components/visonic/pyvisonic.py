@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.3.9"
+PLUGIN_VERSION = "0.3.3.10"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -1226,8 +1226,11 @@ class ProtocolBase(asyncio.Protocol):
                 self.reset_keep_alive_messages()
                 
                 if not self.pmPowerlinkMode:
-                    # Send I'm Alive and request status
-                    self.SendCommand("MSG_ALIVE")
+                    if self.oldpowermax:
+                        self.SendCommand("MSG_STATUS")  # Asks the panel to send us the A5 message set
+                    else:
+                        # Send I'm Alive and request status
+                        self.SendCommand("MSG_ALIVE")
                 # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
                 # When in powerlink mode, it makes no difference as we get the AB messages from the panel, but this also keeps our status updated
                 status_counter = status_counter + 1
