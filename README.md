@@ -2,7 +2,8 @@
 Custom Component for integration with Home Assistant
 
 ## Introduction
-Visonic produce the Powermax alarm panel series (PowerMax, PowerMax+, PowerMaxExpress, PowerMaxPro and PowerMaxComplete) and the Powermaster alarm series (PowerMaster 10 and PowerMaster 30). This Home Assistant Component allows you to control the alarm panel (arm/disarm) and allows you to use the Visonic sensors (movement, door contact, ...) and X10 devices within Home Assistant.
+Visonic produce the Powermax alarm panel series (PowerMax+, PowerMaxExpress, PowerMaxPro and PowerMaxComplete) and the Powermaster alarm series (PowerMaster 10 and PowerMaster 30). This Home Assistant Component allows you to control the alarm panel (arm/disarm) and allows you to use the Visonic sensors (movement, door contact, ...) and X10 devices within Home Assistant.
+Please note that after extensive work, the original PowerMax Panel is not able to be used as it does not support the Powerlink protocol that this component relies on.
 
 ## What hardware will you need?
 You have a choice, you can connect to your Visonic Alarm Panel using RS232, USB or Ethernet (Wired or Wireless)
@@ -102,6 +103,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.3.8    | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. Next Next try! |
 | 0.3.3.9    | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. Next Next Next try! |
 | 0.3.3.10   | Updated to include decode of message 0x22 in the same way as an 0x3C. This is for the older powermax users. More tries! |
+| 0.3.4      | Added PowerMaster shock sensor (as device type vibration). PowerMaster Experimental function retained. Note that the original Powermax is not supported as it doesn not provide the powerlink protocol. |
 
 
 ## Instructions and what works so far

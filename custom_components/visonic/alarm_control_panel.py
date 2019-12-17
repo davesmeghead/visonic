@@ -1,9 +1,7 @@
 """
 Support for visonic partitions control when used with a connection to a Visonic Alarm Panel.
 Currently, there is only support for a single partition
-
   Initial setup by David Field
-
 """
 import logging
 import asyncio
@@ -14,6 +12,11 @@ import voluptuous as vol
 from datetime import timedelta
 from homeassistant.helpers.entity_component import EntityComponent
 from custom_components.visonic import DOMAIN
+
+#from homeassistant.components.alarm_control_panel.const import (
+#    SUPPORT_ALARM_ARM_AWAY,
+#    SUPPORT_ALARM_ARM_HOME,
+#)
 
 from homeassistant.const import (
     ATTR_CODE, ATTR_CODE_FORMAT, ATTR_ENTITY_ID, SERVICE_ALARM_TRIGGER,
@@ -228,6 +231,11 @@ class VisonicAlarm(alarm.AlarmControlPanel):
                     if len(data['code']) == 4:                
                         return data['code']
         return ""
+
+    #@property
+    #def supported_features(self) -> int:
+    #    """Return the list of supported features."""
+    #    return SUPPORT_ALARM_ARM_HOME | SUPPORT_ALARM_ARM_AWAY
 
     def alarm_disarm(self, code = None):
         """Send disarm command."""  

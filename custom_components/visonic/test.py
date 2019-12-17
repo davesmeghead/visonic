@@ -10,18 +10,18 @@ from collections import defaultdict
 def add_visonic_device(visonic_devices):
     
     if visonic_devices == None:
-        log.warning("Visonic attempt to add device when sensor is undefined")
+        log.info("Visonic attempt to add device when sensor is undefined")
         return
     if type(visonic_devices) == defaultdict:
-        log.warning("Visonic got new sensors {0}".format( visonic_devices ))
+        log.info("Visonic got new sensors {0}".format( visonic_devices ))
     elif type(visonic_devices) == pyvisonic.SensorDevice:
         # This is an update of an existing device
-        log.warning("Visonic got a sensor update {0}".format( visonic_devices ))
+        log.info("Visonic got a sensor update {0}".format( visonic_devices ))
         
     #elif type(visonic_devices) == visonicApi.SwitchDevice:   # doesnt exist yet
     
     else:
-        log.warning("Visonic attempt to add device with type {0}  device is {1}".format(type(visonic_devices), visonic_devices ))
+        log.info("Visonic attempt to add device with type {0}  device is {1}".format(type(visonic_devices), visonic_devices ))
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)

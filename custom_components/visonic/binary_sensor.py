@@ -95,6 +95,8 @@ class VisonicSensor(BinarySensorDevice):
                     return 'vibration'
                 if self.visonic_device.stype.lower() == 'temperature':
                     return 'heat'
+                if self.visonic_device.stype.lower() == 'shock':
+                    return 'vibration'
         return None
 
     @property
