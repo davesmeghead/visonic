@@ -13,10 +13,10 @@ from datetime import timedelta
 from homeassistant.helpers.entity_component import EntityComponent
 from custom_components.visonic import DOMAIN
 
-#from homeassistant.components.alarm_control_panel.const import (
-#    SUPPORT_ALARM_ARM_AWAY,
-#    SUPPORT_ALARM_ARM_HOME,
-#)
+from homeassistant.components.alarm_control_panel.const import (
+    SUPPORT_ALARM_ARM_AWAY,
+    SUPPORT_ALARM_ARM_HOME,
+)
 
 from homeassistant.const import (
     ATTR_CODE, ATTR_CODE_FORMAT, ATTR_ENTITY_ID, SERVICE_ALARM_TRIGGER,
@@ -232,10 +232,10 @@ class VisonicAlarm(alarm.AlarmControlPanel):
                         return data['code']
         return ""
 
-    #@property
-    #def supported_features(self) -> int:
-    #    """Return the list of supported features."""
-    #    return SUPPORT_ALARM_ARM_HOME | SUPPORT_ALARM_ARM_AWAY
+    @property
+    def supported_features(self) -> int:
+        """Return the list of supported features."""
+        return SUPPORT_ALARM_ARM_HOME | SUPPORT_ALARM_ARM_AWAY
 
     def alarm_disarm(self, code = None):
         """Send disarm command."""  
