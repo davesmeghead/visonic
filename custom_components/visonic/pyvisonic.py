@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4"
+PLUGIN_VERSION = "0.3.4.1"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -137,40 +137,40 @@ PanelStatus = {
 #    replytype   is a message type from the Panel that we should get in response
 #    waitforack, if True means that we should wait for the acknowledge from the Panel before progressing
 #    waittime    a number of seconds after sending the command to wait before sending the next command 
-VisonicCommand = collections.namedtuple('VisonicCommand', 'data replytype waitforack waittime, msg')
+VisonicCommand = collections.namedtuple('VisonicCommand', 'data replytype waitforack download waittime msg')
 pmSendMsg = {
-   "MSG_EVENTLOG"    : VisonicCommand(bytearray.fromhex('A0 00 00 00 99 99 00 00 00 00 00 43'), [0xA0], False, 0.0, "Retrieving Event Log" ), 
-   "MSG_ARM"         : VisonicCommand(bytearray.fromhex('A1 00 00 00 99 99 00 00 00 00 00 43'), None  ,  True, 0.0, "(Dis)Arming System" ),
-   "MSG_STATUS"      : VisonicCommand(bytearray.fromhex('A2 00 00 00 00 00 00 00 00 00 00 43'), [0xA5],  True, 0.0, "Getting Status" ),
-   "MSG_BYPASSTAT"   : VisonicCommand(bytearray.fromhex('A2 00 00 20 00 00 00 00 00 00 00 43'), [0xA5], False, 0.0, "Bypassing" ),
-   "MSG_ZONENAME"    : VisonicCommand(bytearray.fromhex('A3 00 00 00 00 00 00 00 00 00 00 43'), [0xA3, 0xA3, 0xA3, 0xA3],  True, 0.0, "Requesting Zone Names" ),
-   "MSG_X10PGM"      : VisonicCommand(bytearray.fromhex('A4 00 00 00 00 00 99 99 99 00 00 43'), None  , False, 0.0, "X10 Data" ),
-   "MSG_ZONETYPE"    : VisonicCommand(bytearray.fromhex('A6 00 00 00 00 00 00 00 00 00 00 43'), [0xA6, 0xA6, 0xA6, 0xA6],  True, 0.0, "Requesting Zone Types" ),
-   "MSG_U1"          : VisonicCommand(bytearray.fromhex('A7 04 00 00 00 00 00 00 00 00 00 43'), None  ,  True, 0.0, "Unknown 1" ),
-   "MSG_U2"          : VisonicCommand(bytearray.fromhex('A8 04 00 00 00 00 00 00 00 00 00 43'), None  ,  True, 0.0, "Unknown 2" ),
-   "MSG_U3"          : VisonicCommand(bytearray.fromhex('A9 04 00 00 00 00 00 00 00 00 00 43'), None  ,  True, 0.0, "Unknown 3" ),
-   "MSG_BYPASSEN"    : VisonicCommand(bytearray.fromhex('AA 99 99 12 34 56 78 00 00 00 00 43'), None  , False, 0.0, "BYPASS Enable" ),
-   "MSG_BYPASSDI"    : VisonicCommand(bytearray.fromhex('AA 99 99 00 00 00 00 12 34 56 78 43'), None  , False, 0.0, "BYPASS Disable" ),
-   "MSG_ALIVE"       : VisonicCommand(bytearray.fromhex('AB 03 00 00 00 00 00 00 00 00 00 43'), None  ,  True, 0.0, "I'm Alive Message To Panel" ),
-   "MSG_RESTORE"     : VisonicCommand(bytearray.fromhex('AB 06 00 00 00 00 00 00 00 00 00 43'), [0xA5],  True, 0.0, "Restore PowerMax/Master Connection" ), # It can take multiple of these to put the panel back in to powerlink
-   "MSG_ENROLL"      : VisonicCommand(bytearray.fromhex('AB 0A 00 00 99 99 00 00 00 00 00 43'), None  ,  True, 0.0, "Auto-Enroll of the PowerMax/Master" ),   # should get a reply of [0xAB] but its not guaranteed
-   "MSG_INIT"        : VisonicCommand(bytearray.fromhex('AB 0A 00 01 00 00 00 00 00 00 00 43'), None  ,  True, 8.0, "Initializing PowerMax/Master PowerLink Connection" ),
-   "MSG_X10NAMES"    : VisonicCommand(bytearray.fromhex('AC 00 00 00 00 00 00 00 00 00 00 43'), [0xAC], False, 0.0, "Requesting X10 Names" ),
+   "MSG_EVENTLOG"    : VisonicCommand(bytearray.fromhex('A0 00 00 00 99 99 00 00 00 00 00 43'), [0xA0]                  , False, False, 0.0, "Retrieving Event Log" ), 
+   "MSG_ARM"         : VisonicCommand(bytearray.fromhex('A1 00 00 00 99 99 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "(Dis)Arming System" ),
+   "MSG_STATUS"      : VisonicCommand(bytearray.fromhex('A2 00 00 00 00 00 00 00 00 00 00 43'), [0xA5]                  ,  True, False, 0.0, "Getting Status" ),
+   "MSG_BYPASSTAT"   : VisonicCommand(bytearray.fromhex('A2 00 00 20 00 00 00 00 00 00 00 43'), [0xA5]                  , False, False, 0.0, "Bypassing" ),
+   "MSG_ZONENAME"    : VisonicCommand(bytearray.fromhex('A3 00 00 00 00 00 00 00 00 00 00 43'), [0xA3, 0xA3, 0xA3, 0xA3],  True, False, 0.0, "Requesting Zone Names" ),
+   "MSG_X10PGM"      : VisonicCommand(bytearray.fromhex('A4 00 00 00 00 00 99 99 99 00 00 43'), None                    , False, False, 0.0, "X10 Data" ),
+   "MSG_ZONETYPE"    : VisonicCommand(bytearray.fromhex('A6 00 00 00 00 00 00 00 00 00 00 43'), [0xA6, 0xA6, 0xA6, 0xA6],  True, False, 0.0, "Requesting Zone Types" ),
+   "MSG_U1"          : VisonicCommand(bytearray.fromhex('A7 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "Unknown 1" ),
+   "MSG_U2"          : VisonicCommand(bytearray.fromhex('A8 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "Unknown 2" ),
+   "MSG_U3"          : VisonicCommand(bytearray.fromhex('A9 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "Unknown 3" ),
+   "MSG_BYPASSEN"    : VisonicCommand(bytearray.fromhex('AA 99 99 12 34 56 78 00 00 00 00 43'), None                    , False, False, 0.0, "BYPASS Enable" ),
+   "MSG_BYPASSDI"    : VisonicCommand(bytearray.fromhex('AA 99 99 00 00 00 00 12 34 56 78 43'), None                    , False, False, 0.0, "BYPASS Disable" ),
+   "MSG_ALIVE"       : VisonicCommand(bytearray.fromhex('AB 03 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "I'm Alive Message To Panel" ),
+   "MSG_RESTORE"     : VisonicCommand(bytearray.fromhex('AB 06 00 00 00 00 00 00 00 00 00 43'), [0xA5]                  ,  True, False, 0.0, "Restore PowerMax/Master Connection" ),  # It can take multiple of these to put the panel back in to powerlink
+   "MSG_ENROLL"      : VisonicCommand(bytearray.fromhex('AB 0A 00 00 99 99 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "Auto-Enroll of the PowerMax/Master" ),  # should get a reply of [0xAB] but its not guaranteed
+   "MSG_INIT"        : VisonicCommand(bytearray.fromhex('AB 0A 00 01 00 00 00 00 00 00 00 43'), None                    ,  True, False, 8.0, "Initializing PowerMax/Master PowerLink Connection" ),
+   "MSG_X10NAMES"    : VisonicCommand(bytearray.fromhex('AC 00 00 00 00 00 00 00 00 00 00 43'), [0xAC]                  , False, False, 0.0, "Requesting X10 Names" ),
    # Command codes (powerlink) do not have the 0x43 on the end and are only 11 values
-   "MSG_DOWNLOAD"    : VisonicCommand(bytearray.fromhex('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C], False, 0.0, "Start Download Mode" ),  # This gets either an acknowledge OR an Access Denied response
-   "MSG_WRITE"       : VisonicCommand(bytearray.fromhex('3D 00 00 00 00 00 00 00 00 00 00')   , None  , False, 0.0, "Write Data Set" ),
-   "MSG_DL"          : VisonicCommand(bytearray.fromhex('3E 00 00 00 00 B0 00 00 00 00 00')   , [0x3F],  True, 0.0, "Download Data Set" ),
-   "MSG_SETTIME"     : VisonicCommand(bytearray.fromhex('46 F8 00 01 02 03 04 05 06 FF FF')   , None  , False, 0.0, "Setting Time" ),   # may not need an ack
-   "MSG_SER_TYPE"    : VisonicCommand(bytearray.fromhex('5A 30 04 01 00 00 00 00 00 00 00')   , [0x33], False, 0.0, "Get Serial Type" ),
+   "MSG_DOWNLOAD"    : VisonicCommand(bytearray.fromhex('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C]                  , False,  True, 0.0, "Start Download Mode" ),  # This gets either an acknowledge OR an Access Denied response
+   "MSG_WRITE"       : VisonicCommand(bytearray.fromhex('3D 00 00 00 00 00 00 00 00 00 00')   , None                    , False, False, 0.0, "Write Data Set" ),
+   "MSG_DL"          : VisonicCommand(bytearray.fromhex('3E 00 00 00 00 B0 00 00 00 00 00')   , [0x3F]                  ,  True, False, 0.0, "Download Data Set" ),
+   "MSG_SETTIME"     : VisonicCommand(bytearray.fromhex('46 F8 00 01 02 03 04 05 06 FF FF')   , None                    , False, False, 0.0, "Setting Time" ),   # may not need an ack
+   "MSG_SER_TYPE"    : VisonicCommand(bytearray.fromhex('5A 30 04 01 00 00 00 00 00 00 00')   , [0x33]                  , False, False, 0.0, "Get Serial Type" ),
    # quick command codes to start and stop download/powerlink are a single value
-   "MSG_START"       : VisonicCommand(bytearray.fromhex('0A')                                 , [0x0B], False, 0.0, "Start" ),    # waiting for STOP from panel for download complete 
-   "MSG_STOP"        : VisonicCommand(bytearray.fromhex('0B')                                 , None  , False, 1.5, "Stop" ),     #
-   "MSG_EXIT"        : VisonicCommand(bytearray.fromhex('0F')                                 , None  , False, 1.5, "Exit" ),
+   "MSG_START"       : VisonicCommand(bytearray.fromhex('0A')                                 , [0x0B]                  , False, False, 0.0, "Start" ),    # waiting for STOP from panel for download complete 
+   "MSG_STOP"        : VisonicCommand(bytearray.fromhex('0B')                                 , None                    , False, False, 1.5, "Stop" ),     #
+   "MSG_EXIT"        : VisonicCommand(bytearray.fromhex('0F')                                 , None                    , False, False, 1.5, "Exit" ),
    # Acknowledges
-   "MSG_ACK"         : VisonicCommand(bytearray.fromhex('02')                                 , None  , False, 0.0, "Ack" ),
-   "MSG_ACKLONG"     : VisonicCommand(bytearray.fromhex('02 43')                              , None  , False, 0.0, "Ack Long" ),
+   "MSG_ACK"         : VisonicCommand(bytearray.fromhex('02')                                 , None                    , False, False, 0.0, "Ack" ),
+   "MSG_ACKLONG"     : VisonicCommand(bytearray.fromhex('02 43')                              , None                    , False, False, 0.0, "Ack Long" ),
    # PowerMaster specific
-   "MSG_POWERMASTER" : VisonicCommand(bytearray.fromhex('B0 01 00 00 00 00 00 00 00 00 43')   , [0xB0], False, 0.0, "Powermaster Command" )
+   "MSG_POWERMASTER" : VisonicCommand(bytearray.fromhex('B0 01 00 00 00 00 00 00 00 00 43')   , [0xB0]                  , False, False, 0.0, "Powermaster Command" )
 }
 
 pmSendMsgB0_t = {
@@ -1052,6 +1052,10 @@ class ProtocolBase(asyncio.Protocol):
     #     otherwise try to reinitialise the connection from here
     def PerformDisconnect(self, exc = None):
         """Log when connection is closed, if needed call callback."""
+        if self.suspendAllOperations:
+            #log.info('[Disconnection] Suspended. Sorry but all operations have been suspended, please recreate connection')
+            return
+        
         self.suspendAllOperations = True
         
         if exc is not None:
@@ -1202,7 +1206,7 @@ class ProtocolBase(asyncio.Protocol):
                 self.reset_keep_alive_messages()
                 watchdog_events = watchdog_events + 1
                 PanelStatus["Watchdog Timeout"] = PanelStatus["Watchdog Timeout"] + 1
-                if watchdog_events >= WATCHDOG_MAXIMUM_EVENTS:
+                if not self.giveupTrying and watchdog_events >= WATCHDOG_MAXIMUM_EVENTS:
                     log.info("[Controller]               **************** Going to Standard Mode ***************")
                     watchdog_events = 0
                     self.gotoStandardMode()
@@ -1536,6 +1540,10 @@ class ProtocolBase(asyncio.Protocol):
             # Log some useful information in debug mode
             self.transport.write(sData)
             #log.debug("[pmSendPdu]      waiting for message response {}".format([hex(no).upper() for no in self.pmExpectedResponse]))
+
+            if command.download:
+                self.pmDownloadMode = True
+                log.debug("[pmSendPdu] Setting Download Mode to true")
             
             if sData[1] != 0x02:   # the message is not an acknowledge back to the panel
                 self.pmLastSentMessage = instruction
@@ -1632,7 +1640,6 @@ class ProtocolBase(asyncio.Protocol):
             self.pmExpectedResponse = []
             log.info("[Start_Download] Starting download mode")
             self.SendCommand("MSG_DOWNLOAD", options = [3, bytearray.fromhex(self.DownloadCode)]) #
-            self.pmDownloadMode = True
         elif self.pmDownloadComplete:
             log.debug("[Start_Download] Download has already completed (so not doing anything)")
         else:
@@ -2323,7 +2330,7 @@ class PacketHandling(ProtocolBase):
             self.handle_msgtype08(packet[2:-2])
         elif packet[1] == 0x0B: # Stopped
             self.handle_msgtype0B(packet[2:-2])
-        elif packet[1] == 0x22: # Message when start the download.   Decode a 22 message the same as a 3C, this is intentional !!
+        elif packet[1] == 0x22: # Message from Powermax Panel when starting the download. Seems to be similar to a 3C message.
             log.warning("[handle_packet] WARNING: Message 0x22 is not decoded, are you using an old Powermax Panel?")
         elif packet[1] == 0x25: # Download retry
             self.handle_msgtype25(packet[2:-2])
@@ -2345,12 +2352,14 @@ class PacketHandling(ProtocolBase):
             self.handle_msgtypeA7(packet[2:-2])
         elif packet[1] == 0xab and not self.ForceStandardMode: # PowerLink Event. Only process AB if not forced standard
             self.handle_msgtypeAB(packet[2:-2])
+        elif packet[1] == 0xab:     # PowerLink Event. Only process AB if not forced standard
+            log.debug("[handle_packet] Received AB Message but we are in Standard Mode (ignoring message) " + self.toString(packet))
         elif packet[1] == 0xac: # X10 Names
             self.handle_msgtypeAC(packet[2:-2])
         elif packet[1] == 0xb0: # PowerMaster Event
             self.handle_msgtypeB0(packet[2:-2])
         else:
-            log.info("[handle_packet] Unknown/Unhandled packet type {0}".format(packet[1:2]))
+            log.info("[handle_packet] Unknown/Unhandled packet type " + self.toString(packet))
 
     def displayzonebin(self, bits):
         """ Display Zones in reverse binary format
@@ -2364,7 +2373,7 @@ class PacketHandling(ProtocolBase):
         log.debug("[handle_msgtype02] Ack Received  data = {0}".format(self.toString(data)))
         if not self.pmPowerlinkMode and len(data) > 0:
             if data[0] == 0x43:  # Received a powerlink acknowledge
-                log.info("[handle_msgtype02]    Received a powerlink acknowledge but I am in standard mode")
+                log.info("[handle_msgtype02]    Received a powerlink acknowledge, I am in {0} mode".format(PanelStatus["Mode"]))
                 if self.allowAckToTriggerRestore:
                     log.info("[handle_msgtype02]        and sending MSG_RESTORE")
                     self.SendCommand("MSG_RESTORE")
@@ -2474,7 +2483,7 @@ class PacketHandling(ProtocolBase):
         """ MsgType=3F - Download information
         Multiple 3F can follow eachother, if we request more then &HFF bytes """
 
-        log.info("[handle_msgtype3F]")
+        log.debug("[handle_msgtype3F]")
         # data format is normally: <index> <page> <length> <data ...>
         # If the <index> <page> = FF, then it is an additional PowerMaster MemoryMap
         iIndex = data[0]
@@ -2483,8 +2492,8 @@ class PacketHandling(ProtocolBase):
 
         # Check length and data-length
         if iLength != len(data) - 3:  # 3 because -->   index & page & length
-            log.info("[handle_msgtype3F] ERROR: Type=3F has an invalid length, Received: {0}, Expected: {1}".format(len(data)-3, iLength))
-            log.info("[handle_msgtype3F]                            " + self.toString(data))
+            log.warning("[handle_msgtype3F] ERROR: Type=3F has an invalid length, Received: {0}, Expected: {1}".format(len(data)-3, iLength))
+            log.warning("[handle_msgtype3F]                            " + self.toString(data))
             return
 
         # Write to memory map structure, but remove the first 4 bytes (3F/index/page/length) from the data
@@ -2604,7 +2613,7 @@ class PacketHandling(ProtocolBase):
         #msgTot = data[0]
         eventType = data[1]
 
-        log.info("[handle_msgtypeA5] Parsing A5 packet " + self.toString(data))
+        log.debug("[handle_msgtypeA5] Parsing A5 packet " + self.toString(data))
 
         if eventType == 0x01: # Zone alarm status
             log.debug("[handle_msgtypeA5] Zone Alarm Status")
@@ -2674,6 +2683,10 @@ class PacketHandling(ProtocolBase):
                         self.pmSensorDev_t[i].pushChange()
 
         elif eventType == 0x04: # Zone event
+            if not self.pmPowerlinkMode:
+                log.debug("[handle_msgtypeA5]      Got A5 04 message, resetting watchdog")
+                self.reset_watchdog_timeout()
+
             sysStatus = data[2]   # Mark-Mills with a PowerMax Complete Part, sometimes this has 0x20 bit set and I'm not sure why
             sysFlags  = data[3]
             eventZone = data[4]
@@ -2894,7 +2907,7 @@ class PacketHandling(ProtocolBase):
 
             self.DumpSensorsToDisplay()
         #else:
-        #    log.debug("[handle_msgtypeA5]      Unknown A5 Event: %s", hex(eventType))
+        #    log.info("[handle_msgtypeA5]      Unknown A5 Message: " + self.toString(data))
 
 
     def handle_msgtypeA6(self, data):
@@ -3025,7 +3038,8 @@ class PacketHandling(ProtocolBase):
                 self.DumpSensorsToDisplay()
             elif not self.pmPowerlinkMode and not self.ForceStandardMode:
                 if self.pmDownloadMode:
-                    log.info("[handle_msgtypeAB]         Got alive message while not in Powerlink mode but we're in Download mode")
+                    log.info("[handle_msgtypeAB]         Got alive message while not in Powerlink mode but we're in Download mode, sending Auto Enroll")
+                    self.SendMsg_ENROLL()
                 else:
                     log.info("[handle_msgtypeAB]         Got alive message while not in Powerlink mode and not in Download mode")
             else:
@@ -3045,16 +3059,17 @@ class PacketHandling(ProtocolBase):
             else:
                 log.debug("[handle_msgtypeAB] PowerLink Phone: Unknown Action {0}".format(hex(data[1]).upper()))
         elif subType == 10 and data[2] == 0:
-            log.debug("[handle_msgtypeAB] PowerLink telling us what the code is for downloads, currently commented out as I'm not certain of this")
+            log.debug("[handle_msgtypeAB] PowerLink telling us what the code {0} {1} is for downloads, currently commented out as I'm not certain of this".format(data[3], data[4]))
             # data[3] data[4]
-#        elif subType == 10 and data[2] == 1 and not self.doneAutoEnroll:
-#            if not self.ForceStandardMode:
-#                log.info("[handle_msgtypeAB] PowerLink most likely wants to auto-enroll, only doing auto enroll once")
-#                self.SendMsg_ENROLL()
+        elif subType == 10 and data[2] == 1 and not self.doneAutoEnroll:
+            log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll, only doing auto enroll once ************************** ")
+            self.SendMsg_ENROLL()
         elif subType == 10 and data[2] == 1 and self.pmPowerlinkModePending and not self.ForceStandardMode and self.pmDownloadComplete and not self.pmPowerlinkMode:
-            log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll, lets gtive it a try **************************")
+            log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll, lets give it another try **************************")
             self.doneAutoEnroll = False
             self.SendMsg_ENROLL()
+        elif subType == 10 and data[2] == 1:
+            log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll but not acted on **************************")
 
 
     # X10 Names (0xAC)
@@ -3241,6 +3256,10 @@ class EventHandling(PacketHandling):
             elif command[0] == "bypass":
                 log.debug("[CommandQueue]  Calling bypass for individual sensors")
                 self.SetSensorArmedState(command[1], command[2], command[3])
+            elif command[0] == "shutdown":
+                log.info("[CommandQueue]  Shutdown current connection")
+                self.suspendAllOperations = True
+                self.transport.close()
             elif command[0] == "x10":
                 log.debug("[CommandQueue]  Calling x10 command")
                 self.SendX10Command(command[1], command[2])

@@ -109,6 +109,7 @@ _LOGGER = logging.getLogger(__name__)
      
 command_queue = asyncio.Queue()
 panel_reset_counter = 0
+myTask = None
      
 def setup(hass, base_config):
     """Set up for Visonic devices."""
@@ -231,7 +232,9 @@ def setup(hass, base_config):
 
     def connect_to_alarm():
         global panel_reset_counter
-
+        global command_queue
+        global myTask
+        
         # remove any existing visonic related sensors (so we don't get entity id already exists exceptions on a restart)
         retval = hass.states.async_remove('switch.visonic_alarm_panel')
         if retval:
@@ -302,9 +305,10 @@ def setup(hass, base_config):
             #wibble = hass.states.entity_ids()
             #for x in wibble:
             #    _LOGGER.info("Wibble is {0}".format(x))            
-            notused = hass.loop.create_task(comm)
+            myTask = hass.loop.create_task(comm)
             return True
 
+        myTask = None
         message = 'Failed to connect into Visonic Alarm. Check Settings.'
         _LOGGER.error(message)
         hass.components.persistent_notification.create(
@@ -314,6 +318,41 @@ def setup(hass, base_config):
         return False
                 
                 
+    # Service call to close down the current serial connection and re-establish it, we need to reset the whole connection!!!!
+    async def service_panel_reconnect(call):
+        global command_queue
+        global myTask
+        
+        _LOGGER.warning("User has requested visonic panel reconnection")
+        _LOGGER.info("          ........... Current Task - Closing Down Current Serial Connection, Queue size is {0}".format(command_queue.qsize()))
+        
+        # Try to get the asyncio Coroutine within the Task to shutdown the serial link connection properly
+        command_queue.put_nowait(["shutdown"])
+        while command_queue.qsize() > 0:
+            await asyncio.sleep(0.2)
+        await asyncio.sleep(0.2)   # not a mistake, wait a bit longer to make sure it's closed as we get no feedback (we only get the fact that the queue is empty)
+        
+        # cancel the task from within HA
+        if myTask is not None:
+            _LOGGER.info("          ........... Closing down Current Task")
+            myTask.cancel()
+            await asyncio.sleep(2.0)
+            if myTask.done():
+                _LOGGER.info("          ........... Current Task Done")
+            else:
+                _LOGGER.info("          ........... Current Task Not Done")
+        else:
+            _LOGGER.info("          ........... Current Task not set")
+
+        # re-initialise global variables        
+        myTask = None
+        command_queue = asyncio.Queue()
+        _LOGGER.info("          ........... attempting reconnection")
+        if connect_to_alarm():
+            discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
+            discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
+    
+    hass.services.async_register(DOMAIN, 'alarm_panel_reconnect', service_panel_reconnect)
                 
     # start of main function
     try:
