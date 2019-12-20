@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.1"
+PLUGIN_VERSION = "0.3.4.2"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -955,6 +955,9 @@ class ProtocolBase(asyncio.Protocol):
 
         # The last sent message
         self.pmLastSentMessage = None
+        
+        # Panel type: 0=Powermax (which we dont support), 1=Powermax+, 4=Powermax Pro Part
+        self.PanelType = None
 
         # keep alive counter for the timer 
         self.keep_alive_counter = 0    # only used in keep_alive_and_watchdog_timer
@@ -1171,32 +1174,34 @@ class ProtocolBase(asyncio.Protocol):
                     self.Start_Download()
                     
             elif not self.giveupTrying and self.pmPowerlinkModePending and not self.ForceStandardMode and self.pmDownloadComplete and not self.pmPowerlinkMode:
-                # Attempt to enter powerlink mode
-                self.reset_watchdog_timeout()
-                powerlink_counter = powerlink_counter + 1
-                log.debug("[Controller] Powerlink Counter {0}".format(powerlink_counter))
-                if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
-                    #powerlink_counter = 0
-                    log.info("[Controller] Trigger Powerlink Attempt")
-                    # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
-                    #      this should kick it in to powerlink after we just enrolled
-                    self.allowAckToTriggerRestore = True
-                    # Send enroll to the panel to try powerlink
-                    self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
-                    #self.SendCommand("MSG_BYPASSTAT") # just experimenting here
-                    #self.SendCommand("MSG_X10NAMES")
-                    #self.SendCommand("MSG_U1")
-                    #self.SendCommand("MSG_U2")
-                    #self.SendCommand("MSG_U3")   #  to here
-                    #self.SendCommand("MSG_RESTORE")
-                elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
-                    log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
-                    self.pmExpectedResponse = []
-                    self.expectedResponseTimeout = 0
-                elif powerlink_counter >= POWERLINK_TIMEOUT:
-                    # give up on trying to get to powerlink and goto standard mode (could be either Standard Plus or Standard)
-                    log.info("[Controller] Giving up on Powerlink Attempts, going to one of the standard modes")
-                    self.gotoStandardMode()
+                if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
+                    if self.PanelType >= 2:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
+                        # Attempt to enter powerlink mode
+                        self.reset_watchdog_timeout()
+                        powerlink_counter = powerlink_counter + 1
+                        log.debug("[Controller] Powerlink Counter {0}".format(powerlink_counter))
+                        if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
+                            #powerlink_counter = 0
+                            log.info("[Controller] Trigger Powerlink Attempt")
+                            # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
+                            #      this should kick it in to powerlink after we just enrolled
+                            self.allowAckToTriggerRestore = True
+                            # Send enroll to the panel to try powerlink
+                            self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
+                            #self.SendCommand("MSG_BYPASSTAT") # just experimenting here
+                            #self.SendCommand("MSG_X10NAMES")
+                            #self.SendCommand("MSG_U1")
+                            #self.SendCommand("MSG_U2")
+                            #self.SendCommand("MSG_U3")   #  to here
+                            #self.SendCommand("MSG_RESTORE")
+                        elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
+                            log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
+                            self.pmExpectedResponse = []
+                            self.expectedResponseTimeout = 0
+                        elif powerlink_counter >= POWERLINK_TIMEOUT:
+                            # give up on trying to get to powerlink and goto standard mode (could be either Standard Plus or Standard)
+                            log.info("[Controller] Giving up on Powerlink Attempts, going to one of the standard modes")
+                            self.gotoStandardMode()
                     
             elif self.watchdog_counter >= WATCHDOG_TIMEOUT:   #  the clock runs at 1 second
                 # watchdog timeout
@@ -1266,7 +1271,8 @@ class ProtocolBase(asyncio.Protocol):
             self.SendCommand(None)  # check send queue
 
         self.pmExpectedResponse = []
-        self.SendCommand("MSG_INIT")
+        log.info("[sendInitCommand]   ************************************* Not sending an INIT Command ************************************")
+        #self.SendCommand("MSG_INIT")
         
     def gotoStandardMode(self):
         #self.ClearList()
@@ -2222,11 +2228,13 @@ class PacketHandling(ProtocolBase):
                     setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_1WKEYPAD"])
                     for i in range(0, keypad1wCnt):
                         keypadEnrolled = setting[i * 4 : i * 4 + 2] != bytearray.fromhex("00 00")
+                        log.debug("[Process Settings] Found a 1keypad {0} enrolled {1}".format(i,keypadEnrolled))
                         if keypadEnrolled:
                             deviceStr = "{0},K1{1:0>2}".format(deviceStr, i)
                     setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_2WKEYPAD"])
                     for i in range (0, keypad2wCnt):
                         keypadEnrolled = setting[i * 4 : i * 4 + 3] != bytearray.fromhex("00 00 00")
+                        log.debug("[Process Settings] Found a 2keypad {0} enrolled {1}".format(i,keypadEnrolled))
                         if keypadEnrolled:
                             deviceStr = "{0},K2{1:0>2}".format(deviceStr, i)
 
@@ -2234,6 +2242,7 @@ class PacketHandling(ProtocolBase):
                     setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_SIRENS"])
                     for i in range(0, sirenCnt):
                         sirenEnrolled = setting[i * 4 : i * 4 + 3] != bytearray.fromhex("00 00 00")
+                        log.debug("[Process Settings] Found a siren {0} enrolled {1}".format(i,sirenEnrolled))
                         if sirenEnrolled:
                             deviceStr = "{0},S{1:0>2}".format(deviceStr, i)
                 else: # PowerMaster
@@ -2241,12 +2250,14 @@ class PacketHandling(ProtocolBase):
                     setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_MR_KEYPADS"])
                     for i in range(0, keypad2wCnt):
                         keypadEnrolled = setting[i * 10 : i * 10 + 5] != bytearray.fromhex("00 00 00 00 00")
+                        log.debug("[Process Settings] Found a PMaster keypad {0} enrolled {1}".format(i,keypadEnrolled))
                         if keypadEnrolled:
                             deviceStr = "{0},K2{1:0>2}".format(deviceStr, i)
                     # Process siren settings
                     setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_MR_SIRENS"])
                     for i in range (0, sirenCnt):
                         sirenEnrolled = setting[i * 10 : i * 10 + 5] != bytearray.fromhex("00 00 00 00 00")
+                        log.debug("[Process Settings] Found a siren {0} enrolled {1}".format(i,sirenEnrolled))
                         if sirenEnrolled:
                             deviceStr = "{0},S{1:0>2}".format(deviceStr, i)
 
@@ -2414,7 +2425,10 @@ class PacketHandling(ProtocolBase):
                 elif lastCommandData[0] == 0x24:
                     log.debug("[handle_msgtype08] Got an Access Denied and we have sent a Download command to the Panel, so try to Enroll")
                     self.pmDownloadMode = False
-                    self.SendMsg_ENROLL()
+                    self.doneAutoEnroll = False
+                    if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
+                        if self.PanelType >= 2:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
+                            self.SendMsg_ENROLL() # Auto enroll
 
 
     def handle_msgtype0B(self, data): # STOP
@@ -3038,8 +3052,7 @@ class PacketHandling(ProtocolBase):
                 self.DumpSensorsToDisplay()
             elif not self.pmPowerlinkMode and not self.ForceStandardMode:
                 if self.pmDownloadMode:
-                    log.info("[handle_msgtypeAB]         Got alive message while not in Powerlink mode but we're in Download mode, sending Auto Enroll")
-                    self.SendMsg_ENROLL()
+                    log.info("[handle_msgtypeAB]         Got alive message while not in Powerlink mode but we're in Download mode")
                 else:
                     log.info("[handle_msgtypeAB]         Got alive message while not in Powerlink mode and not in Download mode")
             else:
@@ -3074,7 +3087,7 @@ class PacketHandling(ProtocolBase):
 
     # X10 Names (0xAC)
     def handle_msgtypeAC(self, data): # PowerLink Message
-        """ MsgType=AB - Panel Powerlink Messages """
+        """ MsgType=AC - ??? """
         log.info("[handle_msgtypeAC]  data {0}".format(self.toString(data)))
 
     
