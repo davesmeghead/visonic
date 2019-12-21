@@ -110,6 +110,7 @@ _LOGGER = logging.getLogger(__name__)
 command_queue = asyncio.Queue()
 panel_reset_counter = 0
 myTask = None
+SystemStarted = False
      
 def setup(hass, base_config):
     """Set up for Visonic devices."""
@@ -231,17 +232,16 @@ def setup(hass, base_config):
 #        return obj
 
     def connect_to_alarm():
+        global SystemStarted
+        
+        if SystemStarted:
+            return
+
         global panel_reset_counter
         global command_queue
         global myTask
         
         # remove any existing visonic related sensors (so we don't get entity id already exists exceptions on a restart)
-        retval = hass.states.async_remove('switch.visonic_alarm_panel')
-        if retval:
-            _LOGGER.info("Removed existing HA Entity ID: switch.visonic_alarm_panel")
-        retval = hass.states.async_remove('alarm_control_panel.visonic_alarm')
-        if retval:
-            _LOGGER.info("Removed existing HA Entity ID: alarm_control_panel.visonic_alarm")
         sensor_list = hass.states.async_entity_ids("binary_sensor")
         if sensor_list is not None:
             for x in sensor_list:
@@ -305,6 +305,7 @@ def setup(hass, base_config):
             #wibble = hass.states.entity_ids()
             #for x in wibble:
             #    _LOGGER.info("Wibble is {0}".format(x))            
+            SystemStarted = True
             myTask = hass.loop.create_task(comm)
             return True
 
@@ -319,12 +320,17 @@ def setup(hass, base_config):
                 
                 
     # Service call to close down the current serial connection and re-establish it, we need to reset the whole connection!!!!
-    async def service_panel_reconnect(call):
+    async def service_panel_stop(call):
+        global SystemStarted
+        
+        if not SystemStarted:
+            _LOGGER.warning("Request to Stop the HA alarm_control_panel and it is already stopped")
+            return
+
         global command_queue
         global myTask
         
-        _LOGGER.warning("User has requested visonic panel reconnection")
-        _LOGGER.info("          ........... Current Task - Closing Down Current Serial Connection, Queue size is {0}".format(command_queue.qsize()))
+        _LOGGER.info("........... Current Task - Closing Down Current Serial Connection, Queue size is {0}".format(command_queue.qsize()))
         
         # Try to get the asyncio Coroutine within the Task to shutdown the serial link connection properly
         command_queue.put_nowait(["shutdown"])
@@ -343,17 +349,50 @@ def setup(hass, base_config):
                 _LOGGER.info("          ........... Current Task Not Done")
         else:
             _LOGGER.info("          ........... Current Task not set")
+        
+        SystemStarted = False
 
-        # re-initialise global variables        
+    # Service call to close down the current serial connection and re-establish it, we need to reset the whole connection!!!!
+    async def service_panel_start(call):
+        global command_queue
+        global myTask
+        global SystemStarted
+        
+        if SystemStarted:
+            _LOGGER.warning("Request to Start the HA alarm_control_panel and it is already running")
+            return
+
+        # re-initialise global variables, do not re-create the queue as we can't pass it to the alarm control panel. There's no need to create it again anyway
         myTask = None
-        command_queue = asyncio.Queue()
-        _LOGGER.info("          ........... attempting reconnection")
+
+        _LOGGER.info("........... attempting connection")
+
+        hass.data[VISONIC_PLATFORM] = {}
+
+        alarm_entity_exists = False
+        alarm_list = hass.states.async_entity_ids("alarm_control_panel")
+        if alarm_list is not None:
+            _LOGGER.info("Found existing HA alarm_control_panel {0}".format(alarm_list))
+            for x in alarm_list:
+                _LOGGER.info("    Checking HA Alarm ID: {0}".format(x))
+                if x.lower().startswith( 'alarm_control_panel.visonic_alarm' ):
+                    _LOGGER.info("       ***** Matched - Alarm Control Panel already exists so keep it ***** : {0}".format(x))
+                    alarm_entity_exists = True
+        #retval = hass.states.async_remove('alarm_control_panel.visonic_alarm')
+        #if retval:
+        #    _LOGGER.info("Removed existing HA Entity ID: alarm_control_panel.visonic_alarm")
+
         if connect_to_alarm():
-            discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
-            discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
+            discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)
+            if not alarm_entity_exists:            
+                discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)
+
+    # Service call to close down the current serial connection and re-establish it, we need to reset the whole connection!!!!
+    async def service_panel_reconnect(call):
+        _LOGGER.warning("User has requested visonic panel reconnection")
+        await service_panel_stop(call)
+        await service_panel_start(call)
     
-    hass.services.async_register(DOMAIN, 'alarm_panel_reconnect', service_panel_reconnect)
-                
     # start of main function
     try:
         hass.data[VISONIC_PLATFORM] = {}
@@ -361,13 +400,17 @@ def setup(hass, base_config):
         # Establish a callback to stop the component when the stop event occurs
         hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, stop_subscription)
 
+        #hass.services.async_register(DOMAIN, 'service_panel_stop',    service_panel_stop)
+        #hass.services.async_register(DOMAIN, 'service_panel_start',   service_panel_start)
+        hass.services.async_register(DOMAIN, 'alarm_panel_reconnect', service_panel_reconnect)
+                
         success = connect_to_alarm()
         
         if success:
             # these 2 calls will create a partition "alarm control panel" and a switch that represents the panel information
             #   eventually there will be an "alarm control panel" for each partition but we only support 1 partition at the moment
             discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
-            discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
+            discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)  
             return True
         
     except (ConnectTimeout, HTTPError) as ex:

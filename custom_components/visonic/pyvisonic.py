@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.2"
+PLUGIN_VERSION = "0.3.4.3"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -1605,9 +1605,9 @@ class ProtocolBase(asyncio.Protocol):
                     log.info("[SendCommand] Re-Sending last message  {0}".format(self.pmLastSentMessage.command.msg))
                     self.ClearList()
                     self.pmExpectedResponse = []
+                    self.pmLastSentMessage.triedResendingMessage = True
                     t = asyncio.ensure_future(self.pmSendPdu(self.pmLastSentMessage), loop=self.loop)
                     asyncio.wait_for(t, None)
-                    self.pmLastSentMessage.triedResendingMessage = True
                 else:
                     # tried resending once, no point in trying again so reset settings, start from scratch
                     log.info("[SendCommand] Tried Re-Sending last message but didn't work. Assume a powerlink timeout state and reset")
@@ -2955,7 +2955,7 @@ class PacketHandling(ProtocolBase):
         temp = int(data[1])
         
         # If message count is FF then it looks like the first message is valid so decode it (this is experimental)
-        if self.PowerMaster and msgCnt == 0xFF:
+        if msgCnt == 0xFF:
            msgCnt = 1
         
         if msgCnt <= 4:

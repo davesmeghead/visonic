@@ -106,6 +106,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.4      | Added PowerMaster shock sensor (as device type vibration). PowerMaster Experimental function retained. Note that the original Powermax is not supported as it doesn not provide the powerlink protocol. |
 | 0.3.4.1    | As per 0.3.4. Added service to close and reconnect to the panel, it is visonic.alarm_panel_reconnect with no parameters. Added test code to better connect Powermax+ and understand whats going on. |
 | 0.3.4.2    | As per 0.3.4. Added further test code to better connect Powermax+ and understand whats going on. |
+| 0.3.4.3    | As per 0.3.4. Added more test code to better connect Powermax+ and understand whats going on. Updated new service call code to keep alarm panel in frontend. |
 
 
 ## Instructions and what works so far
