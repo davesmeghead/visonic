@@ -41,7 +41,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.3"
+PLUGIN_VERSION = "0.3.4.4"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -719,7 +719,7 @@ pmZoneName_t = (
    "Attic", "Back door", "Basement", "Bathroom", "Bedroom", "Child room", "Conservatory", "Play room", "Dining room", "Downstairs",
    "Emergency", "Fire", "Front door", "Garage", "Garage door", "Guest room", "Hall", "Kitchen", "Laundry room", "Living room",
    "Master bathroom", "Master bedroom", "Office", "Upstairs", "Utility room", "Yard", "Custom 1", "Custom 2", "Custom 3",
-   "Custom4", "Custom 5", "Not Installed"
+   "Custom 4", "Custom 5", "Not Installed"
 )
 
 pmZoneChime_t = {
@@ -1240,7 +1240,7 @@ class ProtocolBase(asyncio.Protocol):
                 # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
                 # When in powerlink mode, it makes no difference as we get the AB messages from the panel, but this also keeps our status updated
                 status_counter = status_counter + 1
-                if status_counter >= 3:  # every twice around the loop i.e every KEEP_ALIVE_PERIOD * 3 seconds
+                if status_counter >= 2:  # every twice around the loop i.e every KEEP_ALIVE_PERIOD * 2 seconds
                     status_counter = 0
                     if self.pmPowerlinkMode:
                         self.SendCommand("MSG_RESTORE")  # 
@@ -1603,15 +1603,16 @@ class ProtocolBase(asyncio.Protocol):
                 if not self.pmLastSentMessage.triedResendingMessage:
                     # resend the last message
                     log.info("[SendCommand] Re-Sending last message  {0}".format(self.pmLastSentMessage.command.msg))
-                    self.ClearList()
-                    self.pmExpectedResponse = []
+                    #self.SendList = []
+                    #self.pmExpectedResponse = []
                     self.pmLastSentMessage.triedResendingMessage = True
                     t = asyncio.ensure_future(self.pmSendPdu(self.pmLastSentMessage), loop=self.loop)
                     asyncio.wait_for(t, None)
                 else:
                     # tried resending once, no point in trying again so reset settings, start from scratch
-                    log.info("[SendCommand] Tried Re-Sending last message but didn't work. Assume a powerlink timeout state and reset")
+                    log.info("[SendCommand] Tried Re-Sending last message but didn't work. Assume a powerlink timeout state and resync")
                     self.ClearList()
+                    self.pmExpectedResponse = []
                     self.triggerRestoreStatus()
             elif len(self.SendList) > 0 and len(self.pmExpectedResponse) == 0: # we are ready to send
                 # pop the oldest item from the list, this could be the only item.
