@@ -110,6 +110,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.4.4    | As per 0.3.4. Added more and more test code to better connect Powermax+ and understand whats going on. |
 | 0.3.4.5    | When using Ethernet to connect to the panel, I have added the socket options to keep the connection alive with a long timeout. |
 | 0.3.4.6    | When using Ethernet to connect to the panel, I have added the socket options to keep the connection alive with a long timeout. Added code to flush the receive buffer. |
+| 0.3.4.7    | Added more test code to better connect Powermax+ and understand whats going on. Added a send of MSG_RESTORE to the panel when achieved Standard Plus. |
 
 
 ## Instructions and what works so far
