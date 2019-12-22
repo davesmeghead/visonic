@@ -109,6 +109,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.4.3    | As per 0.3.4. Added more test code to better connect Powermax+ and understand whats going on. Updated new service call code to keep alarm panel in frontend. |
 | 0.3.4.4    | As per 0.3.4. Added more and more test code to better connect Powermax+ and understand whats going on. |
 | 0.3.4.5    | When using Ethernet to connect to the panel, I have added the socket options to keep the connection alive with a long timeout. |
+| 0.3.4.6    | When using Ethernet to connect to the panel, I have added the socket options to keep the connection alive with a long timeout. Added code to flush the receive buffer. |
 
 
 ## Instructions and what works so far

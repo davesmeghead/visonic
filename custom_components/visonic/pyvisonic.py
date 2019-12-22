@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.5"
+PLUGIN_VERSION = "0.3.4.6"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -3468,8 +3468,19 @@ def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, comma
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt( socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.setsockopt( socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        sock.settimeout( 100000.0 )   # lots of seconds
+        sock.setblocking(1)      # Set blocking to on, this is the default but just make sure
+        sock.settimeout( 1.0 )   # set timeout to 1 second to flush the receive buffer
         sock.connect((address, port))
+        
+        # Flush the buffer, receive any data and dump it
+        try:
+            rec = sock.recv(10000) # try to receive 100 bytes
+            log.info("Buffer Flushed and Received some data!")
+        except socket.timeout: # fail after 1 second of no activity
+            log.info("Buffer Flushed and Didn't receive data! [Timeout]")
+    
+        # set the timeout to infinite
+        sock.settimeout( None ) 
         
         conn = loop.create_connection(protocol, sock=sock)
         return conn
