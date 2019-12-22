@@ -31,6 +31,7 @@ import collections
 import time
 import copy
 import math
+import socket
 
 from collections import defaultdict
 from datetime import datetime
@@ -41,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.4"
+PLUGIN_VERSION = "0.3.4.5"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -3460,9 +3461,24 @@ def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, comma
 
     address = address
     port = port
-    conn = loop.create_connection(protocol, address, port)
-
-    return conn
+    
+    sock = None
+    try:
+        log.info("Setting TCP socket Options")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt( socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        sock.setsockopt( socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        sock.settimeout( 100000.0 )   # lots of seconds
+        sock.connect((address, port))
+        
+        conn = loop.create_connection(protocol, sock=sock)
+        return conn
+    except socket.error as _:
+        err = _
+        log.info("Setting TCP socket Options Exception " + err)
+        if sock is not None:
+            sock.close()
+    return None
 
 
 # Create a connection using asyncio through a linux port (usb or rs232)
