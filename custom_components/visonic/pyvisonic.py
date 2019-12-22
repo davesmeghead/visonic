@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.7"
+PLUGIN_VERSION = "0.3.4.8"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -78,7 +78,7 @@ DOWNLOAD_RETRY_DELAY = 240
 POWERLINK_RETRY_DELAY = 180
 
 # Number of seconds between trying to achieve powerlink (must have achieved download first) and giving up. Better to be half way between retry delays
-POWERLINK_TIMEOUT = 4.5 * POWERLINK_RETRY_DELAY
+POWERLINK_TIMEOUT = 104.5 * POWERLINK_RETRY_DELAY
 
 PanelSettings = {
    "MotionOffDelay"       : 120,
@@ -1180,30 +1180,15 @@ class ProtocolBase(asyncio.Protocol):
                     self.reset_watchdog_timeout()
                     powerlink_counter = powerlink_counter + 1
                     log.debug("[Controller] Powerlink Counter {0}".format(powerlink_counter))
-                    if self.PanelType >= 2:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
-                        if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
+                    if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
+                        if self.PanelType >= 2:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
                             log.info("[Controller] Trigger Powerlink Attempt")
                             # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
                             #      this should kick it in to powerlink after we just enrolled
                             self.allowAckToTriggerRestore = True
                             # Send enroll to the panel to try powerlink
                             self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
-                            #self.SendCommand("MSG_BYPASSTAT") # just experimenting here
-                            #self.SendCommand("MSG_X10NAMES")
-                            #self.SendCommand("MSG_U1")
-                            #self.SendCommand("MSG_U2")
-                            #self.SendCommand("MSG_U3")   #  to here
-                            #self.SendCommand("MSG_RESTORE")
-                        elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
-                            log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
-                            self.pmExpectedResponse = []
-                            self.expectedResponseTimeout = 0
-                        elif powerlink_counter >= POWERLINK_TIMEOUT:
-                            # give up on trying to get to powerlink and goto standard mode (could be either Standard Plus or Standard)
-                            log.info("[Controller] Giving up on Powerlink Attempts, going to one of the standard modes")
-                            self.gotoStandardMode()
-                    elif self.PanelType == 1:  # Powermax+, attempt to just send a MSG_RESTORE to prompt the panel in to taking action if it is able to
-                        if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
+                        elif self.PanelType == 1:  # Powermax+, attempt to just send a MSG_RESTORE to prompt the panel in to taking action if it is able to
                             log.info("[Controller] Trigger Powerlink Prompt attempt to a Powermax+ panel")
                             # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
                             #      this should kick it in to powerlink after we just enrolled
@@ -1211,6 +1196,14 @@ class ProtocolBase(asyncio.Protocol):
                             # Send a MSG_RESTORE, if it sends back a powerlink acknowledge then another MSG_RESTORE will be sent, 
                             #      hopefully this will be enough to kick the panel in to sending 0xAB Keep-Alive
                             self.SendCommand("MSG_RESTORE")
+                    elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
+                        log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
+                        self.pmExpectedResponse = []
+                        self.expectedResponseTimeout = 0
+                    elif powerlink_counter >= POWERLINK_TIMEOUT:
+                        # give up on trying to get to powerlink and goto standard mode (could be either Standard Plus or Standard)
+                        log.info("[Controller] Giving up on Powerlink Attempts, going to one of the standard modes")
+                        self.gotoStandardMode()
                     
             elif self.watchdog_counter >= WATCHDOG_TIMEOUT:   #  the clock runs at 1 second
                 # watchdog timeout
