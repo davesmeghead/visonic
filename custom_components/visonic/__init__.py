@@ -191,22 +191,29 @@ def setup(hass, base_config):
             # This is an update of the event log
             _LOGGER.info("Event Log update {0} not yet implemented".format( visonic_devices ))
             
-        elif visonic_devices >= 1 and visonic_devices <= 10:   
-            # General update trigger
-            #    1 is a zone update, 
-            #    2 is a panel update AND the alarm is not active, 
-            #    3 is a panel update AND the alarm is active, 
-            #    4 is the panel has been reset, 
-            #    5 is pin rejected, 
-            #    6 is tamper triggered
-            #    7 is download timer expired
-            #    8 is watchdog timer expired, give up trying to achieve a better mode
-            #    9 is watchdog timer expired, going to try again to get a better mode
-            _LOGGER.info("Visonic update event {0}".format(visonic_devices ))
-            hass.bus.fire('alarm_panel_state_update', { 'condition': visonic_devices })
+        elif type(visonic_devices) == int:
+            tmp = int(visonic_devices)
+            if 1 <= tmp <= 10:   
+                # General update trigger
+                #    1 is a zone update, 
+                #    2 is a panel update AND the alarm is not active, 
+                #    3 is a panel update AND the alarm is active, 
+                #    4 is the panel has been reset, 
+                #    5 is pin rejected, 
+                #    6 is tamper triggered
+                #    7 is download timer expired
+                #    8 is watchdog timer expired, give up trying to achieve a better mode
+                #    9 is watchdog timer expired, going to try again to get a better mode
+                _LOGGER.info("Visonic update event {0}".format(tmp))
+                hass.bus.fire('alarm_panel_state_update', { 'condition': tmp})
 
         else:
             _LOGGER.warning("Visonic attempt to add device with type {0}  device is {1}".format(type(visonic_devices), visonic_devices ))
+
+    async def disconnect_callback_async(excep):
+        _LOGGER.error(" ........... attempting reconnection")
+        await service_panel_stop(excep)
+        await service_panel_start(excep)
 
 
     def disconnect_callback(excep):
@@ -217,10 +224,10 @@ def setup(hass, base_config):
             _LOGGER.error("PyVisonic has caused an exception {0}".format(excep))
         sleep(10.0)
         panel_reset_counter = panel_reset_counter + 1
-        _LOGGER.error(" ........... attempting reconnection")
-        if connect_to_alarm():
-            discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
-            discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
+        asyncio.ensure_future(disconnect_callback_async(), loop=hass.loop)        
+        #if connect_to_alarm():
+        #    discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
+        #    discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
         
 #    def get_entity(name):
 #        # Take 'foo.bar.baz' and return self.entities.foo.bar.baz.
@@ -320,16 +327,14 @@ def setup(hass, base_config):
                 
                 
     # Service call to close down the current serial connection and re-establish it, we need to reset the whole connection!!!!
-    async def service_panel_stop(call):
+    async def service_comms_stop(call):
         global SystemStarted
+        global command_queue
         
         if not SystemStarted:
-            _LOGGER.warning("Request to Stop the HA alarm_control_panel and it is already stopped")
+            _LOGGER.warning("Request to Stop the Comms and it is already stopped")
             return
 
-        global command_queue
-        global myTask
-        
         _LOGGER.info("........... Current Task - Closing Down Current Serial Connection, Queue size is {0}".format(command_queue.qsize()))
         
         # Try to get the asyncio Coroutine within the Task to shutdown the serial link connection properly
@@ -338,6 +343,14 @@ def setup(hass, base_config):
             await asyncio.sleep(0.2)
         await asyncio.sleep(0.2)   # not a mistake, wait a bit longer to make sure it's closed as we get no feedback (we only get the fact that the queue is empty)
         
+    # Service call to close down the current serial connection and re-establish it, we need to reset the whole connection!!!!
+    async def service_panel_stop(call):
+        global SystemStarted
+        global myTask
+        
+        if not SystemStarted:
+            _LOGGER.warning("Request to Stop the HA alarm_control_panel and it is already stopped")
+            return
         # cancel the task from within HA
         if myTask is not None:
             _LOGGER.info("          ........... Closing down Current Task")
@@ -349,7 +362,6 @@ def setup(hass, base_config):
                 _LOGGER.info("          ........... Current Task Not Done")
         else:
             _LOGGER.info("          ........... Current Task not set")
-        
         SystemStarted = False
 
     # Service call to close down the current serial connection and re-establish it, we need to reset the whole connection!!!!
@@ -390,6 +402,7 @@ def setup(hass, base_config):
     # Service call to close down the current serial connection and re-establish it, we need to reset the whole connection!!!!
     async def service_panel_reconnect(call):
         _LOGGER.warning("User has requested visonic panel reconnection")
+        await service_comms_stop(call)
         await service_panel_stop(call)
         await service_panel_start(call)
     

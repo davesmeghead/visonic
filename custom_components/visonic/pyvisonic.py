@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.8"
+PLUGIN_VERSION = "0.3.4.9"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -958,6 +958,19 @@ class ProtocolBase(asyncio.Protocol):
         self.pmLastSentMessage = None
         
         # Panel type: 0=Powermax (which we dont support), 1=Powermax+, 4=Powermax Pro Part
+        #    PanelType=0 : PowerMax , Model=21   Powermaster False  <<== THIS DOES NOT WORK (NO POWERLINK SUPPORT) ==>> 
+        #    PanelType=1 : PowerMax+ , Model=47   Powermaster False
+        #    PanelType=2 : PowerMax Pro , Model=22   Powermaster False
+        #    PanelType=4 : PowerMax Pro Part , Model=17   Powermaster False
+        #    PanelType=4 : PowerMax Pro Part , Model=71   Powermaster False
+        #    PanelType=4 : PowerMax Pro Part , Model=86   Powermaster False
+        #    PanelType=5 : PowerMax Complete Part , Model=18   Powermaster False
+        #    PanelType=5 : PowerMax Complete Part , Model=79   Powermaster False
+        #    PanelType=7 : PowerMaster10 , Model=32   Powermaster True
+        #    PanelType=7 : PowerMaster10 , Model=68   Powermaster True
+        #    PanelType=7 : PowerMaster10 , Model=153   Powermaster True
+        #    PanelType=8 : PowerMaster30 , Model=53   Powermaster True
+
         self.PanelType = None
 
         # keep alive counter for the timer 
@@ -1192,7 +1205,7 @@ class ProtocolBase(asyncio.Protocol):
                             log.info("[Controller] Trigger Powerlink Prompt attempt to a Powermax+ panel")
                             # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
                             #      this should kick it in to powerlink after we just enrolled
-                            self.allowAckToTriggerRestore = True
+                            self.allowAckToTriggerRestore = False
                             # Send a MSG_RESTORE, if it sends back a powerlink acknowledge then another MSG_RESTORE will be sent, 
                             #      hopefully this will be enough to kick the panel in to sending 0xAB Keep-Alive
                             self.SendCommand("MSG_RESTORE")
@@ -1242,7 +1255,7 @@ class ProtocolBase(asyncio.Protocol):
                 # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
                 # When in powerlink mode, it makes no difference as we get the AB messages from the panel, but this also keeps our status updated
                 status_counter = status_counter + 1
-                if status_counter >= 2:  # every twice around the loop i.e every KEEP_ALIVE_PERIOD * 2 seconds
+                if status_counter >= 3:  # every twice around the loop i.e every KEEP_ALIVE_PERIOD * 2 seconds
                     status_counter = 0
                     if self.pmPowerlinkMode:
                         self.SendCommand("MSG_RESTORE")  # 
@@ -1657,7 +1670,7 @@ class ProtocolBase(asyncio.Protocol):
     # Attempt to enroll with the panel in the same was as a powerlink module would inside the panel
     def pmReadPanelSettings(self, isPowerMaster):
         """ Attempt to Enroll as a Powerlink """
-        log.info("[Panel Settings] Reading panel settings")
+        log.info("[Panel Settings] Uploading panel settings")
         
         self.myDownloadList.append(pmBlockDownload_t["MSG_DL_Block000"])
         self.myDownloadList.append(pmBlockDownload_t["MSG_DL_Block001"])
@@ -1983,7 +1996,9 @@ class PacketHandling(ProtocolBase):
             pmPanelTypeNr = int(pmPanelTypeNrStr)
             PanelStatus["Model"] = pmPanelType_t[pmPanelTypeNr] if pmPanelTypeNr in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
             #self.dump_settings()
-            log.info("[Process Settings] pmPanelTypeNr {0}    model {1}".format(pmPanelTypeNr, PanelStatus["Model"]))
+            log.info("[Process Settings] pmPanelTypeNr {0} ({1})    model {2}".format(pmPanelTypeNr, self.PanelType, PanelStatus["Model"]))
+            if self.PanelType is None:
+                self.PanelType = pmPanelTypeNr
         else:
             log.error("[Process Settings] Lookup of panel type string and model from the EPROM failed, assuming EPROM download failed")
             #self.dump_settings()
@@ -3275,7 +3290,8 @@ class EventHandling(PacketHandling):
             elif command[0] == "shutdown":
                 log.info("[CommandQueue]  Shutdown current connection")
                 self.suspendAllOperations = True
-                self.transport.close()
+                if self.transport is not None:
+                    self.transport.close()
             elif command[0] == "x10":
                 log.debug("[CommandQueue]  Calling x10 command")
                 self.SendX10Command(command[1], command[2])
