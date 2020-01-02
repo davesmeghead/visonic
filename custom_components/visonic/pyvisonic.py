@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.10"
+PLUGIN_VERSION = "0.3.4.11"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -72,7 +72,7 @@ KEEP_ALIVE_PERIOD = 25  # Seconds
 DOWNLOAD_TIMEOUT = 180
 
 # Number of seconds delay between trying to achieve EPROM download
-DOWNLOAD_RETRY_DELAY = 240
+DOWNLOAD_RETRY_DELAY = 90
 
 # Number of seconds delay between trying to achieve powerlink (must have achieved download first)
 POWERLINK_RETRY_DELAY = 180
@@ -974,6 +974,7 @@ class ProtocolBase(asyncio.Protocol):
         #    PanelType=7 : PowerMaster10 , Model=32   Powermaster True
         #    PanelType=7 : PowerMaster10 , Model=68   Powermaster True
         #    PanelType=7 : PowerMaster10 , Model=153   Powermaster True
+        #    PanelType=8 : PowerMaster30 , Model=6   Powermaster True     may not be compatible with Powerlink3, not sure about previous powerlink hardware
         #    PanelType=8 : PowerMaster30 , Model=53   Powermaster True
 
         self.PanelType = None
@@ -1186,7 +1187,7 @@ class ProtocolBase(asyncio.Protocol):
             elif not self.giveupTrying and not self.pmDownloadComplete and not self.ForceStandardMode and not self.pmDownloadMode:
                 self.reset_watchdog_timeout()
                 download_counter = download_counter + 1
-                if download_counter >= DOWNLOAD_RETRY_DELAY:  # 4 Minutes
+                if download_counter >= DOWNLOAD_RETRY_DELAY:  # 
                     download_counter = 0
                     # trigger a download
                     log.info("[Controller] Trigger Panel Download Attempt")
@@ -1631,15 +1632,15 @@ class ProtocolBase(asyncio.Protocol):
                 else:
                     # tried resending once, no point in trying again so reset settings, start from scratch
                     log.info("[SendCommand] Tried Re-Sending last message but didn't work. Assume a powerlink timeout state and resync")
-                    self.ClearList()
-                    self.pmExpectedResponse = []
+                    #self.ClearList()
+                    #self.pmExpectedResponse = []
                     self.triggerRestoreStatus()
             elif len(self.SendList) > 0 and len(self.pmExpectedResponse) == 0: # we are ready to send
                 # pop the oldest item from the list, this could be the only item.
                 instruction = self.SendList.pop(0)
 
                 if len(instruction.response) > 0:
-                    log.debug("[pmSendPdu] Resetting expected response counter, it got to {0}   Response list before {1}  after {2}".format(self.expectedResponseTimeout, len(self.pmExpectedResponse), len(self.pmExpectedResponse) + len(instruction.response)))
+                    log.debug("[pmSendPdu] Resetting expected response counter, it got to {0}   Response list length before {1}  after {2}".format(self.expectedResponseTimeout, len(self.pmExpectedResponse), len(self.pmExpectedResponse) + len(instruction.response)))
                     self.expectedResponseTimeout = 0
                     # update the expected response list straight away (without having to wait for it to be actually sent) to make sure protocol is followed
                     self.pmExpectedResponse.extend(instruction.response) # if an ack is needed it will already be in this list
@@ -2414,6 +2415,18 @@ class PacketHandling(ProtocolBase):
                     self.allowAckToTriggerRestore = False
 
 
+    def delayDownload(self):
+        self.pmDownloadMode = False
+        self.giveupTrying = False
+        self.pmDownloadComplete = False
+        # exit download mode and try again in DOWNLOAD_RETRY_DELAY seconds
+        self.SendCommand("MSG_STOP")
+        self.SendCommand("MSG_EXIT")
+        self.triggerRestoreStatus()
+        # Assume that we are not in Powerlink as we haven't completed download yet. 
+        PanelStatus["Mode"] = "Standard"
+
+
     def handle_msgtype06(self, data):
         """ MsgType=06 - Time out
         Timeout message from the PM, most likely we are/were in download mode """
@@ -2423,10 +2436,8 @@ class PacketHandling(ProtocolBase):
         self.pmExpectedResponse = []
 
         if self.pmDownloadMode:
-            self.pmDownloadMode = False
-            # exit download mode and try again in DOWNLOAD_RETRY_DELAY seconds
-            self.SendCommand("MSG_STOP")
-            self.SendCommand("MSG_EXIT")
+            self.delayDownload()
+            log.info("[handle_msgtype06] Timeout Received - Going to Standard Mode and going to try download again soon")
         else:
             self.SendAck()
 
@@ -2464,12 +2475,7 @@ class PacketHandling(ProtocolBase):
         # Format: <MsgType> <?> <?> <delay in sec>
         iDelay = data[2]
         log.info("[handle_msgtype25] Download Retry, have to wait {0} seconds     data is {1}".format(iDelay, self.toString(data)))        
-        # exit download mode
-        self.pmDownloadMode = False
-        #sleep(iDelay + 1)
-        # exit download mode and try again in DOWNLOAD_RETRY_DELAY seconds
-        self.SendCommand("MSG_STOP")
-        self.SendCommand("MSG_EXIT")
+        self.delayDownload()
 
 
     def handle_msgtype33(self, data):
@@ -2501,12 +2507,14 @@ class PacketHandling(ProtocolBase):
         self.PanelType = data[5]
 
         self.PowerMaster = (self.PanelType >= 7)
-        modelname = pmPanelType_t[self.PanelType] or "UNKNOWN"  # INTERFACE set this in the user interface
+        PanelStatus["Model"] = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
+        
+        #modelname = pmPanelType_t[self.PanelType] or "UNKNOWN"  # INTERFACE set this in the user interface
 
         PanelStatus["Model Type"] = self.ModelType
         PanelStatus["Power Master"] = 'Yes' if self.PowerMaster else 'No'
 
-        log.debug("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, modelname, self.PowerMaster))
+        log.debug("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, PanelStatus["Model"], self.PowerMaster))
 
         # We got a first response, now we can Download the panel EPROM settings
         interval = self.getTimeFunction() - self.lastSendOfDownloadEprom

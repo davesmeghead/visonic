@@ -114,6 +114,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.4.8    | Added more test code to better connect Powermax+ and understand whats going on. Realised that 0.3.4.7 had a problem so it's fixed |
 | 0.3.4.9    | Added more test code to better connect Powermax+ and understand whats going on. Altered the new service call operation to be compatible with the disconnect procedure. |
 | 0.3.4.10   | Tidied up the new service call operation. Updated B0 Experimental message processing. |
+| 0.3.4.11   | No change to B0 Experimental message processing. Updated timeout sequence. If in download then go to Standard Mode and retry Download in 90 seconds. Shortened download timeouts as they are generally much faster now. |
 
 
 ## Instructions and what works so far
