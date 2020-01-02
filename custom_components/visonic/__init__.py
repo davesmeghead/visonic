@@ -106,7 +106,8 @@ VISONIC_COMPONENTS = [
 _LOGGER = logging.getLogger(__name__)
 #level = logging.getLevelName('INFO')  # INFO
 #_LOGGER.setLevel(level)
-     
+
+visonic_event_name = 'alarm_panel_state_update'
 command_queue = asyncio.Queue()
 panel_reset_counter = 0
 myTask = None
@@ -121,10 +122,6 @@ def setup(hass, base_config):
     base_config = base_config
     # Get the user defined config
     config = base_config.get(DOMAIN)
-
-    def stop_subscription(event):
-        """Shutdown Visonic subscriptions and subscription thread on exit."""
-        _LOGGER.info("Shutting down subscriptions")
 
     # This is a callback function, called from the visonic library when a new sensor is detected/created
     #  it adds it to the list of devices and then calls discovery to fully create it in HA
@@ -181,11 +178,11 @@ def setup(hass, base_config):
             
         elif type(visonic_devices) == visonicApi.SensorDevice:
             # This is an update of an existing sensor device
-            _LOGGER.info("Sensor update {0} not yet included".format( visonic_devices ))
+            _LOGGER.info("Individual Sensor update {0} not yet included".format( visonic_devices ))
             
         elif type(visonic_devices) == visonicApi.X10Device:
             # This is an update of an existing x10 device
-            _LOGGER.info("X10 update {0} not yet included".format( visonic_devices ))
+            _LOGGER.info("Individual X10 update {0} not yet included".format( visonic_devices ))
             
         elif type(visonic_devices) == visonicApi.LogPanelEvent:
             # This is an update of the event log
@@ -205,38 +202,10 @@ def setup(hass, base_config):
                 #    8 is watchdog timer expired, give up trying to achieve a better mode
                 #    9 is watchdog timer expired, going to try again to get a better mode
                 _LOGGER.info("Visonic update event {0}".format(tmp))
-                hass.bus.fire('alarm_panel_state_update', { 'condition': tmp})
+                hass.bus.fire(visonic_event_name, { 'condition': tmp})
 
         else:
             _LOGGER.warning("Visonic attempt to add device with type {0}  device is {1}".format(type(visonic_devices), visonic_devices ))
-
-    async def disconnect_callback_async(excep):
-        _LOGGER.error(" ........... attempting reconnection")
-        await service_panel_stop(excep)
-        await service_panel_start(excep)
-
-
-    def disconnect_callback(excep):
-        global panel_reset_counter
-        if excep is None:
-            _LOGGER.error("PyVisonic has caused an exception, no exception information is available")
-        else:
-            _LOGGER.error("PyVisonic has caused an exception {0}".format(excep))
-        sleep(10.0)
-        panel_reset_counter = panel_reset_counter + 1
-        asyncio.ensure_future(disconnect_callback_async(), loop=hass.loop)        
-        #if connect_to_alarm():
-        #    discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
-        #    discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
-        
-#    def get_entity(name):
-#        # Take 'foo.bar.baz' and return self.entities.foo.bar.baz.
-#        # This makes it easy to convert a string to an arbitrary entity.
-#        elems = name.split(".")
-#        obj = hass.entities
-#        for e in elems:
-#            obj = getattr(obj, e)
-#        return obj
 
     def connect_to_alarm():
         global SystemStarted
@@ -325,7 +294,6 @@ def setup(hass, base_config):
             notification_id=NOTIFICATION_ID)
         return False
                 
-                
     # Service call to close down the current serial connection and re-establish it, we need to reset the whole connection!!!!
     async def service_comms_stop(call):
         global SystemStarted
@@ -405,7 +373,42 @@ def setup(hass, base_config):
         await service_comms_stop(call)
         await service_panel_stop(call)
         await service_panel_start(call)
-    
+
+    async def disconnect_callback_async(excep):
+        _LOGGER.error(" ........... attempting reconnection")
+        await service_panel_stop(excep)
+        await service_panel_start(excep)
+
+    def stop_subscription(event):
+        """Shutdown Visonic subscriptions and subscription thread on exit."""
+        _LOGGER.info("Shutting down subscriptions")
+        asyncio.ensure_future(service_panel_stop(), loop=hass.loop)        
+
+    def disconnect_callback(excep):
+        global panel_reset_counter
+        if excep is None:
+            _LOGGER.error("PyVisonic has caused an exception, no exception information is available")
+        else:
+            _LOGGER.error("PyVisonic has caused an exception {0}".format(excep))
+        # General update trigger
+        #    0 is a disconnect and (hopefully) reconnect from an exception (probably comms related)
+        hass.bus.fire(visonic_event_name, { 'condition': 0})
+        sleep(5.0)
+        panel_reset_counter = panel_reset_counter + 1
+        asyncio.ensure_future(disconnect_callback_async(), loop=hass.loop)        
+        #if connect_to_alarm():
+        #    discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
+        #    discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
+        
+#    def get_entity(name):
+#        # Take 'foo.bar.baz' and return self.entities.foo.bar.baz.
+#        # This makes it easy to convert a string to an arbitrary entity.
+#        elems = name.split(".")
+#        obj = hass.entities
+#        for e in elems:
+#            obj = getattr(obj, e)
+#        return obj
+
     # start of main function
     try:
         hass.data[VISONIC_PLATFORM] = {}
@@ -413,8 +416,6 @@ def setup(hass, base_config):
         # Establish a callback to stop the component when the stop event occurs
         hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, stop_subscription)
 
-        #hass.services.async_register(DOMAIN, 'service_panel_stop',    service_panel_stop)
-        #hass.services.async_register(DOMAIN, 'service_panel_start',   service_panel_start)
         hass.services.async_register(DOMAIN, 'alarm_panel_reconnect', service_panel_reconnect)
                 
         success = connect_to_alarm()

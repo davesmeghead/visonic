@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.9"
+PLUGIN_VERSION = "0.3.4.10"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -78,7 +78,7 @@ DOWNLOAD_RETRY_DELAY = 240
 POWERLINK_RETRY_DELAY = 180
 
 # Number of seconds between trying to achieve powerlink (must have achieved download first) and giving up. Better to be half way between retry delays
-POWERLINK_TIMEOUT = 104.5 * POWERLINK_RETRY_DELAY
+POWERLINK_TIMEOUT = 4.5 * POWERLINK_RETRY_DELAY
 
 PanelSettings = {
    "MotionOffDelay"       : 120,
@@ -738,8 +738,11 @@ pmZoneSensor_t = {
 ZoneSensorMaster = collections.namedtuple("ZoneSensorMaster", 'name func' )
 pmZoneSensorMaster_t = {
    0x01 : ZoneSensorMaster("Next PG2", "Motion" ),
+   0x03 : ZoneSensorMaster("Clip PG2", "Motion" ),
    0x04 : ZoneSensorMaster("Next CAM PG2", "Camera" ),
+   0x0A : ZoneSensorMaster("TOWER CAM PG2", "Camera" ),
    0x16 : ZoneSensorMaster("SMD-426 PG2", "Smoke" ),
+   0x18 : ZoneSensorMaster("GSD-442 PG2", "Smoke" ),
    0x1A : ZoneSensorMaster("TMD-560 PG2", "Temperature" ),
    0x29 : ZoneSensorMaster("MC-302V PG2", "Magnet"),
    0x2A : ZoneSensorMaster("MC-302 PG2", "Magnet"),
@@ -747,6 +750,8 @@ pmZoneSensorMaster_t = {
    0x35 : ZoneSensorMaster("SD-304 PG2", "Shock"),
    0xFE : ZoneSensorMaster("Wired", "Wired" )
 }
+# SMD-426 PG2 (photoelectric smoke detector)
+# SMD-427 PG2 (heat and photoelectric smoke detector) 
 
 class ElapsedFormatter():
 
@@ -1255,7 +1260,7 @@ class ProtocolBase(asyncio.Protocol):
                 # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
                 # When in powerlink mode, it makes no difference as we get the AB messages from the panel, but this also keeps our status updated
                 status_counter = status_counter + 1
-                if status_counter >= 3:  # every twice around the loop i.e every KEEP_ALIVE_PERIOD * 2 seconds
+                if status_counter >= 3:  # around the loop i.e every KEEP_ALIVE_PERIOD * 3 seconds
                     status_counter = 0
                     if self.pmPowerlinkMode:
                         self.SendCommand("MSG_RESTORE")  # 
@@ -2862,9 +2867,10 @@ class PacketHandling(ProtocolBase):
                             self.pmSensorDev_t[key].status = False
                             self.pmSensorDev_t[key].pushChange()
                         elif eventType == 5: # Zone Violated
-                            self.pmSensorDev_t[key].triggered = True
-                            self.pmSensorDev_t[key].triggertime = self.getTimeFunction()
-                            self.pmSensorDev_t[key].pushChange()
+                            if not self.pmSensorDev_t[key].triggered:
+                                self.pmSensorDev_t[key].triggertime = self.getTimeFunction()
+                                self.pmSensorDev_t[key].triggered = True
+                                self.pmSensorDev_t[key].pushChange()
                         #elif eventType == 6: # Panic Alarm
                         #elif eventType == 7: # RF Jamming
                         #elif eventType == 8: # Tamper Open
@@ -3172,11 +3178,13 @@ class PacketHandling(ProtocolBase):
                                 s2 = self.zoneDataMasterMotion[7 + z]
                                 log.debug("[handle_msgtypeB0]             Zone {0}  Motion State Before {1}   After {2}".format(z, s2, s1))
                                 if s1 != s2:
-                                    log.debug("[handle_msgtypeB0]             Triggered Motion Detection")
+                                    log.debug("[handle_msgtypeB0]             Pre-Triggered Motion Detection to set B0 zone")
                                     self.zoneNumberMasterMotion = True   # this means we wait at least 'min_interval' seconds for the next trigger
-                                    self.pmSensorDev_t[z].triggered = True
-                                    self.pmSensorDev_t[z].triggertime = self.getTimeFunction()
-                                    self.pmSensorDev_t[z].pushChange()
+                                    if not self.pmSensorDev_t[key].triggered:
+                                        log.debug("[handle_msgtypeB0]             Triggered Motion Detection")
+                                        self.pmSensorDev_t[key].triggertime = self.getTimeFunction()
+                                        self.pmSensorDev_t[z].triggered = True
+                                        self.pmSensorDev_t[z].pushChange()
                             #else:
                             #    s = data[7 + z]
                             #    log.debug("[handle_msgtypeB0]           Zone {0}  is not a motion stype   State = {1}".format(z, s))
