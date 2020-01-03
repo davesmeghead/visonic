@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.11"
+PLUGIN_VERSION = "0.3.4.12"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -3188,9 +3188,9 @@ class PacketHandling(ProtocolBase):
                                 if s1 != s2:
                                     log.debug("[handle_msgtypeB0]             Pre-Triggered Motion Detection to set B0 zone")
                                     self.zoneNumberMasterMotion = True   # this means we wait at least 'min_interval' seconds for the next trigger
-                                    if not self.pmSensorDev_t[key].triggered:
+                                    if not self.pmSensorDev_t[z].triggered:
                                         log.debug("[handle_msgtypeB0]             Triggered Motion Detection")
-                                        self.pmSensorDev_t[key].triggertime = self.getTimeFunction()
+                                        self.pmSensorDev_t[z].triggertime = self.getTimeFunction()
                                         self.pmSensorDev_t[z].triggered = True
                                         self.pmSensorDev_t[z].pushChange()
                             #else:
