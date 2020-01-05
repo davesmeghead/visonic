@@ -117,6 +117,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.4.11   | No change to B0 Experimental message processing. Updated timeout sequence. If in download then go to Standard Mode and retry Download in 90 seconds. Shortened download timeouts as they are generally much faster now. |
 | 0.3.4.12   | Bug fix in 0.3.4.11 B0 Experimental message processing. |
 | 0.3.4.13   | Updated event and zone information in the panel attributes (Panel Last Event) for PowerMaster panels (a lot more zones and event types). No change to B0 Experimental message processing. |
+| 0.3.4.14   | Changed the Im alive and status message exchange when in standard, standard plus and powerlink modes. No change to B0 Experimental message processing. |
 
 
 ## Instructions and what works so far

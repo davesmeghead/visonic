@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.13"
+PLUGIN_VERSION = "0.3.4.14"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -1080,6 +1080,8 @@ class ProtocolBase(asyncio.Protocol):
         #    PanelType=8 : PowerMaster30 , Model=53   Powermaster True
 
         self.PanelType = None
+        # Whether its a powermax or powermaster
+        self.PowerMaster = None
 
         # keep alive counter for the timer 
         self.keep_alive_counter = 0    # only used in keep_alive_and_watchdog_timer
@@ -1353,22 +1355,23 @@ class ProtocolBase(asyncio.Protocol):
             # Sixth, flush the send queue, send all buffered messages to the panel
             if len(self.SendList) == 0 and not self.pmDownloadMode and self.keep_alive_counter >= KEEP_ALIVE_PERIOD:   #
                 # Every KEEP_ALIVE_PERIOD seconds, unless watchdog has been reset
-                #log.debug("[Controller]   Send list is empty so sending I'm alive message")
+                #log.debug("[Controller]   Send list is empty so sending I'm alive message or get status")
                 # reset counter
                 self.reset_keep_alive_messages()
                 
-                if not self.pmPowerlinkMode:
-                    # Send I'm Alive and request status
-                    self.SendCommand("MSG_ALIVE")
-                # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
-                # When in powerlink mode, it makes no difference as we get the AB messages from the panel, but this also keeps our status updated
                 status_counter = status_counter + 1
                 if status_counter >= 3:  # around the loop i.e every KEEP_ALIVE_PERIOD * 3 seconds
                     status_counter = 0
-                    if self.pmPowerlinkMode:
-                        self.SendCommand("MSG_RESTORE")  # 
-                    else:
+                    if not self.pmPowerlinkMode:
+                        # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
                         self.SendCommand("MSG_STATUS")  # Asks the panel to send us the A5 message set
+                    elif self.PowerMaster is not None and self.PowerMaster:
+                        # When in powerlink mode and the panel is PowerMaster get the status to make sure the sensor states get updated
+                        #   (if powerlink and powermax panel then no need to keep doing this)
+                        self.SendCommand("MSG_RESTORE")  # 
+                elif not self.pmPowerlinkMode:
+                    # When not in powerlink mode, send I'm Alive to the panel so it knows we're still here 
+                    self.SendCommand("MSG_ALIVE")
             else:
                 # Every 1.0 seconds, try to flush the send queue
                 self.SendCommand(None)  # check send queue
@@ -1880,8 +1883,6 @@ class PacketHandling(ProtocolBase):
         self.pmSilentPanic = False
         self.lastPacket = None
         self.lastPacketCounter = 0
-        # Whether its a powermax or powermaster
-        self.PowerMaster = True
         
         # determine when MSG_ENROLL is sent to the panel
         self.doneAutoEnroll = False
@@ -2107,6 +2108,7 @@ class PacketHandling(ProtocolBase):
             log.info("[Process Settings] pmPanelTypeNr {0} ({1})    model {2}".format(pmPanelTypeNr, self.PanelType, PanelStatus["Model"]))
             if self.PanelType is None:
                 self.PanelType = pmPanelTypeNr
+                self.PowerMaster = (self.PanelType >= 7) 
         else:
             log.error("[Process Settings] Lookup of panel type string and model from the EPROM failed, assuming EPROM download failed")
             #self.dump_settings()
@@ -2620,7 +2622,7 @@ class PacketHandling(ProtocolBase):
 
         # We got a first response, now we can Download the panel EPROM settings
         interval = self.getTimeFunction() - self.lastSendOfDownloadEprom
-        td = timedelta(seconds=90)  # prevent multiple requests for the EPROM panel settings, at least 90 seconds 
+        td = timedelta(seconds=DOWNLOAD_RETRY_DELAY)  # prevent multiple requests for the EPROM panel settings, at least DOWNLOAD_RETRY_DELAY seconds 
         if interval > td:
             self.lastSendOfDownloadEprom = self.getTimeFunction()
             self.pmReadPanelSettings(self.PowerMaster)
@@ -2688,11 +2690,12 @@ class PacketHandling(ProtocolBase):
             iLogEvent = data[9]
             
             zoneStr = ""
-            if self.PowerMaster:
-                zoneStr = pmLogPowerMasterUser_t[self.pmLang][iEventZone] or "UNKNOWN"
-            else:
-                iEventZone = int(iEventZone & 0x7F)
-                zoneStr = pmLogPowerMaxUser_t[self.pmLang][iEventZone] or "UNKNOWN"
+            if self.PowerMaster is not None:
+                if self.PowerMaster:
+                    zoneStr = pmLogPowerMasterUser_t[self.pmLang][iEventZone] or "UNKNOWN"
+                else:
+                    iEventZone = int(iEventZone & 0x7F)
+                    zoneStr = pmLogPowerMaxUser_t[self.pmLang][iEventZone] or "UNKNOWN"
                 
             eventStr = pmLogEvent_t[self.pmLang][iLogEvent] or "UNKNOWN"
 
@@ -3107,11 +3110,12 @@ class PacketHandling(ProtocolBase):
                 eventType = logEvent  # int(logEvent & 0x7F)
 
                 zoneStr = ""                
-                if self.PowerMaster:
-                    zoneStr = pmLogPowerMasterUser_t[self.pmLang][eventZone] or "UNKNOWN"
-                else:
-                    eventZone = int(eventZone & 0x7F)
-                    zoneStr = pmLogPowerMaxUser_t[self.pmLang][eventZone] or "UNKNOWN"
+                if self.PowerMaster is not None:
+                    if self.PowerMaster:
+                        zoneStr = pmLogPowerMasterUser_t[self.pmLang][eventZone] or "UNKNOWN"
+                    else:
+                        eventZone = int(eventZone & 0x7F)
+                        zoneStr = pmLogPowerMaxUser_t[self.pmLang][eventZone] or "UNKNOWN"
                 
                 s = (pmLogEvent_t[self.pmLang][eventType] or "UNKNOWN") + " / " + zoneStr
 
@@ -3181,7 +3185,7 @@ class PacketHandling(ProtocolBase):
     # pmHandlePowerlink (0xAB)
     def handle_msgtypeAB(self, data): # PowerLink Message
         """ MsgType=AB - Panel Powerlink Messages """
-        log.info("[handle_msgtypeAB]  data {0}".format(self.toString(data)))
+        log.debug("[handle_msgtypeAB]  data {0}".format(self.toString(data)))
 
         # Restart the timer
         self.reset_watchdog_timeout()
