@@ -185,8 +185,8 @@ def setup(hass, base_config):
             _LOGGER.info("Individual X10 update {0} not yet included".format( visonic_devices ))
             
         elif type(visonic_devices) == visonicApi.LogPanelEvent:
-            # This is an update of the event log
-            _LOGGER.info("Event Log update {0} not yet implemented".format( visonic_devices ))
+            # This is an event log
+            _LOGGER.info("Panel Event Log {0}".format( visonic_devices ))
             
         elif type(visonic_devices) == int:
             tmp = int(visonic_devices)

@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.14"
+PLUGIN_VERSION = "0.3.4.15"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -871,6 +871,8 @@ log = logging.getLogger(__name__)
 
 class LogPanelEvent:
     def __init__(self):
+        self.current = None
+        self.total = None
         self.partition = None
         self.time = None
         self.date = None
@@ -879,6 +881,8 @@ class LogPanelEvent:
     def __str__(self):
         strn = ""
         strn = strn + ("part=None" if self.partition == None else "part={0:<2}".format(self.partition))
+        strn = strn + ("    current=None" if self.current == None else "    current={0:<2}".format(self.current))
+        strn = strn + ("    total=None" if self.total == None else "    total={0:<2}".format(self.total))
         strn = strn + ("    time=None" if self.time == None else "    time={0:<2}".format(self.time))
         strn = strn + ("    date=None" if self.date == None else "    date={0:<2}".format(self.date))
         strn = strn + ("    zone=None" if self.zone == None else "    zone={0:<2}".format(self.zone))
@@ -1833,6 +1837,8 @@ class PacketHandling(ProtocolBase):
         self.event_callback = event_callback
 
         self.pmPhoneNr_t = {}
+        
+        self.eventCount = 0
         self.pmEventLogDictionary = {}
         # We do not put these pin codes in to the panel status
         self.pmPincode_t = [ ]  # allow maximum of 48 user pin codes
@@ -2481,7 +2487,7 @@ class PacketHandling(ProtocolBase):
             self.handle_msgtype3F(packet[2:-2])
         elif packet[1] == 0xa0: # Event log
             self.handle_msgtypeA0(packet[2:-2])
-        elif packet[1] == 0xa3: # Event log
+        elif packet[1] == 0xa3: # Zone Names
             self.handle_msgtypeA3(packet[2:-2])
         elif packet[1] == 0xa5: # General Event
             self.handle_msgtypeA5(packet[2:-2])
@@ -2677,7 +2683,7 @@ class PacketHandling(ProtocolBase):
         # Check for the first entry, it only contains the number of events
         if eventNum == 0x01:
             log.debug("[handle_msgtypeA0] Eventlog received")
-            self.eventCount = data[0]
+            self.eventCount = data[0] - 1   ## the number of messages (including this one) minus 1
         else:
             iSec = data[2]
             iMin = data[3]
@@ -2716,9 +2722,9 @@ class PacketHandling(ProtocolBase):
             self.pmEventLogDictionary[idx].date = "{0:0>2}/{1:0>2}/{2}".format(iDay, iMonth, iYear)
             self.pmEventLogDictionary[idx].zone = zoneStr
             self.pmEventLogDictionary[idx].event = eventStr
-            #self.pmEventLogDictionary.items = idx
-            #self.pmEventLogDictionary.done = (eventNum == self.eventCount)
-            log.debug("[handle_msgtypeA0] Log Event {0}".format(self.pmEventLogDictionary[idx]))
+            self.pmEventLogDictionary[idx].total = self.eventCount
+            self.pmEventLogDictionary[idx].current = idx
+            # log.debug("[handle_msgtypeA0] Log Event {0}".format(self.pmEventLogDictionary[idx]))
             
             # Send the event log in to HA
             self.sendResponseEvent ( self.pmEventLogDictionary[idx] )
@@ -3418,7 +3424,7 @@ class EventHandling(PacketHandling):
     async def process_command_queue(self):
         while not self.suspendAllOperations:
             command = await self.command_queue.get()
-            if command[0] == "log":
+            if command[0] == "eventlog":
                 log.debug("[CommandQueue]  Calling event log")
                 self.GetEventLog(command[1])
             elif command[0] == "bypass":
@@ -3523,6 +3529,8 @@ class EventHandling(PacketHandling):
     def GetEventLog(self, pin = ""):
         """ Get Panel Event Log """
         log.info("GetEventLog")
+        self.eventCount = 0
+        self.pmEventLogDictionary = {}
         if not self.pmDownloadMode:
             isValidPL, bpin = self.pmGetPin(pin)
             if isValidPL:
