@@ -41,10 +41,6 @@ ALARM_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_CODE, default=""): cv.string,
 })
 
-ALARM_SERVICE_EVENTLOG = vol.Schema({
-    vol.Optional(ATTR_CODE, default=""): cv.string,
-})
-
 _LOGGER = logging.getLogger(__name__)
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
@@ -76,35 +72,9 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         if va is not None:
             va.sensor_bypass(call.data)
     
-    def decode_code(data) -> str:
-        if data is not None:
-            if type(data) == str:
-                if len(data) == 4:                
-                    return data
-            elif type(data) is dict:
-                if 'code' in data:
-                    if len(data['code']) == 4:                
-                        return data['code']
-        return ""
-
-    # Service call to retrieve the event log from the panel. This currently just gets dumped in the HA log file
-    def service_panel_eventlog(call):
-        # global command_queue
-        _LOGGER.info('alarm control panel received event log request')
-        if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>":
-            code = ''
-            if ATTR_CODE in call.data:
-                code = call.data[ATTR_CODE]
-            _LOGGER.info('alarm control panel making event log request')
-            queue.put_nowait(["eventlog", decode_code(code)])
-        else:
-            _LOGGER.info('alarm control panel not making event log request {0} {1}'.format(type(call.data), call.data))
-
-
     hass.bus.listen('alarm_panel_state_update', handle_event_alarm_panel)
     
     hass.services.register(DOMAIN, 'alarm_sensor_bypass', service_sensor_bypass, schema=ALARM_SERVICE_SCHEMA)
-    hass.services.register(DOMAIN, 'alarm_panel_eventlog', service_panel_eventlog, schema=ALARM_SERVICE_EVENTLOG)
 
     devices = []
     devices.append(va)

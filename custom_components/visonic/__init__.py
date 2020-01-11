@@ -20,7 +20,7 @@ from homeassistant.util.dt import utc_from_timestamp
 from homeassistant.util import convert, slugify
 from homeassistant.helpers import discovery
 from homeassistant.helpers import config_validation as cv
-from homeassistant.const import (ATTR_ARMED, EVENT_HOMEASSISTANT_STOP, CONF_HOST, CONF_PORT, CONF_PATH, CONF_DEVICE)
+from homeassistant.const import (ATTR_CODE, ATTR_ARMED, EVENT_HOMEASSISTANT_STOP, CONF_HOST, CONF_PORT, CONF_PATH, CONF_DEVICE)
 from homeassistant.helpers.entity import Entity
 from requests import ConnectTimeout, HTTPError
 from time import sleep
@@ -116,6 +116,10 @@ CONFIG_SCHEMA = vol.Schema({
     }),
 }, extra=vol.ALLOW_EXTRA)
 
+ALARM_SERVICE_EVENTLOG = vol.Schema({
+    vol.Optional(ATTR_CODE, default=""): cv.string,
+})
+
 # We only have 2 components, sensors and switches
 VISONIC_COMPONENTS = [
     'binary_sensor', 'switch'   # keep switches here to eventually support X10 devices
@@ -145,17 +149,17 @@ def setup(hass, base_config):
     # Get the user defined config
     config = base_config.get(DOMAIN)
 
+    exclude_sensor_list = config.get(CONF_EXCLUDE_SENSOR)
+    exclude_x10_list = config.get(CONF_EXCLUDE_X10)
+    
+    _LOGGER.info("Exclude sensor list = {0}     Exclude x10 list = {1}".format(exclude_sensor_list, exclude_x10_list))
+        
     # This is a callback function, called from the visonic library when a new sensor is detected/created
     #  it adds it to the list of devices and then calls discovery to fully create it in HA
     #  remember that all the sensors may not be created at the same time
     def visonic_event_callback_handler(visonic_devices):
         global csvdata
         global templatedata
-        
-        exclude_sensor_list = config.get(CONF_EXCLUDE_SENSOR)
-        exclude_x10_list = config.get(CONF_EXCLUDE_X10)
-        
-        _LOGGER.info("Exclude sensor list = {0}     Exclude x10 list = {1}".format(exclude_sensor_list, exclude_x10_list))
         
         # Check to ensure variables are set correctly
         if hass == None:
@@ -242,7 +246,6 @@ def setup(hass, base_config):
                 datadict = {	
                   "partition" : "{0}".format(visonic_devices.partition),
                   "current"   : "{0}".format(current),
-                  "total"     : "{0}".format(total),
                   "date"      : "{0}".format(visonic_devices.date),
                   "time"      : "{0}".format(visonic_devices.time),
                   "zone"      : "{0}".format(visonic_devices.zone),
@@ -260,7 +263,7 @@ def setup(hass, base_config):
                             file_loader = FileSystemLoader(['./templates', hass.config.path()+'/templates', './xml', hass.config.path()+'/xml', './www', hass.config.path()+'/www', '.', hass.config.path(), './custom_components/visonic', hass.config.path()+'/custom_components/visonic'], followlinks=True)
                             env = Environment(loader=file_loader)
                             template = env.get_template('visonic_template.xml')
-                            output = template.render(entries=templatedata)
+                            output = template.render(entries=templatedata, total=total, available="{0}".format(visonic_devices.total))
                             with open(config.get(CONF_LOG_XML_FN), "w") as f:
                                 f.write(output.rstrip())
                                 f.close()
@@ -279,6 +282,7 @@ def setup(hass, base_config):
                     if config.get(CONF_LOG_DONE):
                         hass.bus.fire('visonic_alarm_panel_event_log_complete', {
                             'total': total,
+                            'available': visonic_devices.total,
                         })            
             
         elif type(visonic_devices) == int:
@@ -493,6 +497,30 @@ def setup(hass, base_config):
         #    discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
         #    discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
         
+    def decode_code(data) -> str:
+        if data is not None:
+            if type(data) == str:
+                if len(data) == 4:                
+                    return data
+            elif type(data) is dict:
+                if 'code' in data:
+                    if len(data['code']) == 4:                
+                        return data['code']
+        return ""
+
+    # Service call to retrieve the event log from the panel. This currently just gets dumped in the HA log file
+    def service_panel_eventlog(call):
+        global command_queue
+        _LOGGER.info('alarm control panel received event log request')
+        if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>":
+            code = ''
+            if ATTR_CODE in call.data:
+                code = call.data[ATTR_CODE]
+            _LOGGER.info('alarm control panel making event log request')
+            command_queue.put_nowait(["eventlog", decode_code(code)])
+        else:
+            _LOGGER.info('alarm control panel not making event log request {0} {1}'.format(type(call.data), call.data))
+
 #    def get_entity(name):
 #        # Take 'foo.bar.baz' and return self.entities.foo.bar.baz.
 #        # This makes it easy to convert a string to an arbitrary entity.
@@ -510,6 +538,7 @@ def setup(hass, base_config):
         hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, stop_subscription)
 
         hass.services.async_register(DOMAIN, 'alarm_panel_reconnect', service_panel_reconnect)
+        hass.services.register(DOMAIN, 'alarm_panel_eventlog', service_panel_eventlog, schema=ALARM_SERVICE_EVENTLOG)
                 
         success = connect_to_alarm()
         

@@ -2,11 +2,11 @@
 <rss version="2.0">
     <channel>
         <title>Visonic Event Log</title>
-        <description>Event Entries</description>
+        <description>Event Log has {{total}} Entries</description>
         <link>https://github.com/davesmeghead/visonic</link>
         {%for entry in entries %}
         <item>
-            <description>Partition {{entry.partition}},  Date {{entry.date}},  Time {{entry.time}},  Total {{entry.total}},  Current {{entry.current}},  Zone {{entry.zone}},  Event {{entry.event}}</description>
+            <description>Partition {{entry.partition}},  Date {{entry.date}},  Time {{entry.time}},  Current {{entry.current}},  Zone {{entry.zone}},  Event {{entry.event}}</description>
         </item>
         {%endfor%}
     </channel>
