@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.4.15"
+PLUGIN_VERSION = "0.3.5.1"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -2677,7 +2677,7 @@ class PacketHandling(ProtocolBase):
 
     def handle_msgtypeA0(self, data):
         """ MsgType=A0 - Event Log """
-        log.info("[handle_MsgTypeA0] Packet = {0}".format(self.toString(data)))
+        log.debug("[handle_MsgTypeA0] Packet = {0}".format(self.toString(data)))
         
         eventNum = data[1]
         # Check for the first entry, it only contains the number of events
@@ -3537,9 +3537,9 @@ class EventHandling(PacketHandling):
                 self.SendCommand("MSG_EVENTLOG", options=[4, bpin])
                 return True
             else:
-                log.info("Get Event Log not allowed, invalid pin")
+                log.warning("Get Event Log not allowed, invalid pin")
         else:
-            log.info("Get Event Log only supported when not downloading EPROM.")
+            log.warning("Get Event Log only supported when not downloading EPROM.")
         return False
 
     def SendX10Command(self, dev, state):

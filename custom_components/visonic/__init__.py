@@ -10,8 +10,10 @@ The Connection can be made using Ethernet TCP, USB (connection to RS232) or dire
 
 import logging
 import voluptuous as vol
-#import homeassistant.helpers.entity_registry
 import asyncio
+import jinja2
+
+from jinja2 import Environment, FileSystemLoader
 
 from collections import defaultdict
 from homeassistant.util.dt import utc_from_timestamp
@@ -29,7 +31,7 @@ VISONIC_PLATFORM = 'visonic_platform'
 from custom_components.visonic.switch import VISONIC_X10
 from custom_components.visonic.binary_sensor import VISONIC_SENSORS
 
-REQUIREMENTS = ['pyserial', 'pyserial_asyncio', 'datetime']
+REQUIREMENTS = ['pyserial', 'pyserial_asyncio', 'datetime', 'jinja2']
 
 DOMAIN = 'visonic'
 
@@ -60,6 +62,15 @@ CONF_FORCE_KEYPAD = "force_numeric_keypad"
 CONF_EXCLUDE_SENSOR = "exclude_sensor"
 CONF_EXCLUDE_X10 = "exclude_x10"
 
+# Event processing for the log files from the panel
+CONF_LOG_EVENT        = "panellog_logentry_event"
+CONF_LOG_CSV_TITLE    = "panellog_csv_add_title_row"
+CONF_LOG_XML_FN       = "panellog_xml_filename"
+CONF_LOG_CSV_FN       = "panellog_csv_filename"
+CONF_LOG_DONE         = "panellog_complete_event"
+CONF_LOG_REVERSE      = "panellog_reverse_order"
+CONF_LOG_MAX_ENTRIES  = "panellog_max_entries"
+
 # Temporary B0 Config Items
 CONF_B0_ENABLE_MOTION_PROCESSING   = "b0_enable_motion_processing"
 CONF_B0_MIN_TIME_BETWEEN_TRIGGERS  = "b0_min_time_between_triggers"
@@ -81,20 +92,27 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Required(CONF_DEVICE): vol.Any( DEVICE_SOCKET_SCHEMA, DEVICE_USB_SCHEMA),
         vol.Optional(CONF_EXCLUDE_SENSOR,       default=[]): VISONIC_ID_LIST_SCHEMA,
         vol.Optional(CONF_EXCLUDE_X10,          default=[]): VISONIC_ID_LIST_SCHEMA,
-        vol.Optional(CONF_MOTION_OFF_DELAY,     120 ) : cv.positive_int,
-        vol.Optional(CONF_OVERRIDE_CODE,        "" )  : cv.string,
-        vol.Optional(CONF_DOWNLOAD_CODE,        "" )  : cv.string,
-        vol.Optional(CONF_LANGUAGE,             "EN" ): cv.string,
-        vol.Optional(CONF_ARM_CODE_AUTO,        False): cv.boolean,
-        vol.Optional(CONF_FORCE_STANDARD,       False): cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
-        vol.Optional(CONF_FORCE_KEYPAD,         False): cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
-        vol.Optional(CONF_AUTO_SYNC_TIME,       True ): cv.boolean,
-        vol.Optional(CONF_ENABLE_REMOTE_ARM,    False): cv.boolean,
-        vol.Optional(CONF_ENABLE_REMOTE_DISARM, False): cv.boolean,
-        vol.Optional(CONF_ENABLE_SENSOR_BYPASS, False): cv.boolean,
-        vol.Optional(CONF_B0_ENABLE_MOTION_PROCESSING, False): cv.boolean,
-        vol.Optional(CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,  5 ) : cv.positive_int,
-        vol.Optional(CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,  30 ) : cv.positive_int
+        vol.Optional(CONF_MOTION_OFF_DELAY,     default=120 )  : cv.positive_int,
+        vol.Optional(CONF_OVERRIDE_CODE,        default="" )   : cv.string,
+        vol.Optional(CONF_DOWNLOAD_CODE,        default="" )   : cv.string,
+        vol.Optional(CONF_LANGUAGE,             default="EN" ) : cv.string,
+        vol.Optional(CONF_ARM_CODE_AUTO,        default=False) : cv.boolean,
+        vol.Optional(CONF_FORCE_STANDARD,       default=False) : cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
+        vol.Optional(CONF_FORCE_KEYPAD,         default=False) : cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
+        vol.Optional(CONF_AUTO_SYNC_TIME,       default=True ) : cv.boolean,
+        vol.Optional(CONF_ENABLE_REMOTE_ARM,    default=False) : cv.boolean,
+        vol.Optional(CONF_ENABLE_REMOTE_DISARM, default=False) : cv.boolean,
+        vol.Optional(CONF_ENABLE_SENSOR_BYPASS, default=False) : cv.boolean,
+        vol.Optional(CONF_LOG_EVENT,            default=False) : cv.boolean,
+        vol.Optional(CONF_LOG_DONE,             default=False) : cv.boolean,
+        vol.Optional(CONF_LOG_REVERSE,          default=False) : cv.boolean,
+        vol.Optional(CONF_LOG_CSV_TITLE,        default=False) : cv.boolean,
+        vol.Optional(CONF_LOG_XML_FN,           default="")    : cv.string,
+        vol.Optional(CONF_LOG_CSV_FN,           default="")    : cv.string,
+        vol.Optional(CONF_LOG_MAX_ENTRIES,      default=10000) : cv.positive_int,
+        vol.Optional(CONF_B0_ENABLE_MOTION_PROCESSING, default=False): cv.boolean,
+        vol.Optional(CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,  default=5 ): cv.positive_int,
+        vol.Optional(CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,  default=30 ): cv.positive_int
     }),
 }, extra=vol.ALLOW_EXTRA)
 
@@ -112,6 +130,10 @@ command_queue = asyncio.Queue()
 panel_reset_counter = 0
 myTask = None
 SystemStarted = False
+
+# variables for creating the event log for csv and xml
+csvdata = None
+templatedata = None
      
 def setup(hass, base_config):
     """Set up for Visonic devices."""
@@ -127,6 +149,8 @@ def setup(hass, base_config):
     #  it adds it to the list of devices and then calls discovery to fully create it in HA
     #  remember that all the sensors may not be created at the same time
     def visonic_event_callback_handler(visonic_devices):
+        global csvdata
+        global templatedata
         
         exclude_sensor_list = config.get(CONF_EXCLUDE_SENSOR)
         exclude_x10_list = config.get(CONF_EXCLUDE_X10)
@@ -186,7 +210,76 @@ def setup(hass, base_config):
             
         elif type(visonic_devices) == visonicApi.LogPanelEvent:
             # This is an event log
-            _LOGGER.info("Panel Event Log {0}".format( visonic_devices ))
+            _LOGGER.debug("Panel Event Log {0}".format( visonic_devices ))
+            reverse = config.get(CONF_LOG_REVERSE)
+            total = min(visonic_devices.total, config.get(CONF_LOG_MAX_ENTRIES))
+            current = visonic_devices.current   # only used for output and not for logic
+            if reverse:
+                current = total + 1 - visonic_devices.current
+            # Fire event visonic_alarm_panel_event_log
+            if config.get(CONF_LOG_EVENT) and visonic_devices.current <= total:
+                hass.bus.fire('visonic_alarm_panel_event_log_entry', {
+                    'current': current,
+                    'total': total,
+                    'date': visonic_devices.date,
+                    'time': visonic_devices.time,
+                    'partition': visonic_devices.partition,
+                    'zone': visonic_devices.zone,
+                    'event': visonic_devices.event
+                })            
+
+            # Write out to an xml file
+            if visonic_devices.current==1:
+                templatedata = []
+                csvdata = ""
+
+            if csvdata is not None:
+                if reverse:
+                    csvdata = "{0}, {1}, {2}, {3}, {4}, {5}, {6}\n".format(current, total, visonic_devices.partition, visonic_devices.date, visonic_devices.time, visonic_devices.zone, visonic_devices.event ) + csvdata
+                else:
+                    csvdata = csvdata + "{0}, {1}, {2}, {3}, {4}, {5}, {6}\n".format(current, total, visonic_devices.partition, visonic_devices.date, visonic_devices.time, visonic_devices.zone, visonic_devices.event )
+                
+                datadict = {	
+                  "partition" : "{0}".format(visonic_devices.partition),
+                  "current"   : "{0}".format(current),
+                  "total"     : "{0}".format(total),
+                  "date"      : "{0}".format(visonic_devices.date),
+                  "time"      : "{0}".format(visonic_devices.time),
+                  "zone"      : "{0}".format(visonic_devices.zone),
+                  "event"     : "{0}".format(visonic_devices.event)
+                }
+                
+                templatedata.append(datadict)
+                
+                if visonic_devices.current == total:
+                    # create a new XML file with the results
+                    if len(config.get(CONF_LOG_XML_FN)) > 0:
+                        if reverse:
+                            templatedata.reverse()
+                        try:
+                            file_loader = FileSystemLoader(['./templates', hass.config.path()+'/templates', './xml', hass.config.path()+'/xml', './www', hass.config.path()+'/www', '.', hass.config.path(), './custom_components/visonic', hass.config.path()+'/custom_components/visonic'], followlinks=True)
+                            env = Environment(loader=file_loader)
+                            template = env.get_template('visonic_template.xml')
+                            output = template.render(entries=templatedata)
+                            with open(config.get(CONF_LOG_XML_FN), "w") as f:
+                                f.write(output.rstrip())
+                                f.close()
+                        except:
+                            _LOGGER.debug("Panel Event Log - Failed to write XML file")
+                    if len(config.get(CONF_LOG_CSV_FN)) > 0:
+                        try:
+                            if config.get(CONF_LOG_CSV_TITLE):
+                                csvdata = "current, total, partition, date, time, zone, event\n" + csvdata
+                            with open(config.get(CONF_LOG_CSV_FN), "w") as f:
+                                f.write(csvdata.rstrip())
+                                f.close()
+                        except:
+                            _LOGGER.debug("Panel Event Log - Failed to write CSV file")
+                    csvdata = None
+                    if config.get(CONF_LOG_DONE):
+                        hass.bus.fire('visonic_alarm_panel_event_log_complete', {
+                            'total': total,
+                        })            
             
         elif type(visonic_devices) == int:
             tmp = int(visonic_devices)

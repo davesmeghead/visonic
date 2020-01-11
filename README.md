@@ -119,6 +119,8 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.4.13   | Updated event and zone information in the panel attributes (Panel Last Event) for PowerMaster panels (a lot more zones and event types). No change to B0 Experimental message processing. |
 | 0.3.4.14   | Changed the Im alive and status message exchange when in standard, standard plus and powerlink modes. No change to B0 Experimental message processing. |
 | 0.3.4.15   | Updated Panel Event Log Processing. No change to B0 Experimental message processing. |
+| 0.3.5      | First Release of Panel Event Log Processing. Several configuration.yaml parameters added, a new service to call to start it and several new HA events can be generated. No change to B0 Experimental message processing. |
+| 0.3.5.1    | Updated Release of Panel Event Log Processing. No change to B0 Experimental message processing. |
 
 
 ## Instructions and what works so far
@@ -183,6 +185,11 @@ visonic:
   allow_remote_disarm: 'yes'
   exclude_sensor: [2,3]
   exclude_x10: [1]
+  panellog_logentry_event: 'yes'
+  panellog_csv_add_title_row: 'yes'
+  panellog_xml_filename: 'panel_log.xml'
+  panellog_csv_filename: 'panel_log.csv'
+  panellog_complete_event: 'yes'
 #  force_numeric_keypad: 'yes'
 #  override_code: '1234'
 #  download_code: '9876'
@@ -198,24 +205,35 @@ You can also have a USB (for RS232) connection:
 
 The default settings if you miss it out of the configuration.yaml file:
 
-| Name                    | Default | Description | List of values |
-|-------------------------|  :---:  |-------------|----------------|
-| motion_off              |  120    | The time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period. | Integer Seconds |
-| language                | 'EN'    | Set the Langauge. 'EN' for English, 'NL' for Dutch or 'FR' for French. | 'EN', 'NL' or 'FR' |
-| force_standard          | 'no'    | Determine whether it tries to connect in Standard Plus & Powerlink mode or just goes to Standard. | 'no' or 'yes' |
-| sync_time               | 'yes'   | Attempt to synchronise the time between the device you run HA on and the alarm panel. Powermax only, not Powermaster. | 'no' or 'yes' |
-| allow_remote_arm        | 'no'    | Determines whether the panel can be armed from within HA. | 'no' or 'yes' |
-| allow_remote_disarm     | 'no'    | Determines whether the panel can be disarmed from within HA. | 'no' or 'yes' |
-| override_code           | ''      | If in Standard mode, then this is the 4 digit code used to arm and disarm. See note 1 below | 4 digit string |
-| download_code           | '5650'  | This is the 4 digit code used to download the EPROM and to Enroll for Powerlink. | 4 digit hex string |
-| arm_without_usercode    | 'no'    | If the Panel is Disarmed, then Arm without the usercode (not all panels support this). See note 2 below. | 'no' or 'yes' |
-| force_numeric_keypad    | 'no'    | Display the numeric keypad to force the user to enter the correct code (in any Mode). The only exception is the use of arm_without_usercode. | 'no' or 'yes' |
-| exclude_sensor          | []      | A list of Zone sensors to exclude e.g to exclude zones Z02 and Z03 then use [2,3] | [1,2 etc] |
-| exclude_x10             | []      | A list of X10 devices to exclude e.g to exclude devices X02 and X03 then use [2,3]. For PGM use 0 in the list. | [0,1,2 etc] |
+| Name                       | Default | Description | List of values |
+|----------------------------|  :---:  |-------------|----------------|
+| motion_off                 |  120    | The time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period. | Integer Seconds |
+| language                   | 'EN'    | Set the Langauge. 'EN' for English, 'NL' for Dutch or 'FR' for French. | 'EN', 'NL' or 'FR' |
+| force_standard             | 'no'    | Determine whether it tries to connect in Standard Plus & Powerlink mode or just goes to Standard. | 'no' or 'yes' |
+| sync_time                  | 'yes'   | Attempt to synchronise the time between the device you run HA on and the alarm panel. Powermax only, not Powermaster. | 'no' or 'yes' |
+| allow_remote_arm           | 'no'    | Determines whether the panel can be armed from within HA. | 'no' or 'yes' |
+| allow_remote_disarm        | 'no'    | Determines whether the panel can be disarmed from within HA. | 'no' or 'yes' |
+| override_code              | ''      | If in Standard mode, then this is the 4 digit code used to arm and disarm. See note 1 below | 4 digit string |
+| download_code              | '5650'  | This is the 4 digit code used to download the EPROM and to Enroll for Powerlink. | 4 digit hex string |
+| arm_without_usercode       | 'no'    | If the Panel is Disarmed, then Arm without the usercode (not all panels support this). See note 2 below. | 'no' or 'yes' |
+| force_numeric_keypad       | 'no'    | Display the numeric keypad to force the user to enter the correct code (in any Mode). The only exception is the use of arm_without_usercode. | 'no' or 'yes' |
+| exclude_sensor             | []      | A list of Zone sensors to exclude e.g to exclude zones Z02 and Z03 then use [2,3] | [1,2 etc] |
+| exclude_x10                | []      | A list of X10 devices to exclude e.g to exclude devices X02 and X03 then use [2,3]. For PGM use 0 in the list. | [0,1,2 etc] |
+| panellog_logentry_event    | 'no'    | Generate an event within HA for each panel log entry (potentially hundreds). | 'no' or 'yes' |
+| panellog_xml_filename      | ''      | If this is set to something other than an empty string, create an xml file with the content of the panel event log using an xml template (Note 3 and 4) | '' or 'validpath/filename.xml' |
+| panellog_csv_filename      | ''      | If this is set to something other than an empty string, create a csv file with the content of the panel event log (Note 4) | '' or 'validpath/filename.csv' |
+| panellog_csv_add_title_row | 'no'    | If creating a csv file, then do or do not include a title row at the top | 'no' or 'yes' |
+| panellog_complete_event    | 'no'    | Generate an event within HA at the end of the log retrieval. As this could take tens of seconds, this HA event marks the end. | 'no' or 'yes' |
+| panellog_reverse_order     | 'no'    | Reverse the order of the entries in the saved file(s) | 'no' or 'yes' |
+| panellog_max_entries       | 10000   | Retrieve at most this number of log entries. For example, set this to 1 to get the most recent, etc... | Integer |
 
 Note 1: If in Standard Plus or Powerlink mode then this is not used. If in Standard mode and the override_code is not set then you will have to enter your 4 digit code every time you arm and disarm. It depends on how secure you make your system and how much you trust it.
 
 Note 2: This is only used when in Standard mode. Some panels will arm without entering the 4 digit user code but some will not. So if your panel does not need a user code to arm then set this to 'yes' in your HA configuration files.
+
+Note 3: This creates an xml file from the xml template defined in a file called 'visonic_template.xml'. There is a default 'visonic_template.xml' file with this custom component that it uses unless it finds the file in the following directory locations, in order: templates, xml, www, '.'   (where '.' is your configuration directory)
+
+Note 4: Be careful with the filename path, especially putting a leading "/". By default, if you do not specify a path, the file is created in your configuration directory.
 
 ### Running it in Home Assistant
 Put the files in your custom_components directory that is within your HA config directory. 
@@ -244,17 +262,53 @@ You can change this in your customize configuration like this for example
 ### Home Assistant Visonic Panel Services
 The Component responds to some of the built in HA Alarm Panel Services. The first 3 are HA built in, the 4th I have added.
 
-As an aside, I couldn't get the built in service "alarm_arm_custom_bypass" to work and then realised this is for the panel as a whole and not individual sensors. It is not yet implemented.
+In all 5 services the "code" service data is optional, depending on the mode that we're connected as i.e. in Standard mode then you will need to set the code.
 
-In all 4 services the "code" service data is optional, depending on the mode that we're connected as i.e. in Standard mode then you will need to set the code.
-
-| Name                    | Description | Example Service Data |
-|-------------------------|-------------|----------------------|
+| Name                               | Description | Example Service Data |
+|------------------------------------|-------------|----------------------|
 | alarm_control_panel.alarm_arm_away | Arm the panel away | "entity_id":"alarm_control_panel.visonic_alarm" |
 | alarm_control_panel.alarm_arm_home | Arm the panel home | "entity_id":"alarm_control_panel.visonic_alarm" |
 | alarm_control_panel.alarm_disarm   | Disarm the panel   | "entity_id":"alarm_control_panel.visonic_alarm" |
 | visonic.alarm_sensor_bypass        | Bypass/Arm individual sensors (must be done when panel is disarmed).  | "entity_id":"binary_sensor.visonic_z01", "bypass":"True" |
+| visonic.alarm_panel_eventlog       | Request the panel to retrieve the panel event log and process it.  |   |
 
+
+### Home Assistant Visonic Panel Events
+The Component generates these events on the HA event bus.
+
+| Name                                    | Description | Event Data |
+|-----------------------------------------|-------------|----------------------|
+| alarm_panel_state_update                | An HA Event is sent through HA for various panel and sensor events | condition (see 1 below) |
+| visonic_alarm_panel_event_log_entry     | When the event log is being downloaded, an HA event for every panel log entry (if enabled in config) | see 2 below |
+| visonic_alarm_panel_event_log_complete  | When the event log from the panel has been downloaded (if enabled in config) | None |
+
+
+Note 1
+The data associated with the event is { 'condition': X }   where X is 1, 2, 3, 4, 5, 6, 7 or 8
+```
+        - 1 is a zone update
+        - 2 is a panel update
+        - 3 is a panel update AND the alarm is active!!!!!
+        - 4 is a panel reset
+        - 5 is a pin rejected
+        - 6 is a tamper alarm
+        - 7 is an EPROM download timeout, go to Standard Mode
+        - 8 is a watchdog timeout, give up trying to achieve a better mode
+        - 9 is a watchdog timeout, going to try again to get a better mode
+```
+I may add more information to the event later if required
+
+Note 2
+The list of parameters for each log entry
+```
+    - current
+    - total
+    - date
+    - time
+    - partition
+    - zone
+    - event
+```    
 
 ### How to use it in Home Assistant Automations
 ```
@@ -283,25 +337,12 @@ Of course you'll have to write your own scripts!
 - You need to specify either a USB(RS232) connection or an Ethernet(TCP) connection as the device type, this setting is mandatory. 
 - For Powerlink mode to work the enrollment procedure has to be followed. If you don't enroll the Powerlink on the Alarm Panel the binding will operate in Standard or Standard Plus mode. On the newer software versions of the PowerMax panels the Powerlink enrollment is automatic, and the binding should only operate in 'Powerlink' mode (if enrollment is successful).
 - You can force the binding to use the Standard mode. In this mode, the binding will not download the alarm panel EPROM and so the binding will not know your user code.
-- An HA Event 'alarm_panel_state_update' (that you will probably never use) is sent through HA for:
-    - The data associated with the event is { 'condition': X }   where X is 1, 2, 3, 4, 5, 6, 7 or 8
-        - 1 is a zone update
-        - 2 is a panel update
-        - 3 is a panel update AND the alarm is active!!!!!
-        - 4 is a panel reset
-        - 5 is a pin rejected
-        - 6 is a tamper alarm
-        - 7 is an EPROM download timeout, go to Standard Mode
-        - 8 is a watchdog timeout, give up trying to achieve a better mode
-        - 9 is a watchdog timeout, going to try again to get a better mode
-    - I may add more information to the event later if required
 
 ## What it doesn't do in Home Assistant
 - Partitions, it assumes a single partition
 - What happens when the alarm is actually triggered (apart from sending an event in HA and setting the Alarm Status state)
 - The compatibility of the binding with the Powermaster alarm panel series is probably only partial.
 - The USB connection is implemented but was not tested (although other users have got it working).
-- The Event Log is not yet implemented. It works but I don't know what to do with it in HA.
 
 ## Extra Hidden Functionality
 There are 2 extras that I include in the release
