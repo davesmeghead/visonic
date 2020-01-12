@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.5.2"
+PLUGIN_VERSION = "0.3.5.3"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -1295,6 +1295,7 @@ class ProtocolBase(asyncio.Protocol):
             elif not self.giveupTrying and not self.pmDownloadComplete and not self.ForceStandardMode and not self.pmDownloadMode:
                 self.reset_watchdog_timeout()
                 download_counter = download_counter + 1
+                log.debug("[Controller] download_counter is {0}".format(download_counter))
                 if download_counter >= DOWNLOAD_RETRY_DELAY:  # 
                     download_counter = 0
                     # trigger a download
@@ -1843,11 +1844,12 @@ class PacketHandling(ProtocolBase):
         # We do not put these pin codes in to the panel status
         self.pmPincode_t = [ ]  # allow maximum of 48 user pin codes
 
-        self.lastSendOfDownloadEprom = self.getTimeFunction() - timedelta(seconds=100)  # take off 100 seconds so the first command goes through immediately
+        secdelay = DOWNLOAD_RETRY_DELAY + 100
+        self.lastSendOfDownloadEprom = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off DOWNLOAD_RETRY_DELAY + 100 seconds so the first command goes through immediately
         
         # Variables to manage the PowerMAster B0 message and the triggering of Motion
-        self.lastRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=100)  # take off 100 seconds so the first command goes through immediately
-        self.firstRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=100)  # take off 100 seconds so the first command goes through immediately
+        self.lastRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off 100 seconds so the first command goes through immediately
+        self.firstRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off 100 seconds so the first command goes through immediately
         self.zoneNumberMasterMotion = 0
         self.zoneDataMasterMotion = bytearray(b'')
         
@@ -1889,6 +1891,7 @@ class PacketHandling(ProtocolBase):
         self.pmSilentPanic = False
         self.lastPacket = None
         self.lastPacketCounter = 0
+        self.sensorsCreated = False
         
         # determine when MSG_ENROLL is sent to the panel
         self.doneAutoEnroll = False
@@ -2317,6 +2320,8 @@ class PacketHandling(ProtocolBase):
                                 del self.pmSensorDev_t[i]
                                 #self.pmSensorDev_t[i] = None # remove zone if needed
 
+                self.sensorsCreated = True
+
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process PGM/X10 settings
                 setting = self.pmReadSettings(pmDownloadItem_t["MSG_DL_PGMX10"])
@@ -2502,7 +2507,8 @@ class PacketHandling(ProtocolBase):
         elif packet[1] == 0xac: # X10 Names
             self.handle_msgtypeAC(packet[2:-2])
         elif packet[1] == 0xb0: # PowerMaster Event
-            self.handle_msgtypeB0(packet[2:-2])
+            if not self.pmDownloadMode:   # only process when not downloading EPROM
+                self.handle_msgtypeB0(packet[2:-2])  
         else:
             log.info("[handle_packet] Unknown/Unhandled packet type " + self.toString(packet))
 
@@ -2629,6 +2635,7 @@ class PacketHandling(ProtocolBase):
         # We got a first response, now we can Download the panel EPROM settings
         interval = self.getTimeFunction() - self.lastSendOfDownloadEprom
         td = timedelta(seconds=DOWNLOAD_RETRY_DELAY)  # prevent multiple requests for the EPROM panel settings, at least DOWNLOAD_RETRY_DELAY seconds 
+        log.debug("[handle_msgtype3C] interval={0}  td={1}   self.lastSendOfDownloadEprom={2}    timenow={3}".format(interval, td, self.lastSendOfDownloadEprom, self.getTimeFunction()))
         if interval > td:
             self.lastSendOfDownloadEprom = self.getTimeFunction()
             self.pmReadPanelSettings(self.PowerMaster)
@@ -2778,7 +2785,7 @@ class PacketHandling(ProtocolBase):
 
         log.debug("[handle_msgtypeA5] Parsing A5 packet " + self.toString(data))
 
-        if eventType == 0x01: # Zone alarm status
+        if self.sensorsCreated and eventType == 0x01: # Zone alarm status
             log.debug("[handle_msgtypeA5] Zone Alarm Status")
             val = self.makeInt(data[2:6])
             if val != self.zonealarm_old:
@@ -2798,7 +2805,7 @@ class PacketHandling(ProtocolBase):
                         self.pmSensorDev_t[i].ztamper = (val & (1 << i) != 0)
                         self.pmSensorDev_t[i].pushChange()
 
-        elif eventType == 0x02: # Status message - Zone Open Status
+        elif self.sensorsCreated and eventType == 0x02: # Status message - Zone Open Status
             # if in standard mode then use this A5 status message to reset the watchdog timer        
             if not self.pmPowerlinkMode:
                 log.debug("[handle_msgtypeA5]      Got A5 02 message, resetting watchdog")
@@ -2826,7 +2833,7 @@ class PacketHandling(ProtocolBase):
                         self.pmSensorDev_t[i].lowbatt = (val & (1 << i) != 0)
                         self.pmSensorDev_t[i].pushChange()
 
-        elif eventType == 0x03: # Tamper Event
+        elif self.sensorsCreated and eventType == 0x03: # Tamper Event
             val = self.makeInt(data[2:6])
             log.debug("[handle_msgtypeA5]      Trigger (Inactive) Status Zones 32-01: {:032b}".format(val))
             # This status is different from the status in the 0x02 part above i.e they are different values.
@@ -3058,10 +3065,11 @@ class PacketHandling(ProtocolBase):
                         # it is not enrolled and we already know about it from the EPROM, set enrolled to False
                         self.pmSensorDev_t[i].enrolled = False
 
+                self.sensorsCreated = True
                 self.sendResponseEvent ( visonic_devices )
 
             val = self.makeInt(data[6:10])
-            if val != self.bypass_old:
+            if self.sensorsCreated and val != self.bypass_old:
                 log.debug("[handle_msgtypeA5]      Bypassed Zones 32-01: {:032b}".format(val))
                 self.bypass_old = val
                 for i in range(0, 32):
@@ -3265,7 +3273,7 @@ class PacketHandling(ProtocolBase):
         log.info("[handle_msgtypeB0] Received {0} message {1}/{2} (len = {3})    full data = {4}".format(PanelStatus["Model"] or "UNKNOWN", msgType, subType, msgLen, self.toString(data)))
         #  Received PowerMaster30 message 3/36 (len = 26)   full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
         
-        if not self.pmDownloadMode and msgType == 0x03 and subType == 0x39:
+        if msgType == 0x03 and subType == 0x39:
             # Movement detected (probably)
             #  Received PowerMaster10 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
             #  Received PowerMaster30 message 3/57 (len = 8)    full data = 03 39 08 ff 08 ff 03 18 24 4b 90 43

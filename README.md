@@ -122,6 +122,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.5      | First Release of Panel Event Log Processing. Several configuration.yaml parameters added, a new service to call to start it and several new HA events can be generated. No change to B0 Experimental message processing. |
 | 0.3.5.1    | Updated Release of Panel Event Log Processing. No change to B0 Experimental message processing. |
 | 0.3.5.2    | Updated Release of Panel Event Log Processing. Minor Functional Change. No change to B0 Experimental message processing. |
+| 0.3.5.3    | As per 0.3.5.2. Updated Release of Panel Event Log Processing. Minor Functional Change (battery status). No change to B0 Experimental message processing. |
 
 
 ## Instructions and what works so far
@@ -232,7 +233,7 @@ Note 1: If in Standard Plus or Powerlink mode then this is not used. If in Stand
 
 Note 2: This is only used when in Standard mode. Some panels will arm without entering the 4 digit user code but some will not. So if your panel does not need a user code to arm then set this to 'yes' in your HA configuration files.
 
-Note 3: This creates an xml file from the xml template defined in a file called 'visonic_template.xml'. There is a default 'visonic_template.xml' file with this custom component that it uses unless it finds the file in the following directory locations, in order: templates, xml, www, '.'   (where '.' is your configuration directory). The dictionary variable ```entries``` is passed in to the jinja2 xml file for processing. Take a look at the default file and you should see what I mean.
+Note 3: This creates an xml file from the xml template defined in a file called 'visonic_template.xml'. There is a default 'visonic_template.xml' file with this custom component that it uses unless it finds the file in the following directory locations, in order: templates, xml, www, '.'   (where '.' is your configuration directory). The dictionary variables ```entries```  ```total``` and ```available``` are passed in to the jinja2 xml file for processing. Take a look at the default file and you should see what I mean.
 
 Note 4: Be careful with the filename path, especially putting a leading "/". By default, if you do not specify a path, the file is created in your configuration directory.
 
