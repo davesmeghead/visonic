@@ -3,7 +3,8 @@ Custom Component for integration with Home Assistant
 
 ## Introduction
 Visonic produce the Powermax alarm panel series (PowerMax+, PowerMaxExpress, PowerMaxPro and PowerMaxComplete) and the Powermaster alarm series (PowerMaster 10 and PowerMaster 30). This Home Assistant Component allows you to control the alarm panel (arm/disarm) and allows you to use the Visonic sensors (movement, door contact, ...) and X10 devices within Home Assistant.
-Please note that after extensive work, the original PowerMax Panel is not able to be used as it does not support the Powerlink protocol that this component relies on.
+Please note that after extensive work, the original PowerMax Panel is not able to be used as it does not support the Powerlink protocol that this component relies on. 
+Also the Visonic 360R Alarm Panel is not fitted with an RS232 connection and cannot have a Powerlink3 fitted, it is therefore not compatible with this HA Component.
 
 ## What hardware will you need?
 You have a choice, you can connect to your Visonic Alarm Panel using RS232, USB or Ethernet (Wired or Wireless)
@@ -46,6 +47,12 @@ You connect it in to your Visonic alarm panel like [this](https://www.domoticafo
 
 I connected the 3.75v pin on the panel to the Vcc (3.3v) on my device, gnd to gnd and Tx to Rx, Rx to Tx. 4 wires and that's it. It just worked!
 Some users have found that they only have 5 volts available and they need 3.3 volts and so need to use a DC supply regulator (with 2 10uF Capacitors) to generate the 3.3 volts and then they also need a logic level shifter between the 5 and 3.3 volt TTL levels.
+
+#### Baud rate
+Different panel firmware versions uses different baudrates. This needs to be set in either the Ethernet/RS232 connection or the USB/RS232 connection. I believe that these are:
+17.133 and below - baudrate is 9600
+18.XXX and above - baudrate is 38400
+
 
 ## Release
 This Component is compliant with the new Component format within the Home Assistant structure.
@@ -123,6 +130,8 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.5.1    | Updated Release of Panel Event Log Processing. No change to B0 Experimental message processing. |
 | 0.3.5.2    | Updated Release of Panel Event Log Processing. Minor Functional Change. No change to B0 Experimental message processing. |
 | 0.3.5.3    | As per 0.3.5.2. Updated Release of Panel Event Log Processing. Minor Functional Change (battery status). No change to B0 Experimental message processing. |
+| 0.3.5.4    | Added new config parameter "force_autoenroll". This is a breaking change for Powermax+ users, they need to set this to 'No' in their configuration file. "force_autoenroll" is only used when the panel rejects an EPROM download request and we do not know the panel type. No change to B0 Experimental message processing. |
+| 0.3.5.5    | Alarm Panel Siren handling updated.  Bug fix to remove wait_for warnings.  No change to B0 Experimental message processing. |
 
 
 ## Instructions and what works so far
@@ -212,6 +221,7 @@ The default settings if you miss it out of the configuration.yaml file:
 | motion_off                 |  120    | The time to keep the zone trigger True after it is triggered. There will not be another trigger for that sensor within this time period. | Integer Seconds |
 | language                   | 'EN'    | Set the Langauge. 'EN' for English, 'NL' for Dutch or 'FR' for French. | 'EN', 'NL' or 'FR' |
 | force_standard             | 'no'    | Determine whether it tries to connect in Standard Plus & Powerlink mode or just goes to Standard. | 'no' or 'yes' |
+| force_autoenroll           | 'yes'   | Determine the ability for this Component to autoenroll prior to the panel type being known. Powermax+ panels cannot autoenroll and need to set this to 'no'. | 'no' or 'yes' |
 | sync_time                  | 'yes'   | Attempt to synchronise the time between the device you run HA on and the alarm panel. Powermax only, not Powermaster. | 'no' or 'yes' |
 | allow_remote_arm           | 'no'    | Determines whether the panel can be armed from within HA. | 'no' or 'yes' |
 | allow_remote_disarm        | 'no'    | Determines whether the panel can be disarmed from within HA. | 'no' or 'yes' |

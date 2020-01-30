@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.5.3"
+PLUGIN_VERSION = "0.3.5.5"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -88,6 +88,7 @@ PanelSettings = {
    "ArmWithoutCode"       : False,
    "PluginDebug"          : False,
    "ForceStandard"        : False,
+   "ForceAutoEnroll"      : True,
    "ForceKeypad"          : False,
    "ResetCounter"         : 0,
    "AutoSyncTime"         : True,
@@ -1176,6 +1177,7 @@ class ProtocolBase(asyncio.Protocol):
 
         # get the value for Force standard mode (i.e. do not attempt to go to powerlink)
         self.ForceStandardMode = PanelSettings["ForceStandard"] # INTERFACE : Get user variable from HA to force standard mode or try for PowerLink
+        self.ForceAutoEnroll = PanelSettings["ForceAutoEnroll"] # INTERFACE : Force Auto Enroll when don't know panel type. Only set to true
         self.Initialise()
         self.ArmWithoutCode = PanelSettings["ArmWithoutCode"] # INTERFACE : Get user variable from HA to arm without user code
 
@@ -2573,13 +2575,16 @@ class PacketHandling(ProtocolBase):
                     self.sendResponseEvent ( 5 )  # push changes through to the host, the pin has been rejected
                     
                 elif lastCommandData[0] == 0x24:
-                    log.debug("[handle_msgtype08] Got an Access Denied and we have sent a Download command to the Panel, so try to Enroll")
+                    log.debug("[handle_msgtype08] Got an Access Denied and we have sent a Download command to the Panel")
                     self.pmDownloadMode = False
                     self.doneAutoEnroll = False
                     if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
                         if self.PanelType >= 2:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
+                            log.debug("[handle_msgtype08]                   Try to auto enroll")
                             self.SendMsg_ENROLL() # Auto enroll
-
+                    elif self.ForceAutoEnroll:
+                        log.debug("[handle_msgtype08]                   Try to auto enroll")
+                        self.SendMsg_ENROLL() # Auto enroll
 
     def handle_msgtype0B(self, data): # STOP
         """ Handle STOP from the panel """
@@ -3156,21 +3161,28 @@ class PacketHandling(ProtocolBase):
                 # 0x01 is "Interior Alarm", 0x02 is "Perimeter Alarm", 0x03 is "Delay Alarm", 0x05 is "24h Audible Alarm"
                 # 0x04 is "24h Silent Alarm", 0x0B is "Panic From Keyfob", 0x0C is "Panic From Control Panel"
                 siren = eventType == 0x01 or eventType == 0x02 or eventType == 0x03 or eventType == 0x05
+                
+                # 0x1B is "Cancel Alarm"
+                cancel = eventType == 0x1B
+                
+                # 0x13 is "Delay Restore”
+                ignore = eventType == 0x13
 
                 if tamper:
                     pmTamperActive = self.getTimeFunction()
 
-                if not self.pmSilentPanic and siren:
+                # no clauses as if siren gets true again then keep updating self.pmSirenActive with the time
+                if siren and not self.pmSilentPanic:
                     self.pmSirenActive = self.getTimeFunction()
                     log.info("[handle_msgtypeA7] ******************** Alarm Active *******************")
                 
-                # 0x1B is a cancel alarm
-                if eventType == 0x1B and self.pmSirenActive is not None: # Cancel Alarm
+                # cancel alarm and the alarm has been triggered
+                if cancel and self.pmSirenActive is not None: # Cancel Alarm
                     self.pmSirenActive = None
                     log.info("[handle_msgtypeA7] ******************** Alarm Cancelled ****************")
                 
                 # Siren has been active but it is no longer active (probably timed out and has then been disarmed)
-                if not siren and self.pmSirenActive is not None: # Alarm Timed Out ????
+                if not ignore and not siren and self.pmSirenActive is not None: # Alarm Timed Out ????
                     self.pmSirenActive = None
                     log.info("[handle_msgtypeA7] ******************** Alarm Not Sounding ****************")
                 

@@ -50,6 +50,7 @@ DEFAULT_DEVICE_BAUD = 9600
 CONF_MOTION_OFF_DELAY = "motion_off"
 CONF_LANGUAGE = "language"
 CONF_FORCE_STANDARD = "force_standard"
+CONF_FORCE_AUTOENROLL = "force_autoenroll"
 CONF_AUTO_SYNC_TIME = "sync_time"
 CONF_ENABLE_REMOTE_ARM = "allow_remote_arm"
 CONF_ENABLE_REMOTE_DISARM = "allow_remote_disarm"
@@ -98,6 +99,7 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Optional(CONF_LANGUAGE,             default="EN" ) : cv.string,
         vol.Optional(CONF_ARM_CODE_AUTO,        default=False) : cv.boolean,
         vol.Optional(CONF_FORCE_STANDARD,       default=False) : cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
+        vol.Optional(CONF_FORCE_AUTOENROLL,     default=True)  : cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
         vol.Optional(CONF_FORCE_KEYPAD,         default=False) : cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
         vol.Optional(CONF_AUTO_SYNC_TIME,       default=True ) : cv.boolean,
         vol.Optional(CONF_ENABLE_REMOTE_ARM,    default=False) : cv.boolean,
@@ -335,6 +337,7 @@ def setup(hass, base_config):
         visonicApi.setConfig("MotionOffDelay", config.get(CONF_MOTION_OFF_DELAY))
         visonicApi.setConfig("PluginLanguage", config.get(CONF_LANGUAGE))
         visonicApi.setConfig("ForceStandard", config.get(CONF_FORCE_STANDARD))
+        visonicApi.setConfig("ForceAutoEnroll", config.get(CONF_FORCE_AUTOENROLL))
         visonicApi.setConfig("AutoSyncTime", config.get(CONF_AUTO_SYNC_TIME))
         visonicApi.setConfig("EnableRemoteArm", config.get(CONF_ENABLE_REMOTE_ARM))
         visonicApi.setConfig("EnableRemoteDisArm", config.get(CONF_ENABLE_REMOTE_DISARM))
