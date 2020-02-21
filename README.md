@@ -132,6 +132,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.5.3    | As per 0.3.5.2. Updated Release of Panel Event Log Processing. Minor Functional Change (battery status). No change to B0 Experimental message processing. |
 | 0.3.5.4    | Added new config parameter "force_autoenroll". This is a breaking change for Powermax+ users, they need to set this to 'No' in their configuration file. "force_autoenroll" is only used when the panel rejects an EPROM download request and we do not know the panel type. No change to B0 Experimental message processing. |
 | 0.3.5.5    | Alarm Panel Siren handling updated.  Bug fix to remove wait_for warnings.  No change to B0 Experimental message processing. |
+| 0.3.5.6    | Alarm Panel Siren handling updated.  Detect when no data received from panel from the start up to 30 seconds then something wrong.  No change to B0 Experimental message processing. |
 
 
 ## Instructions and what works so far
@@ -283,6 +284,7 @@ In all 5 services the "code" service data is optional, depending on the mode tha
 | alarm_control_panel.alarm_disarm   | Disarm the panel   | "entity_id":"alarm_control_panel.visonic_alarm" |
 | visonic.alarm_sensor_bypass        | Bypass/Arm individual sensors (must be done when panel is disarmed).  | "entity_id":"binary_sensor.visonic_z01", "bypass":"True" |
 | visonic.alarm_panel_eventlog       | Request the panel to retrieve the panel event log and process it.  |   |
+| visonic.service_panel_reconnect    | Request to reconnect to the panel following a previous problem.  |   |
 
 
 ### Home Assistant Visonic Panel Events
@@ -296,21 +298,25 @@ The Component generates these events on the HA event bus.
 
 
 Note 1
-The data associated with the event is { 'condition': X }   where X is 1, 2, 3, 4, 5, 6, 7 or 8
+
+The data associated with the event is { 'condition': X }   where X is 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 or 10
 ```
-        - 1 is a zone update
-        - 2 is a panel update
-        - 3 is a panel update AND the alarm is active!!!!!
-        - 4 is a panel reset
-        - 5 is a pin rejected
-        - 6 is a tamper alarm
-        - 7 is an EPROM download timeout, go to Standard Mode
-        - 8 is a watchdog timeout, give up trying to achieve a better mode
-        - 9 is a watchdog timeout, going to try again to get a better mode
+        -  0 is a problem with the component itself, this is usually a communication failure with the panel
+        -  1 is a zone update
+        -  2 is a panel update
+        -  3 is a panel update AND the alarm is active!!!!!
+        -  4 is a panel reset
+        -  5 is a pin rejected
+        -  6 is a tamper alarm
+        -  7 is an EPROM download timeout, go to Standard Mode
+        -  8 is a watchdog timeout, give up trying to achieve a better mode
+        -  9 is a watchdog timeout, going to try again to get a better mode
+        - 10 there has not been any data received from the panel at all within the timeout period. Check your hardware.
 ```
 I may add more information to the event later if required
 
 Note 2
+
 The list of parameters for each log entry
 ```
     - current

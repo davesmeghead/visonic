@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.5.5"
+PLUGIN_VERSION = "0.3.5.6"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -79,6 +79,10 @@ POWERLINK_RETRY_DELAY = 180
 
 # Number of seconds between trying to achieve powerlink (must have achieved download first) and giving up. Better to be half way between retry delays
 POWERLINK_TIMEOUT = 4.5 * POWERLINK_RETRY_DELAY
+
+# The number of seconds that if we have not received any data packets from the panel at all then suspend this plugin and report to HA
+NO_RECEIVE_DATA_TIMEOUT = 30
+
 
 PanelSettings = {
    "MotionOffDelay"       : 120,
@@ -281,8 +285,8 @@ pmReceiveMsg_t = {
    0xA7 : PanelCallBack(   15,  True, False ),   # 15 Panel Status Change
    0xAB : PanelCallBack(   15,  True, False ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
    0xAC : PanelCallBack(   15,  True, False ),   # 15 X10 Names ???
-   0xB0 : PanelCallBack( None,  True, False ),
-   0xF1 : PanelCallBack(    9, False, False )    # 9
+   0xB0 : PanelCallBack( None,  True, False ),   # The B0 message comes in varying lengths
+   0xF4 : PanelCallBack( None,  True,  True )    # The F4 message comes in varying lengths. Can't decode it yet but this will accept it and ignore it
 }
 
 pmReceiveMsgB0_t = {
@@ -1069,6 +1073,9 @@ class ProtocolBase(asyncio.Protocol):
         # The last sent message
         self.pmLastSentMessage = None
         
+        # Timestamp of the last received data from the panel. If this remains set to none then we have a comms problem
+        self.lastRecvOfPanelData = None
+        
         # Panel type: 0=Powermax (which we dont support), 1=Powermax+, 4=Powermax Pro Part
         #    PanelType=0 : PowerMax , Model=21   Powermaster False  <<== THIS DOES NOT WORK (NO POWERLINK SUPPORT) ==>> 
         #    PanelType=1 : PowerMax+ , Model=47   Powermaster False
@@ -1256,6 +1263,7 @@ class ProtocolBase(asyncio.Protocol):
         download_counter = 0
         powerlink_counter = POWERLINK_RETRY_DELAY - 10 # set so first time it does it after 10 seconds
         downloadDuration = 0
+        no_data_received_counter = 0
         
         while not self.suspendAllOperations:
     
@@ -1382,9 +1390,17 @@ class ProtocolBase(asyncio.Protocol):
             else:
                 # Every 1.0 seconds, try to flush the send queue
                 self.SendCommand(None)  # check send queue
-            
+
             # sleep, doesn't need to be highly accurate so just count each second
             await asyncio.sleep(1.0)
+
+            if self.lastRecvOfPanelData is None:  ## has any data been received from the panel yet?
+                no_data_received_counter = no_data_received_counter + 1
+                if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:   ## lets assume approx 30 seconds
+                    log.error("[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel after several minutes)")
+                    PanelStatus["Mode"] = "Problem"
+                    self.suspendAllOperations = True
+                    self.sendResponseEvent ( 10 )  # Plugin suspended itself
 
 
     def reset_keep_alive_messages(self):
@@ -1431,6 +1447,7 @@ class ProtocolBase(asyncio.Protocol):
             log.debug('[data receiver] Ignoring garbage data: ' + self.toString(data))
             return
         #log.debug('[data receiver] received data: %s', self.toString(data))
+        self.lastRecvOfPanelData = self.getTimeFunction()
         for databyte in data:
             # process a single byte at a time
             self.handle_received_byte(databyte)
@@ -1598,7 +1615,11 @@ class ProtocolBase(asyncio.Protocol):
             return False
 
         if packet[-2:-1][0] == self.calculate_crc(packet[1:-2])[0] + 1:
-            log.info("[validatePDU] Validated a Packet with a checksum that is 1 different to the actual checksum!!!!")
+            log.info("[validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!!")
+            return True
+
+        if packet[-2:-1][0] == self.calculate_crc(packet[1:-2])[0] - 1:
+            log.info("[validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!!")
             return True
 
         # Check the CRC
@@ -1834,8 +1855,6 @@ class PacketHandling(ProtocolBase):
         """ Perform transactions based on messages (and not bytes) """
         super().__init__(*args, packet_callback=self.handle_packet, **kwargs)
         
-        self.powerMasterDownloadCounter = 0
-        
         # set the event callback handler
         self.event_callback = event_callback
 
@@ -1861,7 +1880,7 @@ class PacketHandling(ProtocolBase):
         # Store the X10 details
         self.pmX10Dev_t = {}
         
-        self.pmLang = PanelSettings["PluginLanguage"]             # INTERFACE : Get the plugin language from HA, either "EN" or "NL"
+        self.pmLang = PanelSettings["PluginLanguage"]             # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
         self.pmRemoteArm = PanelSettings["EnableRemoteArm"]       # INTERFACE : Does the user allow remote setting of the alarm
         self.pmRemoteDisArm = PanelSettings["EnableRemoteDisArm"] # INTERFACE : Does the user allow remote disarming of the alarm
         self.pmSensorBypass = PanelSettings["EnableSensorBypass"] # INTERFACE : Does the user allow sensor bypass, True or False
@@ -2126,7 +2145,7 @@ class PacketHandling(ProtocolBase):
 
         # ------------------------------------------------------------------------------------------------------------------------------------------------
         # Need the panel type to be valid so we can decode some of the remaining downloaded data correctly
-        if pmPanelTypeNr is not None and 0 <= pmPanelTypeNr <= 8:
+        if self.PanelType is not None and 0 <= self.PanelType <= 8:
             #log.debug("[Process Settings] Panel Type Number " + str(pmPanelTypeNr) + "    serial string " + self.toString(panelSerialType))
             zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][pmPanelTypeNr] + pmPanelConfig_t["CFG_WIRED"][pmPanelTypeNr]
             customCnt = pmPanelConfig_t["CFG_ZONECUSTOM"][pmPanelTypeNr]
@@ -2511,6 +2530,8 @@ class PacketHandling(ProtocolBase):
         elif packet[1] == 0xb0: # PowerMaster Event
             if not self.pmDownloadMode:   # only process when not downloading EPROM
                 self.handle_msgtypeB0(packet[2:-2])  
+        elif packet[1] == 0xf4: # F4 Message from a Powermaster, can't decode it yet but this will accept it and ignore it
+            log.info("[handle_packet] Powermaster F4 message " + self.toString(packet))
         else:
             log.info("[handle_packet] Unknown/Unhandled packet type " + self.toString(packet))
 
@@ -3120,7 +3141,6 @@ class PacketHandling(ProtocolBase):
         # If message count is FF then it looks like the first message is valid so decode it (this is experimental)
         if msgCnt == 0xFF:
            msgCnt = 1
-        
         if msgCnt <= 4:
             log.debug("[handle_msgtypeA7]      A7 message contains {0} messages".format(msgCnt))
             for i in range(0, msgCnt):
@@ -3135,6 +3155,8 @@ class PacketHandling(ProtocolBase):
                     else:
                         eventZone = int(eventZone & 0x7F)
                         zoneStr = pmLogPowerMaxUser_t[self.pmLang][eventZone] or "UNKNOWN"
+                else:
+                    log.info("[handle_msgtypeA7]         Got an A7 message and the self.PowerMaster variable is not set")
                 
                 s = (pmLogEvent_t[self.pmLang][eventType] or "UNKNOWN") + " / " + zoneStr
 
@@ -3165,8 +3187,8 @@ class PacketHandling(ProtocolBase):
                 # 0x1B is "Cancel Alarm"
                 cancel = eventType == 0x1B
                 
-                # 0x13 is "Delay Restoreâ€
-                ignore = eventType == 0x13
+                # 0x13 is "Delay Restore", 0x0E is "Confirm Alarm"
+                ignore = eventType == 0x13 or eventType == 0x0E
 
                 if tamper:
                     pmTamperActive = self.getTimeFunction()

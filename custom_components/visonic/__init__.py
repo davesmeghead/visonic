@@ -300,8 +300,17 @@ def setup(hass, base_config):
                 #    7 is download timer expired
                 #    8 is watchdog timer expired, give up trying to achieve a better mode
                 #    9 is watchdog timer expired, going to try again to get a better mode
+                #   10 is a comms problem, we have received no data so plugin has suspended itself
                 _LOGGER.info("Visonic update event {0}".format(tmp))
                 hass.bus.fire(visonic_event_name, { 'condition': tmp})
+                if tmp == 10:
+                    message = 'Failed to connect to your Visonic Alarm. We have not received any data from the panel at all, not one single byte.'
+                    _LOGGER.error(message)
+                    hass.components.persistent_notification.create(
+                        message,
+                        title=NOTIFICATION_TITLE,
+                        notification_id=NOTIFICATION_ID)
+                
 
         else:
             _LOGGER.warning("Visonic attempt to add device with type {0}  device is {1}".format(type(visonic_devices), visonic_devices ))
@@ -369,13 +378,13 @@ def setup(hass, base_config):
             port = device_type[CONF_PORT]
            
             comm = visonicApi.create_tcp_visonic_connection(address = host, port = port, event_callback = visonic_event_callback_handler, command_queue = command_queue,
-                                                           disconnect_callback = disconnect_callback, loop = hass.loop)
+                                                            disconnect_callback = disconnect_callback, loop = hass.loop)
         elif device_type["type"] == "usb":
             path = device_type[CONF_PATH]
             baud = device_type[CONF_DEVICE_BAUD]
            
             comm = visonicApi.create_usb_visonic_connection(port = path, baud = baud, event_callback = visonic_event_callback_handler, command_queue = command_queue,
-                                                         disconnect_callback = disconnect_callback, loop = hass.loop)
+                                                            disconnect_callback = disconnect_callback, loop = hass.loop)
 
         if comm is not None:
             #wibble = hass.states.entity_ids()
@@ -494,11 +503,9 @@ def setup(hass, base_config):
         #    0 is a disconnect and (hopefully) reconnect from an exception (probably comms related)
         hass.bus.fire(visonic_event_name, { 'condition': 0})
         sleep(5.0)
+        _LOGGER.error(" ........... setting up reconnection")
         panel_reset_counter = panel_reset_counter + 1
         asyncio.ensure_future(disconnect_callback_async(), loop=hass.loop)        
-        #if connect_to_alarm():
-        #    discovery.load_platform(hass, "switch", DOMAIN, {}, base_config)   
-        #    discovery.load_platform(hass, "alarm_control_panel", DOMAIN, {}, base_config)   
         
     def decode_code(data) -> str:
         if data is not None:
