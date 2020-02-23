@@ -6,6 +6,13 @@ Visonic produce the Powermax alarm panel series (PowerMax+, PowerMaxExpress, Pow
 Please note that after extensive work, the original PowerMax Panel is not able to be used as it does not support the Powerlink protocol that this component relies on. 
 Also the Visonic 360R Alarm Panel is not fitted with an RS232 connection and cannot have a Powerlink3 fitted, it is therefore not compatible with this HA Component.
 
+## Wiki
+This document contains a lot of usefull information, and you'll have to read most (_if not all_) of it. But, remember to check out our Wiki-section, after you're done reading our main documentation.
+
+- [Visonic PowerMaxPro > NodeMCU > Home Assistant | Guide with pin-layout, flashing and more](https://github.com/davesmeghead/visonic/wiki/Using-NodeMCU-(Pin-layout,-flashing-and-more)-%7C-PowerMax-Pro-%22Model-type-6%22)
+
+_If you have notes related to a specific solution where this component is used, you're mostly welcome to provide both details and full guides to the Wiki-section!_
+
 ## What hardware will you need?
 You have a choice, you can connect to your Visonic Alarm Panel using RS232, USB or Ethernet (Wired or Wireless)
 
