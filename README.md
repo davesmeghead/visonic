@@ -140,6 +140,7 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.5.4    | Added new config parameter "force_autoenroll". This is a breaking change for Powermax+ users, they need to set this to 'No' in their configuration file. "force_autoenroll" is only used when the panel rejects an EPROM download request and we do not know the panel type. No change to B0 Experimental message processing. |
 | 0.3.5.5    | Alarm Panel Siren handling updated.  Bug fix to remove wait_for warnings.  No change to B0 Experimental message processing. |
 | 0.3.5.6    | Alarm Panel Siren handling updated.  Detect when no data received from panel from the start up to 30 seconds then something wrong.  No change to B0 Experimental message processing. |
+| 0.3.5.7    | Experiment for Panel Model 2 (Powermax Pro) to miss out the Enroll command. |
 
 
 ## Instructions and what works so far

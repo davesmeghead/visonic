@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.5.6"
+PLUGIN_VERSION = "0.3.5.7"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -1077,7 +1077,7 @@ class ProtocolBase(asyncio.Protocol):
         self.lastRecvOfPanelData = None
         
         # Panel type: 0=Powermax (which we dont support), 1=Powermax+, 4=Powermax Pro Part
-        #    PanelType=0 : PowerMax , Model=21   Powermaster False  <<== THIS DOES NOT WORK (NO POWERLINK SUPPORT) ==>> 
+        #    PanelType=0 : PowerMax , Model=21   Powermaster False  <<== THIS DOES NOT WORK (NO POWERLINK SUPPORT and only supports EPROM download i.e no sensor data) ==>> 
         #    PanelType=1 : PowerMax+ , Model=47   Powermaster False
         #    PanelType=2 : PowerMax Pro , Model=22   Powermaster False
         #    PanelType=4 : PowerMax Pro Part , Model=17   Powermaster False
@@ -1226,11 +1226,11 @@ class ProtocolBase(asyncio.Protocol):
         # Define powerlink seconds timer and start it for PowerLink communication
         self.reset_watchdog_timeout()
         self.reset_keep_alive_messages()
-        self.sendInitCommand()
         if not self.ForceStandardMode:
+            self.sendInitCommand()
             self.Start_Download()
         else:
-            PanelStatus["Mode"] = "Standard"
+            self.gotoStandardMode()
         asyncio.ensure_future(self.keep_alive_and_watchdog_timer(), loop=self.loop)
 
 
@@ -1319,17 +1319,16 @@ class ProtocolBase(asyncio.Protocol):
                     powerlink_counter = powerlink_counter + 1
                     log.debug("[Controller] Powerlink Counter {0}".format(powerlink_counter))
                     if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
-                        if self.PanelType >= 2:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
+                        if self.PanelType >= 3:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
                             log.info("[Controller] Trigger Powerlink Attempt")
                             # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
                             #      this should kick it in to powerlink after we just enrolled
                             self.allowAckToTriggerRestore = True
                             # Send enroll to the panel to try powerlink
                             self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
-                        elif self.PanelType == 1:  # Powermax+, attempt to just send a MSG_RESTORE to prompt the panel in to taking action if it is able to
+                        elif self.PanelType >= 1:  # Powermax+, attempt to just send a MSG_RESTORE to prompt the panel in to taking action if it is able to
                             log.info("[Controller] Trigger Powerlink Prompt attempt to a Powermax+ panel")
-                            # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
-                            #      this should kick it in to powerlink after we just enrolled
+                            # Prevent the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
                             self.allowAckToTriggerRestore = False
                             # Send a MSG_RESTORE, if it sends back a powerlink acknowledge then another MSG_RESTORE will be sent, 
                             #      hopefully this will be enough to kick the panel in to sending 0xAB Keep-Alive
@@ -1425,7 +1424,7 @@ class ProtocolBase(asyncio.Protocol):
         
     def gotoStandardMode(self):
         #self.ClearList()
-        if self.pmDownloadComplete and self.pmGotUserCode:
+        if self.pmDownloadComplete and not self.ForceStandardMode and self.pmGotUserCode:
             log.info("[Standard Mode] Entering Standard Plus Mode as we got the pin codes from the EPROM")
             PanelStatus["Mode"] = "Standard Plus"
         else:
@@ -3187,7 +3186,7 @@ class PacketHandling(ProtocolBase):
                 # 0x1B is "Cancel Alarm"
                 cancel = eventType == 0x1B
                 
-                # 0x13 is "Delay Restore"ù, 0x0E is "Confirm Alarm"ù
+                # 0x13 is "Delay Restore", 0x0E is "Confirm Alarm"
                 ignore = eventType == 0x13 or eventType == 0x0E
 
                 if tamper:
@@ -3215,7 +3214,7 @@ class PacketHandling(ProtocolBase):
                 
                 #---------------------------------------------------------------------------------------
                 if eventType == 0x60: # system restart
-                    log.warning("[handle_msgtypeA7]         Panel has been reset. Don't do anything and the comms might reconnect and magically continue")
+                    log.warning("[handle_msgtypeA7]          Panel has been reset. Don't do anything and the comms might reconnect and magically continue")
                     self.sendResponseEvent ( 4 )   # push changes through to the host, the panel itself has been reset
 
             if pmTamperActive is not None:
