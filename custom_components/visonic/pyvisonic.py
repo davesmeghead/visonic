@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.5.7"
+PLUGIN_VERSION = "0.3.5.8"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -1250,6 +1250,21 @@ class ProtocolBase(asyncio.Protocol):
         else:
             self.SendCommand("MSG_STATUS")
 
+    def triggerEnroll(self):
+        if self.PanelType >= 3:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
+            log.info("[Controller] Trigger Powerlink Attempt")
+            # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
+            #      this should kick it in to powerlink after we just enrolled
+            self.allowAckToTriggerRestore = True
+            # Send enroll to the panel to try powerlink
+            self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
+        elif self.PanelType >= 1:  # Powermax+ or Powermax Pro, attempt to just send a MSG_RESTORE to prompt the panel in to taking action if it is able to
+            log.info("[Controller] Trigger Powerlink Prompt attempt to a Powermax+ or Powermax Pro panel")
+            # Prevent the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
+            self.allowAckToTriggerRestore = False
+            # Send a MSG_RESTORE, if it sends back a powerlink acknowledge then another MSG_RESTORE will be sent, 
+            #      hopefully this will be enough to kick the panel in to sending 0xAB Keep-Alive
+            self.SendCommand("MSG_RESTORE")
 
     # Function to send I'm Alive and status request messages to the panel
     # This is also a timeout function for a watchdog. If we are in powerlink, we should get a AB 03 message every 20 to 30 seconds
@@ -1319,20 +1334,7 @@ class ProtocolBase(asyncio.Protocol):
                     powerlink_counter = powerlink_counter + 1
                     log.debug("[Controller] Powerlink Counter {0}".format(powerlink_counter))
                     if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
-                        if self.PanelType >= 3:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
-                            log.info("[Controller] Trigger Powerlink Attempt")
-                            # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
-                            #      this should kick it in to powerlink after we just enrolled
-                            self.allowAckToTriggerRestore = True
-                            # Send enroll to the panel to try powerlink
-                            self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
-                        elif self.PanelType >= 1:  # Powermax+, attempt to just send a MSG_RESTORE to prompt the panel in to taking action if it is able to
-                            log.info("[Controller] Trigger Powerlink Prompt attempt to a Powermax+ panel")
-                            # Prevent the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
-                            self.allowAckToTriggerRestore = False
-                            # Send a MSG_RESTORE, if it sends back a powerlink acknowledge then another MSG_RESTORE will be sent, 
-                            #      hopefully this will be enough to kick the panel in to sending 0xAB Keep-Alive
-                            self.SendCommand("MSG_RESTORE")
+                        self.triggerEnroll()
                     elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
                         log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
                         self.pmExpectedResponse = []
@@ -2599,9 +2601,9 @@ class PacketHandling(ProtocolBase):
                     self.pmDownloadMode = False
                     self.doneAutoEnroll = False
                     if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
-                        if self.PanelType >= 2:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
+                        if self.PanelType >= 3:     # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
                             log.debug("[handle_msgtype08]                   Try to auto enroll")
-                            self.SendMsg_ENROLL() # Auto enroll
+                            self.SendMsg_ENROLL()   # Auto enroll
                     elif self.ForceAutoEnroll:
                         log.debug("[handle_msgtype08]                   Try to auto enroll")
                         self.SendMsg_ENROLL() # Auto enroll
@@ -3274,16 +3276,20 @@ class PacketHandling(ProtocolBase):
         elif subType == 10 and data[2] == 0:
             log.debug("[handle_msgtypeAB] PowerLink telling us what the code {0} {1} is for downloads, currently commented out as I'm not certain of this".format(data[3], data[4]))
             # data[3] data[4]
-        elif subType == 10 and data[2] == 1 and not self.doneAutoEnroll:
-            log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll, only doing auto enroll once ************************** ")
-            self.SendMsg_ENROLL()
-        elif subType == 10 and data[2] == 1 and self.pmPowerlinkModePending and not self.ForceStandardMode and self.pmDownloadComplete and not self.pmPowerlinkMode:
-            log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll, lets give it another try **************************")
-            self.doneAutoEnroll = False
-            self.SendMsg_ENROLL()
         elif subType == 10 and data[2] == 1:
-            log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll but not acted on **************************")
+            if not self.ForceStandardMode and not self.doneAutoEnroll and not self.pmPowerlinkMode:
+                log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll, only doing auto enroll once ************************** ")
+                self.pmPowerlinkModePending = True   ## just to make sure it is True !
+                self.triggerEnroll()
+            elif not self.ForceStandardMode and self.pmPowerlinkModePending and self.pmDownloadComplete and not self.pmPowerlinkMode:
+                log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll, lets give it another try **************************")
+                self.triggerEnroll()
+            elif self.pmPowerlinkMode:
+                log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll but not acted on (already in powerlink) **************************")
+            else:
+                log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll but not acted on **************************")
 
+            self.doneAutoEnroll = True
 
     # X10 Names (0xAC)
     def handle_msgtypeAC(self, data): # PowerLink Message
