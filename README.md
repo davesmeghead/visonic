@@ -96,4 +96,5 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.5.6    | Alarm Panel Siren handling updated.  Detect when no data received from panel from the start up to 30 seconds then something wrong.  No change to B0 Experimental message processing. |
 | 0.3.5.7    | Experiment for Panel Model 2 (Powermax Pro) to miss out the Enroll command. |
 | 0.3.5.8    | Panel type Powermax+ (panel model 1) and Powermax Pro (panel model 2) need to manually enroll.  Code updated to reflect this and added new readme section about panel types. Moved most of the info to the wiki. |
+| 0.3.6.0    | Added an additional attribute called "Panel Last Event Data" to the panel entity, this is a complex record of the A7 message (the panel state) |
 

@@ -159,7 +159,7 @@ def setup(hass, base_config):
     # This is a callback function, called from the visonic library when a new sensor is detected/created
     #  it adds it to the list of devices and then calls discovery to fully create it in HA
     #  remember that all the sensors may not be created at the same time
-    def visonic_event_callback_handler(visonic_devices):
+    def visonic_event_callback_handler(visonic_devices, datadictionary):
         global csvdata
         global templatedata
         
@@ -301,8 +301,23 @@ def setup(hass, base_config):
                 #    8 is watchdog timer expired, give up trying to achieve a better mode
                 #    9 is watchdog timer expired, going to try again to get a better mode
                 #   10 is a comms problem, we have received no data so plugin has suspended itself
-                _LOGGER.info("Visonic update event {0}".format(tmp))
-                hass.bus.fire(visonic_event_name, { 'condition': tmp})
+                tmpdict = datadictionary.copy()
+                
+                #theEntity = hass.states.get('binary_sensor.visonic_z01')
+                #_LOGGER.warning("Testing theEntity is {0}".format(theEntity))
+                
+                #if 'Zone' in tmpdict and 'Entity' in tmpdict:
+                #    if tmpdict['Zone'] > 0 and tmpdict['Entity'] is not None:
+                #        theEntity = hass.states.get(tmpdict['Entity'])
+                #        if theEntity is None:
+                #            _LOGGER.warning("theEntity is None")
+                #        else:
+                #            _LOGGER.warning("theEntity is {0}".format(theEntity))
+                
+                tmpdict['condition'] = tmp
+                _LOGGER.info("Visonic update event {0} {1}".format(tmp, tmpdict))
+                hass.bus.fire(visonic_event_name, tmpdict)
+                
                 if tmp == 10:
                     message = 'Failed to connect to your Visonic Alarm. We have not received any data from the panel at all, not one single byte.'
                     _LOGGER.error(message)
@@ -505,7 +520,7 @@ def setup(hass, base_config):
         sleep(5.0)
         _LOGGER.error(" ........... setting up reconnection")
         panel_reset_counter = panel_reset_counter + 1
-        asyncio.ensure_future(disconnect_callback_async(), loop=hass.loop)        
+        asyncio.ensure_future(disconnect_callback_async(excep), loop=hass.loop)        
         
     def decode_code(data) -> str:
         if data is not None:

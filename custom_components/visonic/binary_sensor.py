@@ -38,7 +38,7 @@ class VisonicSensor(BinarySensorDevice):
         """Initialize the sensor."""
         _LOGGER.info("In setup_platform in binary sensor {0}".format(visonic_device.dname))
         self.visonic_device = visonic_device
-        self._name = "Visonic " + self.visonic_device.dname
+        self._name = "visonic_" + self.visonic_device.dname.lower()
         # Append device id to prevent name clashes in HA.
         self.visonic_id = slugify(self._name) # VISONIC_ID_FORMAT.format( slugify(self._name), visonic_device.getDeviceID())
         self.entity_id = ENTITY_ID_FORMAT.format(self.visonic_id)

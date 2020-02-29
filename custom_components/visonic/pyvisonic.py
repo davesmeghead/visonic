@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.5.8"
+PLUGIN_VERSION = "0.3.6.0"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -114,6 +114,7 @@ PanelStatus = {
 
 # A7 message decode
    "Panel Last Event"      : "None",
+   "Panel Last Event Data" : {"Zone": 0, "Entity": None, "Tamper": False, "Siren": False, "Reset": False, "Time": "2020-01-01T00:00:00.0", "Count": 0, "Type": [], "Event": [], "Mode": [], "Name": [] },
    "Panel Alarm Status"    : "None",
    "Panel Trouble Status"  : "None",
    "Panel Siren Active"    : 'No',
@@ -1852,7 +1853,7 @@ class ProtocolBase(asyncio.Protocol):
 class PacketHandling(ProtocolBase):
     """Handle decoding of Visonic packets."""
 
-    def __init__(self, *args, event_callback: Callable = None, **kwargs) -> None:
+    def __init__(self, *args, event_callback: Callable = None, DataDict = {}, **kwargs) -> None:
         """ Perform transactions based on messages (and not bytes) """
         super().__init__(*args, packet_callback=self.handle_packet, **kwargs)
         
@@ -1935,9 +1936,9 @@ class PacketHandling(ProtocolBase):
             # check every 1 second
             await asyncio.sleep(1.0)  # must be less than 5 seconds for self.suspendAllOperations:
 
-    def sendResponseEvent(self, ev):
+    def sendResponseEvent(self, ev, dict = {}):
         if self.event_callback is not None:
-            self.event_callback(ev)        
+            self.event_callback(ev, dict)        
 
     # We can only use this function when the panel has sent a "installing powerlink" message i.e. AB 0A 00 01
     #   We need to clear the send queue and reset the send parameters to immediately send an MSG_ENROLL
@@ -3143,14 +3144,34 @@ class PacketHandling(ProtocolBase):
         if msgCnt == 0xFF:
            msgCnt = 1
         if msgCnt <= 4:
+            datadict = {}
+            datadict['Zone'] = 0
+            datadict['Entity'] = None
+            datadict['Tamper'] = False
+            datadict['Siren'] = self.pmSirenActive is not None
+            datadict['Reset'] = False
+            datadict['Time'] = self.getTimeFunction()
+            datadict['Count'] = msgCnt
+            datadict['Type'] = []
+            datadict['Event'] = []
+            datadict['Mode'] = []
+            datadict['Name'] = []
+
             log.debug("[handle_msgtypeA7]      A7 message contains {0} messages".format(msgCnt))
+
+            zoneCnt = 0  # this means it wont work in case we're in standard mode and the panel type is not set
+            if self.PanelType is not None:
+                zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
+
             for i in range(0, msgCnt):
                 eventZone = int(data[2 + (2 * i)])
-                logEvent  = int(data[3 + (2 * i)])
-                eventType = logEvent  # int(logEvent & 0x7F)
-
-                zoneStr = ""                
+                eventType = int(data[3 + (2 * i)])
+                
+                zoneStr = "Unknown"
+                zoneData = 0
                 if self.PowerMaster is not None:
+                    if eventZone >= 1 and eventZone <= zoneCnt:
+                        zoneData = eventZone
                     if self.PowerMaster:
                         zoneStr = pmLogPowerMasterUser_t[self.pmLang][eventZone] or "UNKNOWN"
                     else:
@@ -3159,8 +3180,14 @@ class PacketHandling(ProtocolBase):
                 else:
                     log.info("[handle_msgtypeA7]         Got an A7 message and the self.PowerMaster variable is not set")
                 
-                s = (pmLogEvent_t[self.pmLang][eventType] or "UNKNOWN") + " / " + zoneStr
+                modeStr = pmLogEvent_t[self.pmLang][eventType] or "UNKNOWN"
+                s = modeStr + " / " + zoneStr
 
+                datadict['Type'].insert(0, eventType)
+                datadict['Event'].insert(0, eventZone)
+                datadict['Mode'].insert(0, modeStr)
+                datadict['Name'].insert(0, zoneStr)
+                
                 #---------------------------------------------------------------------------------------
                 alarmStatus = None
                 if eventType in pmPanelAlarmType_t:
@@ -3170,9 +3197,16 @@ class PacketHandling(ProtocolBase):
                 if eventType in pmPanelTroubleType_t:
                     troubleStatus = pmPanelTroubleType_t[eventType]
 
-                PanelStatus["Panel Last Event"]     = s
-                PanelStatus["Panel Alarm Status"]   = "None" if alarmStatus is None else alarmStatus
-                PanelStatus["Panel Trouble Status"] = "None" if troubleStatus is None else troubleStatus
+                # set the dictionary to send with the event
+                if zoneData-1 in self.pmSensorDev_t:
+                    if datadict['Zone'] != 0:
+                        log.info("[handle_msgtypeA7]          ************* Oops - multiple zone events in the same A7 Message **************")
+                    datadict['Zone'] = zoneData
+                    datadict['Entity'] = "binary_sensor.visonic_" + self.pmSensorDev_t[zoneData-1].dname.lower()
+
+                PanelStatus["Panel Last Event"]      = s
+                PanelStatus["Panel Alarm Status"]    = "None" if alarmStatus is None else alarmStatus
+                PanelStatus["Panel Trouble Status"]  = "None" if troubleStatus is None else troubleStatus
 
                 log.info("[handle_msgtypeA7]         System message " + s + "  alarmStatus " + PanelStatus["Panel Alarm Status"] + "   troubleStatus " + PanelStatus["Panel Trouble Status"])
 
@@ -3193,20 +3227,24 @@ class PacketHandling(ProtocolBase):
 
                 if tamper:
                     pmTamperActive = self.getTimeFunction()
+                    datadict['Tamper'] = True
 
                 # no clauses as if siren gets true again then keep updating self.pmSirenActive with the time
                 if siren and not self.pmSilentPanic:
                     self.pmSirenActive = self.getTimeFunction()
+                    datadict['Siren'] = True
                     log.info("[handle_msgtypeA7] ******************** Alarm Active *******************")
                 
                 # cancel alarm and the alarm has been triggered
                 if cancel and self.pmSirenActive is not None: # Cancel Alarm
                     self.pmSirenActive = None
+                    datadict['Siren'] = False
                     log.info("[handle_msgtypeA7] ******************** Alarm Cancelled ****************")
                 
                 # Siren has been active but it is no longer active (probably timed out and has then been disarmed)
                 if not ignore and not siren and self.pmSirenActive is not None: # Alarm Timed Out ????
                     self.pmSirenActive = None
+                    datadict['Siren'] = False
                     log.info("[handle_msgtypeA7] ******************** Alarm Not Sounding ****************")
                 
                 # INTERFACE Indicate whether siren active
@@ -3216,6 +3254,7 @@ class PacketHandling(ProtocolBase):
                 
                 #---------------------------------------------------------------------------------------
                 if eventType == 0x60: # system restart
+                    datadict['Reset'] = True
                     log.warning("[handle_msgtypeA7]          Panel has been reset. Don't do anything and the comms might reconnect and magically continue")
                     self.sendResponseEvent ( 4 )   # push changes through to the host, the panel itself has been reset
 
@@ -3224,9 +3263,12 @@ class PacketHandling(ProtocolBase):
                 self.sendResponseEvent ( 6 )   # push changes through to the host to get it to update, tamper is active!
                     
             if self.pmSirenActive is not None:
-                self.sendResponseEvent ( 3 )   # push changes through to the host to get it to update, alarm is active!!!!!!!!!
+                self.sendResponseEvent ( 3 , datadict )   # push changes through to the host to get it to update, alarm is active!!!!!!!!!
             else:
-                self.sendResponseEvent ( 2 )   # push changes through to the host to get it to update
+                self.sendResponseEvent ( 2 , datadict )   # push changes through to the host to get it to update
+
+            PanelStatus["Panel Last Event Data"] = datadict
+            
         else:  ## message count is more than 4
             log.warning("[handle_msgtypeA7]      A7 message contains too many messages to process : {0}   data={1}".format(msgCnt, self.toString(data)))
 
