@@ -10,7 +10,7 @@ Also the Visonic 360R Alarm Panel is not fitted with an RS232 connection and can
 Remember to check out our Wiki-section, this contains all the documentation.
 
 - [Wiki Home](https://github.com/davesmeghead/visonic/wiki)
-- [Visonic PowerMaxPro > NodeMCU > Home Assistant | Guide with pin-layout, flashing and more](https://github.com/davesmeghead/visonic/wiki/Using-NodeMCU-(Pin-layout,-flashing-and-more)-%7C-PowerMax-Pro-%22Model-type-6%22)
+- [Visonic PowerMaxPro > NodeMCU > Home Assistant | Guide with pin-layout, flashing and more](https://github.com/davesmeghead/visonic/wiki/Using-NodeMCU-PowermaxProModel6)
 
 _If you have notes related to a specific solution where this component is used, you're mostly welcome to provide both details and full guides to the Wiki-section!_
 
