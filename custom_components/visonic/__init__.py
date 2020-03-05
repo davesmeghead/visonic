@@ -40,6 +40,7 @@ NOTIFICATION_TITLE = 'Visonic Panel Setup'
 
 # Config file variables
 VISONIC_ID_LIST_SCHEMA = vol.Schema([int])
+VISONIC_STRING_LIST_SCHEMA = vol.Schema([str])
 CONF_DEVICE_TYPE = 'type'
 CONF_DEVICE_BAUD = 'baud'
 DEFAULT_DEVICE_HOST = '127.0.0.1'
@@ -62,6 +63,8 @@ CONF_FORCE_KEYPAD = "force_numeric_keypad"
 
 CONF_EXCLUDE_SENSOR = "exclude_sensor"
 CONF_EXCLUDE_X10 = "exclude_x10"
+
+CONF_SIREN_SOUNDING = "siren_sounding"
 
 # Event processing for the log files from the panel
 CONF_LOG_EVENT        = "panellog_logentry_event"
@@ -93,6 +96,7 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Required(CONF_DEVICE): vol.Any( DEVICE_SOCKET_SCHEMA, DEVICE_USB_SCHEMA),
         vol.Optional(CONF_EXCLUDE_SENSOR,       default=[]): VISONIC_ID_LIST_SCHEMA,
         vol.Optional(CONF_EXCLUDE_X10,          default=[]): VISONIC_ID_LIST_SCHEMA,
+        vol.Optional(CONF_SIREN_SOUNDING,       default=["Intruder"]): VISONIC_STRING_LIST_SCHEMA,
         vol.Optional(CONF_MOTION_OFF_DELAY,     default=120 )  : cv.positive_int,
         vol.Optional(CONF_OVERRIDE_CODE,        default="" )   : cv.string,
         vol.Optional(CONF_DOWNLOAD_CODE,        default="" )   : cv.string,
@@ -289,7 +293,7 @@ def setup(hass, base_config):
             
         elif type(visonic_devices) == int:
             tmp = int(visonic_devices)
-            if 1 <= tmp <= 10:   
+            if 1 <= tmp <= 12:   
                 # General update trigger
                 #    1 is a zone update, 
                 #    2 is a panel update AND the alarm is not active, 
@@ -325,8 +329,6 @@ def setup(hass, base_config):
                         message,
                         title=NOTIFICATION_TITLE,
                         notification_id=NOTIFICATION_ID)
-                
-
         else:
             _LOGGER.warning("Visonic attempt to add device with type {0}  device is {1}".format(type(visonic_devices), visonic_devices ))
 
@@ -371,6 +373,7 @@ def setup(hass, base_config):
         visonicApi.setConfig("ArmWithoutCode", config.get(CONF_ARM_CODE_AUTO))
         visonicApi.setConfig("ResetCounter", panel_reset_counter)
         visonicApi.setConfig("ForceKeypad", config.get(CONF_FORCE_KEYPAD))
+        visonicApi.setConfig("SirenTriggerList", config.get(CONF_SIREN_SOUNDING))
 
         visonicApi.setConfig("B0_Enable", config.get(CONF_B0_ENABLE_MOTION_PROCESSING))
         visonicApi.setConfig("B0_Min_Interval_Time", config.get(CONF_B0_MIN_TIME_BETWEEN_TRIGGERS))

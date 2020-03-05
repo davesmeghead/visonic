@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.6.0"
+PLUGIN_VERSION = "0.3.6.1"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -99,6 +99,7 @@ PanelSettings = {
    "EnableRemoteArm"      : False,
    "EnableRemoteDisArm"   : False,   #
    "EnableSensorBypass"   : False,   # Does user allow sensor bypass / arming
+   "SirenTriggerList"     : [],
 
    "B0_Enable"            : False,
    "B0_Min_Interval_Time" : 30,
@@ -576,7 +577,7 @@ pmEventType_t = {
 pmPanelAlarmType_t = {
    0x01 : "Intruder",  0x02 : "Intruder", 0x03 : "Intruder", 0x04 : "Intruder", 0x05 : "Intruder", 0x06 : "Tamper",
    0x07 : "Tamper",    0x08 : "Tamper",   0x09 : "Tamper",   0x0B : "Panic",    0x0C : "Panic",    0x20 : "Fire",
-   0x23 : "Emergency", 0x49 : "Gas",      0x4D : "Flood"
+   0x23 : "Emergency", 0x49 : "Gas",      0x4D : "Flood",    0x4F : "X10"
 }
 
 pmPanelTroubleType_t = {
@@ -1652,6 +1653,7 @@ class ProtocolBase(asyncio.Protocol):
         """Encode and put packet string onto write buffer."""
 
         if self.suspendAllOperations:
+            log.info("[pmSendPdu] Suspended all operations, not sending PDU")
             return
         
         if instruction is None:
@@ -1889,6 +1891,7 @@ class PacketHandling(ProtocolBase):
         self.MotionOffDelay = PanelSettings["MotionOffDelay"]     # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
         self.OverrideCode = PanelSettings["OverrideCode"]         # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
         self.ForceNumericKeypad = PanelSettings["ForceKeypad"]    # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
+        self.SirenTriggerList = PanelSettings["SirenTriggerList"] # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
 
         PanelStatus["Comm Exception Count"] = PanelSettings["ResetCounter"]
         
@@ -2208,6 +2211,7 @@ class PacketHandling(ProtocolBase):
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process alarm settings
+                #log.info("panic {0}   bypass {1}".format(self.lookupEpromSingle("panicAlarm"), self.lookupEpromSingle("bypass") ))
                 self.pmSilentPanic = self.lookupEpromSingle("panicAlarm") == "Silent Panic"    # special
                 self.pmBypassOff = self.lookupEpromSingle("bypass") == "No Bypass"             # special   '2':"Manual Bypass", '0':"No Bypass", '1':"Force Arm"}
                 
@@ -3133,7 +3137,6 @@ class PacketHandling(ProtocolBase):
         #   In a log file I reveiced from pocket,    there was this A7 message 0d a7 ff fc 00 60 00 ff 00 0c 00 00 43 45 0a
         #   In a log file I reveiced from UffeNisse, there was this A7 message 0d a7 ff 64 00 60 00 ff 00 0c 00 00 43 45 0a     msgCnt is 0xFF and temp is 0x64 ????
         #                                                                          
-
         pmTamperActive = None
         msgCnt = int(data[0])
 
@@ -3189,14 +3192,27 @@ class PacketHandling(ProtocolBase):
                 datadict['Name'].insert(0, zoneStr)
                 
                 #---------------------------------------------------------------------------------------
+                log.info("[handle_msgtypeA7]         self.SirenTriggerList = {0}".format(self.SirenTriggerList))
+
+                siren = False
                 alarmStatus = None
                 if eventType in pmPanelAlarmType_t:
                     alarmStatus = pmPanelAlarmType_t[eventType]
+                    log.info("[handle_msgtypeA7]         Checking if {0} is in the list {1}".format(alarmStatus, self.SirenTriggerList))
+                    if alarmStatus in self.SirenTriggerList:
+                        log.info("[handle_msgtypeA7]             And it is, setting siren to True")
+                        siren = True
+
+                # 0x01 is "Interior Alarm", 0x02 is "Perimeter Alarm", 0x03 is "Delay Alarm", 0x05 is "24h Audible Alarm"
+                # 0x04 is "24h Silent Alarm", 0x0B is "Panic From Keyfob", 0x0C is "Panic From Control Panel", 0x20 is Fire
+                #siren = eventType == 0x01 or eventType == 0x02 or eventType == 0x03 or eventType == 0x05
+                #or eventType == 0x20 or eventType == 0x4D  ## Fire and Flood
                 
                 troubleStatus = None
                 if eventType in pmPanelTroubleType_t:
                     troubleStatus = pmPanelTroubleType_t[eventType]
 
+                # zoneData = 1  ## TESTING ONLY (so I dont need to set the siren sounding each time)
                 # set the dictionary to send with the event
                 if zoneData-1 in self.pmSensorDev_t:
                     if datadict['Zone'] != 0:
@@ -3214,13 +3230,9 @@ class PacketHandling(ProtocolBase):
                 # Update tamper and siren status
                 # 0x06 is "Tamper", 0x07 is "Control Panel Tamper", 0x08 is "Tamper Alarm", 0x09 is "Tamper Alarm"
                 tamper = eventType == 0x06 or eventType == 0x07 or eventType == 0x08 or eventType == 0x09
-                
-                # 0x01 is "Interior Alarm", 0x02 is "Perimeter Alarm", 0x03 is "Delay Alarm", 0x05 is "24h Audible Alarm"
-                # 0x04 is "24h Silent Alarm", 0x0B is "Panic From Keyfob", 0x0C is "Panic From Control Panel"
-                siren = eventType == 0x01 or eventType == 0x02 or eventType == 0x03 or eventType == 0x05
-                
-                # 0x1B is "Cancel Alarm"
-                cancel = eventType == 0x1B
+
+                # 0x1B is "Cancel Alarm", 0x21 is "Fire Restore", 0x4E is "Flood Alert Restore", 0x4A is "Gas Trouble Restore"
+                cancel = eventType == 0x1B or eventType == 0x21 or eventType == 0x4A or eventType == 0x4E
                 
                 # 0x13 is "Delay Restore", 0x0E is "Confirm Alarm"
                 ignore = eventType == 0x13 or eventType == 0x0E
@@ -3512,31 +3524,33 @@ class EventHandling(PacketHandling):
     # implement commands from the queue            
     async def process_command_queue(self):
         while not self.suspendAllOperations:
-            command = await self.command_queue.get()
-            if command[0] == "eventlog":
-                log.debug("[CommandQueue]  Calling event log")
-                self.GetEventLog(command[1])
-            elif command[0] == "bypass":
-                log.debug("[CommandQueue]  Calling bypass for individual sensors")
-                self.SetSensorArmedState(command[1], command[2], command[3])
-            elif command[0] == "shutdown":
-                log.info("[CommandQueue]  Shutdown current connection")
-                self.suspendAllOperations = True
-                if self.transport is not None:
-                    self.transport.close()
-            elif command[0] == "x10":
-                log.debug("[CommandQueue]  Calling x10 command")
-                self.SendX10Command(command[1], command[2])
-            elif command[0] in pmArmMode_t:
-                self.RequestArm(command[0], command[1])
+            if self.command_queue.empty():
+                # sleep, doesn't need to be highly accurate so just count each second
+                await asyncio.sleep(1.0)
             else:
-                log.warning("[CommandQueue]  Processing unknown queue command {0}".format(command))
-                
+                command = await self.command_queue.get()
+                if command[0] == "eventlog":
+                    log.debug("[CommandQueue]  Calling event log")
+                    self.GetEventLog(command[1])
+                elif command[0] == "bypass":
+                    log.debug("[CommandQueue]  Calling bypass for individual sensors")
+                    self.SetSensorArmedState(command[1], command[2], command[3])
+                elif command[0] == "shutdown":
+                    log.info("[CommandQueue]  Shutdown current connection")
+                    self.suspendAllOperations = True
+                    if self.transport is not None:
+                        self.transport.close()
+                elif command[0] == "x10":
+                    log.debug("[CommandQueue]  Calling x10 command")
+                    self.SendX10Command(command[1], command[2])
+                elif command[0] in pmArmMode_t:
+                    self.RequestArm(command[0], command[1])
+                else:
+                    log.warning("[CommandQueue]  Processing unknown queue command {0}".format(command))
 
     # RequestArm
     #       state is one of: "Disarmed", "Stay", "Armed", "UserTest", "StayInstant", "ArmedInstant", "Night", "NightInstant"
     #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
-
     def RequestArm(self, state, pin = ""):
         """ Send a request to the panel to Arm/Disarm """
         if not self.pmDownloadMode:
@@ -3559,6 +3573,23 @@ class EventHandling(PacketHandling):
 
                 if isValidPL:
                     if (state == "Disarmed" and self.pmRemoteDisArm) or (state != "Disarmed" and self.pmRemoteArm):
+                        datadict = {}
+                        datadict['Command'] = state
+                        datadict['OpenZones'] = []
+                        datadict['Bypass'] = []
+                        datadict['Tamper'] = []
+                        datadict['ZoneTamper'] = []
+                        for key in self.pmSensorDev_t:
+                            entname = "binary_sensor.visonic_" + self.pmSensorDev_t[key].dname.lower()
+                            if self.pmSensorDev_t[key].status:
+                                datadict['OpenZones'].append(entname)
+                            if self.pmSensorDev_t[key].tamper:
+                                datadict['Tamper'].append(entname)                        
+                            if self.pmSensorDev_t[key].bypass:
+                                datadict['Bypass'].append(entname)                        
+                            if self.pmSensorDev_t[key].ztamper:
+                                datadict['ZoneTamper'].append(entname)                        
+                        self.sendResponseEvent ( 11 , datadict )
                         self.SendCommand("MSG_ARM", options = [3, armCodeA, 4, bpin])    #
                         return True
                     else:

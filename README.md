@@ -10,7 +10,6 @@ Also the Visonic 360R Alarm Panel is not fitted with an RS232 connection and can
 Remember to check out our Wiki-section, this contains all the documentation.
 
 - [Wiki Home](https://github.com/davesmeghead/visonic/wiki)
-- [Visonic PowerMaxPro > NodeMCU > Home Assistant | Guide with pin-layout, flashing and more](https://github.com/davesmeghead/visonic/wiki/Using-NodeMCU-PowermaxProModel6)
 
 _If you have notes related to a specific solution where this component is used, you're mostly welcome to provide both details and full guides to the Wiki-section!_
 
@@ -97,4 +96,5 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.5.7    | Experiment for Panel Model 2 (Powermax Pro) to miss out the Enroll command. |
 | 0.3.5.8    | Panel type Powermax+ (panel model 1) and Powermax Pro (panel model 2) need to manually enroll.  Code updated to reflect this and added new readme section about panel types. Moved most of the info to the wiki. |
 | 0.3.6.0    | Added an additional attribute called "Panel Last Event Data" to the panel entity, this is a complex record of the A7 message (the panel state) |
+| 0.3.6.1    | Added new config entry called "siren_sounding" as a list of strings. Added new HA Event as condition 11, triggered when the user tries to arm/diasrm the panel (but before the command is sent to the panel) |
 
