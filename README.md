@@ -97,4 +97,5 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.5.8    | Panel type Powermax+ (panel model 1) and Powermax Pro (panel model 2) need to manually enroll.  Code updated to reflect this and added new readme section about panel types. Moved most of the info to the wiki. |
 | 0.3.6.0    | Added an additional attribute called "Panel Last Event Data" to the panel entity, this is a complex record of the A7 message (the panel state) |
 | 0.3.6.1    | Added new config entry called "siren_sounding" as a list of strings. Added new HA Event as condition 11, triggered when the user tries to arm/diasrm the panel (but before the command is sent to the panel) |
+| 0.3.6.2    | Updated the new HA Event as condition 11 and added new with condition 12. "Ready" has been added which copies the received "Panel Ready" attribute. A "message" is also added. Either an 11 or 12 HA event is generated.  |
 

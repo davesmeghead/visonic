@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.6.1"
+PLUGIN_VERSION = "0.3.6.2"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -3553,6 +3553,24 @@ class EventHandling(PacketHandling):
     #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
     def RequestArm(self, state, pin = ""):
         """ Send a request to the panel to Arm/Disarm """
+        datadict = {}
+        datadict['Command'] = state
+        datadict['Ready'] = PanelStatus["Panel Ready"] == 'Yes'
+        datadict['OpenZones'] = []
+        datadict['Bypass'] = []
+        datadict['Tamper'] = []
+        datadict['ZoneTamper'] = []
+        for key in self.pmSensorDev_t:
+            entname = "binary_sensor.visonic_" + self.pmSensorDev_t[key].dname.lower()
+            if self.pmSensorDev_t[key].status:
+                datadict['OpenZones'].append(entname)
+            if self.pmSensorDev_t[key].tamper:
+                datadict['Tamper'].append(entname)                        
+            if self.pmSensorDev_t[key].bypass:
+                datadict['Bypass'].append(entname)                        
+            if self.pmSensorDev_t[key].ztamper:
+                datadict['ZoneTamper'].append(entname)                        
+
         if not self.pmDownloadMode:
             isValidPL, bpin = self.pmGetPin(pin)
             
@@ -3573,32 +3591,25 @@ class EventHandling(PacketHandling):
 
                 if isValidPL:
                     if (state == "Disarmed" and self.pmRemoteDisArm) or (state != "Disarmed" and self.pmRemoteArm):
-                        datadict = {}
-                        datadict['Command'] = state
-                        datadict['OpenZones'] = []
-                        datadict['Bypass'] = []
-                        datadict['Tamper'] = []
-                        datadict['ZoneTamper'] = []
-                        for key in self.pmSensorDev_t:
-                            entname = "binary_sensor.visonic_" + self.pmSensorDev_t[key].dname.lower()
-                            if self.pmSensorDev_t[key].status:
-                                datadict['OpenZones'].append(entname)
-                            if self.pmSensorDev_t[key].tamper:
-                                datadict['Tamper'].append(entname)                        
-                            if self.pmSensorDev_t[key].bypass:
-                                datadict['Bypass'].append(entname)                        
-                            if self.pmSensorDev_t[key].ztamper:
-                                datadict['ZoneTamper'].append(entname)                        
+                        datadict['Message'] = "Panel Access, Sending Command to Panel"
                         self.sendResponseEvent ( 11 , datadict )
                         self.SendCommand("MSG_ARM", options = [3, armCodeA, 4, bpin])    #
                         return True
                     else:
-                        log.info("[RequestArm]  Panel Access Not allowed, user setting prevent access")
+                        datadict['Message'] = "Panel Access Not allowed, user configuration setting prevented access"
+                        self.sendResponseEvent ( 12 , datadict )
+                        log.info("[RequestArm]  Panel Access Not allowed, user settings prevent access")
                 else:
-                    log.info("[RequestArm]  Panel Access Not allowed without pin")
+                    datadict['Message'] = "Panel Access Not allowed without valid pin"
+                    self.sendResponseEvent ( 12 , datadict )
+                    log.info("[RequestArm]  Panel Access Not allowed without valid pin")
             else:
-                log.info("[RequestArm]  RequestArmMode invalid state requested " + (state or "N/A"))
+                datadict['Message'] = "Panel Access Not allowed, invalid state requested " + (state or "Invalid")
+                self.sendResponseEvent ( 12 , datadict )
+                log.info("[RequestArm]  RequestArmMode invalid state requested " + (state or "Invalid"))
         else:
+            datadict['Message'] = "Panel Access Not allowed, Request Arm and Disarm only supported when not downloading EPROM"
+            self.sendResponseEvent ( 12 , datadict )
             log.info("[RequestArm]  Request Arm and Disarm only supported when not downloading EPROM.")
         return False
 
