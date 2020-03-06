@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.6.2"
+PLUGIN_VERSION = "0.3.6.3"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -3555,7 +3555,7 @@ class EventHandling(PacketHandling):
         """ Send a request to the panel to Arm/Disarm """
         datadict = {}
         datadict['Command'] = state
-        datadict['Ready'] = PanelStatus["Panel Ready"] == 'Yes'
+        datadict['PanelReady'] = PanelStatus["Panel Ready"] == 'Yes'
         datadict['OpenZones'] = []
         datadict['Bypass'] = []
         datadict['Tamper'] = []
