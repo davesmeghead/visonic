@@ -42,7 +42,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.6.3"
+PLUGIN_VERSION = "0.3.7.0"
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -133,7 +133,7 @@ PanelStatus = {
 
 # 3C message decode
    "Power Master"          : 'No',
-   
+
 # Define model type to be unknown
    "Model"                 : "Unknown"
 }
@@ -548,15 +548,14 @@ pmSysStatusFlags_t = {
 #}
 
 pmArmMode_t = {
-# "Alarm" : 0x07, 
-   "Disarmed" : 0x00, "Stay" : 0x04, "Armed" : 0x05, "StayInstant" : 0x14, "ArmedInstant" : 0x15, "Night" : 0x04, "NightInstant" : 0x14    # "UserTest" : 0x06, 
+   "disarmed" : 0x00, "stay" : 0x04, "armed" : 0x05, "stayinstant" : 0x14, "armedinstant" : 0x15    # "usertest" : 0x06, 
 }
 
 pmDetailedArmMode_t = (
    "Disarmed", "ExitDelay_ArmHome", "ExitDelay_ArmAway", "EntryDelay", "Stay", "Armed", "UserTest", "Downloading", "Programming", "Installer",
    "Home Bypass", "Away Bypass", "Ready", "NotReady", "??", "??", "Disarm", "ExitDelay", "ExitDelay", "EntryDelay", "StayInstant", "ArmedInstant",
    "??", "??", "??", "??", "??", "??", "??", "??", "??", "??"
-) # Not used: Night, NightInstant, Vacation
+)
 
 pmEventType_t = {
    "EN" : (
@@ -921,12 +920,12 @@ class SensorDevice:
     def __str__(self):
         strn = ""
         strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id, type(self.id)))
-        strn = strn + (" dname=None"     if self.dname == None else     " dname={0:<4}".format(self.dname, type(self.dname)))
-        strn = strn + (" stype=None"     if self.stype == None else     " stype={0:<8}".format(self.stype, type(self.stype)))
+        strn = strn + (" dname=None"     if self.dname == None else     " dname={0:<4}".format(self.dname[:4], type(self.dname)))
+        strn = strn + (" stype=None"     if self.stype == None else     " stype={0:<8}".format(self.stype[:8], type(self.stype)))
 # temporarily miss it out to shorten the line in debug messages        strn = strn + (" sid=None"       if self.sid == None else       " sid={0:<3}".format(self.sid, type(self.sid)))
 # temporarily miss it out to shorten the line in debug messages        strn = strn + (" ztype=None"     if self.ztype == None else     " ztype={0:<2}".format(self.ztype, type(self.ztype)))
-        strn = strn + (" zname=None"     if self.zname == None else     " zname={0:<14}".format(self.zname, type(self.zname)))
-        strn = strn + (" ztypeName=None" if self.ztypeName == None else " ztypeName={0:<10}".format(self.ztypeName, type(self.ztypeName)))
+        strn = strn + (" zname=None"     if self.zname == None else     " zname={0:<14}".format(self.zname[:14], type(self.zname)))
+        strn = strn + (" ztypeName=None" if self.ztypeName == None else " ztypeName={0:<10}".format(self.ztypeName[:10], type(self.ztypeName)))
         strn = strn + (" ztamper=None"   if self.ztamper == None else   " ztamper={0:<2}".format(self.ztamper, type(self.ztamper)))
         strn = strn + (" ztrip=None"     if self.ztrip == None else     " ztrip={0:<2}".format(self.ztrip, type(self.ztrip)))
 # temporarily miss it out to shorten the line in debug messages        strn = strn + (" zchime=None"    if self.zchime == None else    " zchime={0:<12}".format(self.zchime, type(self.zchime)))
@@ -1891,7 +1890,8 @@ class PacketHandling(ProtocolBase):
         self.MotionOffDelay = PanelSettings["MotionOffDelay"]     # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
         self.OverrideCode = PanelSettings["OverrideCode"]         # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
         self.ForceNumericKeypad = PanelSettings["ForceKeypad"]    # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
-        self.SirenTriggerList = PanelSettings["SirenTriggerList"] # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
+        tmpList = PanelSettings["SirenTriggerList"] # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
+        self.SirenTriggerList = [x.lower() for x in tmpList]
 
         PanelStatus["Comm Exception Count"] = PanelSettings["ResetCounter"]
         
@@ -2662,7 +2662,7 @@ class PacketHandling(ProtocolBase):
         PanelStatus["Model Type"] = self.ModelType
         PanelStatus["Power Master"] = 'Yes' if self.PowerMaster else 'No'
 
-        log.debug("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, PanelStatus["Model"], self.PowerMaster))
+        log.info("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, PanelStatus["Model"], self.PowerMaster))
 
         # We got a first response, now we can Download the panel EPROM settings
         interval = self.getTimeFunction() - self.lastSendOfDownloadEprom
@@ -3066,6 +3066,7 @@ class PacketHandling(ProtocolBase):
 
             self.sendResponseEvent ( 1 )   # push changes through to the host to get it to update
             
+            #   0x03 : "", 0x04 : "", 0x05 : "", 0x0A : "", 0x0B : "", 0x13 : "", 0x14 : "", 0x15 : ""
             #armModeNum = 1 if pmArmed_t[sysStatus] != None else 0
             #armMode = "Armed" if armModeNum == 1 else "Disarmed"
             
@@ -3187,8 +3188,9 @@ class PacketHandling(ProtocolBase):
                 s = modeStr + " / " + zoneStr
 
                 datadict['Type'].insert(0, eventType)
-                datadict['Event'].insert(0, eventZone)
                 datadict['Mode'].insert(0, modeStr)
+
+                datadict['Event'].insert(0, eventZone)
                 datadict['Name'].insert(0, zoneStr)
                 
                 #---------------------------------------------------------------------------------------
@@ -3198,8 +3200,8 @@ class PacketHandling(ProtocolBase):
                 alarmStatus = None
                 if eventType in pmPanelAlarmType_t:
                     alarmStatus = pmPanelAlarmType_t[eventType]
-                    log.info("[handle_msgtypeA7]         Checking if {0} is in the list {1}".format(alarmStatus, self.SirenTriggerList))
-                    if alarmStatus in self.SirenTriggerList:
+                    log.info("[handle_msgtypeA7]         Checking if {0} is in the siren trigger list {1}".format(alarmStatus.lower(), self.SirenTriggerList))
+                    if alarmStatus.lower() in self.SirenTriggerList:
                         log.info("[handle_msgtypeA7]             And it is, setting siren to True")
                         siren = True
 
@@ -3268,7 +3270,7 @@ class PacketHandling(ProtocolBase):
                 if eventType == 0x60: # system restart
                     datadict['Reset'] = True
                     log.warning("[handle_msgtypeA7]          Panel has been reset. Don't do anything and the comms might reconnect and magically continue")
-                    self.sendResponseEvent ( 4 )   # push changes through to the host, the panel itself has been reset
+                    self.sendResponseEvent ( 4 , datadict )   # push changes through to the host, the panel itself has been reset
 
             if pmTamperActive is not None:
                 log.info("[handle_msgtypeA7] ******************** Tamper Triggered *******************")
@@ -3543,16 +3545,17 @@ class EventHandling(PacketHandling):
                 elif command[0] == "x10":
                     log.debug("[CommandQueue]  Calling x10 command")
                     self.SendX10Command(command[1], command[2])
-                elif command[0] in pmArmMode_t:
-                    self.RequestArm(command[0], command[1])
+                elif command[0] == "download" and not self.pmDownloadMode:
+                    log.info("[CommandQueue]  download EPROM (again)")
+                    self.pmDownloadComplete = False
+                    self.Start_Download()
+                elif command[0] == "command" and command[1].lower() in pmArmMode_t:
+                    log.info("[CommandQueue]  making alarm command call " + command[1])
+                    self.RequestArm(command[1].lower(), command[2])
                 else:
                     log.warning("[CommandQueue]  Processing unknown queue command {0}".format(command))
 
-    # RequestArm
-    #       state is one of: "Disarmed", "Stay", "Armed", "UserTest", "StayInstant", "ArmedInstant", "Night", "NightInstant"
-    #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
-    def RequestArm(self, state, pin = ""):
-        """ Send a request to the panel to Arm/Disarm """
+    def PopulateDictionary(self, state):
         datadict = {}
         datadict['Command'] = state
         datadict['PanelReady'] = PanelStatus["Panel Ready"] == 'Yes'
@@ -3570,6 +3573,15 @@ class EventHandling(PacketHandling):
                 datadict['Bypass'].append(entname)                        
             if self.pmSensorDev_t[key].ztamper:
                 datadict['ZoneTamper'].append(entname)                        
+        return datadict
+        
+    # RequestArm
+    #       state is one of: "disarmed", "stay", "armed", "stayinstant", "armedinstant"  # "UserTest"
+    #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
+    def RequestArm(self, state, pin = ""):
+        """ Send a request to the panel to Arm/Disarm """
+        state = state.lower()
+        datadict = self.PopulateDictionary(state)
 
         if not self.pmDownloadMode:
             isValidPL, bpin = self.pmGetPin(pin)
@@ -3584,32 +3596,32 @@ class EventHandling(PacketHandling):
             
             if armCode is not None:
     
-                if not isValidPL and self.ArmWithoutCode and state != "Disarmed" and self.pmRemoteArm:
+                if not isValidPL and self.ArmWithoutCode and state != "disarmed" and self.pmRemoteArm:
                     # if we dont have pin codes and we can arm without a code and we're arming and arming is allowed
                     isValidPL = True
                     bpin = bytearray.fromhex("00 00 00 00")
 
                 if isValidPL:
-                    if (state == "Disarmed" and self.pmRemoteDisArm) or (state != "Disarmed" and self.pmRemoteArm):
-                        datadict['Message'] = "Panel Access, Sending Command to Panel"
+                    if (state == "disarmed" and self.pmRemoteDisArm) or (state != "disarmed" and self.pmRemoteArm):
+                        datadict['Reason'] = 0
                         self.sendResponseEvent ( 11 , datadict )
                         self.SendCommand("MSG_ARM", options = [3, armCodeA, 4, bpin])    #
                         return True
                     else:
-                        datadict['Message'] = "Panel Access Not allowed, user configuration setting prevented access"
-                        self.sendResponseEvent ( 12 , datadict )
+                        datadict['Reason'] = 3
+                        self.sendResponseEvent ( 11 , datadict )
                         log.info("[RequestArm]  Panel Access Not allowed, user settings prevent access")
                 else:
-                    datadict['Message'] = "Panel Access Not allowed without valid pin"
-                    self.sendResponseEvent ( 12 , datadict )
+                    datadict['Reason'] = 2
+                    self.sendResponseEvent ( 11 , datadict )
                     log.info("[RequestArm]  Panel Access Not allowed without valid pin")
             else:
-                datadict['Message'] = "Panel Access Not allowed, invalid state requested " + (state or "Invalid")
-                self.sendResponseEvent ( 12 , datadict )
+                datadict['Reason'] = 4
+                self.sendResponseEvent ( 11 , datadict )
                 log.info("[RequestArm]  RequestArmMode invalid state requested " + (state or "Invalid"))
         else:
-            datadict['Message'] = "Panel Access Not allowed, Request Arm and Disarm only supported when not downloading EPROM"
-            self.sendResponseEvent ( 12 , datadict )
+            datadict['Reason'] = 1
+            self.sendResponseEvent ( 11 , datadict )
             log.info("[RequestArm]  Request Arm and Disarm only supported when not downloading EPROM.")
         return False
 
@@ -3628,6 +3640,8 @@ class EventHandling(PacketHandling):
     #      byte 11 is 0x43
     def SetSensorArmedState(self, zone, bypassValue, pin = "") -> bool:  # was sensor instead of zone (zone in range 1 to 32).
         """ Set or Clear Sensor Bypass """
+        datadict = self.PopulateDictionary("Bypass")
+
         if not self.pmDownloadMode:
             if not self.pmBypassOff:
                 isValidPL, bpin = self.pmGetPin(pin)
@@ -3641,6 +3655,8 @@ class EventHandling(PacketHandling):
                     bypass = bytearray([y1, y2, y3, y4])
                     log.info("[SensorArmState]  SetSensorArmedState B " + self.toString(bypass))
                     if len(bpin) == 2 and len(bypass) == 4:
+                        datadict['Reason'] = 0
+                        self.sendResponseEvent ( 12 , datadict )
                         if bypassValue:
                             self.SendCommand("MSG_BYPASSEN", options = [1, bpin, 3, bypass]) 
                         else:
@@ -3648,10 +3664,16 @@ class EventHandling(PacketHandling):
                         self.SendCommand("MSG_BYPASSTAT") # request status to check success and update sensor variable
                         return True
                 else:
-                    log.info("[SensorArmState]  Bypass option not allowed, invalid pin")
+                    datadict['Reason'] = 2
+                    self.sendResponseEvent ( 12 , datadict )
+                    log.info("[SensorArmState]  Bypass option Not allowed without valid pin")
             else:
+                datadict['Reason'] = 3
+                self.sendResponseEvent ( 12 , datadict )
                 log.info("[SensorArmState]  Bypass option not enabled in panel settings.")
         else:
+            datadict['Reason'] = 1
+            self.sendResponseEvent ( 12 , datadict )
             log.info("[SensorArmState]  Bypass setting only supported when not downloading EPROM.")
         return False
 
@@ -3659,23 +3681,31 @@ class EventHandling(PacketHandling):
     #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
     def GetEventLog(self, pin = ""):
         """ Get Panel Event Log """
+        datadict = self.PopulateDictionary("EventLog")
         log.info("GetEventLog")
         self.eventCount = 0
         self.pmEventLogDictionary = {}
         if not self.pmDownloadMode:
             isValidPL, bpin = self.pmGetPin(pin)
             if isValidPL:
+                datadict['Reason'] = 0
+                self.sendResponseEvent ( 13 , datadict )
                 self.SendCommand("MSG_EVENTLOG", options=[4, bpin])
                 return True
             else:
+                datadict['Reason'] = 2
+                self.sendResponseEvent ( 13 , datadict )
                 log.warning("Get Event Log not allowed, invalid pin")
         else:
+            datadict['Reason'] = 1
+            self.sendResponseEvent ( 13 , datadict )
             log.warning("Get Event Log only supported when not downloading EPROM.")
         return False
 
     def SendX10Command(self, dev, state):
         # This is untested
         # "MSG_X10PGM"      : VisonicCommand(bytearray.fromhex('A4 00 00 00 00 00 99 99 00 00 00 43'), None  , False, "X10 Data" ),
+        datadict = self.PopulateDictionary("X10")
         if not self.pmDownloadMode:
             if dev >= 0 and dev <= 15:
                 log.debug("[SendX10Command]  Py Visonic : Send X10 Command : id = " + str(dev) + "   state = " + state)
@@ -3683,14 +3713,22 @@ class EventHandling(PacketHandling):
                 byteA = calc & 0xFF
                 byteB = (calc >> 8) & 0xFF
                 if state in pmX10State_t:
+                    datadict['Reason'] = 0
+                    self.sendResponseEvent ( 14 , datadict )
                     what = pmX10State_t[state]
                     self.SendCommand("MSG_X10PGM", options = [6, what, 7, byteA, 8, byteB])
                     return True
                 else:
+                    datadict['Reason'] = 5
+                    self.sendResponseEvent ( 14 , datadict )
                     log.info("[SendX10Command]  Send X10 Command : state not in pmX10State_t " + state)
             else:
+                datadict['Reason'] = 5
+                self.sendResponseEvent ( 14 , datadict )
                 log.info("[SendX10Command]  Send X10 Command : Device ID not in valid range")
         else:
+            datadict['Reason'] = 1
+            self.sendResponseEvent ( 14 , datadict )
             log.info("[SendX10Command]  Get Event Log only supported when not downloading EPROM.")
         return False
 

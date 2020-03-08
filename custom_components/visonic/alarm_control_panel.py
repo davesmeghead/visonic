@@ -49,6 +49,8 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     queue = None
     uawc = False
     fnc = False
+    aai = False
+    ahi = False
     if VISONIC_PLATFORM in hass.data:
         if "command_queue" in hass.data[VISONIC_PLATFORM]:
             queue = hass.data[VISONIC_PLATFORM]["command_queue"]
@@ -56,8 +58,12 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
             uawc = hass.data[VISONIC_PLATFORM]["arm_without_code"]
         if "force_keypad" in hass.data[VISONIC_PLATFORM]:
             fnc = hass.data[VISONIC_PLATFORM]["force_keypad"]
+        if "arm_away_instant" in hass.data[VISONIC_PLATFORM]:
+            aai = hass.data[VISONIC_PLATFORM]["arm_away_instant"]
+        if "arm_home_instant" in hass.data[VISONIC_PLATFORM]:
+            ahi = hass.data[VISONIC_PLATFORM]["arm_home_instant"]
 
-    va = VisonicAlarm(hass, 1, queue, uawc, fnc)  
+    va = VisonicAlarm(hass, 1, queue, uawc, fnc, aai, ahi)  
 
     # Listener to handle fired events
     def handle_event_alarm_panel(event):
@@ -85,7 +91,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
 class VisonicAlarm(alarm.AlarmControlPanel):
     """Representation of a Visonic alarm control panel."""
 
-    def __init__(self, hass, partition_id, queue, uawc, fnc):
+    def __init__(self, hass, partition_id, queue, uawc, fnc, aai, ahi):
         """Initialize a Visonic security camera."""
         #self._data = data
         self.hass = hass
@@ -95,6 +101,8 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         self.force_numeric_keypad = fnc
         self.mystate = STATE_UNKNOWN
         self.myname = "Visonic Alarm"
+        self.arm_away_instant = aai
+        self.arm_home_instant = ahi
 
     def doUpdate(self):    
         self.schedule_update_ha_state(False)
@@ -216,7 +224,7 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         return self.mystate
 
     # RequestArm
-    #       state is one of: "Disarmed", "Stay", "Armed", "UserTest", "StayInstant", "ArmedInstant", "Night", "NightInstant"
+    #       state is one of: "Disarmed", "Stay", "Armed", "UserTest", "StayInstant", "ArmedInstant"
     #        we need to add "log" and "bypass"
     #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
     # call in to pyvisonic in an async way this function : def RequestArm(state, pin = ""):
@@ -241,25 +249,31 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         """Send disarm command."""  
         if self.queue is not None:
             #_LOGGER.info("alarm disarm code=" + self.decode_code(code))        
-            self.queue.put_nowait(["Disarmed", self.decode_code(code)])
+            self.queue.put_nowait(["command", "disarmed", self.decode_code(code)])
 
     def alarm_arm_home(self, code = None):
         """Send arm home command."""
         if self.queue is not None:
             #_LOGGER.info("alarm arm home=" + self.decode_code(code))
-            self.queue.put_nowait(["Stay", self.decode_code(code)])
+            if self.arm_home_instant:
+                self.queue.put_nowait(["command", "stayinstant", self.decode_code(code)])
+            else:
+                self.queue.put_nowait(["command", "stay", self.decode_code(code)])
 
     def alarm_arm_away(self, code = None):
         """Send arm away command."""
         if self.queue is not None:
             #_LOGGER.info("alarm arm away=" + self.decode_code(code))
-            self.queue.put_nowait(["Armed", self.decode_code(code)])
+            if self.arm_away_instant:
+                self.queue.put_nowait(["command", "armedinstant", self.decode_code(code)])
+            else:
+                self.queue.put_nowait(["command", "armed", self.decode_code(code)])
 
     def alarm_arm_night(self, code = None):
-        """Send arm night command."""
+        """Send arm night command (Same as arm home)."""
         if self.queue is not None:
-            #_LOGGER.info("alarm night=" + self.decode_code(code))
-            self.queue.put_nowait(["Night", self.decode_code(code)])
+            _LOGGER.info("alarm night called, calling Stay instead")
+            self.queue.put_nowait(["command", "stay", self.decode_code(code)])
 
     def alarm_trigger(self, code=None):
         """Send alarm trigger command."""

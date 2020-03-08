@@ -60,11 +60,11 @@ CONF_OVERRIDE_CODE = "override_code"
 CONF_DOWNLOAD_CODE = "download_code"
 CONF_ARM_CODE_AUTO = "arm_without_usercode"
 CONF_FORCE_KEYPAD = "force_numeric_keypad"
-
 CONF_EXCLUDE_SENSOR = "exclude_sensor"
 CONF_EXCLUDE_X10 = "exclude_x10"
-
 CONF_SIREN_SOUNDING = "siren_sounding"
+CONF_INSTANT_ARM_AWAY = "arm_away_instant"
+CONF_INSTANT_ARM_HOME = "arm_home_instant"
 
 # Event processing for the log files from the panel
 CONF_LOG_EVENT        = "panellog_logentry_event"
@@ -96,7 +96,7 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Required(CONF_DEVICE): vol.Any( DEVICE_SOCKET_SCHEMA, DEVICE_USB_SCHEMA),
         vol.Optional(CONF_EXCLUDE_SENSOR,       default=[]): VISONIC_ID_LIST_SCHEMA,
         vol.Optional(CONF_EXCLUDE_X10,          default=[]): VISONIC_ID_LIST_SCHEMA,
-        vol.Optional(CONF_SIREN_SOUNDING,       default=["Intruder"]): VISONIC_STRING_LIST_SCHEMA,
+        vol.Optional(CONF_SIREN_SOUNDING,       default=["intruder"]): VISONIC_STRING_LIST_SCHEMA,
         vol.Optional(CONF_MOTION_OFF_DELAY,     default=120 )  : cv.positive_int,
         vol.Optional(CONF_OVERRIDE_CODE,        default="" )   : cv.string,
         vol.Optional(CONF_DOWNLOAD_CODE,        default="" )   : cv.string,
@@ -106,6 +106,8 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Optional(CONF_FORCE_AUTOENROLL,     default=True)  : cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
         vol.Optional(CONF_FORCE_KEYPAD,         default=False) : cv.boolean,   #        '0', 'false', 'no', 'off', 'disable'
         vol.Optional(CONF_AUTO_SYNC_TIME,       default=True ) : cv.boolean,
+        vol.Optional(CONF_INSTANT_ARM_AWAY,     default=False) : cv.boolean,
+        vol.Optional(CONF_INSTANT_ARM_HOME,     default=False) : cv.boolean,
         vol.Optional(CONF_ENABLE_REMOTE_ARM,    default=False) : cv.boolean,
         vol.Optional(CONF_ENABLE_REMOTE_DISARM, default=False) : cv.boolean,
         vol.Optional(CONF_ENABLE_SENSOR_BYPASS, default=False) : cv.boolean,
@@ -126,9 +128,15 @@ ALARM_SERVICE_EVENTLOG = vol.Schema({
     vol.Optional(ATTR_CODE, default=""): cv.string,
 })
 
+CONF_COMMAND = "Command"
+ALARM_SERVICE_COMMAND = vol.Schema({
+    vol.Required(CONF_COMMAND, default="Armed" ) : cv.string,
+    vol.Optional(ATTR_CODE, default=""): cv.string,
+})
+
 # We only have 2 components, sensors and switches
 VISONIC_COMPONENTS = [
-    'binary_sensor', 'switch'   # keep switches here to eventually support X10 devices
+    'binary_sensor', 'switch'   # keep switches here to support X10 devices
 ]
 
 _LOGGER = logging.getLogger(__name__)
@@ -293,7 +301,7 @@ def setup(hass, base_config):
             
         elif type(visonic_devices) == int:
             tmp = int(visonic_devices)
-            if 1 <= tmp <= 12:   
+            if 1 <= tmp <= 14:   
                 # General update trigger
                 #    1 is a zone update, 
                 #    2 is a panel update AND the alarm is not active, 
@@ -385,6 +393,8 @@ def setup(hass, base_config):
         hass.data[VISONIC_PLATFORM]["command_queue"] = command_queue
         hass.data[VISONIC_PLATFORM]["arm_without_code"] = config.get(CONF_ARM_CODE_AUTO)
         hass.data[VISONIC_PLATFORM]["force_keypad"] = config.get(CONF_FORCE_KEYPAD)
+        hass.data[VISONIC_PLATFORM]["arm_away_instant"] = config.get(CONF_INSTANT_ARM_AWAY)
+        hass.data[VISONIC_PLATFORM]["arm_home_instant"] = config.get(CONF_INSTANT_ARM_HOME)
         
         _LOGGER.info("Visonic Connection Device Type is {0}".format(device_type))
 
@@ -549,6 +559,25 @@ def setup(hass, base_config):
         else:
             _LOGGER.info('alarm control panel not making event log request {0} {1}'.format(type(call.data), call.data))
 
+    # Service call to retrieve the event log from the panel. This currently just gets dumped in the HA log file
+    def service_panel_command(call):
+        global command_queue
+        _LOGGER.info('alarm control panel received command request')
+        if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>":
+            code = ''
+            if ATTR_CODE in call.data:
+                code = call.data[ATTR_CODE]
+            command = call.data[CONF_COMMAND]
+            _LOGGER.info('alarm control panel got command ' + command)
+            command_queue.put_nowait(["command", command, decode_code(code)])
+        else:
+            _LOGGER.info('alarm control panel not making command request {0} {1}'.format(type(call.data), call.data))
+
+    # Service call to retrieve the event log from the panel. This currently just gets dumped in the HA log file
+    def service_panel_download(call):
+        global command_queue
+        command_queue.put_nowait(["download"])
+
 #    def get_entity(name):
 #        # Take 'foo.bar.baz' and return self.entities.foo.bar.baz.
 #        # This makes it easy to convert a string to an arbitrary entity.
@@ -567,6 +596,8 @@ def setup(hass, base_config):
 
         hass.services.async_register(DOMAIN, 'alarm_panel_reconnect', service_panel_reconnect)
         hass.services.register(DOMAIN, 'alarm_panel_eventlog', service_panel_eventlog, schema=ALARM_SERVICE_EVENTLOG)
+        hass.services.register(DOMAIN, 'alarm_panel_command', service_panel_command, schema=ALARM_SERVICE_COMMAND)
+        hass.services.register(DOMAIN, 'alarm_panel_download', service_panel_download)
                 
         success = connect_to_alarm()
         

@@ -99,4 +99,5 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.6.1    | Added new config entry called "siren_sounding" as a list of strings. Added new HA Event as condition 11, triggered when the user tries to arm/diasrm the panel (but before the command is sent to the panel) |
 | 0.3.6.2    | Updated the new HA Event as condition 11 and added new with condition 12. "Ready" has been added which copies the received "Panel Ready" attribute. A "message" is also added. Either an 11 or 12 HA event is generated.  |
 | 0.3.6.3    | Changed Ready to PanelReady  |
+| 0.3.7.0    | Several changes to HA event generation, I have updated the wiki so please read it. There are 2 new config settings arm_away_instant and arm_home_instant, 2 new HA Services alarm_panel_command and alarm_panel_download. |
 
