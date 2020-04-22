@@ -28,10 +28,6 @@ log = logging.getLogger(__name__)
 
 pyvisonic.setupLocalLogger()
 
-pyvisonic.setConfig("OverrideCode", -1)
-pyvisonic.setConfig("PluginDebug", True)
-pyvisonic.setConfig("ForceStandard", False)
-
 conn = None
 
 parser = argparse.ArgumentParser(description="Connect to Visonic Alarm Panel")

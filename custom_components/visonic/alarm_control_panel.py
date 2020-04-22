@@ -11,11 +11,14 @@ import voluptuous as vol
 
 from datetime import timedelta
 from homeassistant.helpers.entity_component import EntityComponent
-from custom_components.visonic import DOMAIN
+from homeassistant.core import valid_entity_id, split_entity_id
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 from homeassistant.components.alarm_control_panel.const import (
     SUPPORT_ALARM_ARM_AWAY,
     SUPPORT_ALARM_ARM_HOME,
+    SUPPORT_ALARM_ARM_NIGHT,
 )
 
 from homeassistant.const import (
@@ -26,8 +29,15 @@ from homeassistant.const import (
 from homeassistant.const import (STATE_UNKNOWN, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, 
     STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED)
 
-from custom_components.visonic import VISONIC_PLATFORM
-from homeassistant.core import valid_entity_id, split_entity_id
+from .const import (
+    DOMAIN,
+#    VISONIC_PLATFORM,
+    VISONIC_UNIQUE_ID,
+    DOMAINCLIENT,
+    DOMAINDATA,
+)
+
+from .client import VisonicClient
 
 DEPENDENCIES = ['visonic']
 
@@ -43,74 +53,63 @@ ALARM_SERVICE_SCHEMA = vol.Schema({
 
 _LOGGER = logging.getLogger(__name__)
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
-    """Set up the Visonic alarms."""
-
-    queue = None
-    uawc = False
-    fnc = False
-    aai = False
-    ahi = False
-    if VISONIC_PLATFORM in hass.data:
-        if "command_queue" in hass.data[VISONIC_PLATFORM]:
-            queue = hass.data[VISONIC_PLATFORM]["command_queue"]
-        if "arm_without_code" in hass.data[VISONIC_PLATFORM]:
-            uawc = hass.data[VISONIC_PLATFORM]["arm_without_code"]
-        if "force_keypad" in hass.data[VISONIC_PLATFORM]:
-            fnc = hass.data[VISONIC_PLATFORM]["force_keypad"]
-        if "arm_away_instant" in hass.data[VISONIC_PLATFORM]:
-            aai = hass.data[VISONIC_PLATFORM]["arm_away_instant"]
-        if "arm_home_instant" in hass.data[VISONIC_PLATFORM]:
-            ahi = hass.data[VISONIC_PLATFORM]["arm_home_instant"]
-
-    va = VisonicAlarm(hass, 1, queue, uawc, fnc, aai, ahi)  
-
-    # Listener to handle fired events
-    def handle_event_alarm_panel(event):
-        _LOGGER.info('alarm control panel received update event')
-        # There is a "condition value in the data but we don't need it, just do an update for every change
-        if va is not None:
-            va.doUpdate()
+async def async_setup_entry( hass: HomeAssistant, entry: ConfigEntry, async_add_entities ) -> None:
+    #_LOGGER.info("alarm control panel async_setup_entry called")
+    client = hass.data[DOMAIN][DOMAINCLIENT][entry.unique_id]
+    va = VisonicAlarm(hass, client, 1)
+    devices = [va]
+    async_add_entities(devices, True)  
     
-    # Service call to bypass individual sensors
-    def service_sensor_bypass(call):
-        #_LOGGER.info('alarm control panel service sensor bypass')
-        if va is not None:
-            va.sensor_bypass(call.data)
-    
-    hass.bus.listen('alarm_panel_state_update', handle_event_alarm_panel)
-    
-    hass.services.register(DOMAIN, 'alarm_sensor_bypass', service_sensor_bypass, schema=ALARM_SERVICE_SCHEMA)
-
-    devices = []
-    devices.append(va)
-    
-    add_devices(devices, True)  
-    
-
 class VisonicAlarm(alarm.AlarmControlPanel):
     """Representation of a Visonic alarm control panel."""
 
-    def __init__(self, hass, partition_id, queue, uawc, fnc, aai, ahi):
+    def __init__(self, hass, client, partition_id):
         """Initialize a Visonic security camera."""
         #self._data = data
         self.hass = hass
+        self.client = client
         self.partition_id = partition_id
-        self.queue = queue
-        self.user_arm_without_code = uawc
-        self.force_numeric_keypad = fnc
         self.mystate = STATE_UNKNOWN
         self.myname = "Visonic Alarm"
-        self.arm_away_instant = aai
-        self.arm_home_instant = ahi
+        hass.bus.async_listen('alarm_panel_state_update', self.handle_event_alarm_panel)
+        hass.services.async_register(DOMAIN, 'alarm_sensor_bypass', self.service_sensor_bypass, schema=ALARM_SERVICE_SCHEMA)
 
-    def doUpdate(self):    
+    # Listener to handle fired events
+    def handle_event_alarm_panel(self, event):
         self.schedule_update_ha_state(False)
+#        _LOGGER.info('alarm control panel received update event')
+#        # There is a "condition value in the data but we don't need it, just do an update for every change
+#        if va is not None:
+#            va.doUpdate()
+    
+#    def doUpdate(self):    
 
+    # Service call to bypass individual sensors
+    def service_sensor_bypass(self, call):
+        self.sensor_bypass(call.data)
+#        #_LOGGER.info('alarm control panel service sensor bypass')
+#        if va is not None:
+#            va.sensor_bypass(call.data)
+    
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
         return self.myname + "_" + str(self.partition_id)
+
+    @property
+    def device_info(self):
+        """Return information about the device."""
+        return {
+            'manufacturer': 'Visonic',
+            "identifiers": {(DOMAIN, self.myname)},
+            "name": f"Visonic Alarm Panel (Partition {self.partition_id})",
+            "model": "Alarm Panel",
+            "via_device" : (DOMAIN, VISONIC_UNIQUE_ID),
+        }
+
+    async def async_remove_entry(hass, entry) -> None:
+        """Handle removal of an entry."""
+        _LOGGER.info('alarm control panel async_remove_entry')
 
     @property
     def name(self):
@@ -119,15 +118,22 @@ class VisonicAlarm(alarm.AlarmControlPanel):
 
     @property
     def should_poll(self):
-        return False;
+        return False
 
     @property
     def device_state_attributes(self):  #
         """Return the state attributes of the device."""
-        import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
- 
-        # maybe should filter rather than sending them all
-        return visonicApi.PanelStatus
+        data = self.hass.data[DOMAIN][DOMAINDATA]    ## Currently may only contain self.hass.data[DOMAIN][DOMAINDATA]["Exception Count"]
+        stat = self.client.getPanelStatus()
+        if data is not None and stat is not None:
+            if isinstance(data, dict) and isinstance(stat, dict) and len(stat) > 0 and len(data) > 0:
+                return {**stat, **data}
+        
+        if stat is not None:
+            return stat
+        if data is not None:
+            return data
+        return None
 
 # DO NOT OVERRIDE state_attributes AS IT IS USED IN THE LOVELACE FRONTEND TO DETERMINE code_format
         
@@ -135,11 +141,12 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     def code_format(self):
         """Regex for code format or None if no code is required."""
         _LOGGER.debug("code format called *****************************") 
-        import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
+        #import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
 
         # try powerlink mode first, if in powerlink then it already has the user codes
-        panelmode = visonicApi.PanelStatus["Mode"]
-        if not self.force_numeric_keypad and panelmode is not None:
+        panelmode = self.client.getPanelMode()
+        #_LOGGER.info("code format panel mode {0}".format(panelmode))
+        if not self.hass.data[DOMAIN]["force_keypad"] and panelmode is not None:
             if panelmode == "Powerlink" or panelmode == "Standard Plus":
                 _LOGGER.debug("code format none as powerlink or standard plus *****************************") 
                 return None
@@ -147,27 +154,32 @@ class VisonicAlarm(alarm.AlarmControlPanel):
         # we aren't in powerlink
         
         # If currently Disarmed and user setting to not show panel to arm
-        armcode = None
-        if "Panel Status Code" in visonicApi.PanelStatus:
-            armcode = visonicApi.PanelStatus["Panel Status Code"]
+        armcode = self.client.getPanelStatusCode()
+#        armcode = None
+#        if "Panel Status Code" in visonicApi.PanelStatus:
+#            armcode = visonicApi.PanelStatus["Panel Status Code"]
             
-        if armcode is None:
-            _LOGGER.debug("code format none as armcode is none (panel starting up?) *****************************") 
+        if armcode is None or armcode == -1:
+            _LOGGER.debug("code format none as armcode is none (panel starting up?) *****************************")
             return None
 
-        if armcode == 0 and self.user_arm_without_code:
-            _LOGGER.debug("code format none as armcode is zero (Disarmed) and user arm without code is true *****************************") 
+        if armcode == 0 and self.hass.data[DOMAIN]["arm_without_code"]:
+            _LOGGER.debug("code format none as armcode is zero (Disarmed) and user arm without code is true *****************************")
             return None
 
-        if self.force_numeric_keypad:
-            _LOGGER.debug("code format number as force numeric keypad set in config file *****************************") 
+        if self.hass.data[DOMAIN]["force_keypad"]:
+            _LOGGER.debug("code format number as force numeric keypad set in config file *****************************")
             return "number"
 
-        overridecode = visonicApi.PanelSettings["OverrideCode"]
-        if overridecode is not None:
-            if len(overridecode) == 4:
-                _LOGGER.debug("code format none as code set in config file *****************************") 
-                return None
+        if self.client.hasValidOverrideCode():
+            _LOGGER.debug("code format none as code set in config file *****************************")
+            return None
+
+#        overridecode = visonicApi.PanelSettings["OverrideCode"]
+#        if overridecode is not None:
+#            if len(overridecode) == 4:
+#                _LOGGER.debug("code format none as code set in config file *****************************")
+#                return None
 
         _LOGGER.debug("code format number *****************************") 
         return "number"
@@ -175,35 +187,30 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     @property
     def state(self):
         """Return the state of the device."""
-        import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
-        sirenactive = 'No'
-        if "Panel Siren Active" in visonicApi.PanelStatus:
-            sirenactive = visonicApi.PanelStatus["Panel Siren Active"]
-
-        if sirenactive == 'Yes':
+        
+        if self.client.isSirenActive():
             self.mystate = STATE_ALARM_TRIGGERED
             return STATE_ALARM_TRIGGERED
+
+#        import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
+#        sirenactive = 'No'
+#        if "Panel Siren Active" in visonicApi.PanelStatus:
+#            sirenactive = visonicApi.PanelStatus["Panel Siren Active"]
+#        if sirenactive == 'Yes':
+#            self.mystate = STATE_ALARM_TRIGGERED
+#            return STATE_ALARM_TRIGGERED
             
-        armcode = None
-        if "Panel Status Code" in visonicApi.PanelStatus:
-            armcode = visonicApi.PanelStatus["Panel Status Code"]
+        armcode = self.client.getPanelStatusCode()
         
         # -1  Not yet defined
-        # 0   Disarmed
-        # 1   Exit Delay Arm Home
-        # 2   Exit Delay Arm Away
+        # 0   Disarmed (Also includes 0x0A "Home Bypass", 0x0B "Away Bypass", 0x0C "Ready", 0x0D "Not Ready" and 0x10 "Disarmed Instant")
+        # 1   Home Exit Delay  or  Home Instant Exit Delay
+        # 2   Away Exit Delay  or  Away Instant Exit Delay
         # 3   Entry Delay
-        # 4   Armed Home
-        # 5   Armed Away
-        # 10  Home Bypass
-        # 11  Away Bypass
-        # 20  Armed Home Instant
-        # 21  Armed Away Instant
-        #   "Disarmed", "Home Exit Delay", "Away Exit Delay", "Entry Delay", "Armed Home", "Armed Away", "User Test",
-        #   "Downloading", "Programming", "Installer", "Home Bypass", "Away Bypass", "Ready", "Not Ready", "??", "??",
-        #   "Disarmed Instant", "Home Instant Exit Delay", "Away Instant Exit Delay", "Entry Delay Instant", "Armed Home Instant",
-        #   "Armed Away Instant"
-        
+        # 4   Armed Home  or  Home Bypass  or  Entry Delay Instant  or  Armed Home Instant
+        # 5   Armed Away  or  Away Bypass  or  Armed Away Instant
+        # 6   User Test  or  Downloading  or  Programming  or  Installer
+
         #_LOGGER.warning("alarm armcode is " + str(armcode))
         
         if armcode is None:
@@ -214,20 +221,14 @@ class VisonicAlarm(alarm.AlarmControlPanel):
             self.mystate = STATE_ALARM_PENDING
         elif armcode == 2:
             self.mystate = STATE_ALARM_ARMING
-        elif armcode == 4 or armcode == 10 or armcode == 20:
+        elif armcode == 4:
             self.mystate = STATE_ALARM_ARMED_HOME
-        elif armcode == 5 or armcode == 11 or armcode == 21:
+        elif armcode == 5:
             self.mystate = STATE_ALARM_ARMED_AWAY
         else:
             self.mystate = STATE_UNKNOWN
             
         return self.mystate
-
-    # RequestArm
-    #       state is one of: "Disarmed", "Stay", "Armed", "UserTest", "StayInstant", "ArmedInstant"
-    #        we need to add "log" and "bypass"
-    #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
-    # call in to pyvisonic in an async way this function : def RequestArm(state, pin = ""):
 
     def decode_code(self, data) -> str:
         if data is not None:
@@ -243,37 +244,37 @@ class VisonicAlarm(alarm.AlarmControlPanel):
     @property
     def supported_features(self) -> int:
         """Return the list of supported features."""
-        return SUPPORT_ALARM_ARM_HOME | SUPPORT_ALARM_ARM_AWAY
+        return SUPPORT_ALARM_ARM_HOME | SUPPORT_ALARM_ARM_AWAY | SUPPORT_ALARM_ARM_NIGHT
+
+    # self.client.sendCommand
+    #       state is one of: "Disarmed", "Stay", "Armed", "UserTest", "StayInstant", "ArmedInstant"
+    #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
+    # call in to pyvisonic in an async way this function : def self.client.sendCommand(state, pin = ""):
 
     def alarm_disarm(self, code = None):
         """Send disarm command."""  
-        if self.queue is not None:
-            #_LOGGER.info("alarm disarm code=" + self.decode_code(code))        
-            self.queue.put_nowait(["command", "disarmed", self.decode_code(code)])
+        self.client.sendCommand("disarmed", self.decode_code(code))
 
     def alarm_arm_home(self, code = None):
         """Send arm home command."""
-        if self.queue is not None:
-            #_LOGGER.info("alarm arm home=" + self.decode_code(code))
-            if self.arm_home_instant:
-                self.queue.put_nowait(["command", "stayinstant", self.decode_code(code)])
-            else:
-                self.queue.put_nowait(["command", "stay", self.decode_code(code)])
+        #_LOGGER.info("alarm arm home=" + self.decode_code(code))
+        if self.hass.data[DOMAIN]["arm_home_instant"]:
+            self.client.sendCommand("stayinstant", self.decode_code(code))
+        else:
+            self.client.sendCommand("stay", self.decode_code(code))
 
     def alarm_arm_away(self, code = None):
         """Send arm away command."""
-        if self.queue is not None:
-            #_LOGGER.info("alarm arm away=" + self.decode_code(code))
-            if self.arm_away_instant:
-                self.queue.put_nowait(["command", "armedinstant", self.decode_code(code)])
-            else:
-                self.queue.put_nowait(["command", "armed", self.decode_code(code)])
+        #_LOGGER.info("alarm arm away=" + self.decode_code(code))
+        if self.hass.data[DOMAIN]["arm_away_instant"]:
+            self.client.sendCommand("armedinstant", self.decode_code(code))
+        else:
+            self.client.sendCommand("armed", self.decode_code(code))
 
     def alarm_arm_night(self, code = None):
         """Send arm night command (Same as arm home)."""
-        if self.queue is not None:
-            _LOGGER.info("alarm night called, calling Stay instead")
-            self.queue.put_nowait(["command", "stay", self.decode_code(code)])
+        _LOGGER.info("alarm night called, calling Stay instant")
+        self.client.sendCommand("stayinstant", self.decode_code(code))
 
     def alarm_trigger(self, code=None):
         """Send alarm trigger command."""
@@ -316,11 +317,11 @@ class VisonicAlarm(alarm.AlarmControlPanel):
                         if ATTR_BYPASS in data:
                             bypass = data[ATTR_BYPASS]
                         if devid >= 1 and devid <= 64:
-                            #if bypass:
-                            #    _LOGGER.info("Attempt to bypass sensor device id = " + str(devid))
-                            #else:
-                            #    _LOGGER.info("Attempt to restore (arm) sensor device id = " + str(devid))
-                            self.queue.put_nowait(["bypass", devid, bypass, self.decode_code(code)])
+                            if bypass:
+                                _LOGGER.info("Attempt to bypass sensor device id = " + str(devid))
+                            else:
+                                _LOGGER.info("Attempt to restore (arm) sensor device id = " + str(devid))
+                            self.client.sendBypass(devid, bypass, self.decode_code(code))
                         else:
                             _LOGGER.warning("Attempt to bypass sensor with incorrect parameters device id = " + str(devid))
 

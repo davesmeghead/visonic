@@ -33,6 +33,7 @@ import copy
 import math
 import socket
 
+from enum import Enum
 from collections import defaultdict
 from datetime import datetime
 from time import sleep
@@ -42,7 +43,36 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.3.7.0"
+PLUGIN_VERSION = "0.4.0.0"
+
+# the set of configuration parameters in to this client class
+class PYVConst(Enum):
+    DownloadCode = 0
+    ForceAutoEnroll = 1
+    AutoSyncTime = 2
+    PluginLanguage = 3
+    EnableRemoteArm = 4
+    EnableRemoteDisArm = 5
+    EnableSensorBypass = 6
+    MotionOffDelay = 7
+    OverrideCode = 8
+    ForceKeypad = 9
+    ArmWithoutCode = 10
+    SirenTriggerList = 11
+    B0_Enable = 12
+    B0_Min_Interval_Time = 13
+    B0_Max_Wait_Time = 14
+    ForceStandard = 15
+
+# The set of panel states
+class PanelMode(Enum):
+     UNKNOWN = 0          # Not used but here just in case of future use
+     PROBLEM = 1
+     STARTING = 2
+     STANDARD = 3
+     STANDARD_PLUS = 4
+     POWERLINK = 5
+     DOWNLOAD = 6
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 MAX_CRC_ERROR = 5
@@ -82,61 +112,6 @@ POWERLINK_TIMEOUT = 4.5 * POWERLINK_RETRY_DELAY
 
 # The number of seconds that if we have not received any data packets from the panel at all then suspend this plugin and report to HA
 NO_RECEIVE_DATA_TIMEOUT = 30
-
-
-PanelSettings = {
-   "MotionOffDelay"       : 120,
-   "OverrideCode"         : "",
-   "DownloadCode"         : "",
-   "PluginLanguage"       : "EN",
-   "ArmWithoutCode"       : False,
-   "PluginDebug"          : False,
-   "ForceStandard"        : False,
-   "ForceAutoEnroll"      : True,
-   "ForceKeypad"          : False,
-   "ResetCounter"         : 0,
-   "AutoSyncTime"         : True,
-   "EnableRemoteArm"      : False,
-   "EnableRemoteDisArm"   : False,   #
-   "EnableSensorBypass"   : False,   # Does user allow sensor bypass / arming
-   "SirenTriggerList"     : [],
-
-   "B0_Enable"            : False,
-   "B0_Min_Interval_Time" : 30,
-   "B0_Max_Wait_Time"     : 5
-}
-
-PanelStatus = {
-   "PluginVersion"         : PLUGIN_VERSION,
-   "Comm Exception Count"  : 0,
-   "Mode"                  : "Unknown",
-   "Watchdog Timeout"      : 0,
-   "Download Timeout"      : 0,
-
-# A7 message decode
-   "Panel Last Event"      : "None",
-   "Panel Last Event Data" : {"Zone": 0, "Entity": None, "Tamper": False, "Siren": False, "Reset": False, "Time": "2020-01-01T00:00:00.0", "Count": 0, "Type": [], "Event": [], "Mode": [], "Name": [] },
-   "Panel Alarm Status"    : "None",
-   "Panel Trouble Status"  : "None",
-   "Panel Siren Active"    : 'No',
-
-# A5 message decode
-   "Panel Status"          : "Unknown",
-   "Panel Status Code"     : -1,
-   "Panel Ready"           : 'No',
-   "Panel Alert In Memory" : 'No',
-   "Panel Trouble"         : 'No',
-   "Panel Bypass"          : 'No',
-   "Panel Status Changed"  : 'No',
-   "Panel Alarm Event"     : 'No',
-   "Panel Armed"           : 'No',
-
-# 3C message decode
-   "Power Master"          : 'No',
-
-# Define model type to be unknown
-   "Model"                 : "Unknown"
-}
 
 # Messages left to work out
 #      Panel sent 0d 22 fd 0a 01 16 15 00 0d 00 00 00 9c 0a    No idea what this means
@@ -262,8 +237,6 @@ pmBlockDownload_t = {
    "MSG_DL_BlockBA0"      : bytearray.fromhex('00 BA 80 00'),   # 
    "MSG_DL_BlockBA1"      : bytearray.fromhex('80 BA 80 00')    # 
 }
-
-
 
 #Private VMSG_DL_MASTER10_EVENTLOG As Byte[] = [&H3E, &HFF, &HFF, &HD2, &H07, &HB0, &H05, &H48, &H01, &H00, &H00] '&H3F
 #Private VMSG_DL_MASTER30_EVENTLOG As Byte[] = [&H3E, &HFF, &HFF, &H42, &H1F, &HB0, &H05, &H48, &H01, &H00, &H00] '&H3F
@@ -542,10 +515,6 @@ pmSysStatusFlags_t = {
    "FR" : ( "Prêt", "Alerte en mémoire", "Défaut/Panne", "Isolation sur", "10 dernières secondes", "Evenement Zone", "Etat modifié", "Evenment Alarme" )
 
 }
-
-#pmArmed_t = {
-#   0x03 : "", 0x04 : "", 0x05 : "", 0x0A : "", 0x0B : "", 0x13 : "", 0x14 : "", 0x15 : ""
-#}
 
 pmArmMode_t = {
    "disarmed" : 0x00, "stay" : 0x04, "armed" : 0x05, "stayinstant" : 0x14, "armedinstant" : 0x15    # "usertest" : 0x06, 
@@ -835,7 +804,6 @@ pmZoneChime_t = {
    "EN" : ("Off", "Melody", "Zone", "Invalid"),
    "NL" : ("Uit", "Muziek", "Zone", "Invalid"),
    "FR" : ("Eteint", "Melodie", "Zone", "Invalide")
-
 }
 
 # Note: names need to match to VAR_xxx
@@ -956,7 +924,7 @@ class SensorDevice:
         return self.id
         
     def install_change_handler(self, ch):
-        log.info("[SensorDevice] Installing update handler for device {}".format(self.id))
+        #log.info("[SensorDevice] Installing update handler for device {}".format(self.id))
         self._change_handler = ch
 
     def pushChange(self):
@@ -998,7 +966,7 @@ class X10Device:
         return self.id
         
     def install_change_handler(self, ch):
-        log.info("[X10Device] Installing update handler for device {}".format(self.id))
+        #log.info("[X10Device] Installing update handler for device {}".format(self.id))
         self._change_handler = ch
 
     def pushChange(self):
@@ -1032,51 +1000,46 @@ class VisonicListEntry:
 class ProtocolBase(asyncio.Protocol):
     """Manage low level Visonic protocol."""
 
-    PanelStatus["Comm Exception Count"] = PanelSettings["ResetCounter"]
-    
     log.info("Initialising Protocol - Component Version {0}".format(PLUGIN_VERSION))
 
-    def __init__(self, loop=None, disconnect_callback=None, packet_callback: Callable = None ) -> None:
+    def __init__(self, loop=None, disconnect_callback=None, panelConfig = None, packet_callback: Callable = None) -> None:
         """Initialize class."""
         if loop:
             self.loop = loop
         else:
             self.loop = asyncio.get_event_loop()
 
-        self.testmode = False
-        if PanelSettings["PluginDebug"]:
-            log.info("Initialising Protocol - ************************************")
-            log.info("Initialising Protocol - ************ TEST MODE *************")
-            log.info("Initialising Protocol - ************************************")
-            self.testmode = True
-
-        # 2 callback handlers: packets and disconnections
+        # install the 2 callback handlers: packets and disconnections
         self.packet_callback = packet_callback
         self.disconnect_callback = disconnect_callback
         
         self.transport = None  # type: asyncio.Transport
 
-        ###############################################################
-        # Variables that are only used in handle_received_message function
-        ###############################################################
-        self.pmVarLenMsg = False       # Are we expecting a variable length message from the panel
-        self.pmIncomingPduLen = 0      # The length of the incoming message
-        self.pmCrcErrorCount = 0       # The CRC Error Count for Received Messages
-        self.pmMsgType = None          # The current receiving message type
+        ########################################################################
+        # Global Variables that define the overall panel status                   
+        ########################################################################
+        self.PanelMode = PanelMode.STARTING
+        self.WatchdogTimeout = 0 
+        self.DownloadTimeout = 0 
 
-        ###############################################################
-        # Variables that are only used in this class and not subclasses
-        ###############################################################
+        # A7 related data        
+        self.PanelLastEvent = "None" 
+        self.PanelLastEventData = {"Zone": 0, "Entity": None, "Tamper": False, "Siren": False, "Reset": False, "Time": "2020-01-01T00:00:00.0", "Count": 0, "Type": [], "Event": [], "Mode": [], "Name": [] } 
+        self.PanelAlarmStatus = "None" 
+        self.PanelTroubleStatus = "None" 
 
-        # a list of message types we are expecting from the panel
-        self.pmExpectedResponse = []
+        # A5 related data        
+        self.PanelStatusText = "Unknown" 
+        self.PanelStatusCode = -1 
+        self.PanelReady = False 
+        self.PanelAlertInMemory = False
+        self.PanelTrouble = False 
+        self.PanelBypass = False 
+        self.PanelStatusChanged = False 
+        self.PanelAlarmEvent = False 
+        self.PanelArmed = False 
+        self.PanelStatus = { }
 
-        # The last sent message
-        self.pmLastSentMessage = None
-        
-        # Timestamp of the last received data from the panel. If this remains set to none then we have a comms problem
-        self.lastRecvOfPanelData = None
-        
         # Panel type: 0=Powermax (which we dont support), 1=Powermax+, 4=Powermax Pro Part
         #    PanelType=0 : PowerMax , Model=21   Powermaster False  <<== THIS DOES NOT WORK (NO POWERLINK SUPPORT and only supports EPROM download i.e no sensor data) ==>> 
         #    PanelType=1 : PowerMax+ , Model=47   Powermaster False
@@ -1089,13 +1052,61 @@ class ProtocolBase(asyncio.Protocol):
         #    PanelType=7 : PowerMaster10 , Model=32   Powermaster True
         #    PanelType=7 : PowerMaster10 , Model=68   Powermaster True
         #    PanelType=7 : PowerMaster10 , Model=153   Powermaster True
-        #    PanelType=8 : PowerMaster30 , Model=6   Powermaster True     may not be compatible with Powerlink3, not sure about previous powerlink hardware
+        #    PanelType=8 : PowerMaster30 , Model=6   Powermaster True
         #    PanelType=8 : PowerMaster30 , Model=53   Powermaster True
 
+        # Define model type to be unknown
+        self.PanelModel = "Unknown" 
+        self.ModelType = 0
+        self.PanelStatus = {}
         self.PanelType = None
+
         # Whether its a powermax or powermaster
         self.PowerMaster = None
 
+        # Configured from the client INTERFACE
+        #   These are the default values
+        self.ForceStandardMode = False        # INTERFACE : Get user variable from HA to force standard mode or try for PowerLink
+        self.ForceAutoEnroll = True           # INTERFACE : Force Auto Enroll when don't know panel type. Only set to true
+        self.AutoSyncTime = True              # INTERFACE : sync time with the panel
+        self.DownloadCode = '56 50'           # INTERFACE : Set the Download Code 
+        self.pmLang = 'EN'                    # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
+        self.pmRemoteArm = False              # INTERFACE : Does the user allow remote setting of the alarm
+        self.pmRemoteDisArm = False           # INTERFACE : Does the user allow remote disarming of the alarm
+        self.pmEnableSensorBypass = False     # INTERFACE : Does the user allow sensor bypass, True or False
+        self.MotionOffDelay = 120             # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
+        self.OverrideCode = ""                # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
+        self.ForceNumericKeypad = False       # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
+        self.ArmWithoutCode = False           # INTERFACE : Get user variable from HA to arm without user code
+        self.SirenTriggerList = ["intruder"]  # INTERFACE : This is the trigger list that we can assume is making the siren sound
+        self.BZero_Enable = False             # INTERFACE : B0 enable the processing of the experimental B0 message
+        self.BZero_MinInterval = 30           # INTERFACE : B0 timing for the min interval between subsequent processed B0 messages
+        self.BZero_MaxWaitTime = 5            # INTERFACE : B0 wait time to look for a change in the data in the B0 message
+        
+        # Now that the defaults have been set, update them from the panel config dictionary (that may not have all settings in)
+        self.updateSettings(panelConfig)
+    
+        ########################################################################
+        # Variables that are only used in handle_received_message function
+        ########################################################################
+        self.pmVarLenMsg = False       # Are we expecting a variable length message from the panel
+        self.pmIncomingPduLen = 0      # The length of the incoming message
+        self.pmCrcErrorCount = 0       # The CRC Error Count for Received Messages
+        self.pmMsgType = None          # The current receiving message type
+
+        ########################################################################
+        # Variables that are only used in this class and not subclasses
+        ########################################################################
+
+        # a list of message types we are expecting from the panel
+        self.pmExpectedResponse = []
+
+        # The last sent message
+        self.pmLastSentMessage = None
+        
+        # Timestamp of the last received data from the panel. If this remains set to none then we have a comms problem
+        self.lastRecvOfPanelData = None
+        
         # keep alive counter for the timer 
         self.keep_alive_counter = 0    # only used in keep_alive_and_watchdog_timer
 
@@ -1129,7 +1140,6 @@ class ProtocolBase(asyncio.Protocol):
         ###################################################################
 
         ############## Variables that are set in this class and only read in derived classes ############
-        self.ForceStandardMode = False    # until defined by HA or force standard
         self.suspendAllOperations = False # There has been a communication exception, when true do not send/receive(process) data
 
         ############## Variables that are set and read in this class and in derived classes ############
@@ -1151,6 +1161,7 @@ class ProtocolBase(asyncio.Protocol):
         # When we are downloading the EPROM settings and finished parsing them and setting up the system.
         #   There should be no user (from Home Assistant for example) interaction when self.pmDownloadMode is True
         self.pmDownloadMode = False
+        self.triggeredDownload = False
         
         # Set when we receive a STOP from the panel, indicating that the EPROM data has finished downloading
         self.pmDownloadComplete = False
@@ -1161,13 +1172,45 @@ class ProtocolBase(asyncio.Protocol):
         # When trying to connect in powerlink from the timer loop, this allows the receipt of a powerlink ack to trigger a MSG_RESTORE
         self.allowAckToTriggerRestore = False
 
-        # Set the Download Code 
-        self.DownloadCode = '56 50'
-        #DownloadCode = AA AA'
-        tmpDLCode = PanelSettings["DownloadCode"]                 # INTERFACE : Get the download code
-        if tmpDLCode is not None:
-            if len(tmpDLCode) == 4 and type(tmpDLCode) is str:
-                self.DownloadCode = tmpDLCode[0:2] + " " + tmpDLCode[2:4]
+    def updateSettings(self, newdata : dict):
+        if newdata is not None:
+            #log.info("[updateSettings] Settings refreshed - Using panel config {0}".format(newdata))
+            if PYVConst.ForceStandard in newdata:
+                self.ForceStandardMode = newdata[PYVConst.ForceStandard]          # INTERFACE : Get user variable from HA to force standard mode or try for PowerLink
+            if PYVConst.ForceAutoEnroll in newdata:
+                self.ForceAutoEnroll = newdata[PYVConst.ForceAutoEnroll]          # INTERFACE : Force Auto Enroll when don't know panel type. Only set to true
+            if PYVConst.AutoSyncTime in newdata:
+                self.AutoSyncTime = newdata[PYVConst.AutoSyncTime]                # INTERFACE : sync time with the panel
+            if PYVConst.DownloadCode in newdata:
+                tmpDLCode = newdata[PYVConst.DownloadCode]                        # INTERFACE : Get the download code
+                if len(tmpDLCode) == 4 and type(tmpDLCode) is str:
+                    self.DownloadCode = tmpDLCode[0:2] + " " + tmpDLCode[2:4]
+            if PYVConst.PluginLanguage in newdata:
+                self.pmLang = newdata[PYVConst.PluginLanguage]                    # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
+            if PYVConst.EnableRemoteArm in newdata:
+                self.pmRemoteArm = newdata[PYVConst.EnableRemoteArm]              # INTERFACE : Does the user allow remote setting of the alarm
+            if PYVConst.EnableRemoteDisArm in newdata:
+                self.pmRemoteDisArm = newdata[PYVConst.EnableRemoteDisArm]        # INTERFACE : Does the user allow remote disarming of the alarm
+            if PYVConst.EnableSensorBypass in newdata:
+                self.pmEnableSensorBypass = newdata[PYVConst.EnableSensorBypass]  # INTERFACE : Does the user allow sensor bypass, True or False
+            if PYVConst.MotionOffDelay in newdata:
+                self.MotionOffDelay = newdata[PYVConst.MotionOffDelay]            # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
+            if PYVConst.OverrideCode in newdata:
+                self.OverrideCode = newdata[PYVConst.OverrideCode]                # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
+            if PYVConst.ForceKeypad in newdata:
+                self.ForceNumericKeypad = newdata[PYVConst.ForceKeypad]           # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
+            if PYVConst.ArmWithoutCode in newdata:
+                self.ArmWithoutCode = newdata[PYVConst.ArmWithoutCode]            # INTERFACE : Get user variable from HA to arm without user code
+            if PYVConst.SirenTriggerList in newdata:
+                tmpList = newdata[PYVConst.SirenTriggerList]                  
+                self.SirenTriggerList = [x.lower() for x in tmpList]
+
+            if PYVConst.B0_Enable in newdata:
+                self.BZero_Enable = newdata[PYVConst.B0_Enable]
+            if PYVConst.B0_Min_Interval_Time in newdata:
+                self.BZero_MinInterval = newdata[PYVConst.B0_Min_Interval_Time]
+            if PYVConst.B0_Max_Wait_Time in newdata:
+                self.BZero_MaxWaitTime = newdata[PYVConst.B0_Max_Wait_Time]
 
     # Convert byte array to a string of hex values
     def toString(self, array_alpha: bytearray):
@@ -1184,10 +1227,7 @@ class ProtocolBase(asyncio.Protocol):
         log.info('[Connection] Connected to local Protocol handler and Transport Layer')
 
         # get the value for Force standard mode (i.e. do not attempt to go to powerlink)
-        self.ForceStandardMode = PanelSettings["ForceStandard"] # INTERFACE : Get user variable from HA to force standard mode or try for PowerLink
-        self.ForceAutoEnroll = PanelSettings["ForceAutoEnroll"] # INTERFACE : Force Auto Enroll when don't know panel type. Only set to true
         self.Initialise()
-        self.ArmWithoutCode = PanelSettings["ArmWithoutCode"] # INTERFACE : Get user variable from HA to arm without user code
 
     # when the connection has problems then call the disconnect_callback when available, 
     #     otherwise try to reinitialise the connection from here
@@ -1228,8 +1268,9 @@ class ProtocolBase(asyncio.Protocol):
         self.reset_watchdog_timeout()
         self.reset_keep_alive_messages()
         if not self.ForceStandardMode:
+            self.triggeredDownload = False
             self.sendInitCommand()
-            self.Start_Download()
+            self.startDownload()
         else:
             self.gotoStandardMode()
         asyncio.ensure_future(self.keep_alive_and_watchdog_timer(), loop=self.loop)
@@ -1251,8 +1292,8 @@ class ProtocolBase(asyncio.Protocol):
         else:
             self.SendCommand("MSG_STATUS")
 
-    def triggerEnroll(self):
-        if self.PanelType >= 3:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
+    def triggerEnroll(self, force):
+        if force or self.PanelType >= 3:  # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
             log.info("[Controller] Trigger Powerlink Attempt")
             # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel, 
             #      this should kick it in to powerlink after we just enrolled
@@ -1315,7 +1356,7 @@ class ProtocolBase(asyncio.Protocol):
                     #self.ClearList()
                     # goto standard mode
                     self.gotoStandardMode()
-                    PanelStatus["Download Timeout"] = PanelStatus["Download Timeout"] + 1
+                    self.DownloadTimeout = self.DownloadTimeout + 1
                     self.sendResponseEvent ( 7 )  # download timer expired
                     
             elif not self.giveupTrying and not self.pmDownloadComplete and not self.ForceStandardMode and not self.pmDownloadMode:
@@ -1326,7 +1367,7 @@ class ProtocolBase(asyncio.Protocol):
                     download_counter = 0
                     # trigger a download
                     log.info("[Controller] Trigger Panel Download Attempt")
-                    self.Start_Download()
+                    self.startDownload()
                     
             elif not self.giveupTrying and self.pmPowerlinkModePending and not self.ForceStandardMode and self.pmDownloadComplete and not self.pmPowerlinkMode:
                 if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
@@ -1335,7 +1376,7 @@ class ProtocolBase(asyncio.Protocol):
                     powerlink_counter = powerlink_counter + 1
                     log.debug("[Controller] Powerlink Counter {0}".format(powerlink_counter))
                     if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
-                        self.triggerEnroll()
+                        self.triggerEnroll(False)
                     elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
                         log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
                         self.pmExpectedResponse = []
@@ -1352,7 +1393,7 @@ class ProtocolBase(asyncio.Protocol):
                 self.reset_watchdog_timeout()
                 self.reset_keep_alive_messages()
                 watchdog_events = watchdog_events + 1
-                PanelStatus["Watchdog Timeout"] = PanelStatus["Watchdog Timeout"] + 1
+                self.WatchdogTimeout = self.WatchdogTimeout + 1
                 if not self.giveupTrying and watchdog_events >= WATCHDOG_MAXIMUM_EVENTS:
                     log.info("[Controller]               **************** Going to Standard Mode ***************")
                     watchdog_events = 0
@@ -1400,7 +1441,7 @@ class ProtocolBase(asyncio.Protocol):
                 no_data_received_counter = no_data_received_counter + 1
                 if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:   ## lets assume approx 30 seconds
                     log.error("[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel after several minutes)")
-                    PanelStatus["Mode"] = "Problem"
+                    self.PanelMode = PanelMode.PROBLEM
                     self.suspendAllOperations = True
                     self.sendResponseEvent ( 10 )  # Plugin suspended itself
 
@@ -1422,17 +1463,17 @@ class ProtocolBase(asyncio.Protocol):
             self.SendCommand(None)  # check send queue
 
         self.pmExpectedResponse = []
-        log.info("[sendInitCommand]   ************************************* Not sending an INIT Command ************************************")
+        #log.info("[sendInitCommand]   ************************************* Sending an INIT Command ************************************")
         #self.SendCommand("MSG_INIT")
         
     def gotoStandardMode(self):
         #self.ClearList()
         if self.pmDownloadComplete and not self.ForceStandardMode and self.pmGotUserCode:
             log.info("[Standard Mode] Entering Standard Plus Mode as we got the pin codes from the EPROM")
-            PanelStatus["Mode"] = "Standard Plus"
+            self.PanelMode = PanelMode.STANDARD_PLUS
         else:
             log.info("[Standard Mode] Entering Standard Mode")
-            PanelStatus["Mode"] = "Standard"
+            self.PanelMode = PanelMode.STANDARD
             self.ForceStandardMode = True
         self.giveupTrying = True
         self.pmPowerlinkModePending = False
@@ -1706,6 +1747,7 @@ class ProtocolBase(asyncio.Protocol):
 
             if command.download:
                 self.pmDownloadMode = True
+                self.triggeredDownload = False
                 log.debug("[pmSendPdu] Setting Download Mode to true")
             
             if sData[1] != 0x02:   # the message is not an acknowledge back to the panel
@@ -1796,18 +1838,19 @@ class ProtocolBase(asyncio.Protocol):
         return self.pmLastSentMessage
 
     # This puts the panel in to download mode. It is the start of determining powerlink access
-    def Start_Download(self):
+    def startDownload(self):
         """ Start download mode """
-        PanelStatus["Mode"] = "Download"
-        if not self.pmDownloadComplete and not self.pmDownloadMode:
+        self.PanelMode = PanelMode.DOWNLOAD
+        if not self.pmDownloadComplete and not self.pmDownloadMode and not self.triggeredDownload:
             #self.pmWaitingForAckFromPanel = False
             self.pmExpectedResponse = []
-            log.info("[Start_Download] Starting download mode")
+            log.info("[StartDownload] Starting download mode")
             self.SendCommand("MSG_DOWNLOAD", options = [3, bytearray.fromhex(self.DownloadCode)]) #
+            self.triggeredDownload = True
         elif self.pmDownloadComplete:
-            log.debug("[Start_Download] Download has already completed (so not doing anything)")
+            log.debug("[StartDownload] Download has already completed (so not doing anything)")
         else:
-            log.debug("[Start_Download] Already in Download Mode (so not doing anything)")
+            log.debug("[StartDownload] Already in Download Mode (so not doing anything)")
 
     # Attempt to enroll with the panel in the same was as a powerlink module would inside the panel
     def pmReadPanelSettings(self, isPowerMaster):
@@ -1860,47 +1903,34 @@ class PacketHandling(ProtocolBase):
         
         # set the event callback handler
         self.event_callback = event_callback
-
-        self.pmPhoneNr_t = {}
-        
         self.eventCount = 0
-        self.pmEventLogDictionary = {}
-        # We do not put these pin codes in to the panel status
-        self.pmPincode_t = [ ]  # allow maximum of 48 user pin codes
 
         secdelay = DOWNLOAD_RETRY_DELAY + 100
-        self.lastSendOfDownloadEprom = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off DOWNLOAD_RETRY_DELAY + 100 seconds so the first command goes through immediately
+        self.lastSendOfDownloadEprom = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
         
         # Variables to manage the PowerMAster B0 message and the triggering of Motion
-        self.lastRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off 100 seconds so the first command goes through immediately
-        self.firstRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off 100 seconds so the first command goes through immediately
+        self.lastRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
+        self.firstRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
         self.zoneNumberMasterMotion = 0
         self.zoneDataMasterMotion = bytearray(b'')
         
+        self.pmPhoneNr_t = {}
+        self.pmEventLogDictionary = {}
+        
+        # We do not put these pin codes in to the panel status
+        self.pmPincode_t = [ ]  # allow maximum of 48 user pin codes
+
         # Store the sensor details
         self.pmSensorDev_t = {}
 
         # Store the X10 details
         self.pmX10Dev_t = {}
         
-        self.pmLang = PanelSettings["PluginLanguage"]             # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
-        self.pmRemoteArm = PanelSettings["EnableRemoteArm"]       # INTERFACE : Does the user allow remote setting of the alarm
-        self.pmRemoteDisArm = PanelSettings["EnableRemoteDisArm"] # INTERFACE : Does the user allow remote disarming of the alarm
-        self.pmSensorBypass = PanelSettings["EnableSensorBypass"] # INTERFACE : Does the user allow sensor bypass, True or False
-        self.MotionOffDelay = PanelSettings["MotionOffDelay"]     # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
-        self.OverrideCode = PanelSettings["OverrideCode"]         # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
-        self.ForceNumericKeypad = PanelSettings["ForceKeypad"]    # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
-        tmpList = PanelSettings["SirenTriggerList"] # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
-        self.SirenTriggerList = [x.lower() for x in tmpList]
-
-        PanelStatus["Comm Exception Count"] = PanelSettings["ResetCounter"]
-        
         # Save the EPROM data when downloaded
         self.pmRawSettings = {}
+        
         # Save the sirens
         self.pmSirenDev_t = {}
-        # Status in "Starting" mode
-        PanelStatus["Mode"] = "Starting"
         
         self.pmSirenActive = None
         
@@ -1913,18 +1943,19 @@ class PacketHandling(ProtocolBase):
         self.zonealarm_old = -1
         self.zonetamper_old = -1
 
-        self.pmBypassOff = False         # Do we allow the user to bypass the sensors
-        self.pmSilentPanic = False
+        self.pmBypassOff = False         # Do we allow the user to bypass the sensors, this is read from the EPROM data
+        self.pmSilentPanic = False       # Is silent panic set in the panel. This is read from the EPROM data
+        
         self.lastPacket = None
         self.lastPacketCounter = 0
-        self.sensorsCreated = False
+        self.sensorsCreated = False      # Have the sensors benn created. Either from an A5 message or the EPROM data
         
         # determine when MSG_ENROLL is sent to the panel
         self.doneAutoEnroll = False
 
         asyncio.ensure_future(self.reset_triggered_state_timer(), loop=self.loop)
-    
-    
+        
+    # For the sensors that have been triggered, turn them off after self.MotionOffDelay seconds
     async def reset_triggered_state_timer(self):
         """ reset triggered state"""
         while not self.suspendAllOperations:
@@ -1950,7 +1981,7 @@ class PacketHandling(ProtocolBase):
         if not self.doneAutoEnroll:
             self.doneAutoEnroll = True
             self.SendCommand("MSG_ENROLL",  options = [4, bytearray.fromhex(self.DownloadCode)])
-            self.Start_Download()
+            self.startDownload()
         elif self.DownloadCode == "DF FD":
             log.warning("[SendMsg_ENROLL] Warning: Trying to re enroll, already tried DFFD and still not successful")
         else:
@@ -2007,18 +2038,24 @@ class PacketHandling(ProtocolBase):
     def pmReadSettingsA(self, page, index, settings_len):
         retlen = settings_len
         retval = bytearray()
-        #log.debug("[Read Settings]    Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len)) 
-        while page in self.pmRawSettings and retlen > 0:
-            fred = self.pmRawSettings[page][index : index + retlen]
-            retval = retval + fred
-            page = page + 1
-            retlen = retlen - len(fred)
-            index = 0
-        if settings_len == len(retval):
-            #log.debug("[Read Settings]       Length " + str(settings_len) + " returning (just the 1st value) " + self.toString(retval[:1]))
-            return retval
-        # return a bytearray filled with 0xFF values
+        if self.pmDownloadComplete:
+            #log.debug("[Read Settings]    Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len)) 
+            while page in self.pmRawSettings and retlen > 0:
+                rawset = self.pmRawSettings[page][index : index + retlen]
+                retval = retval + rawset
+                page = page + 1
+                retlen = retlen - len(rawset)
+                index = 0
+            if settings_len == len(retval):
+                #log.debug("[Read Settings]       Length " + str(settings_len) + " returning (just the 1st value) " + self.toString(retval[:1]))
+                return retval
         log.info("[Read Settings]     Sorry but you havent downloaded that part of the EPROM data     page={0} index={1} length={2}".format(hex(page), hex(index), settings_len))
+        if not self.pmDownloadMode:
+            # prevent any more retrieval of the EPROM settings and put us back to Standard Mode
+            self.delayDownload()
+            # try to download panel EPROM again
+            self.startDownload()
+        # return a bytearray filled with 0xFF values
         retval = bytearray()
         for i in range(0, settings_len):
             retval.append(255)
@@ -2138,9 +2175,9 @@ class PacketHandling(ProtocolBase):
         pmPanelTypeNrStr = self.lookupEpromSingle("panelSerialCode")
         if pmPanelTypeNrStr is not None and len(pmPanelTypeNrStr) > 0:
             pmPanelTypeNr = int(pmPanelTypeNrStr)
-            PanelStatus["Model"] = pmPanelType_t[pmPanelTypeNr] if pmPanelTypeNr in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
+            self.PanelModel = pmPanelType_t[pmPanelTypeNr] if pmPanelTypeNr in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
             #self.dump_settings()
-            log.info("[Process Settings] pmPanelTypeNr {0} ({1})    model {2}".format(pmPanelTypeNr, self.PanelType, PanelStatus["Model"]))
+            log.info("[Process Settings] pmPanelTypeNr {0} ({1})    model {2}".format(pmPanelTypeNr, self.PanelType, self.PanelModel))
             if self.PanelType is None:
                 self.PanelType = pmPanelTypeNr
                 self.PowerMaster = (self.PanelType >= 7) 
@@ -2190,7 +2227,7 @@ class PacketHandling(ProtocolBase):
                 pmPanelName = pmPanelName_t[idx] if idx in pmPanelName_t else "Unknown"
 
                 #  INTERFACE : Add this param to the status panel first
-                PanelStatus["Panel Name"] = pmPanelName
+                self.PanelStatus["Panel Name"] = pmPanelName
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process Panel Settings to display in the user interface
@@ -2202,12 +2239,12 @@ class PacketHandling(ProtocolBase):
                             if (type(DecodePanelSettings[key].name) is str):
                                 #log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, DecodePanelSettings[key].name, result[0]))
                                 if len(result[0]) > 0:
-                                    PanelStatus[DecodePanelSettings[key].name] = result[0]
+                                    self.PanelStatus[DecodePanelSettings[key].name] = result[0]
                             else:
                                 #log.debug( "[Process Settings]      {0:<18}  {1}  {2}".format(key, DecodePanelSettings[key].name, result))
                                 for i in range (0, len(DecodePanelSettings[key].name)):
                                     if len(result[i]) > 0:
-                                        PanelStatus[DecodePanelSettings[key].name[i]] = result[i]
+                                        self.PanelStatus[DecodePanelSettings[key].name[i]] = result[i]
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process alarm settings
@@ -2367,11 +2404,11 @@ class PacketHandling(ProtocolBase):
                     if i == 0:
                         x10Location = "PGM"
                         x10DeviceName = "PGM"
-                        x10Type = "onoff"
+                        x10Type = "OnOff Switch"
                     else:
                         x10Location = pmZoneName_t[x10Name & 0x1F]
                         x10DeviceName = "X{0:0>2}".format(i)
-                        x10Type = "dim"
+                        x10Type = "Dimmer Switch"
 
                     if x10Enabled:
                         deviceStr = "{0},{1}".format(deviceStr, x10DeviceName)
@@ -2435,11 +2472,11 @@ class PacketHandling(ProtocolBase):
 
                 log.debug("[Process Settings] Adding zone devices")
 
-                PanelStatus["Door Zones"] = doorZones
-                PanelStatus["Motion Zones"] = motionZones
-                PanelStatus["Smoke Zones"] = smokeZones
-                PanelStatus["Other Zones"] = otherZones
-                PanelStatus["Devices"] = devices
+                self.PanelStatus["Door Zones"] = doorZones
+                self.PanelStatus["Motion Zones"] = motionZones
+                self.PanelStatus["Smoke Zones"] = smokeZones
+                self.PanelStatus["Other Zones"] = otherZones
+                self.PanelStatus["Devices"] = devices
 
                 #  INTERFACE : Add these self.pmSensorDev_t[i] params to the status panel
                 self.sendResponseEvent ( visonic_devices )
@@ -2460,14 +2497,14 @@ class PacketHandling(ProtocolBase):
         self.DumpSensorsToDisplay()
         
         if self.pmPowerlinkMode:
-            PanelStatus["Mode"] = "Powerlink"
+            self.PanelMode = PanelMode.POWERLINK
         elif self.pmDownloadComplete and self.pmGotUserCode:
             log.info("[Process Settings] Entering Standard Plus Mode as we got the pin codes from the EPROM")
-            PanelStatus["Mode"] = "Standard Plus"
+            self.PanelMode = PanelMode.STANDARD_PLUS
         else:
-            PanelStatus["Mode"] = "Standard"
+            self.PanelMode = PanelMode.STANDARD
 
-        if PanelSettings["AutoSyncTime"]:  # should we sync time between the HA and the Alarm Panel
+        if self.AutoSyncTime:  # should we sync time between the HA and the Alarm Panel
             t = datetime.now()
             if t.year > 2000:
                 year = t.year - 2000
@@ -2553,7 +2590,7 @@ class PacketHandling(ProtocolBase):
         log.debug("[handle_msgtype02] Ack Received  data = {0}".format(self.toString(data)))
         if not self.pmPowerlinkMode and len(data) > 0:
             if data[0] == 0x43:  # Received a powerlink acknowledge
-                log.info("[handle_msgtype02]    Received a powerlink acknowledge, I am in {0} mode".format(PanelStatus["Mode"]))
+                log.info("[handle_msgtype02]    Received a powerlink acknowledge, I am in {0} mode".format(self.PanelMode.name))
                 if self.allowAckToTriggerRestore:
                     log.info("[handle_msgtype02]        and sending MSG_RESTORE")
                     self.SendCommand("MSG_RESTORE")
@@ -2569,7 +2606,7 @@ class PacketHandling(ProtocolBase):
         self.SendCommand("MSG_EXIT")
         self.triggerRestoreStatus()
         # Assume that we are not in Powerlink as we haven't completed download yet. 
-        PanelStatus["Mode"] = "Standard"
+        self.PanelMode = PanelMode.STANDARD
 
 
     def handle_msgtype06(self, data):
@@ -2655,14 +2692,9 @@ class PacketHandling(ProtocolBase):
         self.PanelType = data[5]
 
         self.PowerMaster = (self.PanelType >= 7)
-        PanelStatus["Model"] = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
+        self.PanelModel = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
         
-        #modelname = pmPanelType_t[self.PanelType] or "UNKNOWN"  # INTERFACE set this in the user interface
-
-        PanelStatus["Model Type"] = self.ModelType
-        PanelStatus["Power Master"] = 'Yes' if self.PowerMaster else 'No'
-
-        log.info("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, PanelStatus["Model"], self.PowerMaster))
+        log.info("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, self.PanelModel, self.PowerMaster))
 
         # We got a first response, now we can Download the panel EPROM settings
         interval = self.getTimeFunction() - self.lastSendOfDownloadEprom
@@ -2938,62 +2970,53 @@ class PacketHandling(ProtocolBase):
 
 
             # -1  Not yet defined
-            # 0   Disarmed
-            # 1   Exit Delay Arm Home
-            # 2   Exit Delay Arm Away
+            # 0   Disarmed (Also includes 0x0A "Home Bypass", 0x0B "Away Bypass", 0x0C "Ready", 0x0D "Not Ready" and 0x10 "Disarmed Instant")
+            # 1   Home Exit Delay  or  Home Instant Exit Delay
+            # 2   Away Exit Delay  or  Away Instant Exit Delay
             # 3   Entry Delay
-            # 4   Armed Home
-            # 5   Armed Away
-            # 6   Special ("User Test", "Downloading", "Programming", "Installer")
+            # 4   Armed Home  or  Home Bypass  or  Entry Delay Instant  or  Armed Home Instant
+            # 5   Armed Away  or  Away Bypass  or  Armed Away Instant
+            # 6   User Test  or  Downloading  or  Programming  or  Installer
 			
             if sysStatus in [0x03]:
                 sarm = "Armed"
-                PanelStatus["Panel Status Code"] = 3   # Entry Delay
+                self.PanelStatusCode = 3   # Entry Delay
             elif sysStatus in [0x04, 0x0A, 0x13, 0x14]:
                 sarm = "Armed"
-                PanelStatus["Panel Status Code"] = 4   # Armed Home
+                self.PanelStatusCode = 4   # Armed Home
             elif sysStatus in [0x05, 0x0B, 0x15]:
                 sarm = "Armed"
-                PanelStatus["Panel Status Code"] = 5   # Armed Away
+                self.PanelStatusCode = 5   # Armed Away
             elif sysStatus in [0x01, 0x11]:
                 sarm = "Arming"
-                PanelStatus["Panel Status Code"] = 1   # Arming Home
+                self.PanelStatusCode = 1   # Arming Home
             elif sysStatus in [0x02, 0x12]:
                 sarm = "Arming"
-                PanelStatus["Panel Status Code"] = 2   # Arming Away
+                self.PanelStatusCode = 2   # Arming Away
             elif sysStatus in [0x06, 0x07, 0x08, 0x09]:
                 sarm = "Disarmed"
-                PanelStatus["Panel Status Code"] = 6   # Special ("User Test", "Downloading", "Programming", "Installer")
+                self.PanelStatusCode = 6   # Special ("User Test", "Downloading", "Programming", "Installer")
             elif sysStatus > 0x15:
-                log.debug("[handle_msgtypeA5]      Unknown state, assuming Disarmed")
+                log.debug("[handle_msgtypeA5]      Unknown state {0}, assuming Disarmed".format(sysStatus))
                 sarm = "Disarmed"
-                PanelStatus["Panel Status Code"] = 0   # Disarmed
-            else:
+                self.PanelStatusCode = 0   # Disarmed
+            else:  
                 sarm = "Disarmed"
-                PanelStatus["Panel Status Code"] = 0   # Disarmed
+                self.PanelStatusCode = 0   # Disarmed
 
             log.debug("[handle_msgtypeA5]      log: {0}, arm: {1}".format(slog + "(" + sarm_detail + ")", sarm))
 
-            #PanelStatus["Panel Status Code"]    = sysStatus
-            PanelStatus["Panel Status"]        = sarm_detail
-            PanelStatus["Panel Ready"]         = 'Yes' if sysFlags & 0x01 != 0 else 'No'
-            PanelStatus["Panel Alert In Memory"] = 'Yes' if sysFlags & 0x02 != 0 else 'No'
-            PanelStatus["Panel Trouble"]       = 'Yes' if sysFlags & 0x04 != 0 else 'No'
-            PanelStatus["Panel Bypass"]        = 'Yes' if sysFlags & 0x08 != 0 else 'No'
+            self.PanelStatusText    = sarm_detail
+            self.PanelReady         = sysFlags & 0x01 != 0
+            self.PanelAlertInMemory = sysFlags & 0x02 != 0
+            self.PanelTrouble       = sysFlags & 0x04 != 0
+            self.PanelBypass        = sysFlags & 0x08 != 0
             if sysFlags & 0x10 != 0:  # last 10 seconds of entry/exit
-                PanelStatus["Panel Armed"] = 'Yes' if (sarm == "Arming") else 'No'
+                self.PanelArmed = (sarm == "Arming")
             else:
-                PanelStatus["Panel Armed"] = 'Yes' if (sarm == "Armed") else 'No'
-            PanelStatus["Panel Status Changed"] = 'Yes' if sysFlags & 0x40 != 0 else 'No'
-            PanelStatus["Panel Alarm Event"]    = 'Yes' if sysFlags & 0x80 != 0 else 'No'
-
-            #cond = ""
-            #for i in range(0,8):
-            #    if sysFlags & (1<<i) != 0:
-            #        cond = cond + pmSysStatusFlags_t[self.pmLang][i] + ", "
-            #if len(cond) > 0:
-            #    cond = cond[:-2]
-            #PanelStatus["PanelStatusText"] = cond
+                self.PanelArmed = (sarm == "Armed")
+            self.PanelStatusChanged = sysFlags & 0x40 != 0
+            self.PanelAlarmEvent    = sysFlags & 0x80 != 0
 
             if not self.pmPowerlinkMode:
                 # if the system status has the panel armed and there has been an alarm event, assume that the alarm is sounding
@@ -3008,7 +3031,6 @@ class PacketHandling(ProtocolBase):
             if self.pmSirenActive is not None and sarm == "Disarmed":
                 log.info("[handle_msgtypeA5] ******************** Alarm Not Sounding (Disarmed) ****************")
                 self.pmSirenActive = None
-            PanelStatus["Panel Siren Active"] = 'Yes' if self.pmSirenActive != None else 'No'
 
             if sysFlags & 0x20 != 0:
                 sEventLog = pmEventType_t[self.pmLang][eventType]
@@ -3222,11 +3244,11 @@ class PacketHandling(ProtocolBase):
                     datadict['Zone'] = zoneData
                     datadict['Entity'] = "binary_sensor.visonic_" + self.pmSensorDev_t[zoneData-1].dname.lower()
 
-                PanelStatus["Panel Last Event"]      = s
-                PanelStatus["Panel Alarm Status"]    = "None" if alarmStatus is None else alarmStatus
-                PanelStatus["Panel Trouble Status"]  = "None" if troubleStatus is None else troubleStatus
+                self.PanelLastEvent                  = s
+                self.PanelAlarmStatus    = "None" if alarmStatus is None else alarmStatus
+                self.PanelTroubleStatus  = "None" if troubleStatus is None else troubleStatus
 
-                log.info("[handle_msgtypeA7]         System message " + s + "  alarmStatus " + PanelStatus["Panel Alarm Status"] + "   troubleStatus " + PanelStatus["Panel Trouble Status"])
+                log.info("[handle_msgtypeA7]         System message " + s + "  alarmStatus " + self.PanelAlarmStatus + "   troubleStatus " + self.PanelTroubleStatus)
 
                 #---------------------------------------------------------------------------------------
                 # Update tamper and siren status
@@ -3262,7 +3284,6 @@ class PacketHandling(ProtocolBase):
                     log.info("[handle_msgtypeA7] ******************** Alarm Not Sounding ****************")
                 
                 # INTERFACE Indicate whether siren active
-                PanelStatus["Panel Siren Active"] = 'Yes' if self.pmSirenActive != None else 'No'
 
                 log.info("[handle_msgtypeA7]           self.pmSirenActive={0}   siren={1}   eventType={2}   self.pmSilentPanic={3}   tamper={4}".format(self.pmSirenActive, siren, hex(eventType), self.pmSilentPanic, tamper) )
                 
@@ -3281,7 +3302,7 @@ class PacketHandling(ProtocolBase):
             else:
                 self.sendResponseEvent ( 2 , datadict )   # push changes through to the host to get it to update
 
-            PanelStatus["Panel Last Event Data"] = datadict
+            self.PanelLastEventData = datadict
             
         else:  ## message count is more than 4
             log.warning("[handle_msgtypeA7]      A7 message contains too many messages to process : {0}   data={1}".format(msgCnt, self.toString(data)))
@@ -3305,7 +3326,7 @@ class PacketHandling(ProtocolBase):
                 log.info("[handle_msgtypeAB]         Got alive message while Powerlink mode pending, going to full powerlink and calling Restore")
                 self.pmPowerlinkMode = True
                 self.pmPowerlinkModePending = False
-                PanelStatus["Mode"] = "Powerlink"  # it is truly in powerlink now we are receiving powerlink alive messages from the panel
+                self.PanelMode = PanelMode.POWERLINK  # it is truly in powerlink now we are receiving powerlink alive messages from the panel
                 self.triggerRestoreStatus()
                 self.DumpSensorsToDisplay()
             elif not self.pmPowerlinkMode and not self.ForceStandardMode:
@@ -3333,17 +3354,21 @@ class PacketHandling(ProtocolBase):
             log.debug("[handle_msgtypeAB] PowerLink telling us what the code {0} {1} is for downloads, currently commented out as I'm not certain of this".format(data[3], data[4]))
             # data[3] data[4]
         elif subType == 10 and data[2] == 1:
-            if not self.ForceStandardMode and not self.doneAutoEnroll and not self.pmPowerlinkMode:
-                log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll, only doing auto enroll once ************************** ")
+            if self.pmPowerlinkMode:
+                log.info("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll but not acted on (already in powerlink) **************************")
+            elif self.ForceStandardMode:
+                log.info("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll but not acted on (user has set force standard) **************************")
+            elif not self.pmDownloadComplete:
+                log.info("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll but not acted on (download is not complete) **************************")
+            elif not self.doneAutoEnroll:
+                log.info("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll, first time ************************** ")
                 self.pmPowerlinkModePending = True   ## just to make sure it is True !
-                self.triggerEnroll()
-            elif not self.ForceStandardMode and self.pmPowerlinkModePending and self.pmDownloadComplete and not self.pmPowerlinkMode:
-                log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll, lets give it another try **************************")
-                self.triggerEnroll()
-            elif self.pmPowerlinkMode:
-                log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll but not acted on (already in powerlink) **************************")
+                self.triggerEnroll(True)             # The panel is asking to auto enroll so set force to True regardless of the panel type
+            elif self.pmPowerlinkModePending:
+                log.info("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll, lets give it another try **************************")
+                self.triggerEnroll(True)             # The panel is asking to auto enroll so set force to True regardless of the panel type
             else:
-                log.info("[handle_msgtypeAB] ************************** PowerLink most likely wants to auto-enroll but not acted on **************************")
+                log.info("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll but not acted on (not sure why) **************************")
 
             self.doneAutoEnroll = True
 
@@ -3365,30 +3390,27 @@ class PacketHandling(ProtocolBase):
         msgType = data[0]
         subType = data[1]
         msgLen  = data[2]
-        log.info("[handle_msgtypeB0] Received {0} message {1}/{2} (len = {3})    full data = {4}".format(PanelStatus["Model"] or "UNKNOWN", msgType, subType, msgLen, self.toString(data)))
+        log.info("[handle_msgtypeB0] Received {0} message {1}/{2} (len = {3})    full data = {4}".format(self.PanelModel or "UNKNOWN", msgType, subType, msgLen, self.toString(data)))
         #  Received PowerMaster30 message 3/36 (len = 26)   full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
         
         if msgType == 0x03 and subType == 0x39:
             # Movement detected (probably)
             #  Received PowerMaster10 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
             #  Received PowerMaster30 message 3/57 (len = 8)    full data = 03 39 08 ff 08 ff 03 18 24 4b 90 43
-            log.debug("[handle_msgtypeB0]      Sending special {0} Commands to the panel".format(PanelStatus["Model"] or "UNKNOWN"))
+            log.debug("[handle_msgtypeB0]      Sending special {0} Commands to the panel".format(self.PanelModel or "UNKNOWN"))
             self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT1"]])    # This asks the panel to send 03 04 messages
             #self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT2"]])    # This asks the panel to send 03 07 messages
             #self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT3"]])    # This asks the panel to send 03 18 messages
 
-        enable = PanelSettings["B0_Enable"]
-        if enable and msgType == 0x03 and subType == 0x04:
-            log.info("[handle_msgtypeB0]         Received {0} message, continue".format(PanelStatus["Model"] or "UNKNOWN"))
-            min_interval = PanelSettings["B0_Min_Interval_Time"]
-            max_wait_time = PanelSettings["B0_Max_Wait_Time"]
+        if BZero_Enable and msgType == 0x03 and subType == 0x04:
+            log.info("[handle_msgtypeB0]         Received {0} message, continue".format(self.PanelModel or "UNKNOWN"))
             # Zone information (probably)
             #  Received PowerMaster10 message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 <24 * 00> 0c 43
             #  Received PowerMaster30 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 11 08 08 04 08 08 <58 * 00> 89 43
             
             interval = self.getTimeFunction() - self.lastRecvOfMasterMotionData
             self.lastRecvOfMasterMotionData = self.getTimeFunction() 
-            td = timedelta(seconds=min_interval)  # 
+            td = timedelta(seconds=self.BZero_MinInterval)  # 
             if interval > td:
                 # more than 30 seconds since the last B0 03 04 message so reset variables ready
                 # also, it should enter here first time around as self.lastRecvOfMasterMotionData should be 100 seconds ago
@@ -3397,13 +3419,13 @@ class PacketHandling(ProtocolBase):
                 self.firstRecvOfMasterMotionData = self.getTimeFunction() 
                 self.zoneDataMasterMotion = data.copy()
             elif not self.zoneNumberMasterMotion: 
-                log.info("[handle_msgtypeB0]         Checking if time delay is within {0} seconds".format(max_wait_time))
+                log.info("[handle_msgtypeB0]         Checking if time delay is within {0} seconds".format(self.BZero_MaxWaitTime))
                 interval = self.getTimeFunction() - self.firstRecvOfMasterMotionData
-                td = timedelta(seconds=max_wait_time)  # 
+                td = timedelta(seconds=self.BZero_MaxWaitTime)  # 
                 if interval <= td and len(data) == len(self.zoneDataMasterMotion):
                     # less than or equal to 5 seconds since the last valid trigger message, and the data messages are the same length
                     zoneLen = data[6] # The length of the zone data (64 for PM30, 30 for PM10)
-                    log.info("[handle_msgtypeB0]         Received {0} message, zone length = {1}".format(PanelStatus["Model"] or "UNKNOWN", zoneLen))
+                    log.info("[handle_msgtypeB0]         Received {0} message, zone length = {1}".format(self.PanelModel or "UNKNOWN", zoneLen))
                     for z in range(0, zoneLen):
                         # Check if the zone exists and it has to be a PIR
                         # do we already know about the sensor from the EPROM decode
@@ -3417,7 +3439,7 @@ class PacketHandling(ProtocolBase):
                                 log.debug("[handle_msgtypeB0]             Zone {0}  Motion State Before {1}   After {2}".format(z, s2, s1))
                                 if s1 != s2:
                                     log.debug("[handle_msgtypeB0]             Pre-Triggered Motion Detection to set B0 zone")
-                                    self.zoneNumberMasterMotion = True   # this means we wait at least 'min_interval' seconds for the next trigger
+                                    self.zoneNumberMasterMotion = True   # this means we wait at least 'self.BZero_MinInterval' seconds for the next trigger
                                     if not self.pmSensorDev_t[z].triggered:
                                         log.debug("[handle_msgtypeB0]             Triggered Motion Detection")
                                         self.pmSensorDev_t[z].triggertime = self.getTimeFunction()
@@ -3430,7 +3452,7 @@ class PacketHandling(ProtocolBase):
         if msgType == 0x03 and subType == 0x18:
             # Open/Close information (probably)
             zoneLen = data[6] # The length of the zone data (64 for PM30, 30 for PM10)
-            log.info("[handle_msgtypeB0]       Received {0} message, open/close information (probably), zone length = {1}".format(PanelStatus["Model"] or "UNKNOWN", zoneLen))
+            log.info("[handle_msgtypeB0]       Received {0} message, open/close information (probably), zone length = {1}".format(self.PanelModel or "UNKNOWN", zoneLen))
             for z in range(0, zoneLen):
                 if z in self.pmSensorDev_t:
                     s = data[7 + z]
@@ -3441,7 +3463,7 @@ class PacketHandling(ProtocolBase):
             #  Received PowerMaster30 message 3/7 (len = 69)    full data = 03 07 45 ff 08 03 40 03 03 03 03 03 03 <58 * 00> 92 43 
             # Unknown information
             zoneLen = data[6] # The length of the zone data (64 for PM30, 30 for PM10)
-            log.info("[handle_msgtypeB0]       Received {0} message, 03 07 information, zone length = {1}".format(PanelStatus["Model"] or "UNKNOWN", zoneLen))
+            log.info("[handle_msgtypeB0]       Received {0} message, 03 07 information, zone length = {1}".format(self.PanelModel or "UNKNOWN", zoneLen))
             for z in range(0, zoneLen):
                 if z in self.pmSensorDev_t:
                     s = data[7 + z]
@@ -3487,78 +3509,47 @@ class PacketHandling(ProtocolBase):
 
 #    def toYesNo(self, b):
 #        return "Yes" if b else "No"
-        
-    def getStatus(self, s : str):
-        return "Unknown" if s not in PanelStatus else PanelStatus[s]
 
     def DumpSensorsToDisplay(self):
         log.info("=============================================== Display Status ===============================================")
         for key, sensor in self.pmSensorDev_t.items():
             log.info("     key {0:<2} Sensor {1}".format(key, sensor))
-        log.info("   Model {: <18}     PowerMaster {: <18}     LastEvent {: <18}     Ready   {: <13}".format(self.getStatus("Model"),
-                                        self.getStatus("Power Master"), self.getStatus("Panel Last Event"), self.getStatus("Panel Ready")))
-        log.info("   Mode  {: <18}     Status      {: <18}     Armed     {: <18}     Trouble {: <13}     AlarmStatus {: <12}".format(self.getStatus("Mode"), self.getStatus("Panel Status"),
-                                        self.getStatus("Panel Armed"), self.getStatus("Panel Trouble Status"), self.getStatus("Panel Alarm Status")))
+        log.info("   Model {: <18}     PowerMaster {: <18}     LastEvent {: <18}     Ready   {: <13}".format(self.PanelModel,
+                                        'Yes' if self.isPowerMaster() else 'No', self.PanelLastEvent, 'Yes' if self.PanelReady else 'No'))
+        log.info("   Mode  {: <18}     Status      {: <18}     Armed     {: <18}     Trouble {: <13}     AlarmStatus {: <12}".format(self.getPanelMode(), self.PanelStatusText,
+                                        'Yes' if self.PanelArmed else 'No', self.PanelTroubleStatus, self.PanelAlarmStatus))
         log.info("==============================================================================================================")
-        #for key in PanelStatus:
-        #    log.info("Panel Status {0:22}  {1}".format(key, PanelStatus[key]))
 
 
-
+# Event handling and externally callable client functions (plus updatestatus)
 class EventHandling(PacketHandling):
     """ Event Handling """
-
-    def __init__(self, *args, command_queue = None, ignore: List[str] = None, **kwargs) -> None:
+    
+    def __init__(self, *args, command_queue = None, client=None, **kwargs) -> None:
         """Add eventhandling specific initialization."""
         super().__init__(*args, **kwargs)
 
-        if ignore:
-            log.debug('[EventHandling]  ignoring: %s', ignore)
-            self.ignore = ignore
+        if client is not None:
+            client.setPyVisonic(self)
+            self.client = client
         else:
-            #log.debug("In __init__")
-            self.ignore = []
+            log.info('[EventHandling]  client is None')
         
-        self.command_queue = command_queue
-        if command_queue is not None:
-            asyncio.ensure_future(self.process_command_queue(), loop=self.loop)
-        
-    # implement commands from the queue            
-    async def process_command_queue(self):
-        while not self.suspendAllOperations:
-            if self.command_queue.empty():
-                # sleep, doesn't need to be highly accurate so just count each second
-                await asyncio.sleep(1.0)
-            else:
-                command = await self.command_queue.get()
-                if command[0] == "eventlog":
-                    log.debug("[CommandQueue]  Calling event log")
-                    self.GetEventLog(command[1])
-                elif command[0] == "bypass":
-                    log.debug("[CommandQueue]  Calling bypass for individual sensors")
-                    self.SetSensorArmedState(command[1], command[2], command[3])
-                elif command[0] == "shutdown":
-                    log.info("[CommandQueue]  Shutdown current connection")
-                    self.suspendAllOperations = True
-                    if self.transport is not None:
-                        self.transport.close()
-                elif command[0] == "x10":
-                    log.debug("[CommandQueue]  Calling x10 command")
-                    self.SendX10Command(command[1], command[2])
-                elif command[0] == "download" and not self.pmDownloadMode:
-                    log.info("[CommandQueue]  download EPROM (again)")
-                    self.pmDownloadComplete = False
-                    self.Start_Download()
-                elif command[0] == "command" and command[1].lower() in pmArmMode_t:
-                    log.info("[CommandQueue]  making alarm command call " + command[1])
-                    self.RequestArm(command[1].lower(), command[2])
-                else:
-                    log.warning("[CommandQueue]  Processing unknown queue command {0}".format(command))
-
-    def PopulateDictionary(self, state):
+    def ShutdownOperation(self):
+        self.suspendAllOperations = True
+        if self.transport is not None:
+            self.transport.close()
+    
+    async def startDownloadAgain(self):
+        if not self.pmDownloadMode:
+            log.info("[CommandQueue]  download EPROM (again)")
+            self.pmDownloadComplete = False
+            self.startDownload()
+    
+    def PopulateDictionary(self, state) -> dict:
         datadict = {}
         datadict['Command'] = state
-        datadict['PanelReady'] = PanelStatus["Panel Ready"] == 'Yes'
+        datadict['PanelReady'] = self.PanelReady == 'Yes'
         datadict['OpenZones'] = []
         datadict['Bypass'] = []
         datadict['Tamper'] = []
@@ -3574,11 +3565,69 @@ class EventHandling(PacketHandling):
             if self.pmSensorDev_t[key].ztamper:
                 datadict['ZoneTamper'].append(entname)                        
         return datadict
+
+    ############################################################################################################    
+    ############################################################################################################    
+    ############################################################################################################    
+    ######################## The following functions are called from the client ################################
+    ############################################################################################################    
+    ############################################################################################################    
+    ############################################################################################################    
         
+    def isSirenActive(self) -> bool:
+        return self.pmSirenActive is not None
+    
+    def isPowerMaster(self) -> bool:
+        return self.PowerMaster
+        
+    def getPanelStatusCode(self) -> int:
+        return self.PanelStatusCode
+
+    def getPanelMode(self) -> str:
+        return self.PanelMode.name.replace("_", " ").title()
+
+    def getPanelStatus(self) -> dict:
+        #log.info("In visonic getpanelstatus")
+        d = {
+            "Panel Mode"            : self.getPanelMode(),
+            "Plugin Version"        : PLUGIN_VERSION,
+            "Watchdog Timeout"      : self.WatchdogTimeout,
+            "Download Timeout"      : self.DownloadTimeout,
+            "Panel Last Event"      : self.PanelLastEvent,
+            "Panel Last Event Data" : self.PanelLastEventData,
+            "Panel Alarm Status"    : self.PanelAlarmStatus,
+            "Panel Trouble Status"  : self.PanelTroubleStatus,
+            "Panel Siren Active"    : self.isSirenActive(),
+            "Panel Status"          : self.PanelStatusText,
+            "Panel Status Code"     : self.getPanelStatusCode(),
+            "Panel Ready"           : 'Yes' if self.PanelReady else 'No',
+            "Panel Alert In Memory" : 'Yes' if self.PanelAlertInMemory else 'No',
+            "Panel Trouble"         : 'Yes' if self.PanelTrouble else 'No',
+            "Panel Bypass"          : 'Yes' if self.PanelBypass else 'No',
+            "Panel Status Changed"  : 'Yes' if self.PanelStatusChanged else 'No',
+            "Panel Alarm Event"     : 'Yes' if self.PanelAlarmEvent else 'No',
+            "Panel Armed"           : 'Yes' if self.PanelArmed else 'No',
+            "Power Master"          : 'Yes' if self.isPowerMaster() else 'No',
+            "Panel Model"           : self.PanelModel,
+            "Panel Type"            : self.PanelType,
+            "Model Type"            : self.ModelType
+        }
+        
+        if len(self.PanelStatus) > 0:
+            return {**d, **self.PanelStatus}
+        return d
+
+    def hasValidOverrideCode(self) -> bool:
+        if self.OverrideCode is not None:
+            if len(self.OverrideCode) == 4:
+                #log.debug("code format none as code set in config file *****************************")
+                return True
+        return False
+
     # RequestArm
     #       state is one of: "disarmed", "stay", "armed", "stayinstant", "armedinstant"  # "UserTest"
     #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
-    def RequestArm(self, state, pin = ""):
+    def RequestArm(self, state, pin = "") -> bool:
         """ Send a request to the panel to Arm/Disarm """
         state = state.lower()
         datadict = self.PopulateDictionary(state)
@@ -3644,29 +3693,34 @@ class EventHandling(PacketHandling):
 
         if not self.pmDownloadMode:
             if not self.pmBypassOff:
-                isValidPL, bpin = self.pmGetPin(pin)
+                if self.pmEnableSensorBypass:
+                    isValidPL, bpin = self.pmGetPin(pin)
 
-                if isValidPL:
-                    bypassint = 1 << (zone - 1)
-                    log.info("[SensorArmState]  SetSensorArmedState A " + hex(bypassint))
-                    # is it big or little endian, i'm not sure, needs testing
-                    y1, y2, y3, y4 = (bypassint & 0xFFFFFFFF).to_bytes(4, 'little')
-                    # These could be the wrong way around, needs testing
-                    bypass = bytearray([y1, y2, y3, y4])
-                    log.info("[SensorArmState]  SetSensorArmedState B " + self.toString(bypass))
-                    if len(bpin) == 2 and len(bypass) == 4:
-                        datadict['Reason'] = 0
+                    if isValidPL:
+                        bypassint = 1 << (zone - 1)
+                        log.info("[SensorArmState]  SetSensorArmedState A " + hex(bypassint))
+                        # is it big or little endian, i'm not sure, needs testing
+                        y1, y2, y3, y4 = (bypassint & 0xFFFFFFFF).to_bytes(4, 'little')
+                        # These could be the wrong way around, needs testing
+                        bypass = bytearray([y1, y2, y3, y4])
+                        log.info("[SensorArmState]  SetSensorArmedState B " + self.toString(bypass))
+                        if len(bpin) == 2 and len(bypass) == 4:
+                            datadict['Reason'] = 0
+                            self.sendResponseEvent ( 12 , datadict )
+                            if bypassValue:
+                                self.SendCommand("MSG_BYPASSEN", options = [1, bpin, 3, bypass]) 
+                            else:
+                                self.SendCommand("MSG_BYPASSDI", options = [1, bpin, 7, bypass])
+                            self.SendCommand("MSG_BYPASSTAT") # request status to check success and update sensor variable
+                            return True
+                    else:
+                        datadict['Reason'] = 2
                         self.sendResponseEvent ( 12 , datadict )
-                        if bypassValue:
-                            self.SendCommand("MSG_BYPASSEN", options = [1, bpin, 3, bypass]) 
-                        else:
-                            self.SendCommand("MSG_BYPASSDI", options = [1, bpin, 7, bypass])
-                        self.SendCommand("MSG_BYPASSTAT") # request status to check success and update sensor variable
-                        return True
+                        log.info("[SensorArmState]  Bypass option Not allowed without valid pin")
                 else:
-                    datadict['Reason'] = 2
+                    datadict['Reason'] = 4
                     self.sendResponseEvent ( 12 , datadict )
-                    log.info("[SensorArmState]  Bypass option Not allowed without valid pin")
+                    log.info("[SensorArmState]  Bypass disabled by user settings")
             else:
                 datadict['Reason'] = 3
                 self.sendResponseEvent ( 12 , datadict )
@@ -3679,7 +3733,7 @@ class EventHandling(PacketHandling):
 
     # Get the Event Log
     #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
-    def GetEventLog(self, pin = ""):
+    def GetEventLog(self, pin = "") -> bool:
         """ Get Panel Event Log """
         datadict = self.PopulateDictionary("EventLog")
         log.info("GetEventLog")
@@ -3702,14 +3756,17 @@ class EventHandling(PacketHandling):
             log.warning("Get Event Log only supported when not downloading EPROM.")
         return False
 
-    def SendX10Command(self, dev, state):
+    def setX10(self, ident, state) -> bool:
         # This is untested
         # "MSG_X10PGM"      : VisonicCommand(bytearray.fromhex('A4 00 00 00 00 00 99 99 00 00 00 43'), None  , False, "X10 Data" ),
         datadict = self.PopulateDictionary("X10")
+ 
+        log.info("Here we go {0} {1}".format(ident, type(ident)))
+        
         if not self.pmDownloadMode:
-            if dev >= 0 and dev <= 15:
-                log.debug("[SendX10Command]  Py Visonic : Send X10 Command : id = " + str(dev) + "   state = " + state)
-                calc = (1 << dev)
+            if ident >= 0 and ident <= 15:
+                log.debug("[SendX10Command]  Py Visonic : Send X10 Command : id = " + str(ident) + "   state = " + state)
+                calc = (1 << ident)
                 byteA = calc & 0xFF
                 byteB = (calc >> 8) & 0xFF
                 if state in pmX10State_t:
@@ -3732,33 +3789,8 @@ class EventHandling(PacketHandling):
             log.info("[SendX10Command]  Get Event Log only supported when not downloading EPROM.")
         return False
 
-#PowerMax.prototype.writeMessage = function(item, val) {
-#	var len = val.length;
-#	var addr;
-#	if (typeof item == 'string') {
-#		addr = pm.download[item].slice(0, 1);
-#	} else {
-#		addr = [item % 0x100, math.floor(item / 0x100)];
-#	}
-#	while (len > 0) {
-#		var s = val.slice(0, 0xAF);
-#		var l = (len > 0xB0) ? 0xB0 : len;
-#		this.debug('addr = ' + addr + ', len = ' + l);
-#		this.sendMessage("MSG_WRITE", { addr: addr, len: l, val: s });
-#		var page = string.byte(addr, 2)
-#		var index = string.byte(addr)
-#		//pmWriteSettings(page, index, s) // also update internal table
-#		len -= 0xB0;
-#		val = val.slice(0xB0);
-#		var a = 0x100 * page + index + 0xB0;
-#		addr = [a % 0x100, math.floor(a / 0x100)];
-#    }
-#}
-        
-
 class VisonicProtocol(EventHandling):
-    """Combine preferred abstractions that form complete Rflink interface."""
-
+    """Combine preferred abstractions that form complete interface."""
 
     #===================================================================================================================================================
     #===================================================================================================================================================
@@ -3768,30 +3800,25 @@ class VisonicProtocol(EventHandling):
     #===================================================================================================================================================
     #===================================================================================================================================================
 
-def setConfig(key, val):
-    if key in PanelSettings:
-        if val is not None:
-            log.info("Setting key {0} to value {1}".format(key, val))
-            PanelSettings[key] = val
-    else:
-        log.warning("ERROR: ************************ Cannot find key {0} in panel settings".format(key))
 
 # Create a connection using asyncio using an ip and port
-def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, command_queue = None, event_callback=None, disconnect_callback=None, loop=None):
+def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, client=None, panelConfig = None, event_callback=None, disconnect_callback=None, loop=None):
     """Create Visonic manager class, returns tcp transport coroutine."""
+    #global visprotocol
+    #visprotocol = EventHandling
 
     # use default protocol if not specified
     protocol = partial(
         protocol,
+        client=client,
+        panelConfig = panelConfig,
         loop=loop if loop else asyncio.get_event_loop(),
         event_callback=event_callback,
         disconnect_callback=disconnect_callback,
-        command_queue = command_queue, 
-#        ignore=ignore if ignore else [],
     )
 
     address = address
-    port = port
+    port = int(port)
     
     sock = None
     try:
@@ -3815,6 +3842,7 @@ def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, comma
         
         conn = loop.create_connection(protocol, sock=sock)
         return conn
+        
     except socket.error as _:
         err = _
         log.info("Setting TCP socket Options Exception {0}".format(err))
@@ -3824,25 +3852,28 @@ def create_tcp_visonic_connection(address, port, protocol=VisonicProtocol, comma
 
 
 # Create a connection using asyncio through a linux port (usb or rs232)
-def create_usb_visonic_connection(port, baud=9600, protocol=VisonicProtocol, command_queue = None, event_callback=None, disconnect_callback=None, loop=None):
+def create_usb_visonic_connection(path, baud=9600, protocol=VisonicProtocol, client=None, panelConfig = None, event_callback=None, disconnect_callback=None, loop=None):
     """Create Visonic manager class, returns rs232 transport coroutine."""
     from serial_asyncio import create_serial_connection
+    #global visprotocol
+    #visprotocol = EventHandling
+
     # use default protocol if not specified
     protocol = partial(
         protocol,
+        client=client,
+        panelConfig = panelConfig,
         loop=loop if loop else asyncio.get_event_loop(),
         event_callback=event_callback,
         disconnect_callback=disconnect_callback,
-        command_queue = command_queue, 
- #        ignore=ignore if ignore else [],
     )
 
     # setup serial connection
-    port = port
-    baud = baud
-    conn = create_serial_connection(loop, protocol, port, baud)
+    path = path
+    baud = int(baud)
+    conn = create_serial_connection(loop, protocol, path, baud)
 
-    return conn
+    return conn, visprotocol
 
 def setupLocalLogger():
     #add custom formatter to root logger
@@ -3858,6 +3889,5 @@ def setupLocalLogger():
     log.addHandler(shandler)
 
     #level = logging.getLevelName('INFO')
-    #if PanelSettings["PluginDebug"]:
     level = logging.getLevelName('DEBUG')  # INFO, DEBUG
     log.setLevel(level)

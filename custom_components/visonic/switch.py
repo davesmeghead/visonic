@@ -15,49 +15,32 @@ from homeassistant.components.switch import ( SwitchDevice, ENTITY_ID_FORMAT)
 from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED, 
      ATTR_CODE, STATE_STANDBY, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_DISARMING, 
      STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED)
-from custom_components.visonic import VISONIC_PLATFORM
+from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_ID
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 DEPENDENCIES = ['visonic']
 
-VISONIC_X10 = 'visonic_x10'
-
 _LOGGER = logging.getLogger(__name__)
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
-    """Set up the visonic controller devices."""
-    
-    queue = None
-    if VISONIC_PLATFORM in hass.data:
-        if "command_queue" in hass.data[VISONIC_PLATFORM]:
-            queue = hass.data[VISONIC_PLATFORM]["command_queue"]
-
-    #va = VisonicPartition(hass, 1)
-    #
-    ## Listener to handle fired events
-    #def handle_event_switch_status(event):
-    #    _LOGGER.info('alarm state panel received update event ' + event)
-    #    if va is not None:
-    #        va.doUpdate()
-    #
-    #hass.bus.listen('alarm_panel_state_update', handle_event_switch_status)
-    
-    if VISONIC_X10 in hass.data:
-        devices = []
-        for device in hass.data[VISONIC_X10]['switch']:
-            _LOGGER.info('X10 Switch ' + device.name + '    type is ' + str(type(device)))
-            if device.enabled:
-                devices.append(VisonicSwitch(hass, device, queue))
-    
-        add_devices(devices, True)
-        hass.data[VISONIC_X10] = defaultdict(list)
+async def async_setup_entry( hass: HomeAssistant, entry: ConfigEntry, async_add_entities ) -> None:
+    """Set up the Visonic Alarm Binary Sensors"""
+    if DOMAIN in hass.data:
+        client = hass.data[DOMAIN][DOMAINCLIENT][entry.unique_id]
+        devices = [
+            VisonicSwitch(hass, client, device)
+            for device in hass.data[DOMAIN]['switch']   
+        ]
+        hass.data[DOMAIN]["switch"] = list()
+        async_add_entities(devices, True)
 
 class VisonicSwitch(SwitchDevice):
     """Representation of a Visonic X10 Switch."""
 
-    def __init__(self, hass, visonic_device, queue):
+    def __init__(self, hass: HomeAssistant, client, visonic_device):
         """Initialise a Visonic X10 Device."""
-        _LOGGER.info("In setup_platform in switch for X10")
-        self.queue = queue
+        #_LOGGER.info("Creating X10 Switch {0}".format(visonic_device.name))
+        self.client = client
         self.visonic_device = visonic_device
         self.x10id = self.visonic_device.id
         self._name = "Visonic " + self.visonic_device.name
@@ -109,14 +92,22 @@ class VisonicSwitch(SwitchDevice):
         """Return information about the device."""
         return {
             'manufacturer': 'Visonic',
+            "identifiers": {(DOMAIN, self._name)},
+            "name": f"Visonic X10 ({self.visonic_device.name})",
+            "model": self.visonic_device.type,
+            "via_device" : (DOMAIN, VISONIC_UNIQUE_ID),
+            #"sw_version": self._api.information.version_string,
         }
+
+    async def async_remove_entry(hass, entry) -> None:
+        """Handle removal of an entry."""
+        _LOGGER.info('switch async_remove_entry')
 
     # "off"  "on"  "dim"  "brighten"
     def turnmeonandoff(self, state):
         """Send disarm command."""
-        if self.queue is not None:
-            _LOGGER.info("X10 turnmeonandoff id = " + str(self.x10id) + "   state = " + state)        
-            self.queue.put_nowait(["x10", self.x10id, state])
+        #import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
+        self.client.setX10(self.x10id, state)
 
     @property
     def device_state_attributes(self):

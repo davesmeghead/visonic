@@ -1,0 +1,143 @@
+{
+    "config": {
+        "title": "Visonic Alarm System",
+        "abort": {
+            "already_configured": "Alarm Panel Connection Already Configured",
+            "device_error": "Device must be either ethernet or usb",
+            "settings_missing": "Import setting from yaml file but essential settings are missing",
+            "editing": "Thankyou for your edits"
+        },
+        "error": {
+            "eth_or_usb": "Must be either Ethernet or USB",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "device": {
+                "description": "Enter your device type, Ethernet or USB",
+                "title": "Connection",
+                "data": {
+                    "type": "ethernet or usb"
+                }
+            },
+            "ethernet": {
+                "description": "Enter your Ethernet Settings",
+                "title": "Ethernet Configuration",
+                "data": {
+                    "host": "Host Address",
+                    "port": "Port"
+                }
+            },
+            "usb": {
+                "description": "Enter your USB Settings",
+                "title": "USB Configuration",
+                "data": {
+                    "path": "USB Local Path",
+                    "baud": "Baud Rate"
+                }
+            },
+            "parameters1": {
+                "description": "",
+                "title": "Alarm Panel Settings",
+                "data": {
+                    "exclude_x10": "X10 Devices to Exclude (comma separated)",
+                    "exclude_sensor": "Sensor List to Exclude (comma separated)",
+                    "download_code": "Download Code",
+                    "force_standard": "Force Standard Mode",
+                    "force_autoenroll": "Force Auto Enroll for PowerMax+ Panels",
+                    "sync_time": "Synchronise Time with the Alarm Panel",
+                    "language": "Language (EN, NL, FR)"
+                }
+            },
+            "parameters2": {
+                "description": "",
+                "title": "Alarm Panel Settings",
+                "data": {
+                    "arm_without_usercode": "Arm without User Code",
+                    "override_code": "Override User Code",
+                    "siren_sounding": "List of triggers for the siren (comma separated)",
+                    "motion_off": "Motion off delay time (seconds)",
+                    "force_numeric_keypad": "Force use of a Numeric Keypad (Disarm)",
+                    "arm_away_instant": "Arm Away Instant every time",
+                    "arm_home_instant": "Arm Home Instant every time",
+                    "allow_remote_arm": "Allow Panel Arm from Home Assistant",
+                    "allow_remote_disarm": "Allow Panel DisArm from Home Assistant",
+                    "allow_sensor_bypass": "Allow each sensor to be bypassed"
+                }
+            },
+            "parameters3": {
+                "description": "",
+                "title": "Log File",
+                "data": {
+                    "panellog_logentry_event": "Generate an HA Event for each Log entry",
+                    "panellog_csv_add_title_row": "Add a Title Row to the generated CSV file",
+                    "panellog_xml_filename": "The XML Filename (and path)",
+                    "panellog_csv_filename": "The CSV Filename (and path)",
+                    "panellog_complete_event": "Generate an HA Event on Completion",
+                    "panellog_reverse_order": "Reverse the output order",
+                    "panellog_max_entries": "Only output the most recent X log entries"
+                }
+            },
+            "parameters4": {
+                "description": "PowerMaster users only",
+                "title": "B0 Processing",
+                "data": {
+                    "b0_enable_motion_processing": "Enable B0 message processing (PowerMaster Panels only)",
+                    "b0_min_time_between_triggers": "Minimum time between triggers",
+                    "b0_max_time_for_trigger_event": "Maximum time for trigger event"
+                }
+            }
+        }
+    },
+    "options": {
+        "title": "Visonic Alarm System - Editor",
+        "abort": {
+            "already_configured": "Alarm Panel Connection Already Configured",
+            "device_error": "Device must be either ethernet or usb",
+            "editing": "Thankyou for your edits"
+        },
+        "error": {
+            "eth_or_usb": "Must be either Ethernet or USB",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "parameters2": {
+                "description": "",
+                "title": "Alarm Panel Settings",
+                "data": {
+                    "arm_without_usercode": "Arm without User Code",
+                    "override_code": "Override User Code",
+                    "siren_sounding": "List of triggers for the siren (comma separated)",
+                    "motion_off": "Motion off delay time (seconds)",
+                    "force_numeric_keypad": "Force use of a Numeric Keypad",
+                    "arm_away_instant": "Arm Away Instant every time",
+                    "arm_home_instant": "Arm Home Instant every time",
+                    "allow_remote_arm": "Allow Panel Arm from Home Assistant",
+                    "allow_remote_disarm": "Allow Panel DisArm from Home Assistant",
+                    "allow_sensor_bypass": "Allow each sensor to be bypassed"
+                }
+            },
+            "parameters3": {
+                "description": "",
+                "title": "Log File",
+                "data": {
+                    "panellog_logentry_event": "Generate an HA Event for each Log entry",
+                    "panellog_csv_add_title_row": "Add a Title Row to the generated CSV file",
+                    "panellog_xml_filename": "The XML Filename (and path)",
+                    "panellog_csv_filename": "The CSV Filename (and path)",
+                    "panellog_complete_event": "Generate an HA Event on Completion",
+                    "panellog_reverse_order": "Reverse the output order",
+                    "panellog_max_entries": "Only output the most recent X log entries"
+                }
+            },
+            "parameters4": {
+                "description": "PowerMaster users only",
+                "title": "B0 Processing",
+                "data": {
+                    "b0_enable_motion_processing": "Enable B0 message processing (PowerMaster Panels only)",
+                    "b0_min_time_between_triggers": "Minimum time between triggers",
+                    "b0_max_time_for_trigger_event": "Maximum time for trigger event"
+                }
+            }
+        }
+    }    
+}

@@ -1,3 +1,26 @@
+alarm_panel_eventlog:
+  description: Retrieve the Alarm Panel Event Log.
+  fields:
+    code:
+      description: An optional code to send to the panel.
+      example: "1234"
+
+alarm_panel_command:
+  description: Send a command to the Alarm Panel.
+  fields:
+    command:
+      description: The command to send to the panel, one of "Disarmed", "Stay", "Armed", "StayInstant", "ArmedInstant"
+      example: "Stay"
+    code:
+      description: An optional code to send to the panel.
+      example: "1234"
+
+alarm_panel_reconnect:
+  description: Reconnect to the Alarm Panel following a previous problem.
+
+alarm_panel_download:
+  description: Instigate an EPROM Download from the Alarm Panel
+
 alarm_sensor_bypass:
   description: Bypass a visonic sensor.
   fields:
@@ -9,4 +32,4 @@ alarm_sensor_bypass:
       example: 'True or False as a Boolean (from a String)'
     code:
       description: An optional code to send to the panel.
-      example: '"1234" as a String'
+      example: "1234"
