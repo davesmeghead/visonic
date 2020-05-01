@@ -1,6 +1,6 @@
 {
   "domain": "visonic",
-  "name": "Visonic Intruder Alarm - PowerMax and PowerMaster Series",
+  "name": "Visonic Intruder Alarm",
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/davesmeghead/visonic/wiki",

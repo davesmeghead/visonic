@@ -101,4 +101,4 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.3.6.3    | Changed Ready to PanelReady  |
 | 0.3.7.0    | Several changes to HA event generation, I have updated the wiki so please read it. There are 2 new config settings arm_away_instant and arm_home_instant, 2 new HA Services alarm_panel_command and alarm_panel_download. |
 | 0.4.0.0    | Added the ability to create/edit the integration from within Home Assistant. Major change but hopefully not a breaking change. |
-
+| 0.4.0.1    | Bug fix for USB connections |

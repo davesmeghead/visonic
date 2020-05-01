@@ -350,7 +350,7 @@ class VisonicClient:
             path = self.config.get(CONF_PATH)
             baud = self.config.get(CONF_DEVICE_BAUD)
            
-            self.comm = visonicApi.create_usb_visonic_connection(port = path, baud = baud, client = self, panelConfig = self.getConfigData(),
+            self.comm = visonicApi.create_usb_visonic_connection(path = path, baud = baud, client = self, panelConfig = self.getConfigData(),
                        event_callback = self.visonic_event_callback_handler, disconnect_callback = self.disconnect_callback, loop = self.hass.loop)
 
         if self.comm is not None:
