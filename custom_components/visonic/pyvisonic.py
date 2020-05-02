@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.0.3"
+PLUGIN_VERSION = "0.4.0.4"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -1177,40 +1177,56 @@ class ProtocolBase(asyncio.Protocol):
             #log.info("[updateSettings] Settings refreshed - Using panel config {0}".format(newdata))
             if PYVConst.ForceStandard in newdata:
                 self.ForceStandardMode = newdata[PYVConst.ForceStandard]          # INTERFACE : Get user variable from HA to force standard mode or try for PowerLink
+                log.info("[Settings] Force Standard set to {0}".format(self.ForceStandardMode))
             if PYVConst.ForceAutoEnroll in newdata:
                 self.ForceAutoEnroll = newdata[PYVConst.ForceAutoEnroll]          # INTERFACE : Force Auto Enroll when don't know panel type. Only set to true
+                log.info("[Settings] Force Auto Enroll set to {0}".format(self.ForceAutoEnroll))
             if PYVConst.AutoSyncTime in newdata:
                 self.AutoSyncTime = newdata[PYVConst.AutoSyncTime]                # INTERFACE : sync time with the panel
+                log.info("[Settings] Force Auto Sync Time set to {0}".format(self.AutoSyncTime))
             if PYVConst.DownloadCode in newdata:
                 tmpDLCode = newdata[PYVConst.DownloadCode]                        # INTERFACE : Get the download code
                 if len(tmpDLCode) == 4 and type(tmpDLCode) is str:
                     self.DownloadCode = tmpDLCode[0:2] + " " + tmpDLCode[2:4]
+                    log.info("[Settings] Download Code set to {0}".format(self.DownloadCode))
             if PYVConst.PluginLanguage in newdata:
                 self.pmLang = newdata[PYVConst.PluginLanguage]                    # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
+                log.info("[Settings] Language set to {0}".format(self.pmLang))
             if PYVConst.EnableRemoteArm in newdata:
                 self.pmRemoteArm = newdata[PYVConst.EnableRemoteArm]              # INTERFACE : Does the user allow remote setting of the alarm
+                log.info("[Settings] Remote Arm set to {0}".format(self.pmRemoteArm))
             if PYVConst.EnableRemoteDisArm in newdata:
                 self.pmRemoteDisArm = newdata[PYVConst.EnableRemoteDisArm]        # INTERFACE : Does the user allow remote disarming of the alarm
+                log.info("[Settings] Remote DisArm set to {0}".format(self.pmRemoteDisArm))
             if PYVConst.EnableSensorBypass in newdata:
                 self.pmEnableSensorBypass = newdata[PYVConst.EnableSensorBypass]  # INTERFACE : Does the user allow sensor bypass, True or False
+                log.info("[Settings] Enable Sensor Bypass set to {0}".format(self.pmEnableSensorBypass))
             if PYVConst.MotionOffDelay in newdata:
                 self.MotionOffDelay = newdata[PYVConst.MotionOffDelay]            # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
+                log.info("[Settings] Motion Off Delay set to {0}".format(self.MotionOffDelay))
             if PYVConst.OverrideCode in newdata:
                 self.OverrideCode = newdata[PYVConst.OverrideCode]                # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
+                log.info("[Settings] Override Code set <omitted for security>")
             if PYVConst.ForceKeypad in newdata:
                 self.ForceNumericKeypad = newdata[PYVConst.ForceKeypad]           # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
+                log.info("[Settings] Force Numeric Keypad set to {0}".format(self.ForceNumericKeypad))
             if PYVConst.ArmWithoutCode in newdata:
                 self.ArmWithoutCode = newdata[PYVConst.ArmWithoutCode]            # INTERFACE : Get user variable from HA to arm without user code
+                log.info("[Settings] Arm Without Code set to {0}".format(self.ArmWithoutCode))
             if PYVConst.SirenTriggerList in newdata:
                 tmpList = newdata[PYVConst.SirenTriggerList]                  
                 self.SirenTriggerList = [x.lower() for x in tmpList]
+                log.info("[Settings] Siren Trigger List set to {0}".format(self.SirenTriggerList))
 
             if PYVConst.B0_Enable in newdata:
                 self.BZero_Enable = newdata[PYVConst.B0_Enable]
+                log.info("[Settings] B0 Enable set to {0}".format(self.BZero_Enable))
             if PYVConst.B0_Min_Interval_Time in newdata:
                 self.BZero_MinInterval = newdata[PYVConst.B0_Min_Interval_Time]
+                log.info("[Settings] B0 Min Interval set to {0}".format(self.BZero_MinInterval))
             if PYVConst.B0_Max_Wait_Time in newdata:
                 self.BZero_MaxWaitTime = newdata[PYVConst.B0_Max_Wait_Time]
+                log.info("[Settings] B0 Max Wait Time set to {0}".format(self.BZero_MaxWaitTime))
 
     # Convert byte array to a string of hex values
     def toString(self, array_alpha: bytearray):

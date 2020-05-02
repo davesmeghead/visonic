@@ -104,3 +104,4 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.4.0.1    | Bug fix for USB connections |
 | 0.4.0.2    | Bug fix for USB connections |
 | 0.4.0.3    | Bug fix for USB connections |
+| 0.4.0.4    | Bug fix for ability to create/edit the integration from within Home Assistant. Breaking change if you use exclude_x10 and/or exclude_sensor  |

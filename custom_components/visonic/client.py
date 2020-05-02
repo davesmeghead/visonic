@@ -64,11 +64,15 @@ class VisonicClient:
 
         self.exclude_sensor_list = self.config.get(CONF_EXCLUDE_SENSOR)
         if self.exclude_sensor_list is None:
-            self.exclude_sensor_list = {}
+            self.exclude_sensor_list = []
+        if isinstance(self.exclude_sensor_list, str):
+            self.exclude_sensor_list = [int(e) if e.isdigit() else e for e in self.exclude_sensor_list.split(',')]
             
         self.exclude_x10_list = self.config.get(CONF_EXCLUDE_X10)
         if self.exclude_x10_list is None:
-            self.exclude_x10_list = {}
+            self.exclude_x10_list = []
+        if isinstance(self.exclude_x10_list, str):
+            self.exclude_x10_list = [int(e) if e.isdigit() else e for e in self.exclude_x10_list.split(',')]
 
         self.visonic_event_name = 'alarm_panel_state_update'
         self.panel_exception_counter = 0

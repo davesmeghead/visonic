@@ -28,12 +28,9 @@ REQUIREMENTS = ['pyserial', 'pyserial_asyncio', 'datetime', 'jinja2']
 
 log = logging.getLogger(__name__)
 
-CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: create_schema()
-    },
-    extra=vol.ALLOW_EXTRA,
-)
+CONFIG_SCHEMA = vol.Schema({
+    DOMAIN: vol.Schema(create_schema()),
+}, extra=vol.ALLOW_EXTRA)
 
 def configured_hosts(hass):
     """Return a set of the configured hosts."""

@@ -47,13 +47,13 @@ def create_default(options, key, default):
 def create_parameters1(options):
     # Panel settings - can only be set on creation
     return {
-        vol.Required(CONF_LANGUAGE,         default=create_default(options, CONF_LANGUAGE, "EN") )         : str,
-        vol.Optional(CONF_EXCLUDE_SENSOR,   default=create_default(options, CONF_EXCLUDE_SENSOR, ""))      : str,
-        vol.Optional(CONF_EXCLUDE_X10,      default=create_default(options, CONF_EXCLUDE_X10, ""))         : str,
-        vol.Optional(CONF_DOWNLOAD_CODE,    default=create_default(options, CONF_DOWNLOAD_CODE, "") )      : str,
-        vol.Optional(CONF_FORCE_STANDARD,   default=create_default(options, CONF_FORCE_STANDARD, False))   : bool, 
-        vol.Optional(CONF_FORCE_AUTOENROLL, default=create_default(options, CONF_FORCE_AUTOENROLL, False)) : bool, 
-        vol.Optional(CONF_AUTO_SYNC_TIME,   default=create_default(options, CONF_AUTO_SYNC_TIME, True))    : bool
+        vol.Required(CONF_LANGUAGE,         default=create_default(options, CONF_LANGUAGE, "EN") )         : cv.string,
+        vol.Optional(CONF_EXCLUDE_SENSOR,   default=create_default(options, CONF_EXCLUDE_SENSOR, ""))      : cv.string,
+        vol.Optional(CONF_EXCLUDE_X10,      default=create_default(options, CONF_EXCLUDE_X10, ""))         : cv.string,
+        vol.Optional(CONF_DOWNLOAD_CODE,    default=create_default(options, CONF_DOWNLOAD_CODE, "") )      : cv.string,
+        vol.Optional(CONF_FORCE_STANDARD,   default=create_default(options, CONF_FORCE_STANDARD, False))   : cv.boolean, 
+        vol.Optional(CONF_FORCE_AUTOENROLL, default=create_default(options, CONF_FORCE_AUTOENROLL, False)) : cv.boolean, 
+        vol.Optional(CONF_AUTO_SYNC_TIME,   default=create_default(options, CONF_AUTO_SYNC_TIME, True))    : cv.boolean
     }
 
 available_siren_values = {
@@ -70,36 +70,36 @@ available_siren_values = {
 def create_parameters2(options):
     # Panel settings - can be modified/edited
     return {
-        vol.Required(CONF_MOTION_OFF_DELAY,     default=create_default(options, CONF_MOTION_OFF_DELAY, 120) )      : int,
+        vol.Optional(CONF_MOTION_OFF_DELAY,     default=create_default(options, CONF_MOTION_OFF_DELAY, 120) )      : cv.positive_int,
         vol.Optional(CONF_SIREN_SOUNDING,       default=create_default(options, CONF_SIREN_SOUNDING,["intruder"])) : cv.multi_select(available_siren_values),
-        vol.Optional(CONF_OVERRIDE_CODE,        default=create_default(options, CONF_OVERRIDE_CODE, "") )          : str,
-        vol.Optional(CONF_ARM_CODE_AUTO,        default=create_default(options, CONF_ARM_CODE_AUTO, False))        : bool,
-        vol.Optional(CONF_FORCE_KEYPAD,         default=create_default(options, CONF_FORCE_KEYPAD, False))         : bool,
-        vol.Optional(CONF_INSTANT_ARM_AWAY,     default=create_default(options, CONF_INSTANT_ARM_AWAY, False))     : bool,
-        vol.Optional(CONF_INSTANT_ARM_HOME,     default=create_default(options, CONF_INSTANT_ARM_HOME, False))     : bool,
-        vol.Optional(CONF_ENABLE_REMOTE_ARM,    default=create_default(options, CONF_ENABLE_REMOTE_ARM, False))    : bool,
-        vol.Optional(CONF_ENABLE_REMOTE_DISARM, default=create_default(options, CONF_ENABLE_REMOTE_DISARM, False)) : bool,
-        vol.Optional(CONF_ENABLE_SENSOR_BYPASS, default=create_default(options, CONF_ENABLE_SENSOR_BYPASS, False)) : bool
+        vol.Optional(CONF_OVERRIDE_CODE,        default=create_default(options, CONF_OVERRIDE_CODE, "") )          : cv.string,
+        vol.Optional(CONF_ARM_CODE_AUTO,        default=create_default(options, CONF_ARM_CODE_AUTO, False))        : cv.boolean,
+        vol.Optional(CONF_FORCE_KEYPAD,         default=create_default(options, CONF_FORCE_KEYPAD, False))         : cv.boolean,
+        vol.Optional(CONF_INSTANT_ARM_AWAY,     default=create_default(options, CONF_INSTANT_ARM_AWAY, False))     : cv.boolean,
+        vol.Optional(CONF_INSTANT_ARM_HOME,     default=create_default(options, CONF_INSTANT_ARM_HOME, False))     : cv.boolean,
+        vol.Optional(CONF_ENABLE_REMOTE_ARM,    default=create_default(options, CONF_ENABLE_REMOTE_ARM, False))    : cv.boolean,
+        vol.Optional(CONF_ENABLE_REMOTE_DISARM, default=create_default(options, CONF_ENABLE_REMOTE_DISARM, False)) : cv.boolean,
+        vol.Optional(CONF_ENABLE_SENSOR_BYPASS, default=create_default(options, CONF_ENABLE_SENSOR_BYPASS, False)) : cv.boolean
     }
 
 def create_parameters3(options):
     # Log file parameters
     return {
-        vol.Optional(CONF_LOG_EVENT,            default=create_default(options, CONF_LOG_EVENT, False))       : bool,
-        vol.Optional(CONF_LOG_DONE,             default=create_default(options, CONF_LOG_DONE, False))        : bool,
-        vol.Optional(CONF_LOG_REVERSE,          default=create_default(options, CONF_LOG_REVERSE, False))     : bool,
-        vol.Optional(CONF_LOG_CSV_TITLE,        default=create_default(options, CONF_LOG_CSV_TITLE, False))   : bool,
-        vol.Optional(CONF_LOG_XML_FN,           default=create_default(options, CONF_LOG_XML_FN, ""))         : str,
-        vol.Optional(CONF_LOG_CSV_FN,           default=create_default(options, CONF_LOG_CSV_FN, ""))         : str,
-        vol.Optional(CONF_LOG_MAX_ENTRIES,      default=create_default(options, CONF_LOG_MAX_ENTRIES, 10000)) : int
+        vol.Optional(CONF_LOG_EVENT,            default=create_default(options, CONF_LOG_EVENT, False))       : cv.boolean,
+        vol.Optional(CONF_LOG_DONE,             default=create_default(options, CONF_LOG_DONE, False))        : cv.boolean,
+        vol.Optional(CONF_LOG_REVERSE,          default=create_default(options, CONF_LOG_REVERSE, False))     : cv.boolean,
+        vol.Optional(CONF_LOG_CSV_TITLE,        default=create_default(options, CONF_LOG_CSV_TITLE, False))   : cv.boolean,
+        vol.Optional(CONF_LOG_XML_FN,           default=create_default(options, CONF_LOG_XML_FN, ""))         : cv.string,
+        vol.Optional(CONF_LOG_CSV_FN,           default=create_default(options, CONF_LOG_CSV_FN, ""))         : cv.string,
+        vol.Optional(CONF_LOG_MAX_ENTRIES,      default=create_default(options, CONF_LOG_MAX_ENTRIES, 10000)) : cv.positive_int
     }
 
 def create_parameters4(options):
     # B0 related parameters (PowerMaster only)
     return {
-        vol.Optional(CONF_B0_ENABLE_MOTION_PROCESSING,   default=create_default(options, CONF_B0_ENABLE_MOTION_PROCESSING, False)) : bool,
-        vol.Optional(CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, default=create_default(options, CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 5))   : int,
-        vol.Optional(CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,  default=create_default(options, CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 30))   : int
+        vol.Optional(CONF_B0_ENABLE_MOTION_PROCESSING,   default=create_default(options, CONF_B0_ENABLE_MOTION_PROCESSING, False)) : cv.boolean,
+        vol.Optional(CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, default=create_default(options, CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 5))   : cv.positive_int,
+        vol.Optional(CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,  default=create_default(options, CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 30))   : cv.positive_int
     }
 
 CONFIG_SCHEMA_DEVICE = {
@@ -107,25 +107,25 @@ CONFIG_SCHEMA_DEVICE = {
 }
 
 CONFIG_SCHEMA_ETHERNET = {
-    vol.Required(CONF_HOST, default=DEFAULT_DEVICE_HOST) : str,
-    vol.Required(CONF_PORT, default=DEFAULT_DEVICE_PORT) : str
+    vol.Required(CONF_HOST, default=DEFAULT_DEVICE_HOST) : cv.string,
+    vol.Required(CONF_PORT, default=DEFAULT_DEVICE_PORT) : cv.string
 }
 
 CONFIG_SCHEMA_USB = {
-    vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB)  : str,
-    vol.Optional(CONF_DEVICE_BAUD, default=DEFAULT_DEVICE_BAUD): str
+    vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB)  : cv.string,
+    vol.Optional(CONF_DEVICE_BAUD, default=DEFAULT_DEVICE_BAUD): cv.string
 }
 
 # Schema for config file parsing and access
 DEVICE_SOCKET_SCHEMA = vol.Schema({
     vol.Required(CONF_DEVICE_TYPE): 'ethernet',
-    vol.Optional(CONF_HOST, default=DEFAULT_DEVICE_HOST): cv.string,
-    vol.Optional(CONF_PORT, default=DEFAULT_DEVICE_PORT): cv.port
+    vol.Required(CONF_HOST, default=DEFAULT_DEVICE_HOST): cv.string,
+    vol.Required(CONF_PORT, default=DEFAULT_DEVICE_PORT): cv.port
 })
 
 DEVICE_USB_SCHEMA = vol.Schema({
     vol.Required(CONF_DEVICE_TYPE): 'usb',
-    vol.Optional(CONF_PATH, default=DEFAULT_DEVICE_USB): cv.string,
+    vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB): cv.string,
     vol.Optional(CONF_DEVICE_BAUD, default=DEFAULT_DEVICE_BAUD): cv.string
 })
 
@@ -133,7 +133,7 @@ VISONIC_ID_LIST_SCHEMA = vol.Schema([int])
 VISONIC_STRING_LIST_SCHEMA = vol.Schema([str])
 
 CONFIG_SCHEMA = {
-    vol.Required(CONF_DEVICE): vol.In( DEVICE_SOCKET_SCHEMA, DEVICE_USB_SCHEMA )
+    vol.Required(CONF_DEVICE): vol.Any( DEVICE_SOCKET_SCHEMA, DEVICE_USB_SCHEMA )
 }
 
 def create_schema_device():
@@ -169,7 +169,7 @@ def create_schema():
     # Miss out CONFIG_SCHEMA_PARAMETERS1a and use CONFIG_SCHEMA instead
     dest = {**CONFIG_SCHEMA, **create_parameters1(options), **create_parameters2(options), **create_parameters3(options), **create_parameters4(options)}
     #_LOGGER.info("Visonic create schema = {0}".format(dest))
-    return vol.Schema({ DOMAIN: vol.Schema(dest), }, extra=vol.ALLOW_EXTRA)
+    return dest # vol.Schema({ DOMAIN: vol.Schema(dest), }, extra=vol.ALLOW_EXTRA )
 
 def set_defaults(opt):
     global options
