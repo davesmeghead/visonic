@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.0.2"
+PLUGIN_VERSION = "0.4.0.3"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -3858,6 +3858,7 @@ def create_usb_visonic_connection(path, baud=9600, protocol=VisonicProtocol, cli
     #global visprotocol
     #visprotocol = EventHandling
 
+    log.info("Setting USB Options")
     # use default protocol if not specified
     protocol = partial(
         protocol,

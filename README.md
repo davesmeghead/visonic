@@ -103,3 +103,4 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.4.0.0    | Added the ability to create/edit the integration from within Home Assistant. Major change but hopefully not a breaking change. |
 | 0.4.0.1    | Bug fix for USB connections |
 | 0.4.0.2    | Bug fix for USB connections |
+| 0.4.0.3    | Bug fix for USB connections |

@@ -113,7 +113,7 @@ CONFIG_SCHEMA_ETHERNET = {
 
 CONFIG_SCHEMA_USB = {
     vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB)  : str,
-    vol.Required(CONF_DEVICE_BAUD, default=DEFAULT_DEVICE_BAUD): str
+    vol.Optional(CONF_DEVICE_BAUD, default=DEFAULT_DEVICE_BAUD): str
 }
 
 # Schema for config file parsing and access
@@ -176,7 +176,6 @@ def set_defaults(opt):
     for key in opt:
         options[key] = opt[key]
     #_LOGGER.info("set_defaults {0}".format(options[CONF_MOTION_OFF_DELAY] if options is not None and CONF_MOTION_OFF_DELAY in options else "Undefined"))
-
 
 # initially populate the options data with the default values from all possible settings
 

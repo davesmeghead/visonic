@@ -224,7 +224,10 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
                     elif device_type[CONF_DEVICE_TYPE] == "usb":
                         data[CONF_DEVICE_TYPE] = "usb"
                         data[CONF_PATH] = device_type[CONF_PATH]
-                        data[CONF_DEVICE_BAUD] = device_type[CONF_DEVICE_BAUD]
+                        if CONF_DEVICE_BAUD in device_type:
+                            data[CONF_DEVICE_BAUD] = device_type[CONF_DEVICE_BAUD]
+                        else:
+                            data[CONF_DEVICE_BAUD] = int(9600)
                 else:
                     data[k] = import_config.get(k)
         except:
