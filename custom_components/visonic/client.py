@@ -88,22 +88,34 @@ class VisonicClient:
         _LOGGER.info("Exclude sensor list = {0}     Exclude x10 list = {1}".format(self.exclude_sensor_list, self.exclude_x10_list))
         
     def isSirenActive(self) -> bool:
-        return self.visprotocol.isSirenActive()
+        if self.visprotocol is not None:
+            return self.visprotocol.isSirenActive()
+        return False
 
     def isPowerMaster(self) -> bool:
-        return self.visprotocol.isPowerMaster()
+        if self.visprotocol is not None:
+            return self.visprotocol.isPowerMaster()
+        return False
 
     def getPanelStatusCode(self) -> int:
-        return self.visprotocol.getPanelStatusCode()
+        if self.visprotocol is not None:
+            return self.visprotocol.getPanelStatusCode()
+        return -1
 
     def getPanelMode(self) -> str:
-        return self.visprotocol.getPanelMode()
+        if self.visprotocol is not None:
+            return self.visprotocol.getPanelMode()
+        return "Not Connected"
 
     def getPanelStatus(self) -> dict:
-        return self.visprotocol.getPanelStatus()
+        if self.visprotocol is not None:
+            return self.visprotocol.getPanelStatus()
+        return {}
 
     def hasValidOverrideCode(self) -> bool:
-        return self.visprotocol.hasValidOverrideCode()
+        if self.visprotocol is not None:
+            return self.visprotocol.hasValidOverrideCode()
+        return False
 
     def setPyVisonic(self, pyvis):
         self.visprotocol = pyvis

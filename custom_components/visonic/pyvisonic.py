@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.0.1"
+PLUGIN_VERSION = "0.4.0.2"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -3873,7 +3873,7 @@ def create_usb_visonic_connection(path, baud=9600, protocol=VisonicProtocol, cli
     baud = int(baud)
     conn = create_serial_connection(loop, protocol, path, baud)
 
-    return conn, visprotocol
+    return conn
 
 def setupLocalLogger():
     #add custom formatter to root logger
