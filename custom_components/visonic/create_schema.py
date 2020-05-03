@@ -156,13 +156,13 @@ CONFIG_SCHEMA_DEVICE = {
 }
 
 CONFIG_SCHEMA_ETHERNET = {
-    vol.Required(CONF_HOST, default=DEFAULT_DEVICE_HOST) : cv.string,
-    vol.Required(CONF_PORT, default=DEFAULT_DEVICE_PORT) : cv.string
+    vol.Required(CONF_HOST, default=DEFAULT_DEVICE_HOST) : str,
+    vol.Required(CONF_PORT, default=DEFAULT_DEVICE_PORT) : str
 }
 
 CONFIG_SCHEMA_USB = {
-    vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB)  : cv.string,
-    vol.Optional(CONF_DEVICE_BAUD, default=DEFAULT_DEVICE_BAUD): cv.string
+    vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB)  : str,
+    vol.Optional(CONF_DEVICE_BAUD, default=DEFAULT_DEVICE_BAUD): str
 }
 
 # Schema for config file parsing and access
