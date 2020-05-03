@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.0.4"
+PLUGIN_VERSION = "0.4.0.5"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -1206,7 +1206,8 @@ class ProtocolBase(asyncio.Protocol):
                 log.info("[Settings] Motion Off Delay set to {0}".format(self.MotionOffDelay))
             if PYVConst.OverrideCode in newdata:
                 self.OverrideCode = newdata[PYVConst.OverrideCode]                # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
-                log.info("[Settings] Override Code set <omitted for security>")
+                if len(self.OverrideCode) == 4:
+                    log.info("[Settings] Override Code set <omitted for security>")
             if PYVConst.ForceKeypad in newdata:
                 self.ForceNumericKeypad = newdata[PYVConst.ForceKeypad]           # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
                 log.info("[Settings] Force Numeric Keypad set to {0}".format(self.ForceNumericKeypad))
