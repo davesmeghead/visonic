@@ -63,15 +63,15 @@ class VisonicClient:
         #_LOGGER.info("init self.config = {0} {1}".format( PYVConst.DownloadCode, self.config))
 
         self.exclude_sensor_list = self.config.get(CONF_EXCLUDE_SENSOR)
-        if self.exclude_sensor_list is None:
+        if self.exclude_sensor_list is None or len(self.exclude_sensor_list) == 0:
             self.exclude_sensor_list = []
-        if isinstance(self.exclude_sensor_list, str):
+        if isinstance(self.exclude_sensor_list, str) and len(self.exclude_sensor_list) > 0:
             self.exclude_sensor_list = [int(e) if e.isdigit() else e for e in self.exclude_sensor_list.split(',')]
             
         self.exclude_x10_list = self.config.get(CONF_EXCLUDE_X10)
-        if self.exclude_x10_list is None:
+        if self.exclude_x10_list is None or len(self.exclude_x10_list) == 0:
             self.exclude_x10_list = []
-        if isinstance(self.exclude_x10_list, str):
+        if isinstance(self.exclude_x10_list, str) and len(self.exclude_x10_list) > 0:
             self.exclude_x10_list = [int(e) if e.isdigit() else e for e in self.exclude_x10_list.split(',')]
 
         self.visonic_event_name = 'alarm_panel_state_update'
@@ -319,6 +319,14 @@ class VisonicClient:
         self.hass.data[DOMAIN]["force_keypad"]     = self.config.get(CONF_FORCE_KEYPAD, False)
         self.hass.data[DOMAIN]["arm_away_instant"] = self.config.get(CONF_INSTANT_ARM_AWAY, False)
         self.hass.data[DOMAIN]["arm_home_instant"] = self.config.get(CONF_INSTANT_ARM_HOME, False)
+
+        _LOGGER.info("[Settings] Log Max Entries set to {0}".format(self.config.get(CONF_LOG_MAX_ENTRIES)))
+        _LOGGER.info("[Settings] Log Reverse set to {0}".format(self.config.get(CONF_LOG_REVERSE)))
+        _LOGGER.info("[Settings] Log Create Event set to {0}".format(self.config.get(CONF_LOG_EVENT)))
+        _LOGGER.info("[Settings] Log Final Event set to {0}".format(self.config.get(CONF_LOG_DONE)))
+        _LOGGER.info("[Settings] Log XML Filename set to {0}".format(self.config.get(CONF_LOG_XML_FN)))
+        _LOGGER.info("[Settings] Log CSV Filename set to {0}".format(self.config.get(CONF_LOG_CSV_FN)))
+        _LOGGER.info("[Settings] Log CSV title Row set to {0}".format(self.config.get(CONF_LOG_CSV_TITLE)))
 
 
     def connect_to_alarm(self) -> bool:
