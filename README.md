@@ -108,3 +108,4 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.4.0.5    | Bug fix for USB connections |
 | 0.4.0.6    | Bug fix for ability to create the integration from within Home Assistant |
 | 0.4.0.7    | Bug fix for exclude_x10 and exclude_sensor when the lists are empty |
+| 0.4.0.8    | Modified decoding of B0 message data and then made the other variable message decoding the same. |

@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.0.7"
+PLUGIN_VERSION = "0.4.0.8"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -241,27 +241,29 @@ pmBlockDownload_t = {
 #Private VMSG_DL_MASTER10_EVENTLOG As Byte[] = [&H3E, &HFF, &HFF, &HD2, &H07, &HB0, &H05, &H48, &H01, &H00, &H00] '&H3F
 #Private VMSG_DL_MASTER30_EVENTLOG As Byte[] = [&H3E, &HFF, &HFF, &H42, &H1F, &HB0, &H05, &H48, &H01, &H00, &H00] '&H3F
 
-# Message types we can receive with their length (None=unknown) and whether they need an ACK
+# Message types we can receive with their length (None=unknown) and whether they need an ACK.
+#    When variable length is True, the length is the fixed number of bytes.  Add this to the variable part when it is received to get the total packet length.
+#    When length is 0 i.e. Zero then we stop on the first 0x0A
 PanelCallBack = collections.namedtuple("PanelCallBack", 'length ackneeded variablelength' )
 pmReceiveMsg_t = {
-   0x02 : PanelCallBack( None, False, False ),   # Ack
-   0x06 : PanelCallBack( None, False, False ),   # Timeout. See the receiver function for ACK handling
-   0x08 : PanelCallBack( None, False, False ),   # Access Denied
-   0x0B : PanelCallBack( None,  True, False ),   # Stop --> Download Complete
-   0x22 : PanelCallBack(   14,  True, False ),   # 14 Panel Info (older visonic powermax panels)
-   0x25 : PanelCallBack(   14,  True, False ),   # 14 Download Retry
-   0x33 : PanelCallBack(   14,  True, False ),   # 14 Download Settings
-   0x3C : PanelCallBack(   14,  True, False ),   # 14 Panel Info
-   0x3F : PanelCallBack( None,  True,  True ),   # Download Info
-   0xA0 : PanelCallBack(   15,  True, False ),   # 15 Event Log
-   0xA3 : PanelCallBack(   15,  True, False ),   # 15 Zone Names
-   0xA5 : PanelCallBack(   15,  True, False ),   # 15 Status Update       Length was 15 but panel seems to send different lengths
-   0xA6 : PanelCallBack(   15,  True, False ),   # 15 Zone Types I think!!!!
-   0xA7 : PanelCallBack(   15,  True, False ),   # 15 Panel Status Change
-   0xAB : PanelCallBack(   15,  True, False ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
-   0xAC : PanelCallBack(   15,  True, False ),   # 15 X10 Names ???
-   0xB0 : PanelCallBack( None,  True, False ),   # The B0 message comes in varying lengths
-   0xF4 : PanelCallBack( None,  True,  True )    # The F4 message comes in varying lengths. Can't decode it yet but this will accept it and ignore it
+   0x02 : PanelCallBack(  0, False, False ),   # Ack
+   0x06 : PanelCallBack(  0, False, False ),   # Timeout. See the receiver function for ACK handling
+   0x08 : PanelCallBack(  0, False, False ),   # Access Denied
+   0x0B : PanelCallBack(  0,  True, False ),   # Stop --> Download Complete
+   0x22 : PanelCallBack( 14,  True, False ),   # 14 Panel Info (older visonic powermax panels)
+   0x25 : PanelCallBack( 14,  True, False ),   # 14 Download Retry
+   0x33 : PanelCallBack( 14,  True, False ),   # 14 Download Settings
+   0x3C : PanelCallBack( 14,  True, False ),   # 14 Panel Info
+   0x3F : PanelCallBack(  7,  True,  True ),   # Download Info in varying lengths  (For variable length, the length is the fixed number of bytes)
+   0xA0 : PanelCallBack( 15,  True, False ),   # 15 Event Log
+   0xA3 : PanelCallBack( 15,  True, False ),   # 15 Zone Names
+   0xA5 : PanelCallBack( 15,  True, False ),   # 15 Status Update       Length was 15 but panel seems to send different lengths
+   0xA6 : PanelCallBack( 15,  True, False ),   # 15 Zone Types I think!!!!
+   0xA7 : PanelCallBack( 15,  True, False ),   # 15 Panel Status Change
+   0xAB : PanelCallBack( 15,  True, False ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
+   0xAC : PanelCallBack( 15,  True, False ),   # 15 X10 Names ???
+   0xB0 : PanelCallBack(  8,  True,  True ),   # The B0 message comes in varying lengths
+   0xF4 : PanelCallBack(  7,  True,  True )    # The F4 message comes in varying lengths. Can't decode it yet but this will accept it and ignore it. Not sure about the length of 7.
 }
 
 pmReceiveMsgB0_t = {
@@ -1536,15 +1538,16 @@ class ProtocolBase(asyncio.Protocol):
         if pdu_len == 4 and self.pmVarLenMsg:
             # Determine length of variable size message
             # The message type is in the second byte
-            #msgType = self.ReceiveData[1]
-            self.pmIncomingPduLen = 7 + int(data) # (((int(self.ReceiveData[2]) * 0x100) + int(self.ReceiveData[3])))
+            self.pmIncomingPduLen = self.pmIncomingPduLen + int(data) # (((int(self.ReceiveData[2]) * 0x100) + int(self.ReceiveData[3])))
             #if self.pmIncomingPduLen >= 0xB0:  # then more than one message
             #    self.pmIncomingPduLen = 0 # set it to 0 for this loop around
-            #log.debug("[data receiver] Variable length Message Being Receive  Message {0}     pmIncomingPduLen {1}".format(hex(msgType).upper(), self.pmIncomingPduLen))
+            log.debug("[data receiver] Variable length Message Being Received  Message Type {0}     pmIncomingPduLen {1}".format(hex(self.ReceiveData[1]).upper(), self.pmIncomingPduLen))
 
         # If this is the start of a new message, then check to ensure it is a 0x0D (message header)
         if pdu_len == 0:
             self.pmMsgType = None
+            self.pmIncomingPduLen = 0
+            self.pmVarLenMsg = False
             if data == 0x0D:  # preamble
                 #log.debug("[data receiver] Start of new PDU detected, expecting response " + response)
                 #log.debug("[data receiver] Start of new PDU detected")
@@ -1559,11 +1562,11 @@ class ProtocolBase(asyncio.Protocol):
             # Is it a message type that we know about
             if msgType in pmReceiveMsg_t:
                 self.pmMsgType = pmReceiveMsg_t[msgType]
-                self.pmIncomingPduLen = (self.pmMsgType is not None) and self.pmMsgType.length or 0
-                self.pmVarLenMsg = pmReceiveMsg_t[msgType].variablelength
+                self.pmIncomingPduLen = self.pmMsgType.length
+                self.pmVarLenMsg = self.pmMsgType.variablelength
             else:
                 log.warning("[data receiver] Warning : Construction of incoming packet unknown - Message Type {0}".format(hex(msgType).upper()))
-            #log.debug("[data receiver] Building PDU: It's a message %02X; pmIncomingPduLen = %d", data, self.pmIncomingPduLen)
+            log.debug("[data receiver] Building PDU: It's a message {0}; pmIncomingPduLen = {1}   variable = {2}".format(hex(msgType).upper(), self.pmIncomingPduLen, self.pmVarLenMsg))
             # Add on the message type to the buffer
             self.ReceiveData.append(data)
         elif (self.pmIncomingPduLen == 0 and data == 0x0A) or (pdu_len + 1 == self.pmIncomingPduLen): # postamble   (standard length message and data terminator) OR (actual length == calculated length)
@@ -1571,10 +1574,10 @@ class ProtocolBase(asyncio.Protocol):
             self.ReceiveData.append(data)
             #log.debug("[data receiver] Building PDU: Checking it " + self.toString(self.ReceiveData))
             msgType = self.ReceiveData[1]
-            if (data != 0x0A) and (self.ReceiveData[pdu_len] == 0x43):
-                log.info("[data receiver] Building PDU: Special Case 0x43 ********************************************************************************************")
-                self.pmIncomingPduLen = self.pmIncomingPduLen + 1 # for 0x43
-            elif self.validatePDU(self.ReceiveData):
+            #if (data != 0x0A) and (self.ReceiveData[pdu_len] == 0x43):
+            #    log.info("[data receiver] Building PDU: Special Case 0x43 ********************************************************************************************")
+            #    self.pmIncomingPduLen = self.pmIncomingPduLen + 1 # for 0x43
+            if self.validatePDU(self.ReceiveData):
                 # We've got a validated message
                 #log.debug("[data receiver] Building PDU: Got Validated PDU type 0x%02x   full data %s", int(msgType), self.toString(self.ReceiveData))
                 # Reset some variable ready for next time
@@ -1583,9 +1586,10 @@ class ProtocolBase(asyncio.Protocol):
                 # Unknown Message has been received
                 if self.pmMsgType is None:
                     log.warning("[data receiver] Unhandled message {0}".format(hex(msgType)))
-                    self.SendAck()
+                    self.SendAck()  # assume we need to send an ack
                 else:
-                    #log.info("[data receiver] *** Received message " + hex(msgType).upper() + "   data " + self.toString(self.ReceiveData))
+                    #log.info("[data receiver] *** Received validated message " + hex(msgType).upper() + "   data " + self.toString(self.ReceiveData))
+                    log.info("[data receiver] *** Received validated message " + hex(msgType).upper() + " ***")
                     # Send an ACK if needed
                     if self.pmMsgType.ackneeded:
                         #log.debug("[data receiver] Sending an ack as needed by last panel status message " + hex(msgType).upper())
