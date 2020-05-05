@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.0.8"
+PLUGIN_VERSION = "0.4.1.0"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -75,7 +75,9 @@ class PanelMode(Enum):
      DOWNLOAD = 6
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
+#    This means a maximum of 5 CRC errors in 10 minutes before resetting the connection
 MAX_CRC_ERROR = 5
+CRC_ERROR_PERIOD = 600   # seconds, 10 minutes
 
 # Maximum number of received messages that are exactly the same from the alarm panel before performing a restart
 SAME_PACKET_ERROR = 20
@@ -241,29 +243,32 @@ pmBlockDownload_t = {
 #Private VMSG_DL_MASTER10_EVENTLOG As Byte[] = [&H3E, &HFF, &HFF, &HD2, &H07, &HB0, &H05, &H48, &H01, &H00, &H00] '&H3F
 #Private VMSG_DL_MASTER30_EVENTLOG As Byte[] = [&H3E, &HFF, &HFF, &H42, &H1F, &HB0, &H05, &H48, &H01, &H00, &H00] '&H3F
 
-# Message types we can receive with their length (None=unknown) and whether they need an ACK.
-#    When variable length is True, the length is the fixed number of bytes.  Add this to the variable part when it is received to get the total packet length.
-#    When length is 0 i.e. Zero then we stop on the first 0x0A
-PanelCallBack = collections.namedtuple("PanelCallBack", 'length ackneeded variablelength' )
+# Message types we can receive with their length and whether they need an ACK.
+#    When isvariablelength is True:
+#             the length is the fixed number of bytes in the message.  Add this to the variable part when it is received to get the total packet length.
+#             varlenbytepos is the byte position of the variable length of the message.
+#    When length is 0 then we stop processing the message on the first 0x0A. This is only used for the short messages (4 or 5 bytes long) like ack, stop, denied and timeout
+PanelCallBack = collections.namedtuple("PanelCallBack", 'length varlenbytepos ackneeded isvariablelength' )
 pmReceiveMsg_t = {
-   0x02 : PanelCallBack(  0, False, False ),   # Ack
-   0x06 : PanelCallBack(  0, False, False ),   # Timeout. See the receiver function for ACK handling
-   0x08 : PanelCallBack(  0, False, False ),   # Access Denied
-   0x0B : PanelCallBack(  0,  True, False ),   # Stop --> Download Complete
-   0x22 : PanelCallBack( 14,  True, False ),   # 14 Panel Info (older visonic powermax panels)
-   0x25 : PanelCallBack( 14,  True, False ),   # 14 Download Retry
-   0x33 : PanelCallBack( 14,  True, False ),   # 14 Download Settings
-   0x3C : PanelCallBack( 14,  True, False ),   # 14 Panel Info
-   0x3F : PanelCallBack(  7,  True,  True ),   # Download Info in varying lengths  (For variable length, the length is the fixed number of bytes)
-   0xA0 : PanelCallBack( 15,  True, False ),   # 15 Event Log
-   0xA3 : PanelCallBack( 15,  True, False ),   # 15 Zone Names
-   0xA5 : PanelCallBack( 15,  True, False ),   # 15 Status Update       Length was 15 but panel seems to send different lengths
-   0xA6 : PanelCallBack( 15,  True, False ),   # 15 Zone Types I think!!!!
-   0xA7 : PanelCallBack( 15,  True, False ),   # 15 Panel Status Change
-   0xAB : PanelCallBack( 15,  True, False ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
-   0xAC : PanelCallBack( 15,  True, False ),   # 15 X10 Names ???
-   0xB0 : PanelCallBack(  8,  True,  True ),   # The B0 message comes in varying lengths
-   0xF4 : PanelCallBack(  7,  True,  True )    # The F4 message comes in varying lengths. Can't decode it yet but this will accept it and ignore it. Not sure about the length of 7.
+   0x00 : PanelCallBack(  0, -1,  True, False ),   # Dummy message used in the algorithm when the message type is unknown. The -1 is used to indicate an unknown message in the algorithm
+   0x02 : PanelCallBack(  0,  0, False, False ),   # Ack
+   0x06 : PanelCallBack(  0,  0, False, False ),   # Timeout. See the receiver function for ACK handling
+   0x08 : PanelCallBack(  0,  0, False, False ),   # Access Denied
+   0x0B : PanelCallBack(  0,  0,  True, False ),   # Stop --> Download Complete
+   0x22 : PanelCallBack( 14,  0,  True, False ),   # 14 Panel Info (older visonic powermax panels)
+   0x25 : PanelCallBack( 14,  0,  True, False ),   # 14 Download Retry
+   0x33 : PanelCallBack( 14,  0,  True, False ),   # 14 Download Settings
+   0x3C : PanelCallBack( 14,  0,  True, False ),   # 14 Panel Info
+   0x3F : PanelCallBack(  7,  4,  True,  True ),   # Download Info in varying lengths  (For variable length, the length is the fixed number of bytes)
+   0xA0 : PanelCallBack( 15,  0,  True, False ),   # 15 Event Log
+   0xA3 : PanelCallBack( 15,  0,  True, False ),   # 15 Zone Names
+   0xA5 : PanelCallBack( 15,  0,  True, False ),   # 15 Status Update       Length was 15 but panel seems to send different lengths
+   0xA6 : PanelCallBack( 15,  0,  True, False ),   # 15 Zone Types I think!!!!
+   0xA7 : PanelCallBack( 15,  0,  True, False ),   # 15 Panel Status Change
+   0xAB : PanelCallBack( 15,  0,  True, False ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
+   0xAC : PanelCallBack( 15,  0,  True, False ),   # 15 X10 Names ???
+   0xB0 : PanelCallBack(  8,  4,  True,  True ),   # The B0 message comes in varying lengths
+   0xF4 : PanelCallBack(  7,  4,  True,  True )    # The F4 message comes in varying lengths. Can't decode it yet but accept and ignore it. Not sure about the length of 7 for the fixed part.
 }
 
 pmReceiveMsgB0_t = {
@@ -1091,10 +1096,9 @@ class ProtocolBase(asyncio.Protocol):
         ########################################################################
         # Variables that are only used in handle_received_message function
         ########################################################################
-        self.pmVarLenMsg = False       # Are we expecting a variable length message from the panel
-        self.pmIncomingPduLen = 0      # The length of the incoming message
-        self.pmCrcErrorCount = 0       # The CRC Error Count for Received Messages
-        self.pmMsgType = None          # The current receiving message type
+        self.pmIncomingPduLen = 0          # The length of the incoming message
+        self.pmCrcErrorCount = 0           # The CRC Error Count for Received Messages
+        self.pmCurrentPDU = pmReceiveMsg_t[0] # The current receiving message type
 
         ########################################################################
         # Variables that are only used in this class and not subclasses
@@ -1122,7 +1126,7 @@ class ProtocolBase(asyncio.Protocol):
         self.commandlock = None
         
         # The receive byte array for receiving a message
-        self.ReceiveData = bytearray()
+        self.ReceiveData = bytearray(b'')
 
         # A queue of messages to send
         self.SendList = []
@@ -1131,6 +1135,8 @@ class ProtocolBase(asyncio.Protocol):
         
         # This is the time stamp of the last Send
         self.pmLastTransactionTime = self.getTimeFunction() - timedelta(seconds=1)  # take off 1 second so the first command goes through immediately
+
+        self.pmFirstCRCErrorTime = self.getTimeFunction() - timedelta(seconds=1)  # take off 1 second so the first command goes through immediately
 
         self.giveupTrying = False
 
@@ -1515,130 +1521,145 @@ class ProtocolBase(asyncio.Protocol):
             self.handle_received_byte(databyte)
 
     # Process one received byte at a time to build up the received messages
-    #       pmIncomingPduLen is only used in this function
-    #       pmVarLenMsg is only used in this function
-    #       msgType_t is only used in this function
-    #       pmCrcErrorCount is only used in this function
+    #       self.pmIncomingPduLen is only used in this function and resetMessageData
+    #       self.pmCrcErrorCount is only used in this function and resetMessageData
+    #       self.pmCurrentPDU is only used in this function and resetMessageData
     def handle_received_byte(self, data):
         """Process a single byte as incoming data."""
-        # Length of the received data so far
         if self.suspendAllOperations:
             return
-            
-        pdu_len = len(self.ReceiveData)
+        # PDU = Protocol Description Unit
 
-        # If we were expecting a message of a particular length and what we have is already greater then that length then dump the message and resynchronise.
-        if 0 < self.pmIncomingPduLen <= pdu_len:   # waiting for pmIncomingPduLen bytes but got more and haven't been able to validate a PDU
-            log.debug("[data receiver] Building PDU: Dumping Current PDU " + self.toString(self.ReceiveData))
-            # Reset the incoming data to 0 length and clear the receive buffer
-            self.ReceiveData = bytearray(b'')
-            pdu_len = len(self.ReceiveData)
+        pdu_len = len(self.ReceiveData)                                # Length of the received data so far
 
-        # If the length is 4 bytes and we're receiving a variable length message, the panel tells us the length we're expecting to receive
-        if pdu_len == 4 and self.pmVarLenMsg:
-            # Determine length of variable size message
-            # The message type is in the second byte
-            self.pmIncomingPduLen = self.pmIncomingPduLen + int(data) # (((int(self.ReceiveData[2]) * 0x100) + int(self.ReceiveData[3])))
-            #if self.pmIncomingPduLen >= 0xB0:  # then more than one message
-            #    self.pmIncomingPduLen = 0 # set it to 0 for this loop around
+        # If we're receiving a variable length message and we're at the position in the message where we get the variable part
+        if self.pmCurrentPDU.isvariablelength and pdu_len == self.pmCurrentPDU.varlenbytepos:
+            # Determine total length of the message by getting the variable part int(data) and adding it to the fixed length part
+            self.pmIncomingPduLen = self.pmCurrentPDU.length + int(data)
             log.debug("[data receiver] Variable length Message Being Received  Message Type {0}     pmIncomingPduLen {1}".format(hex(self.ReceiveData[1]).upper(), self.pmIncomingPduLen))
 
-        # If this is the start of a new message, then check to ensure it is a 0x0D (message header)
+        # If we were expecting a message of a particular length (i.e. self.pmIncomingPduLen > 0) and what we have is already greater then that length then dump the message and resynchronise.
+        if 0 < self.pmIncomingPduLen <= pdu_len:                       # waiting for pmIncomingPduLen bytes but got more and haven't been able to validate a PDU
+            log.debug("[data receiver] PDU Too Large: Dumping current buffer {0}    The next byte is {1}".format(self.toString(self.ReceiveData), hex(data).upper()))
+            pdu_len = 0                                                # Reset the incoming data to 0 length
+
+        # If this is the start of a new message, then check to ensure it is a 0x0D (message preamble)
         if pdu_len == 0:
-            self.pmMsgType = None
-            self.pmIncomingPduLen = 0
-            self.pmVarLenMsg = False
+            self.resetMessageData()
             if data == 0x0D:  # preamble
-                #log.debug("[data receiver] Start of new PDU detected, expecting response " + response)
-                #log.debug("[data receiver] Start of new PDU detected")
-                # reset the message and add the received header
-                self.ReceiveData = bytearray(b'')
                 self.ReceiveData.append(data)
                 #log.debug("[data receiver] Starting PDU " + self.toString(self.ReceiveData))
+            # else we're trying to resync and walking through the bytes waiting for an 0x0D preamble byte
         elif pdu_len == 1:
-            # The second byte is the message type
-            msgType = data
             #log.debug("[data receiver] Received message Type %d", data)
-            # Is it a message type that we know about
-            if msgType in pmReceiveMsg_t:
-                self.pmMsgType = pmReceiveMsg_t[msgType]
-                self.pmIncomingPduLen = self.pmMsgType.length
-                self.pmVarLenMsg = self.pmMsgType.variablelength
+            if data != 0x00 and data in pmReceiveMsg_t:                # Is it a message type that we know about
+                self.pmCurrentPDU = pmReceiveMsg_t[data]               # set to current message type parameter settings for length, does it need an ack etc
+                self.pmIncomingPduLen = self.pmCurrentPDU.length       # for variable length messages this is the fixed length and will work with this algorithm until updated. 
             else:
-                log.warning("[data receiver] Warning : Construction of incoming packet unknown - Message Type {0}".format(hex(msgType).upper()))
-            log.debug("[data receiver] Building PDU: It's a message {0}; pmIncomingPduLen = {1}   variable = {2}".format(hex(msgType).upper(), self.pmIncomingPduLen, self.pmVarLenMsg))
-            # Add on the message type to the buffer
-            self.ReceiveData.append(data)
-        elif (self.pmIncomingPduLen == 0 and data == 0x0A) or (pdu_len + 1 == self.pmIncomingPduLen): # postamble   (standard length message and data terminator) OR (actual length == calculated length)
-            # add to the message buffer
-            self.ReceiveData.append(data)
+                # build an unknown PDU. As the length is not known, leave self.pmIncomingPduLen set to 0 so we just look for 0x0A as the end of the PDU
+                self.pmCurrentPDU = pmReceiveMsg_t[0]                  # Set to unknown message structure to get settings, varlenbytepos is -1
+                self.pmIncomingPduLen = 0                              # self.pmIncomingPduLen should already be set to 0 but just to make sure !!!
+                log.warning("[data receiver] Warning : Construction of incoming packet unknown - Message Type {0}".format(hex(data).upper()))
+            #log.debug("[data receiver] Building PDU: It's a message {0}; pmIncomingPduLen = {1}   variable = {2}".format(hex(data).upper(), self.pmIncomingPduLen, self.pmCurrentPDU.isvariablelength))
+            self.ReceiveData.append(data)                              # Add on the message type to the buffer
+
+        elif (self.pmIncomingPduLen == 0 and data == 0x0A) or (pdu_len + 1 == self.pmIncomingPduLen): # postamble (the +1 is to include the current data byte)
+            # (waiting for 0x0A and got it) OR (actual length == calculated length)
+            self.ReceiveData.append(data)                              # add byte to the message buffer
             #log.debug("[data receiver] Building PDU: Checking it " + self.toString(self.ReceiveData))
             msgType = self.ReceiveData[1]
-            #if (data != 0x0A) and (self.ReceiveData[pdu_len] == 0x43):
-            #    log.info("[data receiver] Building PDU: Special Case 0x43 ********************************************************************************************")
-            #    self.pmIncomingPduLen = self.pmIncomingPduLen + 1 # for 0x43
             if self.validatePDU(self.ReceiveData):
                 # We've got a validated message
                 #log.debug("[data receiver] Building PDU: Got Validated PDU type 0x%02x   full data %s", int(msgType), self.toString(self.ReceiveData))
-                # Reset some variable ready for next time
-                self.pmVarLenMsg = False
-
-                # Unknown Message has been received
-                if self.pmMsgType is None:
-                    log.warning("[data receiver] Unhandled message {0}".format(hex(msgType)))
-                    self.SendAck()  # assume we need to send an ack
-                else:
-                    #log.info("[data receiver] *** Received validated message " + hex(msgType).upper() + "   data " + self.toString(self.ReceiveData))
-                    log.info("[data receiver] *** Received validated message " + hex(msgType).upper() + " ***")
-                    # Send an ACK if needed
-                    if self.pmMsgType.ackneeded:
-                        #log.debug("[data receiver] Sending an ack as needed by last panel status message " + hex(msgType).upper())
-                        self.SendAck(data = self.ReceiveData)
-
-                    # Check response
-                    tmplength = len(self.pmExpectedResponse)
-                    if len(self.pmExpectedResponse) > 0: # and msgType != 2:   # 2 is a simple acknowledge from the panel so ignore those
-                        # We've sent something and are waiting for a reponse - this is it
-                        #log.debug("[data receiver] msgType {0}  expected one of {1}".format(hex(msgType).upper(), [hex(no).upper() for no in self.pmExpectedResponse]))
-                        if (msgType in self.pmExpectedResponse):
-                            #while msgType in self.pmExpectedResponse:
-                            self.pmExpectedResponse.remove(msgType)
-                            log.debug("[data receiver] msgType {0} got it so removed from list, list is now {1}".format(hex(msgType).upper(), [hex(no).upper() for no in self.pmExpectedResponse]))
-                        #else:
-                        #    log.debug("[data receiver] msgType not in self.pmExpectedResponse   Waiting for next PDU :  expected {0}   got {1}".format([hex(no).upper() for no in self.pmExpectedResponse], hex(msgType).upper()))
-
-                    if len(self.pmExpectedResponse) == 0:
-                        if tmplength > 0:
-                            log.debug("[data receiver] msgType {0} resetting expected response counter, it got up to {1}".format(hex(msgType).upper(), self.expectedResponseTimeout))
-                        self.expectedResponseTimeout = 0
-                        
-                    # Handle the message
-                    if self.packet_callback is not None:
-                        self.packet_callback(self.ReceiveData)
-                    
-                # clear our buffer again so we can receive a new packet.
-                self.ReceiveData = bytearray(b'')
-                
-            else: # CRC check failed. However, it could be an 0x0A in the middle of the data packet and not the terminator of the message
+                if self.pmCurrentPDU.varlenbytepos < 0:                # is it an unknown message i.e. varlenbytepos is -1
+                    log.warning("[data receiver] Received Unknown PDU {0}".format(hex(msgType)))
+                    self.SendAck()                                     # assume we need to send an ack for an unknown message
+                else:                                                  # Process the received known message
+                    self.processReceivedMessage(ackneeded = self.pmCurrentPDU.ackneeded, data = self.ReceiveData)
+                self.resetMessageData()
+            else: 
+                # CRC check failed
                 if len(self.ReceiveData) > 0xB0:
-                    log.info("[data receiver] PDU with CRC error %s", self.toString(self.ReceiveData))
-                    self.ReceiveData = bytearray(b'')
-                    if msgType != 0xF1:        # ignore CRC errors on F1 message
-                        self.pmCrcErrorCount = self.pmCrcErrorCount + 1
-                    if (self.pmCrcErrorCount > MAX_CRC_ERROR):
-                        self.pmCrcErrorCount = 0
-                        self.PerformDisconnect("CRC errors")
-                elif msgType != 0xF1:        # ignore CRC errors on F1 message
-                    a = self.calculate_crc(self.ReceiveData[1:-2])[0]
-                    log.debug("[data receiver] Building PDU: Length is now %d bytes (apparently PDU not complete)    %s    checksum calcs %02x", len(self.ReceiveData), self.toString(self.ReceiveData), a)
+                    # If the length exceeds the max PDU size from the panel then stop and resync
+                    log.warning("[data receiver] PDU with CRC error %s", self.toString(self.ReceiveData))
+                    self.resetMessageData()
+                    if msgType != 0xF1:                                # ignore CRC errors on F1 message
+                        self.processCRCFailure()
+                
+                elif self.pmIncomingPduLen == 0:
+                    a = self.calculate_crc(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
+                    if msgType in pmReceiveMsg_t:
+                        # A known message with zero length and an incorrect checksum. Reset the message data and resync
+                        log.warning("[data receiver] Warning : Construction of incoming packet validation failed - Message = {0}  checksum calcs {1}".format(self.toString(self.ReceiveData), hex(a).upper()))
+                        # Dump the message and carry on
+                        self.resetMessageData()
+                        self.processCRCFailure()
+                    elif msgType != 0xF1:        # ignore CRC errors on F1 message
+                        # When self.pmIncomingPduLen == 0 then the message is unknown, the length is not known and we're waiting for an 0x0A where the checksum is correct, so carry on
+                        log.debug("[data receiver] Building PDU: Length is {0} bytes (apparently PDU not complete)  {1}  checksum calcs {2}".format(len(self.ReceiveData), self.toString(self.ReceiveData), hex(a).upper()) )
+                else:
+                    # When here then the message is a known message type of the correct length but has failed it's validation
+                    a = self.calculate_crc(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
+                    log.warning("[data receiver] Warning : Construction of incoming packet validation failed - Message = {0}   checksum calcs {1}".format(self.toString(self.ReceiveData), hex(a).upper()))
+                    # Dump the message and carry on
+                    self.resetMessageData()
+                    self.processCRCFailure()
+
         elif pdu_len <= 0xC0:
             #log.debug("[data receiver] Current PDU " + self.toString(self.ReceiveData) + "    adding " + str(hex(data).upper()))
             self.ReceiveData.append(data)
         else:
             log.debug("[data receiver] Dumping Current PDU " + self.toString(self.ReceiveData))
-            self.ReceiveData = bytearray(b'') # messages should never be longer than 0xC0
+            self.resetMessageData()
         #log.debug("[data receiver] Building PDU " + self.toString(self.ReceiveData))
+    
+    def resetMessageData(self):
+        # clear our buffer again so we can receive a new packet.
+        self.ReceiveData = bytearray(b'') # messages should never be longer than 0xC0
+        # Reset control variables ready for next time
+        self.pmCurrentPDU = pmReceiveMsg_t[0]
+        self.pmIncomingPduLen = 0
+    
+    def processCRCFailure(self):
+        self.pmCrcErrorCount = self.pmCrcErrorCount + 1
+        if (self.pmCrcErrorCount >= MAX_CRC_ERROR):
+            self.pmCrcErrorCount = 0
+            interval = self.getTimeFunction() - self.pmFirstCRCErrorTime
+            if interval <= timedelta(seconds=CRC_ERROR_PERIOD):
+                self.PerformDisconnect("CRC errors")
+            self.pmFirstCRCErrorTime = self.getTimeFunction()                        
+    
+    def processReceivedMessage(self, ackneeded, data):
+        # Unknown Message has been received
+        msgType = data[1]
+        #log.info("[data receiver] *** Received validated message " + hex(msgType).upper() + "   data " + self.toString(data))
+        log.info("[data receiver] *** Received validated message " + hex(msgType).upper() + " ***")
+        # Send an ACK if needed
+        if ackneeded:
+            #log.debug("[data receiver] Sending an ack as needed by last panel status message " + hex(msgType).upper())
+            self.SendAck(data = data)
 
+        # Check response
+        tmplength = len(self.pmExpectedResponse)
+        if len(self.pmExpectedResponse) > 0: # and msgType != 2:   # 2 is a simple acknowledge from the panel so ignore those
+            # We've sent something and are waiting for a reponse - this is it
+            #log.debug("[data receiver] msgType {0}  expected one of {1}".format(hex(msgType).upper(), [hex(no).upper() for no in self.pmExpectedResponse]))
+            if (msgType in self.pmExpectedResponse):
+                #while msgType in self.pmExpectedResponse:
+                self.pmExpectedResponse.remove(msgType)
+                log.debug("[data receiver] msgType {0} got it so removed from list, list is now {1}".format(hex(msgType).upper(), [hex(no).upper() for no in self.pmExpectedResponse]))
+            #else:
+            #    log.debug("[data receiver] msgType not in self.pmExpectedResponse   Waiting for next PDU :  expected {0}   got {1}".format([hex(no).upper() for no in self.pmExpectedResponse], hex(msgType).upper()))
+
+        if len(self.pmExpectedResponse) == 0:
+            if tmplength > 0:
+                log.debug("[data receiver] msgType {0} resetting expected response counter, it got up to {1}".format(hex(msgType).upper(), self.expectedResponseTimeout))
+            self.expectedResponseTimeout = 0
+            
+        # Handle the message
+        if self.packet_callback is not None:
+            self.packet_callback(data)
+    
 
     # Send an achnowledge back to the panel
     def SendAck(self, data = bytearray(b'')):
