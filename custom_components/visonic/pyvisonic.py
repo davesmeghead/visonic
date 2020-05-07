@@ -3444,7 +3444,7 @@ class PacketHandling(ProtocolBase):
             #self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT2"]])    # This asks the panel to send 03 07 messages
             #self.SendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT3"]])    # This asks the panel to send 03 18 messages
 
-        if BZero_Enable and msgType == 0x03 and subType == 0x04:
+        if self.BZero_Enable and msgType == 0x03 and subType == 0x04:
             log.info("[handle_msgtypeB0]         Received {0} message, continue".format(self.PanelModel or "UNKNOWN"))
             # Zone information (probably)
             #  Received PowerMaster10 message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 <24 * 00> 0c 43
