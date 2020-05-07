@@ -111,3 +111,4 @@ This Component is compliant with the new Component format within the Home Assist
 | 0.4.0.8    | Modified decoding of B0 message data and then made the other variable message decoding the same. |
 | 0.4.0.9    | A bit more tidying up for variable message decoding. |
 | 0.4.1.0    | Restructure the panel data decoding in to PDUs. Release for HACS. |
+| 0.4.2.0    | Restructure the panel data decoding in to PDUs. Release for HACS. Fix B0 Message decode bug. |
