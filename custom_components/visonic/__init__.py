@@ -24,7 +24,7 @@ from .create_schema import set_defaults, create_schema
 from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_ID, PLATFORMS, DOMAINDATA
 from .client import VisonicClient
 
-REQUIREMENTS = ['pyserial', 'pyserial_asyncio', 'datetime', 'jinja2']
+#REQUIREMENTS = ['pyserial', 'pyserial_asyncio', 'datetime', 'jinja2']
 
 log = logging.getLogger(__name__)
 

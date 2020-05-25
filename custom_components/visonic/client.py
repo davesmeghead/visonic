@@ -186,13 +186,13 @@ class VisonicClient:
         elif type(visonic_devices) == visonicApi.LogPanelEvent:
             # This is an event log
             _LOGGER.debug("Panel Event Log {0}".format( visonic_devices ))
-            reverse = self.config.get(CONF_LOG_REVERSE)
+            reverse = self.toBool(self.config.get(CONF_LOG_REVERSE))
             total = min(visonic_devices.total, self.config.get(CONF_LOG_MAX_ENTRIES))
             current = visonic_devices.current   # only used for output and not for logic
             if reverse:
                 current = total + 1 - visonic_devices.current
             # Fire event visonic_alarm_panel_event_log
-            if self.config.get(CONF_LOG_EVENT) and visonic_devices.current <= total:
+            if self.toBool(self.config.get(CONF_LOG_EVENT)) and visonic_devices.current <= total:
                 hass.bus.fire('visonic_alarm_panel_event_log_entry', {
                     'current': current,
                     'total': total,
@@ -242,7 +242,7 @@ class VisonicClient:
                             _LOGGER.debug("Panel Event Log - Failed to write XML file")
                     if len(self.config.get(CONF_LOG_CSV_FN)) > 0:
                         try:
-                            if self.config.get(CONF_LOG_CSV_TITLE):
+                            if self.toBool(self.config.get(CONF_LOG_CSV_TITLE)):
                                 self.csvdata = "current, total, partition, date, time, zone, event\n" + self.csvdata
                             with open(self.config.get(CONF_LOG_CSV_FN), "w") as f:
                                 f.write(self.csvdata.rstrip())
@@ -250,7 +250,7 @@ class VisonicClient:
                         except:
                             _LOGGER.debug("Panel Event Log - Failed to write CSV file")
                     self.csvdata = None
-                    if self.config.get(CONF_LOG_DONE):
+                    if self.toBool(self.config.get(CONF_LOG_DONE)):
                         self.hass.bus.fire('visonic_alarm_panel_event_log_complete', {
                             'total': total,
                             'available': visonic_devices.total,
@@ -286,22 +286,33 @@ class VisonicClient:
         else:
             _LOGGER.warning("Visonic attempt to add device with type {0}  device is {1}".format(type(visonic_devices), visonic_devices ))
 
+    def toBool(self, val) -> bool:
+        if type(val) == bool:
+            return val
+        elif type(val) == int:
+            return val != 0
+        elif type(val) == str:
+            v = val.lower()
+            return not (v == 'no' or v == 'false' or v == '0')
+        _LOGGER.warning("Visonic unable to decode boolean value {0}    type is {1}".format(val, type(val)))
+        return False
+            
     def getConfigData(self) -> dict:
         return {
             PYVConst.DownloadCode         : self.config.get(CONF_DOWNLOAD_CODE, ""),
-            PYVConst.ForceStandard        : self.config.get(CONF_FORCE_STANDARD, False),
-            PYVConst.ForceAutoEnroll      : self.config.get(CONF_FORCE_AUTOENROLL, True),
-            PYVConst.AutoSyncTime         : self.config.get(CONF_AUTO_SYNC_TIME, True),
+            PYVConst.ForceStandard        : self.toBool(self.config.get(CONF_FORCE_STANDARD, False)),
+            PYVConst.ForceAutoEnroll      : self.toBool(self.config.get(CONF_FORCE_AUTOENROLL, True)),
+            PYVConst.AutoSyncTime         : self.toBool(self.config.get(CONF_AUTO_SYNC_TIME, True)),
             PYVConst.PluginLanguage       : self.config.get(CONF_LANGUAGE, "EN"),
-            PYVConst.EnableRemoteArm      : self.config.get(CONF_ENABLE_REMOTE_ARM, False),
-            PYVConst.EnableRemoteDisArm   : self.config.get(CONF_ENABLE_REMOTE_DISARM, False),
-            PYVConst.EnableSensorBypass   : self.config.get(CONF_ENABLE_SENSOR_BYPASS, False),
+            PYVConst.EnableRemoteArm      : self.toBool(self.config.get(CONF_ENABLE_REMOTE_ARM, False)),
+            PYVConst.EnableRemoteDisArm   : self.toBool(self.config.get(CONF_ENABLE_REMOTE_DISARM, False)),
+            PYVConst.EnableSensorBypass   : self.toBool(self.config.get(CONF_ENABLE_SENSOR_BYPASS, False)),
             PYVConst.MotionOffDelay       : self.config.get(CONF_MOTION_OFF_DELAY, 120),
             PYVConst.OverrideCode         : self.config.get(CONF_OVERRIDE_CODE, ""),
-            PYVConst.ForceKeypad          : self.config.get(CONF_FORCE_KEYPAD, False),
-            PYVConst.ArmWithoutCode       : self.config.get(CONF_ARM_CODE_AUTO, False),
+            PYVConst.ForceKeypad          : self.toBool(self.config.get(CONF_FORCE_KEYPAD, False)),
+            PYVConst.ArmWithoutCode       : self.toBool(self.config.get(CONF_ARM_CODE_AUTO, False)),
             PYVConst.SirenTriggerList     : self.config.get(CONF_SIREN_SOUNDING, ["Intruder"]),
-            PYVConst.B0_Enable            : self.config.get(CONF_B0_ENABLE_MOTION_PROCESSING, False),
+            PYVConst.B0_Enable            : self.toBool(self.config.get(CONF_B0_ENABLE_MOTION_PROCESSING, False)),
             PYVConst.B0_Min_Interval_Time : self.config.get(CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 5),
             PYVConst.B0_Max_Wait_Time     : self.config.get(CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 30),
         }
@@ -315,10 +326,10 @@ class VisonicClient:
         #    _LOGGER.warning("Visonic link is not set")
         # make the changes to the platform parameters (used in alarm_control_panel)
         #    the original idea was to keep these separate for multiple partitions but now i'm not so sure its necessary
-        self.hass.data[DOMAIN]["arm_without_code"] = self.config.get(CONF_ARM_CODE_AUTO, False)
-        self.hass.data[DOMAIN]["force_keypad"]     = self.config.get(CONF_FORCE_KEYPAD, False)
-        self.hass.data[DOMAIN]["arm_away_instant"] = self.config.get(CONF_INSTANT_ARM_AWAY, False)
-        self.hass.data[DOMAIN]["arm_home_instant"] = self.config.get(CONF_INSTANT_ARM_HOME, False)
+        self.hass.data[DOMAIN]["arm_without_code"] = self.toBool(self.config.get(CONF_ARM_CODE_AUTO, False))
+        self.hass.data[DOMAIN]["force_keypad"]     = self.toBool(self.config.get(CONF_FORCE_KEYPAD, False))
+        self.hass.data[DOMAIN]["arm_away_instant"] = self.toBool(self.config.get(CONF_INSTANT_ARM_AWAY, False))
+        self.hass.data[DOMAIN]["arm_home_instant"] = self.toBool(self.config.get(CONF_INSTANT_ARM_HOME, False))
 
         _LOGGER.info("[Settings] Log Max Entries set to {0}".format(self.config.get(CONF_LOG_MAX_ENTRIES)))
         _LOGGER.info("[Settings] Log Reverse set to {0}".format(self.config.get(CONF_LOG_REVERSE)))

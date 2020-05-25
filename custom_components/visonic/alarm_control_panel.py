@@ -60,7 +60,7 @@ async def async_setup_entry( hass: HomeAssistant, entry: ConfigEntry, async_add_
     devices = [va]
     async_add_entities(devices, True)  
     
-class VisonicAlarm(alarm.AlarmControlPanel):
+class VisonicAlarm(alarm.AlarmControlPanelEntity):
     """Representation of a Visonic alarm control panel."""
 
     def __init__(self, hass, client, partition_id):
@@ -169,7 +169,7 @@ class VisonicAlarm(alarm.AlarmControlPanel):
 
         if self.hass.data[DOMAIN]["force_keypad"]:
             _LOGGER.debug("code format number as force numeric keypad set in config file *****************************")
-            return "number"
+            return alarm.FORMAT_NUMBER
 
         if self.client.hasValidOverrideCode():
             _LOGGER.debug("code format none as code set in config file *****************************")
@@ -182,7 +182,7 @@ class VisonicAlarm(alarm.AlarmControlPanel):
 #                return None
 
         _LOGGER.debug("code format number *****************************") 
-        return "number"
+        return alarm.FORMAT_NUMBER
 
     @property
     def state(self):

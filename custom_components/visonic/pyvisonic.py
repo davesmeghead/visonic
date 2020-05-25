@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.2.0"
+PLUGIN_VERSION = "0.4.3.0"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -3567,7 +3567,7 @@ class PacketHandling(ProtocolBase):
 class EventHandling(PacketHandling):
     """ Event Handling """
     
-    def __init__(self, *args, command_queue = None, client=None, **kwargs) -> None:
+    def __init__(self, *args, client=None, **kwargs) -> None:
         """Add eventhandling specific initialization."""
         super().__init__(*args, **kwargs)
 
