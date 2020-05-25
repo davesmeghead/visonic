@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.3.0"
+PLUGIN_VERSION = "0.4.4.0"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -1213,9 +1213,13 @@ class ProtocolBase(asyncio.Protocol):
                 self.MotionOffDelay = newdata[PYVConst.MotionOffDelay]            # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
                 log.info("[Settings] Motion Off Delay set to {0}".format(self.MotionOffDelay))
             if PYVConst.OverrideCode in newdata:
-                self.OverrideCode = newdata[PYVConst.OverrideCode]                # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
-                if len(self.OverrideCode) == 4:
-                    log.info("[Settings] Override Code set <omitted for security>")
+                log.info("[Settings] Override Code in new settings, the length is {0}   isdigit = {1}".format(len(newdata[PYVConst.OverrideCode]), newdata[PYVConst.OverrideCode].isdigit()))
+                if type(newdata[PYVConst.OverrideCode]) == str and len(newdata[PYVConst.OverrideCode]) == 4 and newdata[PYVConst.OverrideCode].isdigit():
+                    self.OverrideCode = newdata[PYVConst.OverrideCode]            # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
+                    log.info("[Settings]     Override Code set <omitted for security>")
+                else:
+                    self.OverrideCode = ""                                        # INTERFACE : Clear the override code
+                    log.info("[Settings]     Override Code cleared")
             if PYVConst.ForceKeypad in newdata:
                 self.ForceNumericKeypad = newdata[PYVConst.ForceKeypad]           # INTERFACE : Force the display and use of the keypad, even if downloaded EEPROM
                 log.info("[Settings] Force Numeric Keypad set to {0}".format(self.ForceNumericKeypad))
@@ -3518,7 +3522,7 @@ class PacketHandling(ProtocolBase):
         if pin is None or pin == "" or len(pin) != 4:
             if self.ForceNumericKeypad:
                 return False, bytearray.fromhex("00 00 00 00")
-            elif self.OverrideCode is not None and len(self.OverrideCode) > 0:
+            elif self.OverrideCode is not None and len(self.OverrideCode) == 4:
                 pin = self.OverrideCode
             elif self.pmGotUserCode:
                 return True, self.pmPincode_t[0]   # if self.pmGotUserCode, then we downloaded the pin codes. Use the first one

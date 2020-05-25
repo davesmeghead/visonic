@@ -9,5 +9,5 @@
   "ssdp": [],
   "zeroconf": [],
   "homekit": {},
-  "homeassistant": "0.108.0"
+  "homeassistant": "0.110.0"
 }
