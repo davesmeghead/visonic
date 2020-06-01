@@ -11,7 +11,7 @@ import asyncio
 from collections import defaultdict
 from homeassistant.util import slugify
 from homeassistant.helpers.entity import Entity
-from homeassistant.components.switch import ( SwitchDevice, ENTITY_ID_FORMAT)
+from homeassistant.components.switch import ( SwitchEntity, ENTITY_ID_FORMAT)
 from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED, 
      ATTR_CODE, STATE_STANDBY, STATE_ALARM_DISARMED, STATE_ALARM_ARMED_AWAY, STATE_ALARM_DISARMING, 
      STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMED_HOME, STATE_ALARM_PENDING, STATE_ALARM_ARMING, STATE_ALARM_TRIGGERED)
@@ -34,7 +34,7 @@ async def async_setup_entry( hass: HomeAssistant, entry: ConfigEntry, async_add_
         hass.data[DOMAIN]["switch"] = list()
         async_add_entities(devices, True)
 
-class VisonicSwitch(SwitchDevice):
+class VisonicSwitch(SwitchEntity):
     """Representation of a Visonic X10 Switch."""
 
     def __init__(self, hass: HomeAssistant, client, visonic_device):

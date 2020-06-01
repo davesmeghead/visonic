@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.4.0"
+PLUGIN_VERSION = "0.4.4.1"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -1213,9 +1213,10 @@ class ProtocolBase(asyncio.Protocol):
                 self.MotionOffDelay = newdata[PYVConst.MotionOffDelay]            # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
                 log.info("[Settings] Motion Off Delay set to {0}".format(self.MotionOffDelay))
             if PYVConst.OverrideCode in newdata:
-                log.info("[Settings] Override Code in new settings, the length is {0}   isdigit = {1}".format(len(newdata[PYVConst.OverrideCode]), newdata[PYVConst.OverrideCode].isdigit()))
-                if type(newdata[PYVConst.OverrideCode]) == str and len(newdata[PYVConst.OverrideCode]) == 4 and newdata[PYVConst.OverrideCode].isdigit():
-                    self.OverrideCode = newdata[PYVConst.OverrideCode]            # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
+                tmpOCode = newdata[PYVConst.OverrideCode]                         # INTERFACE : Get the override code
+                log.info("[Settings] Override Code in new settings, the length is {0}   isdigit = {1}".format(len(tmpOCode), tmpOCode.isdigit()))
+                if type(tmpOCode) == str and len(tmpOCode) == 4 and tmpOCode.isdigit():
+                    self.OverrideCode = tmpOCode                                  # INTERFACE : Get the override code (must be set if forced standard and not powerlink)
                     log.info("[Settings]     Override Code set <omitted for security>")
                 else:
                     self.OverrideCode = ""                                        # INTERFACE : Clear the override code
@@ -3595,7 +3596,7 @@ class EventHandling(PacketHandling):
     def PopulateDictionary(self, state) -> dict:
         datadict = {}
         datadict['Command'] = state
-        datadict['PanelReady'] = self.PanelReady == 'Yes'
+        datadict['PanelReady'] = self.PanelReady
         datadict['OpenZones'] = []
         datadict['Bypass'] = []
         datadict['Tamper'] = []

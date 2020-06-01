@@ -355,7 +355,6 @@ class VisonicClient:
                     #device, entity = self.split_entity(x)
                     #self.entities[device][entity]
                     _LOGGER.info("   Removed existing HA Entity ID: {0}".format(x))
-#                    entity_object = get_entity(x)
                     self.hass.add_job(self.hass.states.async_remove(x))
 
         # set up config parameters in the visonic library

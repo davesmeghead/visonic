@@ -9,7 +9,7 @@ import logging
 
 from collections import defaultdict
 from homeassistant.util import slugify
-from homeassistant.components.binary_sensor import BinarySensorDevice
+from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
 from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_LAST_TRIP_TIME, ATTR_TRIPPED)
 from .const import DOMAIN, VISONIC_UNIQUE_ID
@@ -48,9 +48,11 @@ async def async_setup_entry( hass: HomeAssistant, entry: ConfigEntry, async_add_
         # empty the list as we have copied the entries so far in to sensors
         hass.data[DOMAIN]["binary_sensor"] = list()       
         async_add_entities(sensors, True)
-        
+        return True        
+    return False
+
 #   Each Sensor in Visonic Alarms can be Armed/Bypassed individually
-class VisonicSensor(BinarySensorDevice):
+class VisonicSensor(BinarySensorEntity):
     """Representation of a Visonic Sensor."""
 
     def __init__(self, visonic_device):
