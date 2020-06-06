@@ -2370,7 +2370,11 @@ class PacketHandling(ProtocolBase):
                                 sensorID_c = int(setting[i * 4 + 2])          # extract the sensorType
                                 tmpid = sensorID_c & 0x0F
                                 sensorTypeStr = "UNKNOWN " + str(tmpid)
-                                if tmpid in pmZoneSensor_t:
+                                # hack to recognize NEXT-MCW pir detectors correctly on PowerMax Pro.
+                                powermax_pro_sensortypes = {0xe5: 'Motion', 0xd5: 'Motion'}
+                                if sensorID_c in powermax_pro_sensortypes:
+                                    sensorTypeStr = powermax_pro_sensortypes[sensorID_c]
+                                elif tmpid in pmZoneSensor_t:
                                     sensorTypeStr = pmZoneSensor_t[tmpid]
                                 else:
                                     log.info("[Process Settings] Found unknown sensor type " + str(sensorID_c))
