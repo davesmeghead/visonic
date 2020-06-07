@@ -7,7 +7,7 @@ import argparse
 from time import sleep
 from collections import defaultdict
 
-def add_visonic_device(visonic_devices):
+def add_visonic_device(visonic_devices, dict = {}):
     
     if visonic_devices == None:
         log.info("Visonic attempt to add device when sensor is undefined")

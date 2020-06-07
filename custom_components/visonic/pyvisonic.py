@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.4.1"
+PLUGIN_VERSION = "0.4.4.2"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
