@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.4.2"
+PLUGIN_VERSION = "0.4.4.3"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -188,7 +188,7 @@ pmDownloadItem_t = {
    "MSG_DL_ZONENAMES"    : bytearray.fromhex('40 0B 1E 00'),   # used
    "MSG_DL_EVENTLOG"     : bytearray.fromhex('DF 04 28 03'),
    "MSG_DL_ZONESTR"      : bytearray.fromhex('00 19 00 02'),
-   "MSG_DL_ZONESIGNAL"   : bytearray.fromhex('DA 09 1C 00'),   # used    # zone signal strength
+   "MSG_DL_ZONESIGNAL"   : bytearray.fromhex('DA 09 1C 00'),   # used    # zone signal strength - the 1C may be the zone count i.e. the 28 wireless zones
    "MSL_DL_ZONECUSTOM"   : bytearray.fromhex('A0 1A 50 00'),
    "MSG_DL_MR_ZONENAMES" : bytearray.fromhex('60 09 40 00'),   # used
    "MSG_DL_MR_PINCODES"  : bytearray.fromhex('98 0A 60 00'),   # used
@@ -526,6 +526,7 @@ pmSysStatusFlags_t = {
 pmArmMode_t = {
    "disarmed" : 0x00, "stay" : 0x04, "armed" : 0x05, "stayinstant" : 0x14, "armedinstant" : 0x15    # "usertest" : 0x06, 
 }
+# 0x07 Alarm??????
 
 pmDetailedArmMode_t = (
    "Disarmed", "ExitDelay_ArmHome", "ExitDelay_ArmAway", "EntryDelay", "Stay", "Armed", "UserTest", "Downloading", "Programming", "Installer",
@@ -814,7 +815,7 @@ pmZoneChime_t = {
 }
 
 # Note: names need to match to VAR_xxx
-pmZoneSensor_t = {
+pmZoneSensorMax_t = {
    0x0 : "Vibration", 0x2 : "Shock", 0x3 : "Motion", 0x4 : "Motion", 0x5 : "Magnet", 0x6 : "Magnet", 0x7 : "Magnet", 0xA : "Smoke", 0xB : "Gas", 0xC : "Motion", 0xF : "Wired"
 } # unknown to date: Push Button, Flood, Universal
 
@@ -2370,8 +2371,17 @@ class PacketHandling(ProtocolBase):
                                 sensorID_c = int(setting[i * 4 + 2])          # extract the sensorType
                                 tmpid = sensorID_c & 0x0F
                                 sensorTypeStr = "UNKNOWN " + str(tmpid)
-                                if tmpid in pmZoneSensor_t:
-                                    sensorTypeStr = pmZoneSensor_t[tmpid]
+
+                                # User cybfox77 found that PIR sensors were returning the sensor type 'sensorID_c' as 0xe5 and 0xd5, these would be decoded as Magnet sensors
+                                # This is a very specific workaround for that particular panel type and model number and we'll wait and see if other users have issues
+                                #          These issues could be either way, users with or without that panel/model getting wrong results
+                                #          [handle_msgtype3C] PanelType=4 : PowerMax Pro Part , Model=62   Powermaster False
+                                powermax_pro_sensortypes = {0xe5: 'Motion', 0xd5: 'Motion'}
+                                if self.PanelType == 4 and self.ModelType == 62 and sensorID_c in powermax_pro_sensortypes:
+                                    sensorTypeStr = powermax_pro_sensortypes[sensorID_c]
+                                elif tmpid in pmZoneSensorMax_t:
+                                #if tmpid in pmZoneSensorMax_t:
+                                    sensorTypeStr = pmZoneSensorMax_t[tmpid]
                                 else:
                                     log.info("[Process Settings] Found unknown sensor type " + str(sensorID_c))
 

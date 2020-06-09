@@ -24,6 +24,7 @@ This Component is compliant with the new Component format within the Home Assist
 
 |  Release   |    Description   |
 |------------|------------------|
+| 0.4.4.3    | Specific update for misreporting of PIR sensors on PowerMax Pro model 62. |
 | 0.4.4.2    | Updated test.py to reflect changes to the callback. |
 | 0.4.4.1    | Fixed a bug in the reporting of PanelReady in the HA Event. |
 | 0.4.4.0    | Circumvent an HA bug that prevents a config parameter being set back to an empty string. Release for HACS. |

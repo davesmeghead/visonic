@@ -142,7 +142,20 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     def code_format(self):
         """Regex for code format or None if no code is required."""
         _LOGGER.debug("code format called *****************************") 
-        #import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
+
+#        _LOGGER.info("  get users") 
+        #users = await hass.auth.async_get_users()
+        
+#        valid_users = {}
+#        users = asyncio.get_event_loop().run_until_complete(self.hass.auth.async_get_users())
+#        # await hass.auth.async_get_users()
+#        for user in users:
+#            if user.is_active and not user.system_generated and len(user.name) > 0:
+#                valid_users[user.name] = user.is_owner
+        
+#        owner = asyncio.get_event_loop().run_until_complete(self.hass.auth.async_get_owner())
+        
+#        _LOGGER.info("           valid users  ***************************** {0} \n\n  owner = {1}\n\n".format(valid_users, owner)) 
 
         # try powerlink mode first, if in powerlink then it already has the user codes
         panelmode = self.client.getPanelMode()
