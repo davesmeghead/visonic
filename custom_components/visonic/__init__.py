@@ -24,8 +24,6 @@ from .create_schema import set_defaults, create_schema
 from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_ID, PLATFORMS, DOMAINDATA
 from .client import VisonicClient
 
-#REQUIREMENTS = ['pyserial', 'pyserial_asyncio', 'datetime', 'jinja2']
-
 log = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = vol.Schema({
@@ -58,7 +56,8 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         #   this will run 'async_step_import' in config_flow.py
         conf = base_config.get(DOMAIN)
         log.info("      Adding job")
-        hass.async_add_job (
+        # hass.async_add_job (
+        hass.async_create_task (
             hass.config_entries.flow.async_init(
                 DOMAIN, 
                 context={"source": config_entries.SOURCE_IMPORT},
@@ -78,7 +77,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         log.info("visonic unique id was None")
         hass.config_entries.async_update_entry(entry, unique_id=VISONIC_UNIQUE_ID)
     
-    log.info("************* create connection here **************")
+    log.info("************* create connection here ************** {0}".format(entry.entry_id))
     #log.info("     options {0}".format(entry.options))
     #log.info("     data    {0}".format(entry.data))
 
@@ -117,7 +116,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 # This function is called to terminate a client connection to the alarm panel
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Unload visonic entry."""
-    log.info("************* terminate connection here **************")
+    log.info("************* terminate connection here ************** {0}".format(entry.entry_id))
     #log.info("     options {0}".format(entry.options))
     #log.info("     data    {0}".format(entry.data))
 
@@ -145,7 +144,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
 # This function is called when there have been changes made to the parameters in the control flow
 async def async_options_updated(hass: HomeAssistant, entry: ConfigEntry):
     """Edit visonic entry."""
-    log.info("************* update connection here **************")
+    log.info("************* update connection here ************** {0}".format(entry.entry_id))
     #log.info("     options {0}".format(entry.options))
     #log.info("     data    {0}".format(entry.data))
 

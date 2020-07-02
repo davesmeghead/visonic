@@ -48,8 +48,6 @@ async def async_setup_entry( hass: HomeAssistant, entry: ConfigEntry, async_add_
         # empty the list as we have copied the entries so far in to sensors
         hass.data[DOMAIN]["binary_sensor"] = list()       
         async_add_entities(sensors, True)
-        return True        
-    return False
 
 #   Each Sensor in Visonic Alarms can be Armed/Bypassed individually
 class VisonicSensor(BinarySensorEntity):

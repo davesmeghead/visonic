@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.4.3"
+PLUGIN_VERSION = "0.4.4.4"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -3531,7 +3531,10 @@ class PacketHandling(ProtocolBase):
     def pmGetPin(self, pin):
         """ Get pin and convert to bytearray """
         if pin is None or pin == "" or len(pin) != 4:
-            if self.ForceNumericKeypad:
+            if self.PanelStatusCode == 0 and self.ArmWithoutCode and self.pmGotUserCode:
+                # Panel currently disarmed, arm without user code, got the user code from eprom
+                return True, self.pmPincode_t[0]   # if self.pmGotUserCode, then we downloaded the pin codes. Use the first one
+            elif self.ForceNumericKeypad:
                 return False, bytearray.fromhex("00 00 00 00")
             elif self.OverrideCode is not None and len(self.OverrideCode) == 4:
                 pin = self.OverrideCode

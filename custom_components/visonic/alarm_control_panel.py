@@ -58,8 +58,7 @@ async def async_setup_entry( hass: HomeAssistant, entry: ConfigEntry, async_add_
     client = hass.data[DOMAIN][DOMAINCLIENT][entry.unique_id]
     va = VisonicAlarm(hass, client, 1)
     devices = [va]
-    async_add_entities(devices, True)  
-    return True        
+    async_add_entities(devices)  
     
 class VisonicAlarm(alarm.AlarmControlPanelEntity):
     """Representation of a Visonic alarm control panel."""

@@ -32,7 +32,7 @@ async def async_setup_entry( hass: HomeAssistant, entry: ConfigEntry, async_add_
             for device in hass.data[DOMAIN]['switch']   
         ]
         hass.data[DOMAIN]["switch"] = list()
-        async_add_entities(devices, True)
+        async_add_entities(devices)
 
 class VisonicSwitch(SwitchEntity):
     """Representation of a Visonic X10 Switch."""
