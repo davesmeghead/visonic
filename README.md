@@ -24,7 +24,8 @@ This Component is compliant with the new Component format within the Home Assist
 
 |  Release   |    Description   |
 |------------|------------------|
-| 0.4.4.4    | Bug fix for the combination of Arm Without Code and panel Disarmed when in Powerlin or Standard Plus. |
+| 0.5.0.0    | Used the preferred home assistant code formatter, so all code files modified. No functional changes, a few bug fixes |
+| 0.4.4.4    | Bug fix for the combination of Arm Without Code and panel Disarmed when in Powerlink or Standard Plus. |
 | 0.4.4.3    | Specific update for misreporting of PIR sensors on PowerMax Pro model 62. |
 | 0.4.4.2    | Updated test.py to reflect changes to the callback. |
 | 0.4.4.1    | Fixed a bug in the reporting of PanelReady in the HA Event. |
