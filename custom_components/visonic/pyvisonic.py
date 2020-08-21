@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.4.4.4"
+PLUGIN_VERSION = "0.5.0.0"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -74,6 +74,8 @@ class PanelMode(Enum):
      POWERLINK = 5
      DOWNLOAD = 6
 
+# 0d f1 07 43 00 00 8b 56 0a 0d 02 43 ba 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d 02 43 ba 0a 0d a5 09 02 00 00 00 00 00 00 00 00 43 0c 0a 0d a5 09 02 00 00 00 00 00 00 00 00 43 0c 0a 0d a5 09 02 00 00 00 00 00 00 00 00 43 0c 0a
+                
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 #    This means a maximum of 5 CRC errors in 10 minutes before resetting the connection
 MAX_CRC_ERROR = 5
@@ -268,6 +270,7 @@ pmReceiveMsg_t = {
    0xAB : PanelCallBack( 15,  0,  True, False ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
    0xAC : PanelCallBack( 15,  0,  True, False ),   # 15 X10 Names ???
    0xB0 : PanelCallBack(  8,  4,  True,  True ),   # The B0 message comes in varying lengths
+   0xF1 : PanelCallBack( 14,  0,  True, False ),   # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it
    0xF4 : PanelCallBack(  7,  4,  True,  True )    # The F4 message comes in varying lengths. Can't decode it yet but accept and ignore it. Not sure about the length of 7 for the fixed part.
 }
 
@@ -776,7 +779,7 @@ pmPanelName_t = {
    "063e" : "PowerMax Express 6_62 (UK)", "0645" : "PowerMax Express 6_69", "0647" : "PowerMax Express 6_71",
    "0648" : "PowerMax Express 6_72", "0649" : "PowerMax Express 6_73", "064a" : "PowerMax Activa 6_74",
    "064c" : "PowerMax Express 6_76", "064d" : "PowerMax Express 6_77", "064e" : "PowerMax Express 6_78",
-   "064f" : "PowerMax Secure 6_79", "0650" : "PowerMax Express 6_80", "0650" : "PowerMax Express part2 M 6_80",
+   "064f" : "PowerMax Secure 6_79", "0650" : "PowerMax Express 6_80", # "0650" : "PowerMax Express part2 M 6_80",
    "0651" : "PowerMax Express 6_81", "0652" : "PowerMax Express 6_82", "0653" : "PowerMax Express 6_83",
    "0654" : "PowerMax 6_84", "0655" : "PowerMax 6_85", "0658" : "PowerMax 6_88", "0659" : "PowerMax 6_89",
    "065a" : "PowerMax 6_90", "065b" : "PowerMax 6_91", "0701" : "PowerMax PowerCode-G 7_1", "0702" : "PowerMax PowerCode-G 7_2",
@@ -825,6 +828,7 @@ pmZoneSensorMaster_t = {
    0x03 : ZoneSensorMaster("Clip PG2", "Motion" ),
    0x04 : ZoneSensorMaster("Next CAM PG2", "Camera" ),
    0x0A : ZoneSensorMaster("TOWER CAM PG2", "Camera" ),
+   0x0C : ZoneSensorMaster("MP-802 PG2", "Motion" ),
    0x16 : ZoneSensorMaster("SMD-426 PG2", "Smoke" ),
    0x18 : ZoneSensorMaster("GSD-442 PG2", "Smoke" ),
    0x1A : ZoneSensorMaster("TMD-560 PG2", "Temperature" ),
@@ -895,23 +899,23 @@ class SensorDevice:
 
     def __str__(self):
         strn = ""
-        strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id, type(self.id)))
-        strn = strn + (" dname=None"     if self.dname == None else     " dname={0:<4}".format(self.dname[:4], type(self.dname)))
-        strn = strn + (" stype=None"     if self.stype == None else     " stype={0:<8}".format(self.stype[:8], type(self.stype)))
+        strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
+        strn = strn + (" dname=None"     if self.dname == None else     " dname={0:<4}".format(self.dname[:4]))
+        strn = strn + (" stype=None"     if self.stype == None else     " stype={0:<8}".format(self.stype[:8]))
 # temporarily miss it out to shorten the line in debug messages        strn = strn + (" sid=None"       if self.sid == None else       " sid={0:<3}".format(self.sid, type(self.sid)))
 # temporarily miss it out to shorten the line in debug messages        strn = strn + (" ztype=None"     if self.ztype == None else     " ztype={0:<2}".format(self.ztype, type(self.ztype)))
-        strn = strn + (" zname=None"     if self.zname == None else     " zname={0:<14}".format(self.zname[:14], type(self.zname)))
-        strn = strn + (" ztypeName=None" if self.ztypeName == None else " ztypeName={0:<10}".format(self.ztypeName[:10], type(self.ztypeName)))
-        strn = strn + (" ztamper=None"   if self.ztamper == None else   " ztamper={0:<2}".format(self.ztamper, type(self.ztamper)))
-        strn = strn + (" ztrip=None"     if self.ztrip == None else     " ztrip={0:<2}".format(self.ztrip, type(self.ztrip)))
+        strn = strn + (" zname=None"     if self.zname == None else     " zname={0:<14}".format(self.zname[:14]))
+        strn = strn + (" ztypeName=None" if self.ztypeName == None else " ztypeName={0:<10}".format(self.ztypeName[:10]))
+        strn = strn + (" ztamper=None"   if self.ztamper == None else   " ztamper={0:<2}".format(self.ztamper))
+        strn = strn + (" ztrip=None"     if self.ztrip == None else     " ztrip={0:<2}".format(self.ztrip))
 # temporarily miss it out to shorten the line in debug messages        strn = strn + (" zchime=None"    if self.zchime == None else    " zchime={0:<12}".format(self.zchime, type(self.zchime)))
 # temporarily miss it out to shorten the line in debug messages        strn = strn + (" partition=None" if self.partition == None else " partition={0}".format(self.partition, type(self.partition)))
-        strn = strn + (" bypass=None"    if self.bypass == None else    " bypass={0:<2}".format(self.bypass, type(self.bypass)))
-        strn = strn + (" lowbatt=None"   if self.lowbatt == None else   " lowbatt={0:<2}".format(self.lowbatt, type(self.lowbatt)))
-        strn = strn + (" status=None"    if self.status == None else    " status={0:<2}".format(self.status, type(self.status)))
-        strn = strn + (" tamper=None"    if self.tamper == None else    " tamper={0:<2}".format(self.tamper, type(self.tamper)))
-        strn = strn + (" enrolled=None"  if self.enrolled == None else  " enrolled={0:<2}".format(self.enrolled, type(self.enrolled)))
-        strn = strn + (" triggered=None" if self.triggered == None else " triggered={0:<2}".format(self.triggered, type(self.triggered)))
+        strn = strn + (" bypass=None"    if self.bypass == None else    " bypass={0:<2}".format(self.bypass))
+        strn = strn + (" lowbatt=None"   if self.lowbatt == None else   " lowbatt={0:<2}".format(self.lowbatt))
+        strn = strn + (" status=None"    if self.status == None else    " status={0:<2}".format(self.status))
+        strn = strn + (" tamper=None"    if self.tamper == None else    " tamper={0:<2}".format(self.tamper))
+        strn = strn + (" enrolled=None"  if self.enrolled == None else  " enrolled={0:<2}".format(self.enrolled))
+        strn = strn + (" triggered=None" if self.triggered == None else " triggered={0:<2}".format(self.triggered))
         return strn
 
     def __eq__(self, other):
@@ -952,12 +956,12 @@ class X10Device:
 
     def __str__(self):
         strn = ""
-        strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id, type(self.id)))
-        strn = strn + (" name=None"     if self.name == None else     " name={0:<4}".format(self.name, type(self.name)))
-        strn = strn + (" type=None"     if self.type == None else     " type={0:<8}".format(self.type, type(self.type)))
-        strn = strn + (" location=None" if self.location == None else " location={0:<14}".format(self.location, type(self.location)))
-        strn = strn + (" enabled=None"  if self.enabled == None else  " enabled={0:<2}".format(self.enabled, type(self.enabled)))
-        strn = strn + (" state=None"    if self.state == None else    " state={0:<2}".format(self.state, type(self.state)))
+        strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
+        strn = strn + (" name=None"     if self.name == None else     " name={0:<4}".format(self.name))
+        strn = strn + (" type=None"     if self.type == None else     " type={0:<8}".format(self.type))
+        strn = strn + (" location=None" if self.location == None else " location={0:<14}".format(self.location))
+        strn = strn + (" enabled=None"  if self.enabled == None else  " enabled={0:<2}".format(self.enabled))
+        strn = strn + (" state=None"    if self.state == None else    " state={0:<2}".format(self.state))
         return strn
 
     def __eq__(self, other):
@@ -1010,7 +1014,7 @@ class ProtocolBase(asyncio.Protocol):
 
     log.info("Initialising Protocol - Component Version {0}".format(PLUGIN_VERSION))
 
-    def __init__(self, loop=None, disconnect_callback=None, panelConfig = None, packet_callback: Callable = None) -> None:
+    def __init__(self, loop=None, event_callback: Callable = None, disconnect_callback=None, panelConfig = None, packet_callback: Callable = None) -> None:
         """Initialize class."""
         if loop:
             self.loop = loop
@@ -1020,6 +1024,8 @@ class ProtocolBase(asyncio.Protocol):
         # install the 2 callback handlers: packets and disconnections
         self.packet_callback = packet_callback
         self.disconnect_callback = disconnect_callback
+        # set the event callback handler
+        self.event_callback = event_callback
         
         self.transport = None  # type: asyncio.Transport
 
@@ -1288,6 +1294,9 @@ class ProtocolBase(asyncio.Protocol):
         """Log when connection is closed, if needed call callback."""
         self.PerformDisconnect(exc)
 
+    def sendResponseEvent(self, ev, dict = {}):
+        if self.event_callback is not None:
+            self.event_callback(ev, dict)        
 
     # Initialise the parameters for the comms and set everything ready
     #    This is called when the connection is first made and then after any comms exceptions
@@ -1585,27 +1594,24 @@ class ProtocolBase(asyncio.Protocol):
                 self.resetMessageData()
             else: 
                 # CRC check failed
+                a = self.calculate_crc(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
                 if len(self.ReceiveData) > 0xB0:
                     # If the length exceeds the max PDU size from the panel then stop and resync
-                    log.warning("[data receiver] PDU with CRC error %s", self.toString(self.ReceiveData))
+                    log.warning("[data receiver] PDU with CRC error Message = {0}   checksum calcs {1}".format(self.toString(self.ReceiveData), hex(a).upper()))
                     self.resetMessageData()
-                    if msgType != 0xF1:                                # ignore CRC errors on F1 message
-                        self.processCRCFailure()
-                
+                    self.processCRCFailure()
                 elif self.pmIncomingPduLen == 0:
-                    a = self.calculate_crc(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
                     if msgType in pmReceiveMsg_t:
                         # A known message with zero length and an incorrect checksum. Reset the message data and resync
                         log.warning("[data receiver] Warning : Construction of incoming packet validation failed - Message = {0}  checksum calcs {1}".format(self.toString(self.ReceiveData), hex(a).upper()))
                         # Dump the message and carry on
                         self.resetMessageData()
                         self.processCRCFailure()
-                    elif msgType != 0xF1:        # ignore CRC errors on F1 message
+                    else: # if msgType != 0xF1:        # ignore CRC errors on F1 message
                         # When self.pmIncomingPduLen == 0 then the message is unknown, the length is not known and we're waiting for an 0x0A where the checksum is correct, so carry on
                         log.debug("[data receiver] Building PDU: Length is {0} bytes (apparently PDU not complete)  {1}  checksum calcs {2}".format(len(self.ReceiveData), self.toString(self.ReceiveData), hex(a).upper()) )
                 else:
                     # When here then the message is a known message type of the correct length but has failed it's validation
-                    a = self.calculate_crc(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
                     log.warning("[data receiver] Warning : Construction of incoming packet validation failed - Message = {0}   checksum calcs {1}".format(self.toString(self.ReceiveData), hex(a).upper()))
                     # Dump the message and carry on
                     self.resetMessageData()
@@ -1627,13 +1633,15 @@ class ProtocolBase(asyncio.Protocol):
         self.pmIncomingPduLen = 0
     
     def processCRCFailure(self):
-        self.pmCrcErrorCount = self.pmCrcErrorCount + 1
-        if (self.pmCrcErrorCount >= MAX_CRC_ERROR):
-            self.pmCrcErrorCount = 0
-            interval = self.getTimeFunction() - self.pmFirstCRCErrorTime
-            if interval <= timedelta(seconds=CRC_ERROR_PERIOD):
-                self.PerformDisconnect("CRC errors")
-            self.pmFirstCRCErrorTime = self.getTimeFunction()                        
+        msgType = self.ReceiveData[1]
+        if msgType != 0xF1:                                # ignore CRC errors on F1 message
+            self.pmCrcErrorCount = self.pmCrcErrorCount + 1
+            if (self.pmCrcErrorCount >= MAX_CRC_ERROR):
+                self.pmCrcErrorCount = 0
+                interval = self.getTimeFunction() - self.pmFirstCRCErrorTime
+                if interval <= timedelta(seconds=CRC_ERROR_PERIOD):
+                    self.PerformDisconnect("CRC errors")
+                self.pmFirstCRCErrorTime = self.getTimeFunction()                        
     
     def processReceivedMessage(self, ackneeded, data):
         # Unknown Message has been received
@@ -1766,7 +1774,7 @@ class ProtocolBase(asyncio.Protocol):
                     a = instruction.options[o * 2 + 1]  # the bytearray to insert
                     if isinstance(a, int):
                         #log.debug("[pmSendPdu] Options {0} {1} {2} {3}".format(type(s), type(a), s, a))
-                        data[s] = a;                
+                        data[s] = a             
                     else:
                         #log.debug("[pmSendPdu] Options {0} {1} {2} {3} {4}".format(type(s), type(a), s, a, len(a)))
                         for i in range(0, len(a)):
@@ -1945,12 +1953,10 @@ class ProtocolBase(asyncio.Protocol):
 class PacketHandling(ProtocolBase):
     """Handle decoding of Visonic packets."""
 
-    def __init__(self, *args, event_callback: Callable = None, DataDict = {}, **kwargs) -> None:
+    def __init__(self, *args, DataDict = {}, **kwargs) -> None:
         """ Perform transactions based on messages (and not bytes) """
         super().__init__(*args, packet_callback=self.handle_packet, **kwargs)
         
-        # set the event callback handler
-        self.event_callback = event_callback
         self.eventCount = 0
 
         secdelay = DOWNLOAD_RETRY_DELAY + 100
@@ -2017,10 +2023,6 @@ class PacketHandling(ProtocolBase):
                         self.pmSensorDev_t[key].pushChange()
             # check every 1 second
             await asyncio.sleep(1.0)  # must be less than 5 seconds for self.suspendAllOperations:
-
-    def sendResponseEvent(self, ev, dict = {}):
-        if self.event_callback is not None:
-            self.event_callback(ev, dict)        
 
     # We can only use this function when the panel has sent a "installing powerlink" message i.e. AB 0A 00 01
     #   We need to clear the send queue and reset the send parameters to immediately send an MSG_ENROLL
@@ -2144,7 +2146,7 @@ class PacketHandling(ProtocolBase):
         
         for ctr in range(0, val.count):
             addr = val.poff + (ctr * val.pstep)
-            page = math.floor(addr / 0x100); 
+            page = math.floor(addr / 0x100)
             pos  = addr % 0x100
             
             myvalue = ''
@@ -2176,7 +2178,7 @@ class PacketHandling(ProtocolBase):
                 for j in range(0, math.floor(val.psize / 8)):
                     nr = self.pmReadSettingsA(page, pos + j, 1)
                     if nr[0] != 0xFF:
-                        myvalue = myvalue + chr(nr[0]);
+                        myvalue = myvalue + chr(nr[0])
             else:
                 myvalue = "Not Set"
             
@@ -2613,6 +2615,7 @@ class PacketHandling(ProtocolBase):
             self.handle_msgtype3F(packet[2:-2])
         elif packet[1] == 0xa0: # Event log
             self.handle_msgtypeA0(packet[2:-2])
+            log.debug("[handle_msgtypeA0] Finished")
         elif packet[1] == 0xa3: # Zone Names
             self.handle_msgtypeA3(packet[2:-2])
         elif packet[1] == 0xa5: # General Event
@@ -2856,6 +2859,8 @@ class PacketHandling(ProtocolBase):
             
             # Send the event log in to HA
             self.sendResponseEvent ( self.pmEventLogDictionary[idx] )
+            
+            log.debug("[handle_msgtypeA0] Finished processing Log Event {0}".format(self.pmEventLogDictionary[idx]))
 
             
     def handle_msgtypeA3(self, data):
@@ -2991,17 +2996,6 @@ class PacketHandling(ProtocolBase):
 
             sysStatus = sysStatus & 0x1F     # Mark-Mills with a PowerMax Complete Part, sometimes this has the 0x20 bit set and I'm not sure why
 
-            # Examine zone tripped status
-            if eventZone != 0:
-                log.debug("[handle_msgtypeA5]      Event {0} in zone {1}".format(pmEventType_t[self.pmLang][eventType] or "UNKNOWN", eventZone))
-                if eventZone in self.pmSensorDev_t:
-                    sensor = self.pmSensorDev_t[eventZone]
-                    if sensor is not None:
-                        log.debug("[handle_msgtypeA5]      zone type {0} device tripped {1}".format(eventType, eventZone))
-                    else:
-                        log.debug("[handle_msgtypeA5]      unable to locate zone device " + str(eventZone))
-
-
             # Examine X10 status
             for i in range(0, 16):
                 status = x10status & (1 << i)
@@ -3078,72 +3072,92 @@ class PacketHandling(ProtocolBase):
             if not self.pmPowerlinkMode:
                 # if the system status has the panel armed and there has been an alarm event, assume that the alarm is sounding
                 #   Normally this would only be directly available in Powerlink mode with A7 messages, but an assumption is made here
-                if sarm == "Armed" and sysFlags & 0x80 != 0:
+                if self.PanelArmed and self.PanelAlarmEvent:
                     log.info("[handle_msgtypeA5]      Alarm Event Assumed while in Standard Mode")
                     # Alarm Event 
                     self.pmSirenActive = self.getTimeFunction()
-                    self.sendResponseEvent ( 3 )   # Alarm Event
+
+                    datadict = {}
+                    datadict['Zone'] = 0
+                    datadict['Entity'] = None
+                    datadict['Tamper'] = False
+                    datadict['Siren'] = True
+                    datadict['Reset'] = False
+                    datadict['Time'] = self.pmSirenActive
+                    datadict['Count'] = 0
+                    datadict['Type'] = []
+                    datadict['Event'] = []
+                    datadict['Mode'] = []
+                    datadict['Name'] = []
+                    self.sendResponseEvent ( 3, datadict )   # Alarm Event
 
             # Clear any alarm event if the panel alarm has been triggered before (while armed) but now that the panel is disarmed (in all modes)
             if self.pmSirenActive is not None and sarm == "Disarmed":
                 log.info("[handle_msgtypeA5] ******************** Alarm Not Sounding (Disarmed) ****************")
                 self.pmSirenActive = None
 
-            if sysFlags & 0x20 != 0:
+            if sysFlags & 0x20 != 0:                # Zone Event
                 sEventLog = pmEventType_t[self.pmLang][eventType]
-                log.debug("[handle_msgtypeA5]      Bit 5 set, Zone Event")
-                log.debug("[handle_msgtypeA5]            Zone: {0}, {1}".format(eventZone, sEventLog))
-                for key, value in self.pmSensorDev_t.items():
-                    if value.id == eventZone:      # look for the device name
-                        if eventType == 1: # Tamper Alarm
-                            self.pmSensorDev_t[key].tamper = True
-                            self.pmSensorDev_t[key].pushChange()
-                        elif eventType == 2: # Tamper Restore
-                            self.pmSensorDev_t[key].tamper = False
-                            self.pmSensorDev_t[key].pushChange()
-                        elif eventType == 3: # Zone Open
-                            self.pmSensorDev_t[key].triggered = True
-                            self.pmSensorDev_t[key].status = True
+                log.debug("[handle_msgtypeA5]      Zone Event")
+                log.debug("[handle_msgtypeA5]            Zone: {0}    Type: {1}, {2}".format(eventZone, eventType, sEventLog))
+                key = eventZone - 1   # get the key from the zone - 1
+#                for key, value in self.pmSensorDev_t.items():
+#                    if value.id == eventZone:      # look for the device name
+                if key in self.pmSensorDev_t:
+                    if eventType == 1: # Tamper Alarm
+                        self.pmSensorDev_t[key].tamper = True
+                        self.pmSensorDev_t[key].pushChange()
+                    elif eventType == 2: # Tamper Restore
+                        self.pmSensorDev_t[key].tamper = False
+                        self.pmSensorDev_t[key].pushChange()
+                    elif eventType == 3: # Zone Open
+                        self.pmSensorDev_t[key].triggered = True
+                        self.pmSensorDev_t[key].status = True
+                        self.pmSensorDev_t[key].triggertime = self.getTimeFunction()
+                        self.pmSensorDev_t[key].pushChange()
+                    elif eventType == 4: # Zone Closed
+                        self.pmSensorDev_t[key].triggered = False
+                        self.pmSensorDev_t[key].status = False
+                        self.pmSensorDev_t[key].pushChange()
+                    elif eventType == 5: # Zone Violated
+                        if not self.pmSensorDev_t[key].triggered:
                             self.pmSensorDev_t[key].triggertime = self.getTimeFunction()
+                            self.pmSensorDev_t[key].triggered = True
                             self.pmSensorDev_t[key].pushChange()
-                        elif eventType == 4: # Zone Closed
-                            self.pmSensorDev_t[key].triggered = False
-                            self.pmSensorDev_t[key].status = False
-                            self.pmSensorDev_t[key].pushChange()
-                        elif eventType == 5: # Zone Violated
-                            if not self.pmSensorDev_t[key].triggered:
-                                self.pmSensorDev_t[key].triggertime = self.getTimeFunction()
-                                self.pmSensorDev_t[key].triggered = True
-                                self.pmSensorDev_t[key].pushChange()
-                        #elif eventType == 6: # Panic Alarm
-                        #elif eventType == 7: # RF Jamming
-                        #elif eventType == 8: # Tamper Open
-                        #    self.pmSensorDev_t[key].pushChange()
-                        #elif eventType == 9: # Comms Failure
-                        #elif eventType == 10: # Line Failure
-                        #elif eventType == 11: # Fuse
-                        #elif eventType == 12: # Not Active
-                        #    self.pmSensorDev_t[key].triggered = False
-                        #    self.pmSensorDev_t[key].status = False
-                        #    self.pmSensorDev_t[key].pushChange()
-                        elif eventType == 13: # Low Battery
-                            self.pmSensorDev_t[key].lowbatt = True
-                            self.pmSensorDev_t[key].pushChange()
-                        #elif eventType == 14: # AC Failure
-                        #elif eventType == 15: # Fire Alarm
-                        #elif eventType == 16: # Emergency
-                        #elif eventType == 17: # Siren Tamper
-                        #    self.pmSensorDev_t[key].tamper = True
-                        #    self.pmSensorDev_t[key].pushChange()
-                        #elif eventType == 18: # Siren Tamper Restore
-                        #    self.pmSensorDev_t[key].tamper = False
-                        #    self.pmSensorDev_t[key].pushChange()
-                        #elif eventType == 19: # Siren Low Battery
-                        #    self.pmSensorDev_t[key].lowbatt = True
-                        #    self.pmSensorDev_t[key].pushChange()
-                        #elif eventType == 20: # Siren AC Fail
+                    #elif eventType == 6: # Panic Alarm
+                    #elif eventType == 7: # RF Jamming
+                    #elif eventType == 8: # Tamper Open
+                    #    self.pmSensorDev_t[key].pushChange()
+                    #elif eventType == 9: # Comms Failure
+                    #elif eventType == 10: # Line Failure
+                    #elif eventType == 11: # Fuse
+                    #elif eventType == 12: # Not Active
+                    #    self.pmSensorDev_t[key].triggered = False
+                    #    self.pmSensorDev_t[key].status = False
+                    #    self.pmSensorDev_t[key].pushChange()
+                    elif eventType == 13: # Low Battery
+                        self.pmSensorDev_t[key].lowbatt = True
+                        self.pmSensorDev_t[key].pushChange()
+                    #elif eventType == 14: # AC Failure
+                    #elif eventType == 15: # Fire Alarm
+                    #elif eventType == 16: # Emergency
+                    #elif eventType == 17: # Siren Tamper
+                    #    self.pmSensorDev_t[key].tamper = True
+                    #    self.pmSensorDev_t[key].pushChange()
+                    #elif eventType == 18: # Siren Tamper Restore
+                    #    self.pmSensorDev_t[key].tamper = False
+                    #    self.pmSensorDev_t[key].pushChange()
+                    #elif eventType == 19: # Siren Low Battery
+                    #    self.pmSensorDev_t[key].lowbatt = True
+                    #    self.pmSensorDev_t[key].pushChange()
+                    #elif eventType == 20: # Siren AC Fail
 
-            self.sendResponseEvent ( 1 )   # push changes through to the host to get it to update
+                    datadict = {}
+                    datadict['Zone'] = eventZone
+                    datadict['Event'] = eventType
+                    datadict['Description'] = sEventLog
+            
+                    self.sendResponseEvent ( 1, datadict )   # push zone changes through to the host to get it to update
             
             #   0x03 : "", 0x04 : "", 0x05 : "", 0x0A : "", 0x0B : "", 0x13 : "", 0x14 : "", 0x15 : ""
             #armModeNum = 1 if pmArmed_t[sysStatus] != None else 0
@@ -3192,6 +3206,8 @@ class PacketHandling(ProtocolBase):
             self.DumpSensorsToDisplay()
         #else:
         #    log.info("[handle_msgtypeA5]      Unknown A5 Message: " + self.toString(data))
+
+        self.sendResponseEvent ( 0 )   # 0 means push through an HA Frontend change, do not create an HA Event
 
 
     def handle_msgtypeA6(self, data):
@@ -3531,10 +3547,13 @@ class PacketHandling(ProtocolBase):
     def pmGetPin(self, pin):
         """ Get pin and convert to bytearray """
         if pin is None or pin == "" or len(pin) != 4:
-            if self.PanelStatusCode == 0 and self.ArmWithoutCode and self.pmGotUserCode:
+            if self.ArmWithoutCode and self.PanelStatusCode == 0 and self.OverrideCode is not None and len(self.OverrideCode) == 4:
+                # Panel currently disarmed, arm without user code, override is set and valid
+                pin = self.OverrideCode
+            elif self.ArmWithoutCode and self.PanelStatusCode == 0 and self.pmGotUserCode:
                 # Panel currently disarmed, arm without user code, got the user code from eprom
                 return True, self.pmPincode_t[0]   # if self.pmGotUserCode, then we downloaded the pin codes. Use the first one
-            elif self.ForceNumericKeypad:
+            elif self.ForceNumericKeypad:   # this is used to catch the condition that the keypad is used but an invalid number of digits has been entered, then "" is input as the pin value
                 return False, bytearray.fromhex("00 00 00 00")
             elif self.OverrideCode is not None and len(self.OverrideCode) == 4:
                 pin = self.OverrideCode
@@ -3569,6 +3588,18 @@ class PacketHandling(ProtocolBase):
 
 #    def toYesNo(self, b):
 #        return "Yes" if b else "No"
+
+    def isSirenActive(self) -> bool:
+        return self.pmSirenActive is not None
+    
+    def getPanelStatusCode(self) -> int:
+        return self.PanelStatusCode
+
+    def isPowerMaster(self) -> bool:
+        return self.PowerMaster
+        
+    def getPanelMode(self) -> str:
+        return self.PanelMode.name.replace("_", " ").title()
 
     def DumpSensorsToDisplay(self):
         log.info("=============================================== Display Status ===============================================")
@@ -3634,18 +3665,6 @@ class EventHandling(PacketHandling):
     ############################################################################################################    
     ############################################################################################################    
         
-    def isSirenActive(self) -> bool:
-        return self.pmSirenActive is not None
-    
-    def isPowerMaster(self) -> bool:
-        return self.PowerMaster
-        
-    def getPanelStatusCode(self) -> int:
-        return self.PanelStatusCode
-
-    def getPanelMode(self) -> str:
-        return self.PanelMode.name.replace("_", " ").title()
-
     def getPanelStatus(self) -> dict:
         #log.info("In visonic getpanelstatus")
         d = {
