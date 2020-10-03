@@ -147,6 +147,208 @@ class VisonicClient:
         else:
             _LOGGER.warning("[VisonicClient] The pyvisonic command is None")
 
+    def process_panel_event_log(self, event_log_entry ):
+        """ Process a sequence of panel log events """
+        #import custom_components.visonic.pyvisonic as visonicApi  # Connection to python Library
+
+        reverse = self.toBool(self.config.get(CONF_LOG_REVERSE))
+        total = min(event_log_entry.total, self.config.get(CONF_LOG_MAX_ENTRIES))
+        current = event_log_entry.current  # only used for output and not for logic
+        if reverse:
+            current = total + 1 - event_log_entry.current
+        # Fire event visonic_alarm_panel_event_log
+        if self.toBool(self.config.get(CONF_LOG_EVENT)) and event_log_entry.current <= total:
+            self.hass.bus.fire(
+                "visonic_alarm_panel_event_log_entry",
+                {
+                    "current": current,
+                    "total": total,
+                    "date": event_log_entry.date,
+                    "time": event_log_entry.time,
+                    "partition": event_log_entry.partition,
+                    "zone": event_log_entry.zone,
+                    "event": event_log_entry.event,
+                },
+            )
+        _LOGGER.debug("Panel Event - fired Single Item event")
+        # Write out to an xml file
+        if event_log_entry.current == 1:
+            self.templatedata = []
+            self.csvdata = ""
+
+        if self.csvdata is not None:
+            _LOGGER.debug("Panel Event - Saving csv data")
+            if reverse:
+                self.csvdata = (
+                    "{0}, {1}, {2}, {3}, {4}, {5}, {6}\n".format(
+                        current,
+                        total,
+                        event_log_entry.partition,
+                        event_log_entry.date,
+                        event_log_entry.time,
+                        event_log_entry.zone,
+                        event_log_entry.event,
+                    )
+                    + self.csvdata
+                )
+            else:
+                self.csvdata = self.csvdata + "{0}, {1}, {2}, {3}, {4}, {5}, {6}\n".format(
+                    current,
+                    total,
+                    event_log_entry.partition,
+                    event_log_entry.date,
+                    event_log_entry.time,
+                    event_log_entry.zone,
+                    event_log_entry.event,
+                )
+
+            _LOGGER.debug("Panel Event - Saving xml data")
+            datadict = {
+                "partition": "{0}".format(event_log_entry.partition),
+                "current": "{0}".format(current),
+                "date": "{0}".format(event_log_entry.date),
+                "time": "{0}".format(event_log_entry.time),
+                "zone": "{0}".format(event_log_entry.zone),
+                "event": "{0}".format(event_log_entry.event),
+            }
+
+            self.templatedata.append(datadict)
+
+            if event_log_entry.current == total:
+                _LOGGER.debug("Panel Event - Received last entry  reverse={0}  xmlfilenamelen={1} csvfilenamelen={2} ".format(reverse, len(self.config.get(CONF_LOG_XML_FN)), len(self.config.get(CONF_LOG_CSV_FN)) ) )
+                # create a new XML file with the results
+                if len(self.config.get(CONF_LOG_XML_FN)) > 0:
+                    _LOGGER.debug("Panel Event - Starting xml save filename {0}".format(self.config.get(CONF_LOG_XML_FN)))
+                    if reverse:
+                        self.templatedata.reverse()
+                    try:
+                        _LOGGER.debug("Panel Event - Setting up xml file loader")
+                        file_loader = FileSystemLoader(
+                            [
+                                "./templates",
+                                self.hass.config.path() + "/templates",
+                                "./xml",
+                                self.hass.config.path() + "/xml",
+                                "./www",
+                                self.hass.config.path() + "/www",
+                                ".",
+                                self.hass.config.path(),
+                                "./custom_components/visonic",
+                                self.hass.config.path() + "/custom_components/visonic",
+                            ],
+                            followlinks=True,
+                        )
+                        env = Environment(loader=file_loader)
+                        _LOGGER.debug("Panel Event - Setting up xml - getting the template")
+                        template = env.get_template("visonic_template.xml")
+                        output = template.render(entries=self.templatedata, total=total, available="{0}".format(event_log_entry.total),)
+                        _LOGGER.debug("Panel Event - Opening xml file")
+                        with open(self.config.get(CONF_LOG_XML_FN), "w") as f:
+                            _LOGGER.debug("Panel Event - Writing xml file")
+                            f.write(output.rstrip())
+                            _LOGGER.debug("Panel Event - Closing xml file")
+                            f.close()
+                    except:
+                        self.createWarningMessage("Panel Event Log - Failed to write XML file")
+                
+                _LOGGER.debug("Panel Event - CSV File Creation")
+                
+                if len(self.config.get(CONF_LOG_CSV_FN)) > 0:
+                    try:
+                        _LOGGER.debug("Panel Event - Starting csv save filename {0}".format(self.config.get(CONF_LOG_CSV_FN)))
+                        if self.toBool(self.config.get(CONF_LOG_CSV_TITLE)):
+                            _LOGGER.debug("Panel Event - Adding header to string")
+                            self.csvdata = "current, total, partition, date, time, zone, event\n" + self.csvdata
+                        _LOGGER.debug("Panel Event - Opening csv file")
+                        with open(self.config.get(CONF_LOG_CSV_FN), "w") as f:
+                            _LOGGER.debug("Panel Event - Writing csv file")
+                            f.write(self.csvdata.rstrip())
+                            _LOGGER.debug("Panel Event - Closing csv file")
+                            f.close()
+                    except:
+                        self.createWarningMessage("Panel Event Log - Failed to write CSV file")
+                
+                _LOGGER.debug("Panel Event - Clear data ready for next time")
+                self.csvdata = None
+                if self.toBool(self.config.get(CONF_LOG_DONE)):
+                    _LOGGER.debug("Panel Event - Firing Completion Event")
+                    self.hass.bus.fire(
+                        "visonic_alarm_panel_event_log_complete", {"total": total, "available": event_log_entry.total},
+                    )
+                _LOGGER.debug("Panel Event - Complete")
+    
+
+    def process_new_devices(self, visonic_devices : defaultdict):
+        """ Process new devices (sensors and x10) """
+        # Process new sensors
+        if len(visonic_devices["sensor"]) > 0:
+            changedlist = False
+            for dev in visonic_devices["sensor"]:
+                if dev.getDeviceID() is None:
+                    _LOGGER.debug("     Sensor ID is None")
+                else:
+                    _LOGGER.debug("     Sensor %s", str(dev))
+                    if dev.getDeviceID() not in self.exclude_sensor_list:
+                        if dev not in self.hass.data[DOMAIN]["binary_sensor"]:
+                            # _LOGGER.debug("     Added to dispatcher")
+                            # async_dispatcher_send(self.hass, "visonic_new_binary_sensor", dev)
+                            changedlist = True
+                            self.hass.data[DOMAIN]["binary_sensor"].append(dev)
+                        else:
+                            _LOGGER.debug("      Sensor %s already in the list", dev.getDeviceID())
+            _LOGGER.debug("Visonic: %s binary sensors", len(self.hass.data[DOMAIN]["binary_sensor"]))
+            if changedlist:
+                self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, "binary_sensor"))
+
+        # Process new X10 switches
+        if len(visonic_devices["switch"]) > 0:
+            changedlist = False
+            for dev in visonic_devices["switch"]:
+                # _LOGGER.debug("VS: X10 Switch list %s", dev)
+                if dev.enabled and dev.getDeviceID() not in self.exclude_x10_list:
+                    if dev not in self.hass.data[DOMAIN]["switch"]:
+                        changedlist = True
+                        self.hass.data[DOMAIN]["switch"].append(dev)
+                    else:
+                        _LOGGER.debug("      X10 %s already in the list", dev.getDeviceID())
+            _LOGGER.debug("Visonic: %s switches", len(self.hass.data[DOMAIN]["switch"]))
+            if changedlist:
+                self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, "switch"))
+
+
+    def generate_ha_bus_event(self, event_id : int, datadictionary):
+        # Trigger an update to the Alarm Panel Frontend
+        if self.entry.entry_id in self.hass.data[DOMAIN][DOMAINALARM]:
+            va = self.hass.data[DOMAIN][DOMAINALARM][self.entry.entry_id]
+            if va is not None:
+                va.schedule_update_ha_state(False)
+
+        # Send an event on the event bus for conditions 1 to 14
+        tmp = int(event_id)
+        if 1 <= tmp <= 14:
+            # General update trigger
+            #    1 is a zone update,
+            #    2 is a panel update AND the alarm is not active,
+            #    3 is a panel update AND the alarm is active,
+            #    4 is the panel has been reset,
+            #    5 is pin rejected,
+            #    6 is tamper triggered
+            #    7 is download timer expired
+            #    8 is watchdog timer expired, give up trying to achieve a better mode
+            #    9 is watchdog timer expired, going to try again to get a better mode
+            #   10 is a comms problem, we have received no data so plugin has suspended itself
+            tmpdict = datadictionary.copy()
+
+            tmpdict["condition"] = tmp
+            _LOGGER.debug("Visonic update event %s %s", tmp, tmpdict)
+            self.hass.bus.fire(self.visonic_event_name, tmpdict)
+
+            if tmp == 10:
+                self.createWarningMessage(
+                    "Failed to connect to your Visonic Alarm. We have not received any data from the panel at all, not one single byte."
+                )
+
+
     def visonic_event_callback_handler(self, visonic_devices, datadictionary):
         """ This is a callback function, called from the visonic library. """
         #  There are several reasons when this is called:
@@ -154,7 +356,7 @@ class VisonicClient:
         #         it adds it to the list of devices and then calls discovery to fully create it in HA
         #         remember that all the sensors may not be created at the same time
         #     For log file creation and processing
-        #     For event processing
+        #     To create an ha event on the event bus
 
         import custom_components.visonic.pyvisonic as visonicApi  # Connection to python Library
 
@@ -165,45 +367,12 @@ class VisonicClient:
         if visonic_devices == None:
             _LOGGER.warning("Visonic attempt to add device when sensor is undefined")
             return
+
         # Is the passed in data a dictionary full of X10 switches and sensors
         if type(visonic_devices) == defaultdict:
             # a set of sensors and/or switches.
             # _LOGGER.debug("Visonic got new sensors %s", visonic_devices["sensor"] )
-
-            # Process new sensors
-            if len(visonic_devices["sensor"]) > 0:
-                changedlist = False
-                for dev in visonic_devices["sensor"]:
-                    if dev.getDeviceID() is None:
-                        _LOGGER.debug("     Sensor ID is None")
-                    else:
-                        _LOGGER.debug("     Sensor %s", str(dev))
-                        if dev.getDeviceID() not in self.exclude_sensor_list:
-                            if dev not in self.hass.data[DOMAIN]["binary_sensor"]:
-                                # _LOGGER.debug("     Added to dispatcher")
-                                # async_dispatcher_send(self.hass, "visonic_new_binary_sensor", dev)
-                                changedlist = True
-                                self.hass.data[DOMAIN]["binary_sensor"].append(dev)
-                            else:
-                                _LOGGER.debug("      Sensor %s already in the list", dev.getDeviceID())
-                _LOGGER.debug("Visonic: %s binary sensors", len(self.hass.data[DOMAIN]["binary_sensor"]))
-                if changedlist:
-                    self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, "binary_sensor"))
-
-            # Process new X10 switches
-            if len(visonic_devices["switch"]) > 0:
-                changedlist = False
-                for dev in visonic_devices["switch"]:
-                    # _LOGGER.debug("VS: X10 Switch list %s", dev)
-                    if dev.enabled and dev.getDeviceID() not in self.exclude_x10_list:
-                        if dev not in self.hass.data[DOMAIN]["switch"]:
-                            changedlist = True
-                            self.hass.data[DOMAIN]["switch"].append(dev)
-                        else:
-                            _LOGGER.debug("      X10 %s already in the list", dev.getDeviceID())
-                _LOGGER.debug("Visonic: %s switches", len(self.hass.data[DOMAIN]["switch"]))
-                if changedlist:
-                    self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, "switch"))
+            self.process_new_devices(visonic_devices)
 
         elif type(visonic_devices) == visonicApi.SensorDevice:
             # This is an update of an existing sensor device
@@ -216,164 +385,11 @@ class VisonicClient:
         elif type(visonic_devices) == visonicApi.LogPanelEvent:
             # This is an event log
             _LOGGER.debug("Panel Event Log %s", visonic_devices)
-            reverse = self.toBool(self.config.get(CONF_LOG_REVERSE))
-            total = min(visonic_devices.total, self.config.get(CONF_LOG_MAX_ENTRIES))
-            current = visonic_devices.current  # only used for output and not for logic
-            if reverse:
-                current = total + 1 - visonic_devices.current
-            # Fire event visonic_alarm_panel_event_log
-            if self.toBool(self.config.get(CONF_LOG_EVENT)) and visonic_devices.current <= total:
-                self.hass.bus.fire(
-                    "visonic_alarm_panel_event_log_entry",
-                    {
-                        "current": current,
-                        "total": total,
-                        "date": visonic_devices.date,
-                        "time": visonic_devices.time,
-                        "partition": visonic_devices.partition,
-                        "zone": visonic_devices.zone,
-                        "event": visonic_devices.event,
-                    },
-                )
-            _LOGGER.debug("Panel Event - fired Single Item event")
-            # Write out to an xml file
-            if visonic_devices.current == 1:
-                self.templatedata = []
-                self.csvdata = ""
-
-            if self.csvdata is not None:
-                _LOGGER.debug("Panel Event - Saving csv data")
-                if reverse:
-                    self.csvdata = (
-                        "{0}, {1}, {2}, {3}, {4}, {5}, {6}\n".format(
-                            current,
-                            total,
-                            visonic_devices.partition,
-                            visonic_devices.date,
-                            visonic_devices.time,
-                            visonic_devices.zone,
-                            visonic_devices.event,
-                        )
-                        + self.csvdata
-                    )
-                else:
-                    self.csvdata = self.csvdata + "{0}, {1}, {2}, {3}, {4}, {5}, {6}\n".format(
-                        current,
-                        total,
-                        visonic_devices.partition,
-                        visonic_devices.date,
-                        visonic_devices.time,
-                        visonic_devices.zone,
-                        visonic_devices.event,
-                    )
-
-                _LOGGER.debug("Panel Event - Saving xml data")
-                datadict = {
-                    "partition": "{0}".format(visonic_devices.partition),
-                    "current": "{0}".format(current),
-                    "date": "{0}".format(visonic_devices.date),
-                    "time": "{0}".format(visonic_devices.time),
-                    "zone": "{0}".format(visonic_devices.zone),
-                    "event": "{0}".format(visonic_devices.event),
-                }
-
-                self.templatedata.append(datadict)
-
-                if visonic_devices.current == total:
-                    _LOGGER.debug("Panel Event - Received last entry  reverse={0}  xmlfilenamelen={1} csvfilenamelen={2} ".format(reverse, len(self.config.get(CONF_LOG_XML_FN)), len(self.config.get(CONF_LOG_CSV_FN)) ) )
-                    # create a new XML file with the results
-                    if len(self.config.get(CONF_LOG_XML_FN)) > 0:
-                        _LOGGER.debug("Panel Event - Starting xml save filename {0}".format(self.config.get(CONF_LOG_XML_FN)))
-                        if reverse:
-                            self.templatedata.reverse()
-                        try:
-                            _LOGGER.debug("Panel Event - Setting up xml file loader")
-                            file_loader = FileSystemLoader(
-                                [
-                                    "./templates",
-                                    self.hass.config.path() + "/templates",
-                                    "./xml",
-                                    self.hass.config.path() + "/xml",
-                                    "./www",
-                                    self.hass.config.path() + "/www",
-                                    ".",
-                                    self.hass.config.path(),
-                                    "./custom_components/visonic",
-                                    self.hass.config.path() + "/custom_components/visonic",
-                                ],
-                                followlinks=True,
-                            )
-                            env = Environment(loader=file_loader)
-                            _LOGGER.debug("Panel Event - Setting up xml - getting the template")
-                            template = env.get_template("visonic_template.xml")
-                            output = template.render(entries=self.templatedata, total=total, available="{0}".format(visonic_devices.total),)
-                            _LOGGER.debug("Panel Event - Opening xml file")
-                            with open(self.config.get(CONF_LOG_XML_FN), "w") as f:
-                                _LOGGER.debug("Panel Event - Writing xml file")
-                                f.write(output.rstrip())
-                                _LOGGER.debug("Panel Event - Closing xml file")
-                                f.close()
-                        except:
-                            self.createWarningMessage("Panel Event Log - Failed to write XML file")
-                    
-                    _LOGGER.debug("Panel Event - CSV File Creation")
-                    
-                    if len(self.config.get(CONF_LOG_CSV_FN)) > 0:
-                        try:
-                            _LOGGER.debug("Panel Event - Starting csv save filename {0}".format(self.config.get(CONF_LOG_CSV_FN)))
-                            if self.toBool(self.config.get(CONF_LOG_CSV_TITLE)):
-                                _LOGGER.debug("Panel Event - Adding header to string")
-                                self.csvdata = "current, total, partition, date, time, zone, event\n" + self.csvdata
-                            _LOGGER.debug("Panel Event - Opening csv file")
-                            with open(self.config.get(CONF_LOG_CSV_FN), "w") as f:
-                                _LOGGER.debug("Panel Event - Writing csv file")
-                                f.write(self.csvdata.rstrip())
-                                _LOGGER.debug("Panel Event - Closing csv file")
-                                f.close()
-                        except:
-                            self.createWarningMessage("Panel Event Log - Failed to write CSV file")
-                    
-                    _LOGGER.debug("Panel Event - Clear data ready for next time")
-                    self.csvdata = None
-                    if self.toBool(self.config.get(CONF_LOG_DONE)):
-                        _LOGGER.debug("Panel Event - Firing Completion Event")
-                        self.hass.bus.fire(
-                            "visonic_alarm_panel_event_log_complete", {"total": total, "available": visonic_devices.total},
-                        )
-                    _LOGGER.debug("Panel Event - Complete")
+            self.process_panel_event_log(visonic_devices)
 
         elif type(visonic_devices) == int:
+            self.generate_ha_bus_event(visonic_devices, datadictionary)
 
-            # Trigger an update to the Alarm Panel Frontend
-            if self.entry.entry_id in self.hass.data[DOMAIN][DOMAINALARM]:
-                va = self.hass.data[DOMAIN][DOMAINALARM][self.entry.entry_id]
-                if va is not None:
-                    va.schedule_update_ha_state(False)
-
-            # Send an event on the event bus for conditions 1 to 14
-            tmp = int(visonic_devices)
-            if 1 <= tmp <= 14:
-                # General update trigger
-                #    1 is a zone update,
-                #    2 is a panel update AND the alarm is not active,
-                #    3 is a panel update AND the alarm is active,
-                #    4 is the panel has been reset,
-                #    5 is pin rejected,
-                #    6 is tamper triggered
-                #    7 is download timer expired
-                #    8 is watchdog timer expired, give up trying to achieve a better mode
-                #    9 is watchdog timer expired, going to try again to get a better mode
-                #   10 is a comms problem, we have received no data so plugin has suspended itself
-                tmpdict = datadictionary.copy()
-
-                tmpdict["condition"] = tmp
-                _LOGGER.debug("Visonic update event %s %s", tmp, tmpdict)
-                self.hass.bus.fire(self.visonic_event_name, tmpdict)
-
-                if tmp == 10:
-                    self.createWarningMessage(
-                        "Failed to connect to your Visonic Alarm. We have not received any data from the panel at all, not one single byte."
-                    )
         else:
             _LOGGER.warning("Visonic attempt to add device with type %s  device is %s", type(visonic_devices), visonic_devices)
 

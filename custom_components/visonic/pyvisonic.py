@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.5.0.0"
+PLUGIN_VERSION = "0.5.0.1"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -1536,9 +1536,11 @@ class ProtocolBase(asyncio.Protocol):
             self.handle_received_byte(databyte)
 
     # Process one received byte at a time to build up the received messages
-    #       self.pmIncomingPduLen is only used in this function and resetMessageData
-    #       self.pmCrcErrorCount is only used in this function and resetMessageData
-    #       self.pmCurrentPDU is only used in this function and resetMessageData
+    #       self.pmIncomingPduLen is only used in this function
+    #       self.pmCrcErrorCount is only used in this function
+    #       self.pmCurrentPDU is only used in this function
+    #       self.resetMessageData is only used in this function
+    #       self.processCRCFailure is only used in this function
     def handle_received_byte(self, data):
         """Process a single byte as incoming data."""
         if self.suspendAllOperations:
@@ -1598,15 +1600,15 @@ class ProtocolBase(asyncio.Protocol):
                 if len(self.ReceiveData) > 0xB0:
                     # If the length exceeds the max PDU size from the panel then stop and resync
                     log.warning("[data receiver] PDU with CRC error Message = {0}   checksum calcs {1}".format(self.toString(self.ReceiveData), hex(a).upper()))
-                    self.resetMessageData()
                     self.processCRCFailure()
+                    self.resetMessageData()
                 elif self.pmIncomingPduLen == 0:
                     if msgType in pmReceiveMsg_t:
                         # A known message with zero length and an incorrect checksum. Reset the message data and resync
                         log.warning("[data receiver] Warning : Construction of incoming packet validation failed - Message = {0}  checksum calcs {1}".format(self.toString(self.ReceiveData), hex(a).upper()))
                         # Dump the message and carry on
-                        self.resetMessageData()
                         self.processCRCFailure()
+                        self.resetMessageData()
                     else: # if msgType != 0xF1:        # ignore CRC errors on F1 message
                         # When self.pmIncomingPduLen == 0 then the message is unknown, the length is not known and we're waiting for an 0x0A where the checksum is correct, so carry on
                         log.debug("[data receiver] Building PDU: Length is {0} bytes (apparently PDU not complete)  {1}  checksum calcs {2}".format(len(self.ReceiveData), self.toString(self.ReceiveData), hex(a).upper()) )
@@ -1614,8 +1616,8 @@ class ProtocolBase(asyncio.Protocol):
                     # When here then the message is a known message type of the correct length but has failed it's validation
                     log.warning("[data receiver] Warning : Construction of incoming packet validation failed - Message = {0}   checksum calcs {1}".format(self.toString(self.ReceiveData), hex(a).upper()))
                     # Dump the message and carry on
-                    self.resetMessageData()
                     self.processCRCFailure()
+                    self.resetMessageData()
 
         elif pdu_len <= 0xC0:
             #log.debug("[data receiver] Current PDU " + self.toString(self.ReceiveData) + "    adding " + str(hex(data).upper()))
