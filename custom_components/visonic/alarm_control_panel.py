@@ -221,7 +221,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
 
         if armcode is None:
             self.mystate = STATE_UNKNOWN
-        elif armcode == 0:
+        elif armcode == 0 or armcode == 6:
             self.mystate = STATE_ALARM_DISARMED
         elif armcode == 1 or armcode == 3:  # Exit delay home or entry delay. This should allow user to enter code
             self.mystate = STATE_ALARM_PENDING
@@ -309,9 +309,9 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
                 if not eid.startswith("binary_sensor."):
                     eid = "binary_sensor." + eid
                 if valid_entity_id(eid):
-                    mystate = self.hass.states.get(eid)
-                    if mystate is not None:
-                        devid = mystate.attributes["visonic device"]
+                    mybpstate = self.hass.states.get(eid)
+                    if mybpstate is not None:
+                        devid = mybpstate.attributes["visonic device"]
                         code = ""
                         if ATTR_CODE in data:
                             code = data[ATTR_CODE]

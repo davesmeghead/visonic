@@ -290,12 +290,12 @@ class VisonicClient:
                     _LOGGER.debug("     Sensor %s", str(dev))
                     if dev.getDeviceID() not in self.exclude_sensor_list:
                         if dev not in self.hass.data[DOMAIN]["binary_sensor"]:
-                            # _LOGGER.debug("     Added to dispatcher")
+                            _LOGGER.debug("       Added to dispatcher")
                             # async_dispatcher_send(self.hass, "visonic_new_binary_sensor", dev)
                             changedlist = True
                             self.hass.data[DOMAIN]["binary_sensor"].append(dev)
                         else:
-                            _LOGGER.debug("      Sensor %s already in the list", dev.getDeviceID())
+                            _LOGGER.debug("       Sensor %s already in the list", dev.getDeviceID())
             _LOGGER.debug("Visonic: %s binary sensors", len(self.hass.data[DOMAIN]["binary_sensor"]))
             if changedlist:
                 self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, "binary_sensor"))
@@ -461,12 +461,22 @@ class VisonicClient:
         sensor_list = self.hass.states.async_entity_ids("binary_sensor")
         if sensor_list is not None:
             for x in sensor_list:
-                _LOGGER.debug("Checking HA Entity ID: %s", x)
+                _LOGGER.debug("Checking HA Entity Sensor ID: %s", x)
                 if x.lower().startswith("binary_sensor.visonic_z"):
-                    # device, entity = self.split_entity(x)
-                    # self.entities[device][entity]
-                    _LOGGER.debug("   Removed existing HA Entity ID: %s", x)
+                    _LOGGER.debug("   Removed existing HA Entity Sensor ID: %s", x)
                     self.hass.add_job(self.hass.states.async_remove(x))
+
+        # remove any existing visonic related switches (so we don't get entity id already exists exceptions on a restart)
+        switch_list = self.hass.states.async_entity_ids("switch")
+        if switch_list is not None:
+            for x in switch_list:
+                _LOGGER.debug("Checking HA Entity Switch ID: %s", x)
+                if x.lower().startswith("switch.visonic_x"):
+                    _LOGGER.debug("   Removed existing HA Entity Switch ID: %s", x)
+                    self.hass.add_job(self.hass.states.async_remove(x))
+
+        self.hass.data[DOMAIN]["binary_sensor"] = list()
+        self.hass.data[DOMAIN]["switch"] = list()
 
         # set up config parameters in the visonic library
         self.hass.data[DOMAIN][DOMAINDATA]["Exception Count"] = self.panel_exception_counter
