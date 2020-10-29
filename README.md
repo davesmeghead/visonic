@@ -24,6 +24,7 @@ This Component is compliant with the new Component format within the Home Assist
 
 |  Release   |    Description   |
 |------------|------------------|
+| 0.5.0.3    | Added flood sensor FLD-550 PG2, the device class is moisture.  I know it isn't ideal but that really is the best option |
 | 0.5.0.2    | Minor bug fix for recreating sensors and switches after a restart |
 | 0.5.0.1    | HACS Release and minor bug fix |
 | 0.5.0.0    | Used the preferred home assistant code formatter, so all code files modified. No functional changes, a few bug fixes |

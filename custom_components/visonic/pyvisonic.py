@@ -43,7 +43,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "0.5.0.1"
+PLUGIN_VERSION = "0.5.0.3"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -831,6 +831,7 @@ pmZoneSensorMaster_t = {
    0x0C : ZoneSensorMaster("MP-802 PG2", "Motion" ),
    0x16 : ZoneSensorMaster("SMD-426 PG2", "Smoke" ),
    0x18 : ZoneSensorMaster("GSD-442 PG2", "Smoke" ),
+   0x19 : ZoneSensorMaster("FLD-550 PG2", "Flood" ),
    0x1A : ZoneSensorMaster("TMD-560 PG2", "Temperature" ),
    0x29 : ZoneSensorMaster("MC-302V PG2", "Magnet"),
    0x2A : ZoneSensorMaster("MC-302 PG2", "Magnet"),

@@ -124,14 +124,14 @@ class VisonicSensor(BinarySensorEntity):
                     return "door"
                 if self.visonic_device.stype.lower() == "smoke":
                     return "smoke"
+                if self.visonic_device.stype.lower() == "flood":
+                    return "moisture"
                 if self.visonic_device.stype.lower() == "gas":
                     return "gas"
                 if self.visonic_device.stype.lower() == "vibration" or self.visonic_device.stype.lower() == "shock":
                     return "vibration"
                 if self.visonic_device.stype.lower() == "temperature":
                     return "heat"
-                if self.visonic_device.stype.lower() == "shock":
-                    return "vibration"
         return None
 
     @property
