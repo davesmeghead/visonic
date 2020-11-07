@@ -1,32 +1,24 @@
-""" Switches for the connection to a Visonic PowerMax or PowerMaster Alarm System """
-import logging
+"""Switches for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
+
 import asyncio
-
+import logging
 from collections import defaultdict
-from homeassistant.util import slugify
-from homeassistant.helpers.entity import Entity
-from homeassistant.components.switch import SwitchEntity, ENTITY_ID_FORMAT
-from homeassistant.const import (
-    ATTR_ARMED,
-    ATTR_BATTERY_LEVEL,
-    ATTR_LAST_TRIP_TIME,
-    ATTR_TRIPPED,
-    ATTR_CODE,
-    STATE_STANDBY,
-    STATE_ALARM_DISARMED,
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_DISARMING,
-    STATE_ALARM_ARMED_NIGHT,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_PENDING,
-    STATE_ALARM_ARMING,
-    STATE_ALARM_TRIGGERED,
-)
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_NAME
 
-DEPENDENCIES = ["visonic"]
+from homeassistant.components.switch import ENTITY_ID_FORMAT, SwitchEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_CODE,
+                                 ATTR_LAST_TRIP_TIME, ATTR_TRIPPED,
+                                 STATE_ALARM_ARMED_AWAY,
+                                 STATE_ALARM_ARMED_HOME,
+                                 STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMING,
+                                 STATE_ALARM_DISARMED, STATE_ALARM_DISARMING,
+                                 STATE_ALARM_PENDING, STATE_ALARM_TRIGGERED,
+                                 STATE_STANDBY)
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import Entity
+from homeassistant.util import slugify
+
+from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -129,7 +121,6 @@ class VisonicSwitch(SwitchEntity):
         #        attr["State"] = "Yes" if self.visonic_device.state else "No"
         return attr
 
-
 # class VisonicPartition(Entity):
 # """Representation of a Visonic Partition."""
 
@@ -222,4 +213,3 @@ class VisonicSwitch(SwitchEntity):
 # """Return the state attributes of the device."""
 # # maybe should filter rather than sending them all
 # return visonicApi.PanelStatus
-

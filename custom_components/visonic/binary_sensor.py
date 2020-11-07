@@ -1,18 +1,14 @@
-""" Sensors for the connection to a Visonic PowerMax or PowerMaster Alarm System """
-import logging
+"""Sensors for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 
+import logging
 from collections import defaultdict
+
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    ATTR_ARMED,
-    ATTR_BATTERY_LEVEL,
-    ATTR_LAST_TRIP_TIME,
-    ATTR_TRIPPED,
-)
-from homeassistant.core import HomeAssistant
-from homeassistant.core import callback
+from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL,
+                                 ATTR_LAST_TRIP_TIME, ATTR_TRIPPED)
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
 
 from .const import DOMAIN, VISONIC_UNIQUE_NAME

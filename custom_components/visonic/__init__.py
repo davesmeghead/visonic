@@ -1,10 +1,12 @@
-""" Create a connection to a Visonic PowerMax or PowerMaster Alarm System """
+"""Create a connection to a Visonic PowerMax or PowerMaster Alarm System."""
+
 import asyncio
-import jinja2
 import logging
+
+import jinja2
+
 import requests.exceptions
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import __version__
@@ -12,18 +14,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .client import VisonicClient
-from .const import (
-    DOMAIN,
-    DOMAINCLIENT,
-    DOMAINALARM,
-    PLATFORMS,
-    DOMAINDATA,
-)
-from .create_schema import set_defaults, create_schema
+from .const import DOMAIN, DOMAINALARM, DOMAINCLIENT, DOMAINDATA, PLATFORMS
+from .create_schema import create_schema, set_defaults
 
 _LOGGER = logging.getLogger(__name__)
 
-CONFIG_SCHEMA = vol.Schema({DOMAIN: vol.Schema(create_schema()),}, extra=vol.ALLOW_EXTRA)
+CONFIG_SCHEMA = vol.Schema(
+    {
+        DOMAIN: vol.Schema(create_schema()),
+    },
+    extra=vol.ALLOW_EXTRA,
+)
 
 
 def configured_hosts(hass):

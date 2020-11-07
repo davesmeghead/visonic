@@ -1,13 +1,27 @@
-""" Schema for the connection to a Visonic PowerMax or PowerMaster Alarm System """
+"""Schema for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 
 import logging
+
 import voluptuous as vol
+from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT
+from homeassistant.helpers import config_validation as cv
 from homeassistant.util.yaml.objects import NodeListClass
 
-from homeassistant.helpers import config_validation as cv
+from .const import (
+    CONF_LOG_CSV_FN, CONF_LOG_CSV_TITLE, CONF_LOG_DONE, CONF_LOG_EVENT,
+    CONF_LOG_MAX_ENTRIES, CONF_LOG_REVERSE, CONF_LOG_XML_FN,
+    DEFAULT_DEVICE_BAUD, DEFAULT_DEVICE_HOST, DEFAULT_DEVICE_PORT,
+    DEFAULT_DEVICE_USB)
 
-from homeassistant.const import CONF_HOST, CONF_PORT, CONF_PATH, CONF_DEVICE
-from .const import *
+from pyvisonic.const import (
+    CONF_ARM_CODE_AUTO, CONF_AUTO_SYNC_TIME, CONF_B0_ENABLE_MOTION_PROCESSING,
+    CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
+    CONF_DEVICE_BAUD, CONF_DEVICE_TYPE, CONF_DOWNLOAD_CODE,
+    CONF_ENABLE_REMOTE_ARM, CONF_ENABLE_REMOTE_DISARM,
+    CONF_ENABLE_SENSOR_BYPASS, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_X10,
+    CONF_FORCE_AUTOENROLL, CONF_FORCE_KEYPAD, CONF_FORCE_STANDARD,
+    CONF_INSTANT_ARM_AWAY, CONF_INSTANT_ARM_HOME, CONF_LANGUAGE,
+    CONF_MOTION_OFF_DELAY, CONF_OVERRIDE_CODE, CONF_SIREN_SOUNDING)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,12 +56,24 @@ def create_parameters1(options):
     # Panel settings - can only be set on creation
     return {
         vol.Required(CONF_LANGUAGE, default=create_default(options, CONF_LANGUAGE, "EN")): str,
-        vol.Optional(CONF_EXCLUDE_SENSOR, default=create_default(options, CONF_EXCLUDE_SENSOR, ""),): str,
+        vol.Optional(
+            CONF_EXCLUDE_SENSOR,
+            default=create_default(options, CONF_EXCLUDE_SENSOR, ""),
+        ): str,
         vol.Optional(CONF_EXCLUDE_X10, default=create_default(options, CONF_EXCLUDE_X10, "")): str,
         vol.Optional(CONF_DOWNLOAD_CODE, default=create_default(options, CONF_DOWNLOAD_CODE, "")): str,
-        vol.Optional(CONF_FORCE_STANDARD, default=create_default(options, CONF_FORCE_STANDARD, False),): bool,
-        vol.Optional(CONF_FORCE_AUTOENROLL, default=create_default(options, CONF_FORCE_AUTOENROLL, False),): bool,
-        vol.Optional(CONF_AUTO_SYNC_TIME, default=create_default(options, CONF_AUTO_SYNC_TIME, True),): bool,
+        vol.Optional(
+            CONF_FORCE_STANDARD,
+            default=create_default(options, CONF_FORCE_STANDARD, False),
+        ): bool,
+        vol.Optional(
+            CONF_FORCE_AUTOENROLL,
+            default=create_default(options, CONF_FORCE_AUTOENROLL, False),
+        ): bool,
+        vol.Optional(
+            CONF_AUTO_SYNC_TIME,
+            default=create_default(options, CONF_AUTO_SYNC_TIME, True),
+        ): bool,
     }
 
 
@@ -66,18 +92,40 @@ available_siren_values = {
 def create_parameters2(options):
     # Panel settings - can be modified/edited
     return {
-        vol.Optional(CONF_MOTION_OFF_DELAY, default=create_default(options, CONF_MOTION_OFF_DELAY, 120),): int,
-        vol.Optional(CONF_SIREN_SOUNDING, default=create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),): cv.multi_select(
-            available_siren_values
-        ),
+        vol.Optional(
+            CONF_MOTION_OFF_DELAY,
+            default=create_default(options, CONF_MOTION_OFF_DELAY, 120),
+        ): int,
+        vol.Optional(
+            CONF_SIREN_SOUNDING,
+            default=create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
+        ): cv.multi_select(available_siren_values),
         vol.Optional(CONF_OVERRIDE_CODE, default=create_default(options, CONF_OVERRIDE_CODE, "")): str,
-        vol.Optional(CONF_ARM_CODE_AUTO, default=create_default(options, CONF_ARM_CODE_AUTO, False),): bool,
+        vol.Optional(
+            CONF_ARM_CODE_AUTO,
+            default=create_default(options, CONF_ARM_CODE_AUTO, False),
+        ): bool,
         vol.Optional(CONF_FORCE_KEYPAD, default=create_default(options, CONF_FORCE_KEYPAD, False)): bool,
-        vol.Optional(CONF_INSTANT_ARM_AWAY, default=create_default(options, CONF_INSTANT_ARM_AWAY, False),): bool,
-        vol.Optional(CONF_INSTANT_ARM_HOME, default=create_default(options, CONF_INSTANT_ARM_HOME, False),): bool,
-        vol.Optional(CONF_ENABLE_REMOTE_ARM, default=create_default(options, CONF_ENABLE_REMOTE_ARM, False),): bool,
-        vol.Optional(CONF_ENABLE_REMOTE_DISARM, default=create_default(options, CONF_ENABLE_REMOTE_DISARM, False),): bool,
-        vol.Optional(CONF_ENABLE_SENSOR_BYPASS, default=create_default(options, CONF_ENABLE_SENSOR_BYPASS, False),): bool,
+        vol.Optional(
+            CONF_INSTANT_ARM_AWAY,
+            default=create_default(options, CONF_INSTANT_ARM_AWAY, False),
+        ): bool,
+        vol.Optional(
+            CONF_INSTANT_ARM_HOME,
+            default=create_default(options, CONF_INSTANT_ARM_HOME, False),
+        ): bool,
+        vol.Optional(
+            CONF_ENABLE_REMOTE_ARM,
+            default=create_default(options, CONF_ENABLE_REMOTE_ARM, False),
+        ): bool,
+        vol.Optional(
+            CONF_ENABLE_REMOTE_DISARM,
+            default=create_default(options, CONF_ENABLE_REMOTE_DISARM, False),
+        ): bool,
+        vol.Optional(
+            CONF_ENABLE_SENSOR_BYPASS,
+            default=create_default(options, CONF_ENABLE_SENSOR_BYPASS, False),
+        ): bool,
     }
 
 
@@ -87,19 +135,34 @@ def create_parameters3(options):
         vol.Optional(CONF_LOG_EVENT, default=create_default(options, CONF_LOG_EVENT, False)): bool,
         vol.Optional(CONF_LOG_DONE, default=create_default(options, CONF_LOG_DONE, False)): bool,
         vol.Optional(CONF_LOG_REVERSE, default=create_default(options, CONF_LOG_REVERSE, False)): bool,
-        vol.Optional(CONF_LOG_CSV_TITLE, default=create_default(options, CONF_LOG_CSV_TITLE, False),): bool,
+        vol.Optional(
+            CONF_LOG_CSV_TITLE,
+            default=create_default(options, CONF_LOG_CSV_TITLE, False),
+        ): bool,
         vol.Optional(CONF_LOG_XML_FN, default=create_default(options, CONF_LOG_XML_FN, "")): str,
         vol.Optional(CONF_LOG_CSV_FN, default=create_default(options, CONF_LOG_CSV_FN, "")): str,
-        vol.Optional(CONF_LOG_MAX_ENTRIES, default=create_default(options, CONF_LOG_MAX_ENTRIES, 10000),): int,
+        vol.Optional(
+            CONF_LOG_MAX_ENTRIES,
+            default=create_default(options, CONF_LOG_MAX_ENTRIES, 10000),
+        ): int,
     }
 
 
 def create_parameters4(options):
     # B0 related parameters (PowerMaster only)
     return {
-        vol.Optional(CONF_B0_ENABLE_MOTION_PROCESSING, default=create_default(options, CONF_B0_ENABLE_MOTION_PROCESSING, False),): bool,
-        vol.Optional(CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, default=create_default(options, CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 5),): int,
-        vol.Optional(CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, default=create_default(options, CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 30),): int,
+        vol.Optional(
+            CONF_B0_ENABLE_MOTION_PROCESSING,
+            default=create_default(options, CONF_B0_ENABLE_MOTION_PROCESSING, False),
+        ): bool,
+        vol.Optional(
+            CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,
+            default=create_default(options, CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 5),
+        ): int,
+        vol.Optional(
+            CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
+            default=create_default(options, CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 30),
+        ): int,
     }
 
 
@@ -108,30 +171,64 @@ def create_parameters1cv(options):
     # Panel settings - can only be set on creation
     return {
         vol.Required(CONF_LANGUAGE, default=create_default(options, CONF_LANGUAGE, "EN")): cv.string,
-        vol.Optional(CONF_EXCLUDE_SENSOR, default=create_default(options, CONF_EXCLUDE_SENSOR, ""),): cv.string,
+        vol.Optional(
+            CONF_EXCLUDE_SENSOR,
+            default=create_default(options, CONF_EXCLUDE_SENSOR, ""),
+        ): cv.string,
         vol.Optional(CONF_EXCLUDE_X10, default=create_default(options, CONF_EXCLUDE_X10, "")): cv.string,
         vol.Optional(CONF_DOWNLOAD_CODE, default=create_default(options, CONF_DOWNLOAD_CODE, "")): cv.string,
-        vol.Optional(CONF_FORCE_STANDARD, default=create_default(options, CONF_FORCE_STANDARD, False),): cv.boolean,
-        vol.Optional(CONF_FORCE_AUTOENROLL, default=create_default(options, CONF_FORCE_AUTOENROLL, False),): cv.boolean,
-        vol.Optional(CONF_AUTO_SYNC_TIME, default=create_default(options, CONF_AUTO_SYNC_TIME, True),): cv.boolean,
+        vol.Optional(
+            CONF_FORCE_STANDARD,
+            default=create_default(options, CONF_FORCE_STANDARD, False),
+        ): cv.boolean,
+        vol.Optional(
+            CONF_FORCE_AUTOENROLL,
+            default=create_default(options, CONF_FORCE_AUTOENROLL, False),
+        ): cv.boolean,
+        vol.Optional(
+            CONF_AUTO_SYNC_TIME,
+            default=create_default(options, CONF_AUTO_SYNC_TIME, True),
+        ): cv.boolean,
     }
 
 
 def create_parameters2cv(options):
     # Panel settings - can be modified/edited
     return {
-        vol.Optional(CONF_MOTION_OFF_DELAY, default=create_default(options, CONF_MOTION_OFF_DELAY, 120),): cv.positive_int,
-        vol.Optional(CONF_SIREN_SOUNDING, default=create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),): cv.multi_select(
-            available_siren_values
-        ),
+        vol.Optional(
+            CONF_MOTION_OFF_DELAY,
+            default=create_default(options, CONF_MOTION_OFF_DELAY, 120),
+        ): cv.positive_int,
+        vol.Optional(
+            CONF_SIREN_SOUNDING,
+            default=create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
+        ): cv.multi_select(available_siren_values),
         vol.Optional(CONF_OVERRIDE_CODE, default=create_default(options, CONF_OVERRIDE_CODE, "")): cv.string,
-        vol.Optional(CONF_ARM_CODE_AUTO, default=create_default(options, CONF_ARM_CODE_AUTO, False),): cv.boolean,
+        vol.Optional(
+            CONF_ARM_CODE_AUTO,
+            default=create_default(options, CONF_ARM_CODE_AUTO, False),
+        ): cv.boolean,
         vol.Optional(CONF_FORCE_KEYPAD, default=create_default(options, CONF_FORCE_KEYPAD, False)): cv.boolean,
-        vol.Optional(CONF_INSTANT_ARM_AWAY, default=create_default(options, CONF_INSTANT_ARM_AWAY, False),): cv.boolean,
-        vol.Optional(CONF_INSTANT_ARM_HOME, default=create_default(options, CONF_INSTANT_ARM_HOME, False),): cv.boolean,
-        vol.Optional(CONF_ENABLE_REMOTE_ARM, default=create_default(options, CONF_ENABLE_REMOTE_ARM, False),): cv.boolean,
-        vol.Optional(CONF_ENABLE_REMOTE_DISARM, default=create_default(options, CONF_ENABLE_REMOTE_DISARM, False),): cv.boolean,
-        vol.Optional(CONF_ENABLE_SENSOR_BYPASS, default=create_default(options, CONF_ENABLE_SENSOR_BYPASS, False),): cv.boolean,
+        vol.Optional(
+            CONF_INSTANT_ARM_AWAY,
+            default=create_default(options, CONF_INSTANT_ARM_AWAY, False),
+        ): cv.boolean,
+        vol.Optional(
+            CONF_INSTANT_ARM_HOME,
+            default=create_default(options, CONF_INSTANT_ARM_HOME, False),
+        ): cv.boolean,
+        vol.Optional(
+            CONF_ENABLE_REMOTE_ARM,
+            default=create_default(options, CONF_ENABLE_REMOTE_ARM, False),
+        ): cv.boolean,
+        vol.Optional(
+            CONF_ENABLE_REMOTE_DISARM,
+            default=create_default(options, CONF_ENABLE_REMOTE_DISARM, False),
+        ): cv.boolean,
+        vol.Optional(
+            CONF_ENABLE_SENSOR_BYPASS,
+            default=create_default(options, CONF_ENABLE_SENSOR_BYPASS, False),
+        ): cv.boolean,
     }
 
 
@@ -141,10 +238,16 @@ def create_parameters3cv(options):
         vol.Optional(CONF_LOG_EVENT, default=create_default(options, CONF_LOG_EVENT, False)): cv.boolean,
         vol.Optional(CONF_LOG_DONE, default=create_default(options, CONF_LOG_DONE, False)): cv.boolean,
         vol.Optional(CONF_LOG_REVERSE, default=create_default(options, CONF_LOG_REVERSE, False)): cv.boolean,
-        vol.Optional(CONF_LOG_CSV_TITLE, default=create_default(options, CONF_LOG_CSV_TITLE, False),): cv.boolean,
+        vol.Optional(
+            CONF_LOG_CSV_TITLE,
+            default=create_default(options, CONF_LOG_CSV_TITLE, False),
+        ): cv.boolean,
         vol.Optional(CONF_LOG_XML_FN, default=create_default(options, CONF_LOG_XML_FN, "")): cv.string,
         vol.Optional(CONF_LOG_CSV_FN, default=create_default(options, CONF_LOG_CSV_FN, "")): cv.string,
-        vol.Optional(CONF_LOG_MAX_ENTRIES, default=create_default(options, CONF_LOG_MAX_ENTRIES, 10000),): cv.positive_int,
+        vol.Optional(
+            CONF_LOG_MAX_ENTRIES,
+            default=create_default(options, CONF_LOG_MAX_ENTRIES, 10000),
+        ): cv.positive_int,
     }
 
 
@@ -152,13 +255,16 @@ def create_parameters4cv(options):
     # B0 related parameters (PowerMaster only)
     return {
         vol.Optional(
-            CONF_B0_ENABLE_MOTION_PROCESSING, default=create_default(options, CONF_B0_ENABLE_MOTION_PROCESSING, False),
+            CONF_B0_ENABLE_MOTION_PROCESSING,
+            default=create_default(options, CONF_B0_ENABLE_MOTION_PROCESSING, False),
         ): cv.boolean,
         vol.Optional(
-            CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, default=create_default(options, CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 5),
+            CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,
+            default=create_default(options, CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 5),
         ): cv.positive_int,
         vol.Optional(
-            CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, default=create_default(options, CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 30),
+            CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
+            default=create_default(options, CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 30),
         ): cv.positive_int,
     }
 
@@ -264,4 +370,3 @@ initialise = {
 for key in initialise:
     d = key.default()
     options[key] = d
-

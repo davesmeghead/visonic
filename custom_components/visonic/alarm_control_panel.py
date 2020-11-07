@@ -1,49 +1,32 @@
-""" Create a connection to a Visonic PowerMax or PowerMaster Alarm System """
-import asyncio
-import homeassistant.helpers.config_validation as cv
-import homeassistant.components.alarm_control_panel as alarm
-import logging
-import voluptuous as vol
+"""Create a connection to a Visonic PowerMax or PowerMaster Alarm System (Alarm Panel Control)."""
 
+import asyncio
+import logging
 from datetime import timedelta
+
+from homeassistant.exceptions import Unauthorized, UnknownUser
+from homeassistant.auth.permissions.const import POLICY_CONTROL
+
+import homeassistant.components.alarm_control_panel as alarm
+import homeassistant.helpers.config_validation as cv
+import voluptuous as vol
+from homeassistant.components.alarm_control_panel.const import (
+    SUPPORT_ALARM_ARM_AWAY, SUPPORT_ALARM_ARM_HOME, SUPPORT_ALARM_ARM_NIGHT)
 from homeassistant.config_entries import ConfigEntry
+# Use the HA core attributes, alarm states and services
+from homeassistant.const import (ATTR_CODE, ATTR_CODE_FORMAT, ATTR_ENTITY_ID,
+                                 SERVICE_ALARM_ARM_AWAY,
+                                 SERVICE_ALARM_ARM_CUSTOM_BYPASS,
+                                 SERVICE_ALARM_ARM_HOME,
+                                 SERVICE_ALARM_ARM_NIGHT, SERVICE_ALARM_DISARM,
+                                 SERVICE_ALARM_TRIGGER, STATE_ALARM_ARMED_AWAY,
+                                 STATE_ALARM_ARMED_HOME,
+                                 STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMING,
+                                 STATE_ALARM_DISARMED, STATE_ALARM_PENDING,
+                                 STATE_ALARM_TRIGGERED, STATE_UNKNOWN)
 from homeassistant.core import HomeAssistant, valid_entity_id
 
-from homeassistant.components.alarm_control_panel.const import (
-    SUPPORT_ALARM_ARM_AWAY,
-    SUPPORT_ALARM_ARM_HOME,
-    SUPPORT_ALARM_ARM_NIGHT,
-)
-
-# Use the HA core attributes, alarm states and services
-from homeassistant.const import (
-    ATTR_CODE,
-    ATTR_CODE_FORMAT,
-    ATTR_ENTITY_ID,
-    SERVICE_ALARM_TRIGGER,
-    SERVICE_ALARM_DISARM,
-    SERVICE_ALARM_ARM_HOME,
-    SERVICE_ALARM_ARM_AWAY,
-    SERVICE_ALARM_ARM_NIGHT,
-    SERVICE_ALARM_ARM_CUSTOM_BYPASS,
-    STATE_UNKNOWN,
-    STATE_ALARM_DISARMED,
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_NIGHT,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_PENDING,
-    STATE_ALARM_ARMING,
-    STATE_ALARM_TRIGGERED,
-)
-
-from .const import (
-    DOMAIN,
-    VISONIC_UNIQUE_NAME,
-    DOMAINCLIENT,
-    DOMAINDATA,
-    DOMAINALARM,
-    ATTR_BYPASS,
-)
+from .const import (ATTR_BYPASS, DOMAIN, DOMAINALARM, DOMAINCLIENT, DOMAINDATA, VISONIC_UNIQUE_NAME)
 
 SCAN_INTERVAL = timedelta(seconds=30)
 
@@ -95,8 +78,26 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         """Listener to handle fired events."""
         self.schedule_update_ha_state(False)
 
-    def service_sensor_bypass(self, call):
+    async def service_sensor_bypass(self, call):
         """Service call to bypass individual sensors."""
+        entity_id = call.data["entity_id"]
+        if call.context.user_id:
+            user = await self.hass.auth.async_get_user(call.context.user_id)
+
+            if user is None:
+                raise UnknownUser(
+                    context=call.context,
+                    entity_id=entity_id,
+                    permission=POLICY_CONTROL,
+                )
+
+            if not user.permissions.check_entity(entity_id, POLICY_CONTROL):
+                raise Unauthorized(
+                    context=call.context,
+                    entity_id=entity_id,
+                    permission=POLICY_CONTROL,
+                )
+
         self.sensor_bypass(call.data)
 
     @property

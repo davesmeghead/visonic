@@ -1,33 +1,27 @@
-""" Config flow for the connection to a Visonic PowerMax or PowerMaster Alarm System """
-import logging
+"""Config flow for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
+
 import copy
+import logging
+from collections import OrderedDict
+from typing import Any, Dict, Optional
 
 import voluptuous as vol
-from collections import OrderedDict
+from homeassistant import config_entries, core, data_entry_flow
+from homeassistant.const import (ATTR_ARMED, ATTR_CODE, CONF_DEVICE, CONF_HOST,
+                                 CONF_PATH, CONF_PORT,
+                                 EVENT_HOMEASSISTANT_STOP)
+from homeassistant.core import HomeAssistant, callback
 
-from homeassistant.core import HomeAssistant
-from homeassistant.core import callback
-from homeassistant import config_entries, core
-from homeassistant.const import (
-    ATTR_CODE,
-    ATTR_ARMED,
-    EVENT_HOMEASSISTANT_STOP,
-    CONF_HOST,
-    CONF_PORT,
-    CONF_PATH,
-    CONF_DEVICE,
-)
+from .const import (DOMAIN, DOMAINCLIENT)
 
-from .const import *
-from .create_schema import (
-    create_schema_device,
-    create_schema_ethernet,
-    create_schema_usb,
-    create_schema_parameters1,
-    create_schema_parameters2,
-    create_schema_parameters3,
-    create_schema_parameters4,
-)
+from pyvisonic.const import (CONF_DEVICE_BAUD, CONF_DEVICE_TYPE, CONF_EXCLUDE_SENSOR,
+                    CONF_EXCLUDE_X10, CONF_SIREN_SOUNDING)
+
+from .create_schema import (create_schema_device, create_schema_ethernet,
+                            create_schema_parameters1,
+                            create_schema_parameters2,
+                            create_schema_parameters3,
+                            create_schema_parameters4, create_schema_usb)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,11 +41,11 @@ _LOGGER = logging.getLogger(__name__)
 #     - if self.powermaster
 #     -     Parameters4
 
-
 # Common handler for creation and edit
-class MyHandlers:
+class MyHandlers(data_entry_flow.FlowHandler):
     def __init__(self):
         """Initialize the config flow."""
+        # Do not call the parents init function
         # _LOGGER.debug("MyHandlers init")
         self.powermaster = False
         self.config = {}
@@ -94,7 +88,10 @@ class MyHandlers:
 
         # _LOGGER.debug("show_form ds = %s", (ds)
         return self.async_show_form(
-            step_id=step, data_schema=ds, errors=errors if errors else {}, description_placeholders=placeholders if placeholders else {},
+            step_id=step,
+            data_schema=ds,
+            errors=errors if errors else {},
+            description_placeholders=placeholders if placeholders else {},
         )
 
     async def async_step_parameters1(self, user_input=None):
@@ -108,7 +105,7 @@ class MyHandlers:
         return await self._show_form(step="parameters3")
 
     async def async_step_parameters3(self, user_input=None):
-        import custom_components.visonic.pyvisonic as visonicApi  # Connection to python Library
+        #import custom_components.visonic.pyvisonic as visonicApi  # Connection to python Library
 
         if user_input is not None:
             self.config.update(user_input)
@@ -161,6 +158,12 @@ class MyHandlers:
 class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
     """Handle a Visonic flow."""
 
+    def __init__(self):
+        """Initialize options flow."""
+        MyHandlers.__init__(self)
+        config_entries.ConfigFlow.__init__(self)
+        _LOGGER.debug("Visonic ConfigFlow init")
+
     def dumpMyState(self):
         if self._async_current_entries():
             entries = self._async_current_entries()
@@ -184,11 +187,6 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         """Get the options flow for this handler."""
         _LOGGER.debug("Visonic async_get_options_flow")
         return VisonicOptionsFlowHandler(config_entry)
-
-    def __init__(self):
-        """Initialize the config flow."""
-        MyHandlers.__init__(self)
-        _LOGGER.debug("Visonic ConfigFlow init")
 
     # ask the user, ethernet or usb
     async def async_step_device(self, user_input=None):
@@ -280,6 +278,7 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
     def __init__(self, config_entry):
         """Initialize options flow."""
         MyHandlers.__init__(self)
+        config_entries.OptionsFlow.__init__(self)
         self.config = dict(config_entry.options)
         self.entry_id = config_entry.entry_id
         _LOGGER.debug("init %s %s", self.entry_id, self.config)
@@ -295,4 +294,3 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
                 self.powermaster = client.isPowerMaster()
         _LOGGER.debug("Edit config option settings, powermaster = %s", self.powermaster)
         return await self._show_form(step="parameters2")
-
