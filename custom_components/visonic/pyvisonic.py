@@ -267,7 +267,7 @@ pmReceiveMsg_t = {
    0xAB : PanelCallBack( 15,  0,  True, False ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
    0xAC : PanelCallBack( 15,  0,  True, False ),   # 15 X10 Names ???
    0xB0 : PanelCallBack(  8,  4,  True,  True ),   # The B0 message comes in varying lengths
-   0xF1 : PanelCallBack( 14,  0,  True, False ),   # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it
+   0xF1 : PanelCallBack(  8,  0,  True,  True ),   # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it
    0xF4 : PanelCallBack(  7,  4,  True,  True )    # The F4 message comes in varying lengths. Can't decode it yet but accept and ignore it. Not sure about the length of 7 for the fixed part.
 }
 
