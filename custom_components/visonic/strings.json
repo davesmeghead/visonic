@@ -1,6 +1,5 @@
 {
     "config": {
-        "title": "Visonic Alarm System",
         "abort": {
             "already_configured": "Alarm Panel Connection Already Configured",
             "device_error": "Device must be either ethernet or usb",
@@ -43,7 +42,7 @@
                     "exclude_sensor": "Sensor List to Exclude (comma separated)",
                     "download_code": "Download Code",
                     "force_standard": "Force Standard Mode",
-                    "force_autoenroll": "Force Auto Enroll for PowerMax+ Panels",
+                    "force_autoenroll": "Force Auto Enroll for panels other than PowerMax+",
                     "sync_time": "Synchronise Time with the Alarm Panel",
                     "language": "Language (EN, NL, FR)"
                 }
@@ -89,7 +88,6 @@
         }
     },
     "options": {
-        "title": "Visonic Alarm System - Editor",
         "abort": {
             "already_configured": "Alarm Panel Connection Already Configured",
             "device_error": "Device must be either ethernet or usb",

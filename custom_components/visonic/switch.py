@@ -1,41 +1,32 @@
 """Switches for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 
-import asyncio
 import logging
-from collections import defaultdict
 
 from homeassistant.components.switch import ENTITY_ID_FORMAT, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (ATTR_ARMED, ATTR_BATTERY_LEVEL, ATTR_CODE,
-                                 ATTR_LAST_TRIP_TIME, ATTR_TRIPPED,
-                                 STATE_ALARM_ARMED_AWAY,
-                                 STATE_ALARM_ARMED_HOME,
-                                 STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMING,
-                                 STATE_ALARM_DISARMED, STATE_ALARM_DISARMING,
-                                 STATE_ALARM_PENDING, STATE_ALARM_TRIGGERED,
-                                 STATE_STANDBY)
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import slugify
-
-from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_NAME
+from .pyvisonic import X10Device
+from .client import VisonicClient
+from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_NAME, VISONIC_UPDATE_STATE_DISPATCHER
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
-    """Set up the Visonic Alarm Binary Sensors"""
+    """Set up the Visonic Alarm Binary Sensors."""
     if DOMAIN in hass.data:
-        client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        devices = [VisonicSwitch(hass, client, device) for device in hass.data[DOMAIN]["switch"]]
+        client = hass.data[DOMAIN][entry.entry_id][DOMAINCLIENT]
+        devices = [VisonicSwitch(client, device) for device in hass.data[DOMAIN]["switch"]]
         hass.data[DOMAIN]["switch"] = list()
-        async_add_entities(devices)
+        async_add_entities(devices, True)
 
 
 class VisonicSwitch(SwitchEntity):
     """Representation of a Visonic X10 Switch."""
 
-    def __init__(self, hass: HomeAssistant, client, visonic_device):
+    def __init__(self, client: VisonicClient, visonic_device: X10Device):
         """Initialise a Visonic X10 Device."""
         # _LOGGER.debug("Creating X10 Switch %s", visonic_device.name)
         self.client = client
@@ -48,9 +39,30 @@ class VisonicSwitch(SwitchEntity):
         # VISONIC_ID_FORMAT.format( slugify(self._name), visonic_device.getDeviceID())
         self.entity_id = ENTITY_ID_FORMAT.format(self.visonic_id)
         self.current_value = self.visonic_device.state
-        self.visonic_device.install_change_handler(self.onChange)
 
-    def onChange(self):
+    async def async_added_to_hass(self):
+        """Register callbacks."""
+        # Register for dispatcher calls to update the state
+        self.async_on_remove(async_dispatcher_connect(self.hass, VISONIC_UPDATE_STATE_DISPATCHER, self.onChange))
+        # self.visonic_device.install_change_handler(self.onChange)
+
+    # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
+    async def async_will_remove_from_hass(self):
+        """Remove from hass."""
+        await super().async_will_remove_from_hass()
+        # if self.visonic_device is not None:
+        #    self.visonic_device.install_change_handler(None)
+        self.visonic_device = None
+        self.client = None
+        _LOGGER.debug("switch async_will_remove_from_hass")
+
+    # async def async_remove_entry(self, hass, entry) -> None:
+    #    """Handle removal of an entry."""
+    #    _LOGGER.debug("switch async_remove_entry")
+
+    def onChange(self, event_id: int, datadictionary: dict):
+        """Switch state has changed."""
+        # _LOGGER.debug("Switch onchange %s", str(self._name))
         self.current_value = self.visonic_device.state
         self.schedule_update_ha_state()
 
@@ -99,14 +111,9 @@ class VisonicSwitch(SwitchEntity):
             # "sw_version": self._api.information.version_string,
         }
 
-    async def async_remove_entry(self, hass, entry) -> None:
-        """Handle removal of an entry."""
-        _LOGGER.debug("switch async_remove_entry")
-
     # "off"  "on"  "dim"  "brighten"
     def turnmeonandoff(self, state):
         """Send disarm command."""
-        # import custom_components.visonic.pyvisonic as visonicApi   # Connection to python Library
         self.client.setX10(self.x10id, state)
 
     @property
@@ -120,96 +127,3 @@ class VisonicSwitch(SwitchEntity):
         attr["Visonic Device"] = self.visonic_device.id
         #        attr["State"] = "Yes" if self.visonic_device.state else "No"
         return attr
-
-# class VisonicPartition(Entity):
-# """Representation of a Visonic Partition."""
-
-# def __init__(self, hass, partition):
-# """Initialise a Visonic device."""
-# self._name = "Visonic Alarm Partition"
-# self._address = "Visonic_Partition_" + str(partition)     # the only thing that is available on startup, eventually need to start all partitions
-# self.current_value = self._name
-
-# def doUpdate(self):
-# self.schedule_update_ha_state(False)
-
-# @property
-# def should_poll(self):
-# """Get polling requirement from visonic device."""
-# return False # self.visonic_device.should_poll
-
-# @property
-# def unique_id(self) -> str:
-# """Return a unique ID."""
-# return self._address
-
-# @property
-# def name(self):
-# """Return the name of the device."""
-# return self._name
-
-# def getStatus(self, s : str):
-# if visonicApi is None:
-# return "Unknown"
-# return "Unknown" if s not in visonicApi.PanelStatus else visonicApi.PanelStatus[s]
-
-# @property
-# def device_info(self):
-# """Return information about the device."""
-# return {
-# 'manufacturer': 'Visonic',
-# 'name': self.getStatus("Panel Name"),
-# 'sw_version': self.getStatus("Panel Software"),
-# 'model': self.getStatus("Model"),
-# }
-
-# @property
-# def state(self):
-# """Return the state of the device."""
-# #isArmed = visonicApi.PanelStatus["Panel Armed"]
-
-# armcode = visonicApi.PanelStatus["Panel Status Code"]
-# sirenActive = visonicApi.PanelStatus["Panel Siren Active"]
-
-# # -1  Not yet defined
-# # 0   Disarmed
-# # 1   Exit Delay Arm Home
-# # 2   Exit Delay Arm Away
-# # 3   Entry Delay
-# # 4   Armed Home
-# # 5   Armed Away
-# # 6   Special ("User Test", "Downloading", "Programming", "Installer")
-
-# #_LOGGER.warning("alarm armcode is " + str(armcode))
-
-# if sirenActive == 'Yes':
-# return STATE_ALARM_TRIGGERED
-# elif armcode == 0 or armcode == 6:
-# return STATE_ALARM_DISARMED
-# elif armcode == 1:
-# return STATE_ALARM_PENDING
-# elif armcode == 2:
-# return STATE_ALARM_ARMING
-# elif armcode == 3:
-# return STATE_ALARM_DISARMING
-# elif armcode == 4:
-# return STATE_ALARM_ARMED_HOME
-# elif armcode == 5:
-# return STATE_ALARM_ARMED_AWAY
-
-# return STATE_STANDBY
-
-# #def entity_picture(self):
-# #    return "/config/myimages/20160807_183340.jpg"
-
-# @property
-# def device_state_attributes(self):  #
-# """Return the state attributes of the device."""
-# # maybe should filter rather than sending them all
-# return None
-
-# @property
-# def state_attributes(self):  #
-# """Return the state attributes of the device."""
-# # maybe should filter rather than sending them all
-# return visonicApi.PanelStatus

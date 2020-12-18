@@ -1,27 +1,29 @@
 """Config flow for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 
-import copy
 import logging
-from collections import OrderedDict
-from typing import Any, Dict, Optional
 
-import voluptuous as vol
-from homeassistant import config_entries, core, data_entry_flow
-from homeassistant.const import (ATTR_ARMED, ATTR_CODE, CONF_DEVICE, CONF_HOST,
-                                 CONF_PATH, CONF_PORT,
-                                 EVENT_HOMEASSISTANT_STOP)
-from homeassistant.core import HomeAssistant, callback
+from .pconst import (
+    CONF_DEVICE_BAUD,
+    CONF_DEVICE_TYPE,
+    CONF_EXCLUDE_SENSOR,
+    CONF_EXCLUDE_X10,
+    CONF_SIREN_SOUNDING,
+)
 
-from .const import (DOMAIN, DOMAINCLIENT)
+from homeassistant import config_entries, data_entry_flow
+from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT
+from homeassistant.core import callback
 
-from pyvisonic.const import (CONF_DEVICE_BAUD, CONF_DEVICE_TYPE, CONF_EXCLUDE_SENSOR,
-                    CONF_EXCLUDE_X10, CONF_SIREN_SOUNDING)
-
-from .create_schema import (create_schema_device, create_schema_ethernet,
-                            create_schema_parameters1,
-                            create_schema_parameters2,
-                            create_schema_parameters3,
-                            create_schema_parameters4, create_schema_usb)
+from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_NAME
+from .create_schema import (
+    create_schema_device,
+    create_schema_ethernet,
+    create_schema_parameters1,
+    create_schema_parameters2,
+    create_schema_parameters3,
+    create_schema_parameters4,
+    create_schema_usb,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,8 +43,10 @@ _LOGGER = logging.getLogger(__name__)
 #     - if self.powermaster
 #     -     Parameters4
 
-# Common handler for creation and edit
+
 class MyHandlers(data_entry_flow.FlowHandler):
+    """My generic handler for config flow ConfigFlow and OptionsFlow."""
+
     def __init__(self):
         """Initialize the config flow."""
         # Do not call the parents init function
@@ -50,15 +54,18 @@ class MyHandlers(data_entry_flow.FlowHandler):
         self.powermaster = False
         self.config = {}
 
-    def toList(self, l, n):
-        if n in l:
-            if isinstance(l[n], str):
-                tmplist = l[n].split(",") if n in l and l[n] != "" else []
-                self.config[n] = [item.strip().lower() for item in tmplist]
+    def toList(self, lst, cfg):
+        """Convert to a list."""
+        if cfg in lst:
+            if isinstance(lst[cfg], str):
+                tmplist = lst[cfg].split(",") if lst[cfg] != "" else []
+                self.config[cfg] = [item.strip().lower() for item in tmplist]
             else:
-                self.config[n] = l[n]
+                self.config[cfg] = lst[cfg]
 
-    async def _show_form(self, step="device", placeholders=None, errors=None) -> None:
+    async def _show_form(
+        self, step: str = "device", placeholders=None, errors=None
+    ) -> None:
         """Show the form to the user."""
         # _LOGGER.debug("show_form %s %s %s", step, placeholders, errors)
 
@@ -95,17 +102,20 @@ class MyHandlers(data_entry_flow.FlowHandler):
         )
 
     async def async_step_parameters1(self, user_input=None):
+        """Config flow step 1."""
         if user_input is not None:
             self.config.update(user_input)
         return await self._show_form(step="parameters2")
 
     async def async_step_parameters2(self, user_input=None):
+        """Config flow step 2."""
         if user_input is not None:
             self.config.update(user_input)
         return await self._show_form(step="parameters3")
 
     async def async_step_parameters3(self, user_input=None):
-        #import custom_components.visonic.pyvisonic as visonicApi  # Connection to python Library
+        """Config flow step 3."""
+        # import custom_components.visonic.pyvisonic as visonicApi  # Connection to python Library
 
         if user_input is not None:
             self.config.update(user_input)
@@ -120,16 +130,18 @@ class MyHandlers(data_entry_flow.FlowHandler):
         return await self.processcomplete()
 
     async def async_step_parameters4(self, user_input=None):
-        """Handle the input processing of the config flow."""
+        """Config flow step 4."""
         # add parameters to config
         self.config.update(user_input)
         return await self.processcomplete()
 
-    async def validate_input(self, data):
-        """Validate the input"""
+    async def validate_input(self, data: dict):
+        """Validate the input."""
+        # To be implemented
         return {"title": "Alarm Panel"}
 
     async def processcomplete(self):
+        """Config flow process complete."""
         try:
             info = await self.validate_input(self.config)
             if info is not None:
@@ -140,16 +152,20 @@ class MyHandlers(data_entry_flow.FlowHandler):
                 if CONF_EXCLUDE_SENSOR in self.config:
                     self.toList(self.config, CONF_EXCLUDE_SENSOR)
                     # convert string list to integer list
-                    self.config[CONF_EXCLUDE_SENSOR] = [int(i) for i in self.config[CONF_EXCLUDE_SENSOR]]
+                    self.config[CONF_EXCLUDE_SENSOR] = [
+                        int(i) for i in self.config[CONF_EXCLUDE_SENSOR]
+                    ]
 
                 if CONF_EXCLUDE_X10 in self.config:
                     self.toList(self.config, CONF_EXCLUDE_X10)
                     # convert string list to integer list
-                    self.config[CONF_EXCLUDE_X10] = [int(i) for i in self.config[CONF_EXCLUDE_X10]]
+                    self.config[CONF_EXCLUDE_X10] = [
+                        int(i) for i in self.config[CONF_EXCLUDE_X10]
+                    ]
 
                 return self.async_create_entry(title=info["title"], data=self.config)
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.debug("Unexpected exception")
+        except Exception as er:  # pylint: disable=broad-except
+            _LOGGER.debug("Unexpected exception in config flow  %s", str(er))
             # errors["base"] = "unknown"
         return self.async_abort(reason="device_error")
 
@@ -158,6 +174,9 @@ class MyHandlers(data_entry_flow.FlowHandler):
 class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
     """Handle a Visonic flow."""
 
+    VERSION = 1
+    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
+
     def __init__(self):
         """Initialize options flow."""
         MyHandlers.__init__(self)
@@ -165,6 +184,7 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         _LOGGER.debug("Visonic ConfigFlow init")
 
     def dumpMyState(self):
+        """Output state to the log file."""
         if self._async_current_entries():
             entries = self._async_current_entries()
 
@@ -175,11 +195,8 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
             is_loaded = cur_entry.state == config_entries.ENTRY_STATE_LOADED
 
             _LOGGER.debug("Is loaded %s", is_loaded)
-        else:
-            _LOGGER.debug("Invalid List")
-
-    VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
+        # else:
+        #    _LOGGER.debug("Invalid List")
 
     @staticmethod
     @callback
@@ -232,13 +249,15 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         # importing a yaml config setup
         info = await self.validate_input(user_input)
         if info is not None:
+            await self.async_set_unique_id(VISONIC_UNIQUE_NAME)
+            self._abort_if_unique_id_configured()
             return self.async_create_entry(title=info["title"], data=user_input)
         return self.async_abort(reason="device_error")
 
     # this is run to import the configuration.yaml parameters
     async def async_step_import(self, import_config):
         """Import a config entry from configuration.yaml."""
-        _LOGGER.debug("Visonic in async_step_import in %s", import_config)
+        # _LOGGER.debug("Visonic in async_step_import in %s", import_config)
         self.dumpMyState()
 
         # convert the yaml file format for the device (ethernet or usb) settings to a flat dictionary structure
@@ -261,9 +280,12 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
                             data[CONF_DEVICE_BAUD] = int(9600)
                 else:
                     data[k] = import_config.get(k)
-        except:
-            _LOGGER.debug("Importing settings from configuration.yaml but something went wrong or some essential data is missing")
-            _LOGGER.debug("     The current data is %s", import_config)
+        except Exception as er:
+            _LOGGER.debug(
+                "Importing settings from configuration.yaml but something went wrong or some essential data is missing %s",
+                str(er),
+            )
+            # _LOGGER.debug("     The current data is %s", import_config)
             return self.async_abort(reason="settings_missing")
 
         return await self.async_step_user(data)
@@ -288,7 +310,7 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
         """Manage the options."""
         # Get the client
         if self.hass is not None:
-            client = self.hass.data[DOMAIN][DOMAINCLIENT][self.entry_id]
+            client = self.hass.data[DOMAIN][self.entry_id][DOMAINCLIENT]
             if client is not None:
                 # From the client, is it a PowerMaster panel (this assumes that the EPROM has been downloaded, or at least the 0x3C data)"
                 self.powermaster = client.isPowerMaster()

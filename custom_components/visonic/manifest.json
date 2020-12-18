@@ -5,9 +5,7 @@
   "dependencies": [],
   "documentation": "https://github.com/davesmeghead/visonic/wiki",
   "codeowners": ["@davesmeghead"],
-  "requirements": ["pyserial", "pyserial_asyncio", "jinja2", "pyvisonic"],
   "ssdp": [],
   "zeroconf": [],
-  "homekit": {},
-  "homeassistant": "0.117.0"
+  "homekit": {}
 }

@@ -1,32 +1,46 @@
 """Create a connection to a Visonic PowerMax or PowerMaster Alarm System (Alarm Panel Control)."""
 
-import asyncio
-import logging
 from datetime import timedelta
+import logging
 
-from homeassistant.exceptions import Unauthorized, UnknownUser
-from homeassistant.auth.permissions.const import POLICY_CONTROL
-
-import homeassistant.components.alarm_control_panel as alarm
-import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant.components.alarm_control_panel.const import (
-    SUPPORT_ALARM_ARM_AWAY, SUPPORT_ALARM_ARM_HOME, SUPPORT_ALARM_ARM_NIGHT)
-from homeassistant.config_entries import ConfigEntry
-# Use the HA core attributes, alarm states and services
-from homeassistant.const import (ATTR_CODE, ATTR_CODE_FORMAT, ATTR_ENTITY_ID,
-                                 SERVICE_ALARM_ARM_AWAY,
-                                 SERVICE_ALARM_ARM_CUSTOM_BYPASS,
-                                 SERVICE_ALARM_ARM_HOME,
-                                 SERVICE_ALARM_ARM_NIGHT, SERVICE_ALARM_DISARM,
-                                 SERVICE_ALARM_TRIGGER, STATE_ALARM_ARMED_AWAY,
-                                 STATE_ALARM_ARMED_HOME,
-                                 STATE_ALARM_ARMED_NIGHT, STATE_ALARM_ARMING,
-                                 STATE_ALARM_DISARMED, STATE_ALARM_PENDING,
-                                 STATE_ALARM_TRIGGERED, STATE_UNKNOWN)
-from homeassistant.core import HomeAssistant, valid_entity_id
 
-from .const import (ATTR_BYPASS, DOMAIN, DOMAINALARM, DOMAINCLIENT, DOMAINDATA, VISONIC_UNIQUE_NAME)
+from homeassistant.auth.permissions.const import POLICY_CONTROL
+import homeassistant.components.alarm_control_panel as alarm
+from homeassistant.components.alarm_control_panel.const import (
+    SUPPORT_ALARM_ARM_AWAY,
+    SUPPORT_ALARM_ARM_HOME,
+    SUPPORT_ALARM_ARM_NIGHT,
+)
+from homeassistant.config_entries import ConfigEntry
+
+# Use the HA core attributes, alarm states and services
+from homeassistant.const import (
+    ATTR_CODE,
+    ATTR_ENTITY_ID,
+    STATE_ALARM_ARMED_AWAY,
+    STATE_ALARM_ARMED_HOME,
+    STATE_ALARM_ARMING,
+    STATE_ALARM_DISARMED,
+    STATE_ALARM_PENDING,
+    STATE_ALARM_TRIGGERED,
+    STATE_UNKNOWN,
+)
+from homeassistant.core import HomeAssistant, valid_entity_id
+from homeassistant.exceptions import Unauthorized, UnknownUser
+import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+from .client import VisonicClient
+from .const import (
+    #    ALARM_PANEL_CHANGE_EVENT,
+    ATTR_BYPASS,
+    DOMAIN,
+    DOMAINCLIENT,
+    DOMAINDATA,
+    VISONIC_UNIQUE_NAME,
+    VISONIC_UPDATE_STATE_DISPATCHER,
+)
 
 SCAN_INTERVAL = timedelta(seconds=30)
 
@@ -42,40 +56,67 @@ ALARM_SERVICE_SCHEMA = vol.Schema(
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
-    """ Set up the alarm control panel."""
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
+) -> None:
+    """Set up the alarm control panel."""
     # _LOGGER.debug("alarm control panel async_setup_entry called")
-    # Get the client
-    client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-    # Create the alarm controlpanel
-    va = VisonicAlarm(hass, client, 1)
-    # Save it
-    hass.data[DOMAIN][DOMAINALARM][entry.entry_id] = va
-    # Add it to HA
-    devices = [va]
-    async_add_entities(devices)
+    if DOMAIN in hass.data:
+        # Get the client
+        client = hass.data[DOMAIN][entry.entry_id][DOMAINCLIENT]
+        # Create the alarm controlpanel
+        va = VisonicAlarm(client, 1)
+        # Save it
+        # hass.data[DOMAIN][DOMAINALARM][entry.entry_id] = va
+        # Add it to HA
+        devices = [va]
+        async_add_entities(devices, True)
 
 
 class VisonicAlarm(alarm.AlarmControlPanelEntity):
     """Representation of a Visonic alarm control panel."""
 
-    def __init__(self, hass, client, partition_id):
+    def __init__(self, client: VisonicClient, partition_id: int):
         """Initialize a Visonic security camera."""
         # self._data = data
-        self.hass = hass
+        # self.hass = hass
         self.client = client
         self.partition_id = partition_id
         self.mystate = STATE_UNKNOWN
         self.myname = VISONIC_UNIQUE_NAME
-        # Add a listener to the visonic events for any change in the panel state
-        hass.bus.async_listen("alarm_panel_state_update", self.handle_event_alarm_panel)
-        # Register HA Service to bypass individual sensors
-        hass.services.async_register(
-            DOMAIN, "alarm_sensor_bypass", self.service_sensor_bypass, schema=ALARM_SERVICE_SCHEMA,
-        )
+        self.users = {}
+        self.doneUsers = False
 
-    def handle_event_alarm_panel(self, event):
-        """Listener to handle fired events."""
+    async def async_added_to_hass(self):
+        """Register callbacks."""
+        # Register for dispatcher calls to update the state
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, VISONIC_UPDATE_STATE_DISPATCHER, self.onChange
+            )
+        )
+        # Register HA Service to bypass individual sensors
+        self.hass.services.async_register(
+            DOMAIN,
+            "alarm_sensor_bypass",
+            self.service_sensor_bypass,
+            schema=ALARM_SERVICE_SCHEMA,
+        )
+        # Add a listener to the visonic events for any change in the panel state
+        # hass.bus.async_listen(ALARM_PANEL_CHANGE_EVENT, self.handle_event_alarm_panel)
+
+    async def async_will_remove_from_hass(self):
+        """Remove from hass."""
+        await super().async_will_remove_from_hass()
+        self.hass.services.async_remove(
+            DOMAIN,
+            "alarm_sensor_bypass",
+        )
+        self.client = None
+        _LOGGER.debug("alarm control panel async_will_remove_from_hass")
+
+    def onChange(self, event_id: int, datadictionary: dict):
+        """HA Event Callback."""
         self.schedule_update_ha_state(False)
 
     async def service_sensor_bypass(self, call):
@@ -116,9 +157,9 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
         }
 
-    async def async_remove_entry(self, hass, entry) -> None:
-        """Handle removal of an entry."""
-        _LOGGER.debug("alarm control panel async_remove_entry")
+    # async def async_remove_entry(self, hass, entry) -> None:
+    #    """Handle removal of an entry."""
+    #    _LOGGER.debug("alarm control panel async_remove_entry")
 
     @property
     def name(self):
@@ -131,12 +172,24 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         return False
 
     @property
+    def code_arm_required(self):
+        """Whether the code is required for arm actions."""
+        return not self.client.isArmWithoutCode()
+
+    @property
     def device_state_attributes(self):  #
         """Return the state attributes of the device."""
-        data = self.hass.data[DOMAIN][DOMAINDATA]  ## Currently may only contain self.hass.data[DOMAIN][DOMAINDATA]["Exception Count"]
+        data = self.hass.data[DOMAIN][
+            DOMAINDATA
+        ]  # Currently may only contain self.hass.data[DOMAIN][DOMAINDATA]["Exception Count"]
         stat = self.client.getPanelStatus()
         if data is not None and stat is not None:
-            if isinstance(data, dict) and isinstance(stat, dict) and len(stat) > 0 and len(data) > 0:
+            if (
+                isinstance(data, dict)
+                and isinstance(stat, dict)
+                and len(stat) > 0
+                and len(data) > 0
+            ):
                 return {**stat, **data}
 
         if stat is not None:
@@ -147,30 +200,44 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
 
     # DO NOT OVERRIDE state_attributes AS IT IS USED IN THE LOVELACE FRONTEND TO DETERMINE code_format
 
+    # async def populateUsers(self):
+    #    self.users = await self.hass.auth.async_get_users()
+
+    @property
+    def code_format_per_user(self):
+        """List of users and their panel permissions."""
+        # if self.client.isForceKeypad():
+        #    _LOGGER.debug("code format number as force numeric keypad set in config file")
+        #    return alarm.FORMAT_NUMBER
+        valid_users = {}
+        # if len(self.users) == 0:
+        #    if not self.doneUsers:
+        #        self.hass.async_create_task(self.populateUsers())
+        #        self.doneUsers = True
+        # else:
+        #    valid_users["1"] = alarm.FORMAT_NUMBER
+        #    for user in self.users:
+        #        if user.is_active and not user.system_generated and len(user.name) > 0:
+        #            valid_users[user.id] = None
+        #        _LOGGER.debug("   user {0}\n".format(user))
+
+        valid_users["cacacf490fe7401385538e9ebba48f48"] = alarm.FORMAT_NUMBER  # Bill
+        valid_users["dd9b2167a42a43dba197ce7eb01d8a26"] = None  # David
+        valid_users["908f1cd371e44e609ef4ebac28cb520f"] = alarm.FORMAT_TEXT  # Ted
+
+        return valid_users
+
     @property
     def code_format(self):
         """Regex for code format or None if no code is required."""
 
-        # **************************************************************************************
-        # I would like to get the current user data from the frontend and
-        #        then decide whether to show the user the code format panel or not
-        # **************************************************************************************
-        # _LOGGER.debug("code format called")
-        #        _LOGGER.debug("  get users")
-        # users = await hass.auth.async_get_users()
-        #        valid_users = {}
-        #        users = asyncio.get_event_loop().run_until_complete(self.hass.auth.async_get_users())
-        #        # await hass.auth.async_get_users()
-        #        for user in users:
-        #            if user.is_active and not user.system_generated and len(user.name) > 0:
-        #                valid_users[user.name] = user.is_owner
-        #        owner = asyncio.get_event_loop().run_until_complete(self.hass.auth.async_get_owner())
-        #        _LOGGER.debug("           valid users  ***************************** {0} \n\n  owner = {1}\n\n".format(valid_users, owner))
+        if self.client is None:
+            return None
 
         # try powerlink or standard plus mode first, then it already has the user codes
         panelmode = self.client.getPanelMode()
         # _LOGGER.debug("code format panel mode %s", panelmode)
-        if not self.hass.data[DOMAIN]["force_keypad"] and panelmode is not None:
+        if not self.client.isForceKeypad() and panelmode is not None:
             if panelmode == "Powerlink" or panelmode == "Standard Plus":
                 _LOGGER.debug("code format none as powerlink or standard plus ********")
                 return None
@@ -183,12 +250,16 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             return None
 
         # If currently Disarmed and user setting to not show panel to arm
-        if armcode == 0 and self.hass.data[DOMAIN]["arm_without_code"]:
-            _LOGGER.debug("code format none, armcode is zero and user arm without code is true")
+        if armcode == 0 and self.client.isArmWithoutCode():
+            _LOGGER.debug(
+                "code format none, armcode is zero and user arm without code is true"
+            )
             return None
 
-        if self.hass.data[DOMAIN]["force_keypad"]:
-            _LOGGER.debug("code format number as force numeric keypad set in config file")
+        if self.client.isForceKeypad():
+            _LOGGER.debug(
+                "code format number as force numeric keypad set in config file"
+            )
             return alarm.FORMAT_NUMBER
 
         if self.client.hasValidOverrideCode():
@@ -201,6 +272,8 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     @property
     def state(self):
         """Return the state of the device."""
+        if self.client is None:
+            return STATE_UNKNOWN
 
         if self.client.isSirenActive():
             self.mystate = STATE_ALARM_TRIGGERED
@@ -224,7 +297,9 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             self.mystate = STATE_UNKNOWN
         elif armcode == 0 or armcode == 6:
             self.mystate = STATE_ALARM_DISARMED
-        elif armcode == 1 or armcode == 3:  # Exit delay home or entry delay. This should allow user to enter code
+        elif (
+            armcode == 1 or armcode == 3
+        ):  # Exit delay home or entry delay. This should allow user to enter code
             self.mystate = STATE_ALARM_PENDING
         elif armcode == 2:
             self.mystate = STATE_ALARM_ARMING
@@ -238,6 +313,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         return self.mystate
 
     def decode_code(self, data) -> str:
+        """Decode the panel code."""
         if data is not None:
             if type(data) == str:
                 if len(data) == 4:
@@ -261,11 +337,12 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     def alarm_disarm(self, code=None):
         """Send disarm command."""
         self.client.sendCommand("disarmed", self.decode_code(code))
+        # _LOGGER.debug("Alarm Disarm code is {0}".format(code))
 
     def alarm_arm_home(self, code=None):
         """Send arm home command."""
-        # _LOGGER.debug("alarm arm home %s", self.decode_code(code))
-        if self.hass.data[DOMAIN]["arm_home_instant"]:
+        # _LOGGER.debug("Alarm Arm code is {0}".format(code))
+        if self.client.isArmHomeInstant():
             self.client.sendCommand("stayinstant", self.decode_code(code))
         else:
             self.client.sendCommand("stay", self.decode_code(code))
@@ -273,7 +350,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     def alarm_arm_away(self, code=None):
         """Send arm away command."""
         # _LOGGER.debug("alarm arm away %s", self.decode_code(code))
-        if self.hass.data[DOMAIN]["arm_away_instant"]:
+        if self.client.isArmAwayInstant():
             self.client.sendCommand("armedinstant", self.decode_code(code))
         else:
             self.client.sendCommand("armed", self.decode_code(code))
@@ -321,12 +398,24 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
                             bypass = data[ATTR_BYPASS]
                         if devid >= 1 and devid <= 64:
                             if bypass:
-                                _LOGGER.debug("Attempt to bypass sensor device id = %s", str(devid))
+                                _LOGGER.debug(
+                                    "Attempt to bypass sensor device id = %s",
+                                    str(devid),
+                                )
                             else:
-                                _LOGGER.debug("Attempt to restore (arm) sensor device id = %s", str(devid))
-                            self.client.sendBypass(devid, bypass, self.decode_code(code))
+                                _LOGGER.debug(
+                                    "Attempt to restore (arm) sensor device id = %s",
+                                    str(devid),
+                                )
+                            self.client.sendBypass(
+                                devid, bypass, self.decode_code(code)
+                            )
                         else:
-                            _LOGGER.warning("Attempt to bypass sensor with incorrect parameters device id = %s", str(devid))
+                            _LOGGER.warning(
+                                "Attempt to bypass sensor with incorrect parameters device id = %s",
+                                str(devid),
+                            )
 
     def alarm_arm_custom_bypass(self, data=None):
+        """Bypass Panel."""
         _LOGGER.debug("Alarm Panel Custom Bypass Not Yet Implemented")
