@@ -2,8 +2,18 @@
 
 import logging
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
-from homeassistant.components.sensor import ENTITY_ID_FORMAT
+from homeassistant.components.binary_sensor import (
+    DEVICE_CLASS_DOOR,
+    DEVICE_CLASS_GAS,
+    DEVICE_CLASS_SMOKE,
+    DEVICE_CLASS_MOISTURE,
+    DEVICE_CLASS_MOTION,
+    DEVICE_CLASS_VIBRATION,
+    DEVICE_CLASS_WINDOW,
+    DEVICE_CLASS_HEAT,
+    BinarySensorEntity,
+)
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ARMED,
@@ -11,6 +21,7 @@ from homeassistant.const import (
     ATTR_LAST_TRIP_TIME,
     ATTR_TRIPPED,
 )
+
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 from homeassistant.core import HomeAssistant
@@ -34,7 +45,9 @@ async def async_setup_entry(
 
     if DOMAIN in hass.data:
         _LOGGER.debug("   In binary sensor async_setup_entry")
-        sensors = [VisonicSensor(device) for device in hass.data[DOMAIN]["binary_sensor"]]
+        sensors = [
+            VisonicSensor(device) for device in hass.data[DOMAIN]["binary_sensor"]
+        ]
         # empty the list as we have copied the entries so far in to sensors
         hass.data[DOMAIN]["binary_sensor"] = list()
         async_add_entities(sensors, True)
@@ -50,33 +63,39 @@ class VisonicSensor(BinarySensorEntity):
         self.visonic_device = visonic_device
         self._name = "visonic_" + self.visonic_device.dname.lower()
         # Append device id to prevent name clashes in HA.
-        self.visonic_id = slugify(self._name)
-
-        self.entity_id = ENTITY_ID_FORMAT.format(self.visonic_id)
-        self.current_value = self.visonic_device.triggered or self.visonic_device.status
+        self._visonic_id = slugify(self._name)
+        self._current_value = (
+            self.visonic_device.triggered or self.visonic_device.status
+        )
 
     async def async_added_to_hass(self):
         """Register callbacks."""
         # Register for dispatcher calls to update the state
-        self.async_on_remove(async_dispatcher_connect(self.hass, VISONIC_UPDATE_STATE_DISPATCHER, self.onChange))
-        # self.visonic_device.install_change_handler(self.onChange)  # use HA dispatcher instead
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, VISONIC_UPDATE_STATE_DISPATCHER, self.onChange
+            )
+        )
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
         await super().async_will_remove_from_hass()
-        # if self.visonic_device is not None:
-        #    self.visonic_device.install_change_handler(None)
         self.visonic_device = None
         _LOGGER.debug("binary sensor async_will_remove_from_hass")
 
     def onChange(self, event_id: int, datadictionary: dict):
         """Call on any change to the sensor."""
-        # _LOGGER.debug("Sensor onchange %s", str(self.visonic_id))
+        # _LOGGER.debug("Sensor onchange %s", str(self._visonic_id))
         # Update the current value based on the device state
-        self.current_value = self.visonic_device.triggered or self.visonic_device.status
-        # Ask HA to schedule an update
-        self.schedule_update_ha_state()
+        if self.visonic_device is not None:
+            self._current_value = (
+                self.visonic_device.triggered or self.visonic_device.status
+            )
+            # Ask HA to schedule an update
+            self.schedule_update_ha_state()
+        else:
+            _LOGGER.debug("binary sensor on change called but sensor is not defined")
 
     @property
     def should_poll(self):
@@ -88,7 +107,7 @@ class VisonicSensor(BinarySensorEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        return self.visonic_id
+        return self._visonic_id
 
     @property
     def name(self):
@@ -98,7 +117,7 @@ class VisonicSensor(BinarySensorEntity):
     @property
     def is_on(self):
         """Return true if the binary sensor is on."""
-        return self.current_value
+        return self._current_value
 
     @property
     def device_info(self):
@@ -122,22 +141,23 @@ class VisonicSensor(BinarySensorEntity):
         """Return the class of this sensor."""
         if self.visonic_device is not None:
             if self.visonic_device.stype is not None:
-                if self.visonic_device.stype.lower() == "motion" or self.visonic_device.stype.lower() == "camera":
-                    return "motion"
-                if self.visonic_device.stype.lower() == "magnet":
-                    return "window"
-                if self.visonic_device.stype.lower() == "wired":
-                    return "door"
-                if self.visonic_device.stype.lower() == "smoke":
-                    return "smoke"
-                if self.visonic_device.stype.lower() == "flood":
-                    return "moisture"
-                if self.visonic_device.stype.lower() == "gas":
-                    return "gas"
-                if self.visonic_device.stype.lower() == "vibration" or self.visonic_device.stype.lower() == "shock":
-                    return "vibration"
-                if self.visonic_device.stype.lower() == "temperature":
-                    return "heat"
+                stype = self.visonic_device.stype.lower()
+                if stype == "motion" or stype == "camera":
+                    return DEVICE_CLASS_MOTION
+                if stype == "magnet":
+                    return DEVICE_CLASS_WINDOW
+                if stype == "wired":
+                    return DEVICE_CLASS_DOOR
+                if stype == "smoke":
+                    return DEVICE_CLASS_SMOKE
+                if stype == "flood":
+                    return DEVICE_CLASS_MOISTURE
+                if stype == "gas":
+                    return DEVICE_CLASS_GAS
+                if stype == "vibration" or stype == "shock":
+                    return DEVICE_CLASS_VIBRATION
+                if stype == "temperature":
+                    return DEVICE_CLASS_HEAT
         return None
 
     @property

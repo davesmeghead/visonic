@@ -75,6 +75,8 @@ from .const import (
     VISONIC_UPDATE_STATE_DISPATCHER,
 )
 
+CLIENT_VERSION = "0.6.3.0"
+
 _LOGGER = logging.getLogger(__name__)
 
 # the schemas for the HA service calls
@@ -95,6 +97,8 @@ ALARM_SERVICE_COMMAND = vol.Schema(
 
 class VisonicClient:
     """Set up for Visonic devices."""
+
+    _LOGGER.debug("Initialising Client - Version {0}".format(CLIENT_VERSION))
 
     def __init__(self, hass: HomeAssistant, cf: dict, entry: ConfigEntry):
         """Initialize the Visonic Client."""
@@ -130,8 +134,8 @@ class VisonicClient:
         # panel connection
         self.panel_exception_counter = 0
         self.visonicTask = None
-        self.SystemStarted = False
         self.visonicProtocol = None
+        self.SystemStarted = False
 
         # variables for creating the event log for csv and xml
         self.csvdata = None
@@ -206,7 +210,9 @@ class VisonicClient:
     def getPanelStatus(self) -> dict:
         """Get the panel status."""
         if self.visonicProtocol is not None:
-            return self.visonicProtocol.getPanelStatus()
+            pd = self.visonicProtocol.getPanelStatus()
+            pd["Client Version"] = CLIENT_VERSION
+            return pd
         return {}
 
     def hasValidOverrideCode(self) -> bool:
@@ -521,6 +527,15 @@ class VisonicClient:
             _LOGGER.warning("Visonic attempt to add device when sensor is undefined")
             return
 
+        if not self.SystemStarted:
+            _LOGGER.warning("Visonic Panel Request to callback handler when system not started")
+            # Try to get the asyncio Coroutine within the Task to shutdown the serial link connection properly
+            if self.visonicProtocol is not None:
+                _LOGGER.debug("     Shutting Down Protocol")
+                self.visonicProtocol.ShutdownOperation()
+                self.visonicProtocol = None
+            return
+
         # Is the passed in data a dictionary full of X10 switches and sensors
         if type(visonic_devices) == defaultdict:
             # a set of sensors and/or switches.
@@ -599,18 +614,6 @@ class VisonicClient:
             self.config.update(conf)
         if self.visonicProtocol is not None:
             self.visonicProtocol.updateSettings(self.getConfigData())
-        # else:
-        #    _LOGGER.warning("Visonic link is not set")
-        # make the changes to the platform parameters (used in alarm_control_panel)
-        #    the original idea was to keep these separate for multiple partitions but now i'm not so sure its necessary
-
-        # _LOGGER.debug("[Settings] Log Max Entries   %s", self.config.get(CONF_LOG_MAX_ENTRIES))
-        # _LOGGER.debug("[Settings] Log Reverse       %s", self.config.get(CONF_LOG_REVERSE))
-        # _LOGGER.debug("[Settings] Log Create Event  %s", self.config.get(CONF_LOG_EVENT))
-        # _LOGGER.debug("[Settings] Log Final Event   %s", self.config.get(CONF_LOG_DONE))
-        # _LOGGER.debug("[Settings] Log XML Filename  %s", self.config.get(CONF_LOG_XML_FN))
-        # _LOGGER.debug("[Settings] Log CSV Filename  %s", self.config.get(CONF_LOG_CSV_FN))
-        # _LOGGER.debug("[Settings] Log CSV title Row %s", self.config.get(CONF_LOG_CSV_TITLE))
 
     async def connect_to_alarm(self) -> bool:
         """Create the connection to the alarm panel."""
@@ -702,13 +705,26 @@ class VisonicClient:
             self.SystemStarted = True
             return True
 
-        self.visonicTask = None
         self.createWarningMessage(
             "Failed to connect into Visonic Alarm. Check Settings."
         )
+
+        if self.visonicTask is not None:
+            _LOGGER.debug("          ........... Closing down Current Task")
+            self.visonicTask.cancel()
+
+        if self.visonicProtocol is not None:
+            _LOGGER.debug("          ........... Shutting Down Protocol")
+            self.visonicProtocol.ShutdownOperation()
+
+        self.visonicTask = None
+        self.visonicProtocol = None
+        self.SystemStarted = False
+        
+        await asyncio.sleep(0.5)
         return False
 
-    async def service_comms_stop(self, call):
+    async def service_comms_stop(self):
         """Service call to close down the current serial connection, we need to reset the whole connection."""
         if not self.SystemStarted:
             _LOGGER.debug("Request to Stop the Comms and it is already stopped")
@@ -717,16 +733,20 @@ class VisonicClient:
         # Try to get the asyncio Coroutine within the Task to shutdown the serial link connection properly
         if self.visonicProtocol is not None:
             self.visonicProtocol.ShutdownOperation()
+        self.visonicProtocol = None
         await asyncio.sleep(0.5)
         # not a mistake, wait a bit longer to make sure it's closed as we get no feedback (we only get the fact that the queue is empty)
 
-    async def service_panel_stop(self, call):
+    async def service_panel_stop(self):
         """Service call to stop the connection."""
         if not self.SystemStarted:
             _LOGGER.debug(
                 "Request to Stop the HA alarm_control_panel and it is already stopped"
             )
             return
+
+        # stop the usb/ethernet comms with the panel
+        await self.service_comms_stop()
 
         # unload the alarm, sensors and the switches
         await self.hass.config_entries.async_forward_entry_unload(
@@ -748,9 +768,10 @@ class VisonicClient:
                 _LOGGER.debug("          ........... Current Task Not Done")
         else:
             _LOGGER.debug("          ........... Current Task not set")
+        self.visonicTask = None
         self.SystemStarted = False
 
-    async def service_panel_start(self, call):
+    async def service_panel_start(self):
         """Service call to start the connection."""
         if self.SystemStarted:
             _LOGGER.warning(
@@ -758,20 +779,10 @@ class VisonicClient:
             )
             return
 
-        # re-initialise global variables, do not re-create the queue as we can't pass it to the alarm control panel. There's no need to create it again anyway
         self.visonicTask = None
+        self.visonicProtocol = None
 
         # _LOGGER.debug("........... attempting connection")
-
-        # alarm_entity_exists = False
-        # alarm_list = self.hass.states.async_entity_ids("alarm_control_panel")
-        # if alarm_list is not None:
-        #    _LOGGER.debug("Found existing HA alarm_control_panel %s", alarm_list)
-        #    for x in alarm_list:
-        #        _LOGGER.debug("    Checking HA Alarm ID: %s", x)
-        #        if x.lower().startswith(ALARM_PANEL_ENTITY):
-        #            _LOGGER.debug("       ***** Matched - Alarm Control Panel already exists so keep it ***** : %s", x)
-        #            alarm_entity_exists = True
 
         if await self.connect_to_alarm():
             # if not alarm_entity_exists:
@@ -801,20 +812,22 @@ class VisonicClient:
                 )
 
         _LOGGER.debug("User has requested visonic panel reconnection")
-        await self.service_comms_stop(call)
-        await self.service_panel_stop(call)
-        await self.service_panel_start(call)
+        await self.service_panel_stop()
+        await self.service_panel_start()
 
-    async def disconnect_callback_async(self, excep):
+    async def disconnect_callback_async(self):
         """Service call to disconnect."""
+        _LOGGER.debug(" ........... terminating connection and setting up reconnection")
+        await asyncio.sleep(1.0)
+        await self.service_panel_stop()
+        await asyncio.sleep(3.0)
         _LOGGER.debug(" ........... attempting reconnection")
-        await self.service_panel_stop(excep)
-        await self.service_panel_start(excep)
+        await self.service_panel_start()
 
     def stop_subscription(self, event):
         """Shutdown Visonic subscriptions and subscription thread on exit."""
         _LOGGER.debug("Shutting down subscriptions")
-        asyncio.ensure_future(self.service_panel_stop(event), loop=self.hass.loop)
+        asyncio.ensure_future(self.service_panel_stop(), loop=self.hass.loop)
 
     def disconnect_callback(self, excep):
         """Disconnection Callback for connection disruption to the panel."""
@@ -824,20 +837,13 @@ class VisonicClient:
             )
         else:
             _LOGGER.debug("PyVisonic has caused an exception %s", str(excep))
+
         # General update trigger
         #    0 is a disconnect and (hopefully) reconnect from an exception (probably comms related)
         self.hass.bus.fire(ALARM_PANEL_CHANGE_EVENT, {"condition": 0})
 
-        if self.visonicTask is not None:
-            _LOGGER.debug("Cancelling Task PyVisonic")
-            self.visonicTask.cancel()
-
-        sleep(5.0)
-        _LOGGER.debug(" ........... setting up reconnection")
         self.panel_exception_counter = self.panel_exception_counter + 1
-        asyncio.ensure_future(
-            self.disconnect_callback_async(excep), loop=self.hass.loop
-        )
+        asyncio.ensure_future(self.disconnect_callback_async(), loop=self.hass.loop)
 
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
     def pmGetPin(self, pin: str, forcedKeypad: bool):
@@ -891,7 +897,9 @@ class VisonicClient:
         self, event_id: int, reason: int, command: str, message: str
     ):
         """Generate an HA Bus Event with a Reason Code."""
-        datadict = self.visonicProtocol.PopulateDictionary(command)
+        datadict = {}
+        if self.visonicProtocol is not None:
+            datadict = self.visonicProtocol.PopulateDictionary(command)
         datadict["Reason"] = reason
         self.generate_ha_bus_event(event_id, datadict)
         # if reason > 0:
@@ -899,7 +907,7 @@ class VisonicClient:
             "[" + message + "]  " + str(reason) + "  " + self.messageDict[reason]
         )
 
-    def sendCommand(self, command: str, code: str):
+    def sendCommand(self, command: str, code: str) -> bool:
         """Send a command to the panel."""
         vp = self.visonicProtocol
         if vp is not None:
@@ -907,8 +915,7 @@ class VisonicClient:
             _LOGGER.debug("sendCommand to Visonic Alarm Panel: %s %s", command, code)
 
             isValidPL, pin = self.pmGetPin(
-                code,
-                self.isForceKeypad(),    # len(code) == 0 or 
+                code, self.isForceKeypad()  # len(code) == 0 or
             )
 
             # Do this test here as it is not applicable to pin settings for bypass and event log
@@ -927,6 +934,9 @@ class VisonicClient:
                     self.generateBusEventReason(11, 3, command, "RequestArm")
             else:
                 self.generateBusEventReason(11, 2, command, "RequestArm")
+            return True
+        else:
+            return False
 
     def sendBypass(self, devid: int, bypass: bool, code: str):
         """Send the bypass command to the panel."""
@@ -1058,14 +1068,7 @@ class VisonicClient:
                 self.service_panel_command,
                 schema=ALARM_SERVICE_COMMAND,
             )
-            # self.hass.services.async_register(DOMAIN, "alarm_panel_download", self.service_panel_download)
-
-            await self.service_panel_start(None)
-            # if await self.connect_to_alarm():
-            #    # Create "alarm control panel"
-            #    #   eventually there will be an "alarm control panel" for each partition but we only support 1 partition at the moment
-            #    self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, "alarm_control_panel"))
-            #    # return True
+            await self.service_panel_start()
 
         except (ConnectTimeout, HTTPError) as ex:
             _LOGGER.debug("Unable to connect to Visonic Alarm Panel: %s", str(ex))

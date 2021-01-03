@@ -6,8 +6,8 @@
     Thanks to everyone who helped decode the data.
 
   Converted to Python module by Wouter Wolkers and David Field
-  
-  The Component now follows the new HA file structure and uses asyncio  
+
+  The Component now follows the new HA file structure and uses asyncio
 """
 
 #################################################################
@@ -19,14 +19,9 @@
 #   It downloads from the panel first and then tries powerlink
 #################################################################
 
-import struct
-import re
 import asyncio
-import concurrent
 import logging
 import sys
-import pkg_resources
-import threading
 import collections
 import time
 import copy
@@ -38,12 +33,12 @@ from collections import defaultdict
 from datetime import datetime
 from time import sleep
 from datetime import timedelta
-#from dateutil.relativedelta import *
+
 from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "1.0.3.1"
+PLUGIN_VERSION = "1.0.3.2"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -70,7 +65,9 @@ class PanelMode(Enum):
     DOWNLOAD = 6
 
 
-# 0d f1 07 43 00 00 8b 56 0a 0d 02 43 ba 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d a5 09 01 00 00 00 00 00 00 00 00 43 0d 0a 0d 02 43 ba 0a 0d a5 09 02 00 00 00 00 00 00 00 00 43 0c 0a 0d a5 09 02 00 00 00 00 00 00 00 00 43 0c 0a 0d a5 09 02 00 00 00 00 00 00 00 00 43 0c 0a
+# 0d f1 07 43 00 00 8b 56 0a
+#  Might be a coincidence but the checksum works out as 0x38 which in decimal is 56, which is the checksum in the message
+#    Is it a bug in the panel firmware?  It's putting the decimal in as the checksum directly?
 
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 #    This means a maximum of 5 CRC errors in 10 minutes before resetting the connection
@@ -123,7 +120,7 @@ NO_RECEIVE_DATA_TIMEOUT = 30
 # fmt: off
 VisonicCommand = collections.namedtuple('VisonicCommand', 'data replytype waitforack download waittime msg')
 pmSendMsg = {
-   "MSG_EVENTLOG"    : VisonicCommand(bytearray.fromhex('A0 00 00 00 99 99 00 00 00 00 00 43'), [0xA0]                  , False, False, 0.0, "Retrieving Event Log" ), 
+   "MSG_EVENTLOG"    : VisonicCommand(bytearray.fromhex('A0 00 00 00 99 99 00 00 00 00 00 43'), [0xA0]                  , False, False, 0.0, "Retrieving Event Log" ),
    "MSG_ARM"         : VisonicCommand(bytearray.fromhex('A1 00 00 00 99 99 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "(Dis)Arming System" ),
    "MSG_STATUS"      : VisonicCommand(bytearray.fromhex('A2 00 00 00 00 00 00 00 00 00 00 43'), [0xA5]                  ,  True, False, 0.0, "Getting Status" ),
    "MSG_BYPASSTAT"   : VisonicCommand(bytearray.fromhex('A2 00 00 20 00 00 00 00 00 00 00 43'), [0xA5]                  , False, False, 0.0, "Bypassing" ),
@@ -147,7 +144,7 @@ pmSendMsg = {
    "MSG_SETTIME"     : VisonicCommand(bytearray.fromhex('46 F8 00 01 02 03 04 05 06 FF FF')   , None                    , False, False, 0.0, "Setting Time" ),   # may not need an ack
    "MSG_SER_TYPE"    : VisonicCommand(bytearray.fromhex('5A 30 04 01 00 00 00 00 00 00 00')   , [0x33]                  , False, False, 0.0, "Get Serial Type" ),
    # quick command codes to start and stop download/powerlink are a single value
-   "MSG_START"       : VisonicCommand(bytearray.fromhex('0A')                                 , [0x0B]                  , False, False, 0.0, "Start" ),    # waiting for STOP from panel for download complete 
+   "MSG_START"       : VisonicCommand(bytearray.fromhex('0A')                                 , [0x0B]                  , False, False, 0.0, "Start" ),    # waiting for STOP from panel for download complete
    "MSG_STOP"        : VisonicCommand(bytearray.fromhex('0B')                                 , None                    , False, False, 1.5, "Stop" ),     #
    "MSG_EXIT"        : VisonicCommand(bytearray.fromhex('0F')                                 , None                    , False, False, 1.5, "Exit" ),
    # Acknowledges
@@ -199,7 +196,7 @@ pmDownloadItem_t = {
    "MSG_DL_MR_ZONES3"    : bytearray.fromhex('B2 B9 A0 00'),   # used
    "MSG_DL_MR_ZONES4"    : bytearray.fromhex('52 BA A0 00'),   # used
    "MSG_DL_MR_SIRKEYZON" : bytearray.fromhex('E2 B6 10 04'),    # Combines Sirens keypads and sensors
-   "MSG_DL_ALL"          : bytearray.fromhex('00 00 00 00')     # 
+   "MSG_DL_ALL"          : bytearray.fromhex('00 00 00 00')     #
 }
 
 
@@ -207,36 +204,36 @@ pmDownloadItem_t = {
 #    Each block is 128 bytes long. Each EPROM page is 256 bytes so 2 downloads are needed per EPROM page
 #    We have to do it like this as the max message size is 176 bytes. I decided this was messy so I download 128 bytes at a time instead
 pmBlockDownload_t = {
-   "MSG_DL_Block000"      : bytearray.fromhex('00 00 80 00'),   # 
-   "MSG_DL_Block001"      : bytearray.fromhex('80 00 80 00'),   # 
-   "MSG_DL_Block010"      : bytearray.fromhex('00 01 80 00'),   # 
-   "MSG_DL_Block011"      : bytearray.fromhex('80 01 80 00'),   # 
-   "MSG_DL_Block020"      : bytearray.fromhex('00 02 80 00'),   # 
-   "MSG_DL_Block021"      : bytearray.fromhex('80 02 80 00'),   # 
-   "MSG_DL_Block030"      : bytearray.fromhex('00 03 80 00'),   # 
-   "MSG_DL_Block031"      : bytearray.fromhex('80 03 80 00'),   # 
-   "MSG_DL_Block040"      : bytearray.fromhex('00 04 80 00'),   # 
-   "MSG_DL_Block041"      : bytearray.fromhex('80 04 80 00'),   # 
-   "MSG_DL_Block090"      : bytearray.fromhex('00 09 80 00'),   # 
-   "MSG_DL_Block091"      : bytearray.fromhex('80 09 80 00'),   # 
-   "MSG_DL_Block0A0"      : bytearray.fromhex('00 0A 80 00'),   # 
-   "MSG_DL_Block0A1"      : bytearray.fromhex('80 0A 80 00'),   # 
-   "MSG_DL_Block0B0"      : bytearray.fromhex('00 0B 80 00'),   # 
-   "MSG_DL_Block0B1"      : bytearray.fromhex('80 0B 80 00'),   # 
-   "MSG_DL_Block190"      : bytearray.fromhex('00 19 80 00'),   # 
-   "MSG_DL_Block191"      : bytearray.fromhex('80 19 80 00'),   # 
-   "MSG_DL_Block1A0"      : bytearray.fromhex('00 1A 80 00'),   # 
-   "MSG_DL_Block1A1"      : bytearray.fromhex('80 1A 80 00'),   # 
-   "MSG_DL_BlockB60"      : bytearray.fromhex('00 B6 80 00'),   # 
-   "MSG_DL_BlockB61"      : bytearray.fromhex('80 B6 80 00'),   # 
-   "MSG_DL_BlockB70"      : bytearray.fromhex('00 B7 80 00'),   # 
-   "MSG_DL_BlockB71"      : bytearray.fromhex('80 B7 80 00'),   # 
-   "MSG_DL_BlockB80"      : bytearray.fromhex('00 B8 80 00'),   # 
-   "MSG_DL_BlockB81"      : bytearray.fromhex('80 B8 80 00'),   # 
-   "MSG_DL_BlockB90"      : bytearray.fromhex('00 B9 80 00'),   # 
-   "MSG_DL_BlockB91"      : bytearray.fromhex('80 B9 80 00'),   # 
-   "MSG_DL_BlockBA0"      : bytearray.fromhex('00 BA 80 00'),   # 
-   "MSG_DL_BlockBA1"      : bytearray.fromhex('80 BA 80 00')    # 
+   "MSG_DL_Block000"      : bytearray.fromhex('00 00 80 00'),   #
+   "MSG_DL_Block001"      : bytearray.fromhex('80 00 80 00'),   #
+   "MSG_DL_Block010"      : bytearray.fromhex('00 01 80 00'),   #
+   "MSG_DL_Block011"      : bytearray.fromhex('80 01 80 00'),   #
+   "MSG_DL_Block020"      : bytearray.fromhex('00 02 80 00'),   #
+   "MSG_DL_Block021"      : bytearray.fromhex('80 02 80 00'),   #
+   "MSG_DL_Block030"      : bytearray.fromhex('00 03 80 00'),   #
+   "MSG_DL_Block031"      : bytearray.fromhex('80 03 80 00'),   #
+   "MSG_DL_Block040"      : bytearray.fromhex('00 04 80 00'),   #
+   "MSG_DL_Block041"      : bytearray.fromhex('80 04 80 00'),   #
+   "MSG_DL_Block090"      : bytearray.fromhex('00 09 80 00'),   #
+   "MSG_DL_Block091"      : bytearray.fromhex('80 09 80 00'),   #
+   "MSG_DL_Block0A0"      : bytearray.fromhex('00 0A 80 00'),   #
+   "MSG_DL_Block0A1"      : bytearray.fromhex('80 0A 80 00'),   #
+   "MSG_DL_Block0B0"      : bytearray.fromhex('00 0B 80 00'),   #
+   "MSG_DL_Block0B1"      : bytearray.fromhex('80 0B 80 00'),   #
+   "MSG_DL_Block190"      : bytearray.fromhex('00 19 80 00'),   #
+   "MSG_DL_Block191"      : bytearray.fromhex('80 19 80 00'),   #
+   "MSG_DL_Block1A0"      : bytearray.fromhex('00 1A 80 00'),   #
+   "MSG_DL_Block1A1"      : bytearray.fromhex('80 1A 80 00'),   #
+   "MSG_DL_BlockB60"      : bytearray.fromhex('00 B6 80 00'),   #
+   "MSG_DL_BlockB61"      : bytearray.fromhex('80 B6 80 00'),   #
+   "MSG_DL_BlockB70"      : bytearray.fromhex('00 B7 80 00'),   #
+   "MSG_DL_BlockB71"      : bytearray.fromhex('80 B7 80 00'),   #
+   "MSG_DL_BlockB80"      : bytearray.fromhex('00 B8 80 00'),   #
+   "MSG_DL_BlockB81"      : bytearray.fromhex('80 B8 80 00'),   #
+   "MSG_DL_BlockB90"      : bytearray.fromhex('00 B9 80 00'),   #
+   "MSG_DL_BlockB91"      : bytearray.fromhex('80 B9 80 00'),   #
+   "MSG_DL_BlockBA0"      : bytearray.fromhex('00 BA 80 00'),   #
+   "MSG_DL_BlockBA1"      : bytearray.fromhex('80 BA 80 00')    #
 }
 
 #Private VMSG_DL_MASTER10_EVENTLOG As Byte[] = [&H3E, &HFF, &HFF, &HD2, &H07, &HB0, &H05, &H48, &H01, &H00, &H00] '&H3F
@@ -267,7 +264,7 @@ pmReceiveMsg_t = {
    0xAB : PanelCallBack( 15,  0,  True, False ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
    0xAC : PanelCallBack( 15,  0,  True, False ),   # 15 X10 Names ???
    0xB0 : PanelCallBack(  8,  4,  True,  True ),   # The B0 message comes in varying lengths
-   0xF1 : PanelCallBack(  8,  0,  True,  True ),   # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it
+   0xF1 : PanelCallBack(  0,  0,  True,  True ),   # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it
    0xF4 : PanelCallBack(  7,  4,  True,  True )    # The F4 message comes in varying lengths. Can't decode it yet but accept and ignore it. Not sure about the length of 7 for the fixed part.
 }
 
@@ -302,15 +299,15 @@ pmLogEvent_t = {
            "Human Hot Alert Restore", "Temperature Sensor Trouble", "Temperature Sensor Trouble Restore",
            #110
            # New values for PowerMaster and models with partitions
-           "PIR Mask", "PIR Mask Restore", "Repeater low battery", "Repeater low battery restore", "Repeater inactive", 
-           "Repeater inactive restore", "Repeater tamper", "Repeater tamper restore", "Siren test end", "Devices test end", 
+           "PIR Mask", "PIR Mask Restore", "Repeater low battery", "Repeater low battery restore", "Repeater inactive",
+           "Repeater inactive restore", "Repeater tamper", "Repeater tamper restore", "Siren test end", "Devices test end",
            "One way comm. trouble", "One way comm. trouble restore",
            #122
-           "Sensor outdoor alarm", "Sensor outdoor restore", "Guard sensor alarmed", "Guard sensor alarmed restore", 
-           "Date time change", "System shutdown", "System power up", "Missed Reminder", "Pendant test fail", "Basic KP inactive", 
-           "Basic KP inactive restore", "Basic KP tamper", "Basic KP tamper Restore", 
+           "Sensor outdoor alarm", "Sensor outdoor restore", "Guard sensor alarmed", "Guard sensor alarmed restore",
+           "Date time change", "System shutdown", "System power up", "Missed Reminder", "Pendant test fail", "Basic KP inactive",
+           "Basic KP inactive restore", "Basic KP tamper", "Basic KP tamper Restore",
            #135
-           "Heat", "Heat restore", "LE Heat Trouble", "CO alarm", "CO alarm restore", "CO trouble", "CO trouble restore", 
+           "Heat", "Heat restore", "LE Heat Trouble", "CO alarm", "CO alarm restore", "CO trouble", "CO trouble restore",
            "Exit Installer", "Enter Installer", "Self test trouble", "Self test restore", "Confirm panic event", "n/a", "Soak test fail",
            "Fire Soak test fail", "Gas Soak test fail", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a"),
    "NL" : (
@@ -373,13 +370,13 @@ pmLogPowerMaxUser_t = {
            "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
-           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", 
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown"],
   "NL" : [ "Systeem", "Zone 01", "Zone 02", "Zone 03", "Zone 04", "Zone 05", "Zone 06", "Zone 07", "Zone 08",
            "Zone 09", "Zone 10", "Zone 11", "Zone 12", "Zone 13", "Zone 14", "Zone 15", "Zone 16", "Zone 17", "Zone 18",
            "Zone 19", "Zone 20", "Zone 21", "Zone 22", "Zone 23", "Zone 24", "Zone 25", "Zone 26", "Zone 27", "Zone 28",
            "Zone 29", "Zone 30", "Fob  01", "Fob  02", "Fob  03", "Fob  04", "Fob  05", "Fob  06", "Fob  07", "Fob  08",
-           "Gebruiker 01", "Gebruiker 02", "Gebruiker 03", "Gebruiker 04", "Gebruiker 05", "Gebruiker 06", "Gebruiker 07", 
+           "Gebruiker 01", "Gebruiker 02", "Gebruiker 03", "Gebruiker 04", "Gebruiker 05", "Gebruiker 06", "Gebruiker 07",
            "Gebruiker 08", "Pad  01", "Pad  02",
            "Pad  03", "Pad  04", "Pad  05", "Pad  06", "Pad  07", "Pad  08", "Sir  01", "Sir  02", "2Pad 01", "2Pad 02",
            "2Pad 03", "2Pad 04", "X10  01", "X10  02", "X10  03", "X10  04", "X10  05", "X10  06", "X10  07", "X10  08",
@@ -387,7 +384,7 @@ pmLogPowerMaxUser_t = {
            "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
-           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", 
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown"],
   "FR" : [ "Système", "Zone 01", "Zone 02", "Zone 03", "Zone 04", "Zone 05", "Zone 06", "Zone 07", "Zone 08",
            "Zone 09", "Zone 10", "Zone 11", "Zone 12", "Zone 13", "Zone 14", "Zone 15", "Zone 16", "Zone 17", "Zone 18",
@@ -400,7 +397,7 @@ pmLogPowerMaxUser_t = {
            "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
-           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", 
+           "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown"]
 }
 
@@ -411,27 +408,27 @@ pmLogPowerMasterUser_t = {
            "Zone 29", "Zone 30", "Zone 31", "Zone 32", "Zone 33", "Zone 34", "Zone 35", "Zone 36", "Zone 37", "Zone 38",
            "Zone 39", "Zone 40", "Zone 41", "Zone 42", "Zone 43", "Zone 44", "Zone 45", "Zone 46", "Zone 47", "Zone 48",
            "Zone 49", "Zone 50", "Zone 51", "Zone 52", "Zone 53", "Zone 54", "Zone 55", "Zone 56", "Zone 57", "Zone 58",
-           "Zone 59", "Zone 60", "Zone 61", "Zone 62", "Zone 63", "Zone 64", 
-           "Fob  01", "Fob  02", "Fob  03", "Fob  04", "Fob  05", "Fob  06", "Fob  07", "Fob  08", "Fob  09", "Fob  10", 
-           "Fob  11", "Fob  12", "Fob  13", "Fob  14", "Fob  15", "Fob  16", "Fob  17", "Fob  18", "Fob  19", "Fob  20", 
-           "Fob  21", "Fob  22", "Fob  23", "Fob  24", "Fob  25", "Fob  26", "Fob  27", "Fob  28", "Fob  29", "Fob  30", 
+           "Zone 59", "Zone 60", "Zone 61", "Zone 62", "Zone 63", "Zone 64",
+           "Fob  01", "Fob  02", "Fob  03", "Fob  04", "Fob  05", "Fob  06", "Fob  07", "Fob  08", "Fob  09", "Fob  10",
+           "Fob  11", "Fob  12", "Fob  13", "Fob  14", "Fob  15", "Fob  16", "Fob  17", "Fob  18", "Fob  19", "Fob  20",
+           "Fob  21", "Fob  22", "Fob  23", "Fob  24", "Fob  25", "Fob  26", "Fob  27", "Fob  28", "Fob  29", "Fob  30",
            "Fob  31", "Fob  32",
-           "User 01", "User 02", "User 03", "User 04", "User 05", "User 06", "User 07", "User 08", "User 09", "User 10", 
-           "User 11", "User 12", "User 13", "User 14", "User 15", "User 16", "User 17", "User 18", "User 19", "User 20", 
-           "User 21", "User 22", "User 23", "User 24", "User 25", "User 26", "User 27", "User 28", "User 29", "User 30", 
-           "User 31", "User 32", "User 33", "User 34", "User 35", "User 36", "User 37", "User 38", "User 39", "User 40", 
-           "User 41", "User 42", "User 43", "User 44", "User 45", "User 46", "User 47", "User 48",            
+           "User 01", "User 02", "User 03", "User 04", "User 05", "User 06", "User 07", "User 08", "User 09", "User 10",
+           "User 11", "User 12", "User 13", "User 14", "User 15", "User 16", "User 17", "User 18", "User 19", "User 20",
+           "User 21", "User 22", "User 23", "User 24", "User 25", "User 26", "User 27", "User 28", "User 29", "User 30",
+           "User 31", "User 32", "User 33", "User 34", "User 35", "User 36", "User 37", "User 38", "User 39", "User 40",
+           "User 41", "User 42", "User 43", "User 44", "User 45", "User 46", "User 47", "User 48",
            "Pad  01", "Pad  02", "Pad  03", "Pad  04", "Pad  05", "Pad  06", "Pad  07", "Pad  08", "Pad  09", "Pad  10",
            "Pad  11", "Pad  12", "Pad  13", "Pad  14", "Pad  15", "Pad  16", "Pad  17", "Pad  18", "Pad  19", "Pad  20",
            "Pad  21", "Pad  22", "Pad  23", "Pad  24", "Pad  25", "Pad  26", "Pad  27", "Pad  28", "Pad  29", "Pad  30",
            "Pad  31", "Pad  32",
            "Sir  01", "Sir  02", "Sir  03", "Sir  04", "Sir  05", "Sir  06", "Sir  07", "Sir  08",
-           "2Pad 01", "2Pad 02", "2Pad 03", "2Pad 04", 
+           "2Pad 01", "2Pad 02", "2Pad 03", "2Pad 04",
            "X10  01", "X10  02", "X10  03", "X10  04", "X10  05", "X10  06", "X10  07", "X10  08",
            "X10  09", "X10  10", "X10  11", "X10  12", "X10  13", "X10  14", "X10  15", "PGM    ", "P-LINK ",
-           "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "PTag 09", "PTag 10", 
-           "PTag 11", "PTag 12", "PTag 13", "PTag 14", "PTag 15", "PTag 16", "PTag 17", "PTag 18", "PTag 19", "PTag 20", 
-           "PTag 21", "PTag 22", "PTag 23", "PTag 24", "PTag 25", "PTag 26", "PTag 27", "PTag 28", "PTag 29", "PTag 30", 
+           "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "PTag 09", "PTag 10",
+           "PTag 11", "PTag 12", "PTag 13", "PTag 14", "PTag 15", "PTag 16", "PTag 17", "PTag 18", "PTag 19", "PTag 20",
+           "PTag 21", "PTag 22", "PTag 23", "PTag 24", "PTag 25", "PTag 26", "PTag 27", "PTag 28", "PTag 29", "PTag 30",
            "PTag 31", "PTag 32",
            "Rptr 01", "Rptr 02", "Rptr 03", "Rptr 04", "Rptr 05", "Rptr 06", "Rptr 07", "Rptr 08",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown"],
@@ -441,27 +438,27 @@ pmLogPowerMasterUser_t = {
            "Zone 29", "Zone 30", "Zone 31", "Zone 32", "Zone 33", "Zone 34", "Zone 35", "Zone 36", "Zone 37", "Zone 38",
            "Zone 39", "Zone 40", "Zone 41", "Zone 42", "Zone 43", "Zone 44", "Zone 45", "Zone 46", "Zone 47", "Zone 48",
            "Zone 49", "Zone 50", "Zone 51", "Zone 52", "Zone 53", "Zone 54", "Zone 55", "Zone 56", "Zone 57", "Zone 58",
-           "Zone 59", "Zone 60", "Zone 61", "Zone 62", "Zone 63", "Zone 64", 
-           "Fob  01", "Fob  02", "Fob  03", "Fob  04", "Fob  05", "Fob  06", "Fob  07", "Fob  08", "Fob  09", "Fob  10", 
-           "Fob  11", "Fob  12", "Fob  13", "Fob  14", "Fob  15", "Fob  16", "Fob  17", "Fob  18", "Fob  19", "Fob  20", 
-           "Fob  21", "Fob  22", "Fob  23", "Fob  24", "Fob  25", "Fob  26", "Fob  27", "Fob  28", "Fob  29", "Fob  30", 
+           "Zone 59", "Zone 60", "Zone 61", "Zone 62", "Zone 63", "Zone 64",
+           "Fob  01", "Fob  02", "Fob  03", "Fob  04", "Fob  05", "Fob  06", "Fob  07", "Fob  08", "Fob  09", "Fob  10",
+           "Fob  11", "Fob  12", "Fob  13", "Fob  14", "Fob  15", "Fob  16", "Fob  17", "Fob  18", "Fob  19", "Fob  20",
+           "Fob  21", "Fob  22", "Fob  23", "Fob  24", "Fob  25", "Fob  26", "Fob  27", "Fob  28", "Fob  29", "Fob  30",
            "Fob  31", "Fob  32",
-           "Gebruiker 01", "Gebruiker 02", "Gebruiker 03", "Gebruiker 04", "Gebruiker 05", "Gebruiker 06", "Gebruiker 07", "Gebruiker 08", "Gebruiker 09", "Gebruiker 10", 
-           "Gebruiker 11", "Gebruiker 12", "Gebruiker 13", "Gebruiker 14", "Gebruiker 15", "Gebruiker 16", "Gebruiker 17", "Gebruiker 18", "Gebruiker 19", "Gebruiker 20", 
-           "Gebruiker 21", "Gebruiker 22", "Gebruiker 23", "Gebruiker 24", "Gebruiker 25", "Gebruiker 26", "Gebruiker 27", "Gebruiker 28", "Gebruiker 29", "Gebruiker 30", 
-           "Gebruiker 31", "Gebruiker 32", "Gebruiker 33", "Gebruiker 34", "Gebruiker 35", "Gebruiker 36", "Gebruiker 37", "Gebruiker 38", "Gebruiker 39", "Gebruiker 40", 
-           "Gebruiker 41", "Gebruiker 42", "Gebruiker 43", "Gebruiker 44", "Gebruiker 45", "Gebruiker 46", "Gebruiker 47", "Gebruiker 48",            
+           "Gebruiker 01", "Gebruiker 02", "Gebruiker 03", "Gebruiker 04", "Gebruiker 05", "Gebruiker 06", "Gebruiker 07", "Gebruiker 08", "Gebruiker 09", "Gebruiker 10",
+           "Gebruiker 11", "Gebruiker 12", "Gebruiker 13", "Gebruiker 14", "Gebruiker 15", "Gebruiker 16", "Gebruiker 17", "Gebruiker 18", "Gebruiker 19", "Gebruiker 20",
+           "Gebruiker 21", "Gebruiker 22", "Gebruiker 23", "Gebruiker 24", "Gebruiker 25", "Gebruiker 26", "Gebruiker 27", "Gebruiker 28", "Gebruiker 29", "Gebruiker 30",
+           "Gebruiker 31", "Gebruiker 32", "Gebruiker 33", "Gebruiker 34", "Gebruiker 35", "Gebruiker 36", "Gebruiker 37", "Gebruiker 38", "Gebruiker 39", "Gebruiker 40",
+           "Gebruiker 41", "Gebruiker 42", "Gebruiker 43", "Gebruiker 44", "Gebruiker 45", "Gebruiker 46", "Gebruiker 47", "Gebruiker 48",
            "Pad  01", "Pad  02", "Pad  03", "Pad  04", "Pad  05", "Pad  06", "Pad  07", "Pad  08", "Pad  09", "Pad  10",
            "Pad  11", "Pad  12", "Pad  13", "Pad  14", "Pad  15", "Pad  16", "Pad  17", "Pad  18", "Pad  19", "Pad  20",
            "Pad  21", "Pad  22", "Pad  23", "Pad  24", "Pad  25", "Pad  26", "Pad  27", "Pad  28", "Pad  29", "Pad  30",
            "Pad  31", "Pad  32",
            "Sir  01", "Sir  02", "Sir  03", "Sir  04", "Sir  05", "Sir  06", "Sir  07", "Sir  08",
-           "2Pad 01", "2Pad 02", "2Pad 03", "2Pad 04", 
+           "2Pad 01", "2Pad 02", "2Pad 03", "2Pad 04",
            "X10  01", "X10  02", "X10  03", "X10  04", "X10  05", "X10  06", "X10  07", "X10  08",
            "X10  09", "X10  10", "X10  11", "X10  12", "X10  13", "X10  14", "X10  15", "PGM    ", "P-LINK ",
-           "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "PTag 09", "PTag 10", 
-           "PTag 11", "PTag 12", "PTag 13", "PTag 14", "PTag 15", "PTag 16", "PTag 17", "PTag 18", "PTag 19", "PTag 20", 
-           "PTag 21", "PTag 22", "PTag 23", "PTag 24", "PTag 25", "PTag 26", "PTag 27", "PTag 28", "PTag 29", "PTag 30", 
+           "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "PTag 09", "PTag 10",
+           "PTag 11", "PTag 12", "PTag 13", "PTag 14", "PTag 15", "PTag 16", "PTag 17", "PTag 18", "PTag 19", "PTag 20",
+           "PTag 21", "PTag 22", "PTag 23", "PTag 24", "PTag 25", "PTag 26", "PTag 27", "PTag 28", "PTag 29", "PTag 30",
            "PTag 31", "PTag 32",
            "Rptr 01", "Rptr 02", "Rptr 03", "Rptr 04", "Rptr 05", "Rptr 06", "Rptr 07", "Rptr 08"],
   "FR" : [ "Système", "Zone 01", "Zone 02", "Zone 03", "Zone 04", "Zone 05", "Zone 06", "Zone 07", "Zone 08",
@@ -470,27 +467,27 @@ pmLogPowerMasterUser_t = {
            "Zone 29", "Zone 30", "Zone 31", "Zone 32", "Zone 33", "Zone 34", "Zone 35", "Zone 36", "Zone 37", "Zone 38",
            "Zone 39", "Zone 40", "Zone 41", "Zone 42", "Zone 43", "Zone 44", "Zone 45", "Zone 46", "Zone 47", "Zone 48",
            "Zone 49", "Zone 50", "Zone 51", "Zone 52", "Zone 53", "Zone 54", "Zone 55", "Zone 56", "Zone 57", "Zone 58",
-           "Zone 59", "Zone 60", "Zone 61", "Zone 62", "Zone 63", "Zone 64", 
-           "Memclé  01", "Memclé  02", "Memclé  03", "Memclé  04", "Memclé  05", "Memclé  06", "Memclé  07", "Memclé  08", "Memclé  09", "Memclé  10", 
-           "Memclé  11", "Memclé  12", "Memclé  13", "Memclé  14", "Memclé  15", "Memclé  16", "Memclé  17", "Memclé  18", "Memclé  19", "Memclé  20", 
-           "Memclé  21", "Memclé  22", "Memclé  23", "Memclé  24", "Memclé  25", "Memclé  26", "Memclé  27", "Memclé  28", "Memclé  29", "Memclé  30", 
+           "Zone 59", "Zone 60", "Zone 61", "Zone 62", "Zone 63", "Zone 64",
+           "Memclé  01", "Memclé  02", "Memclé  03", "Memclé  04", "Memclé  05", "Memclé  06", "Memclé  07", "Memclé  08", "Memclé  09", "Memclé  10",
+           "Memclé  11", "Memclé  12", "Memclé  13", "Memclé  14", "Memclé  15", "Memclé  16", "Memclé  17", "Memclé  18", "Memclé  19", "Memclé  20",
+           "Memclé  21", "Memclé  22", "Memclé  23", "Memclé  24", "Memclé  25", "Memclé  26", "Memclé  27", "Memclé  28", "Memclé  29", "Memclé  30",
            "Memclé  31", "Memclé  32",
-           "User 01", "User 02", "User 03", "User 04", "User 05", "User 06", "User 07", "User 08", "User 09", "User 10", 
-           "User 11", "User 12", "User 13", "User 14", "User 15", "User 16", "User 17", "User 18", "User 19", "User 20", 
-           "User 21", "User 22", "User 23", "User 24", "User 25", "User 26", "User 27", "User 28", "User 29", "User 30", 
-           "User 31", "User 32", "User 33", "User 34", "User 35", "User 36", "User 37", "User 38", "User 39", "User 40", 
-           "User 41", "User 42", "User 43", "User 44", "User 45", "User 46", "User 47", "User 48",            
+           "User 01", "User 02", "User 03", "User 04", "User 05", "User 06", "User 07", "User 08", "User 09", "User 10",
+           "User 11", "User 12", "User 13", "User 14", "User 15", "User 16", "User 17", "User 18", "User 19", "User 20",
+           "User 21", "User 22", "User 23", "User 24", "User 25", "User 26", "User 27", "User 28", "User 29", "User 30",
+           "User 31", "User 32", "User 33", "User 34", "User 35", "User 36", "User 37", "User 38", "User 39", "User 40",
+           "User 41", "User 42", "User 43", "User 44", "User 45", "User 46", "User 47", "User 48",
            "Pad  01", "Pad  02", "Pad  03", "Pad  04", "Pad  05", "Pad  06", "Pad  07", "Pad  08", "Pad  09", "Pad  10",
            "Pad  11", "Pad  12", "Pad  13", "Pad  14", "Pad  15", "Pad  16", "Pad  17", "Pad  18", "Pad  19", "Pad  20",
            "Pad  21", "Pad  22", "Pad  23", "Pad  24", "Pad  25", "Pad  26", "Pad  27", "Pad  28", "Pad  29", "Pad  30",
            "Pad  31", "Pad  32",
            "Sir  01", "Sir  02", "Sir  03", "Sir  04", "Sir  05", "Sir  06", "Sir  07", "Sir  08",
-           "2Pad 01", "2Pad 02", "2Pad 03", "2Pad 04", 
+           "2Pad 01", "2Pad 02", "2Pad 03", "2Pad 04",
            "X10  01", "X10  02", "X10  03", "X10  04", "X10  05", "X10  06", "X10  07", "X10  08",
            "X10  09", "X10  10", "X10  11", "X10  12", "X10  13", "X10  14", "X10  15", "PGM    ", "P-LINK ",
-           "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "PTag 09", "PTag 10", 
-           "PTag 11", "PTag 12", "PTag 13", "PTag 14", "PTag 15", "PTag 16", "PTag 17", "PTag 18", "PTag 19", "PTag 20", 
-           "PTag 21", "PTag 22", "PTag 23", "PTag 24", "PTag 25", "PTag 26", "PTag 27", "PTag 28", "PTag 29", "PTag 30", 
+           "PTag 01", "PTag 02", "PTag 03", "PTag 04", "PTag 05", "PTag 06", "PTag 07", "PTag 08", "PTag 09", "PTag 10",
+           "PTag 11", "PTag 12", "PTag 13", "PTag 14", "PTag 15", "PTag 16", "PTag 17", "PTag 18", "PTag 19", "PTag 20",
+           "PTag 21", "PTag 22", "PTag 23", "PTag 24", "PTag 25", "PTag 26", "PTag 27", "PTag 28", "PTag 29", "PTag 30",
            "PTag 31", "PTag 32",
            "Rptr 01", "Rptr 02", "Rptr 03", "Rptr 04", "Rptr 05", "Rptr 06", "Rptr 07", "Rptr 08",
            "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown"]
@@ -524,7 +521,7 @@ pmSysStatusFlags_t = {
 }
 
 pmArmMode_t = {
-   "disarmed" : 0x00, "stay" : 0x04, "armed" : 0x05, "stayinstant" : 0x14, "armedinstant" : 0x15    # "usertest" : 0x06, 
+   "disarmed" : 0x00, "stay" : 0x04, "armed" : 0x05, "stayinstant" : 0x14, "armedinstant" : 0x15    # "usertest" : 0x06,
 }
 # 0x07 Alarm??????
 
@@ -600,7 +597,7 @@ DecodePanelSettings = {
 
     # PANEL DEFINITION
     "entryDelays"    : SettingsCommand(  True, 2, "BYTE",    8,  257,    8,   1,     2,  ["Entry Delay 1","Entry Delay 2"],    {'0':"None", '15':"15 Seconds", '30':"30 Seconds", '45':"45 Seconds", '60':"1 Minute", '180':"3 Minutes", '240':"4 Minutes"}),  # 257, 258
-    
+
     "exitDelay"      : SettingsCommand(  True, 1, "BYTE",    8,  259,    8,   0,    -1,  "Exit Delay",       { '30':"30 Seconds", '60':"60 Seconds", '90':"90 Seconds", '120':"2 Minutes", '180':"3 Minutes", '240':"4 Minutes"}),
     "bellTime"       : SettingsCommand(  True, 1, "BYTE",    8,  260,    8,   0,    -1,  "Bell Time",        { '1':"1 Minute", '3':"3 Minutes", '4':"4 Minutes", '8':"8 Minutes", '10':"10 Minutes", '15':"15 Minutes", '20':"20 Minutes"}),
     "abortTime"      : SettingsCommand(  True, 1, "BYTE",    8,  267,    8,   0,    -1,  "Abort Time",       { '0':"None", '15':"15 Seconds", '30':"30 Seconds", '45':"45 Seconds", '60':"1 Minute", '120':"2 Minutes", '180':"3 Minutes", '240':"4 Minutes"} ),
@@ -616,7 +613,7 @@ DecodePanelSettings = {
     "supervision"    : SettingsCommand(  True, 1, "BYTE",    8,  264,    8,   0,    -1,  "Supevision Interval", { '1':"1 Hour", '2':"2 Hours", '4':"4 Hours", '8':"8 Hours", '12':"12 Hours", '0':"Disable"} ),
     "notReady"       : SettingsCommand(  True, 1, "BYTE",    8,  281,    1,   0,     4,  "Not Ready",           { '0':"Normal", '1':"In Supervision"}  ),
     "fobAux"         : SettingsCommand(  True, 2, "BYTE",    8,  263,    8,  14,    -1,  ["Auxiliary Keyfob Button function 1","Auxiliary Keyfob Button function 2"], { '1':"System Status", '2':"Instant Arm", '3':"Cancel Exit Delay", '4':"PGM/X-10"} ), # 263, 277
-    
+
     "jamDetect"      : SettingsCommand(  True, 1, "BYTE",    8,  256,    8,   0,    -1,  "Jamming Detection",       { '1':"UL 20/20", '2':"EN 30/60", '3':"Class 6", '4':"Other", '0':"Disable"} ),
     "latchKey"       : SettingsCommand(  True, 1, "BYTE",    8,  283,    1,   0,     7,  "Latchkey Arming",         { '1':"On", '0':"Off"} ),
     "noActivity"     : SettingsCommand(  True, 1, "BYTE",    8,  265,    8,   0,    -1,  "No Activity Time",        { '3':"3 Hours", '6':"6 Hours",'12':"12 Hours", '24':"24 Hours", '48':"48 Hours", '72':"72 Hours", '0':"Disable"} ),
@@ -634,7 +631,7 @@ DecodePanelSettings = {
     "confirmAlarm"   : SettingsCommand(  True, 1, "BYTE",    8,  268,    8,   0,    -1,  "Confirm Alarm Timer",     { '0':"None", '30':"30 Minutes", '45':"45 Minutes", '60':"60 Minutes", '90':"90 Minutes"} ),
     "acFailure"      : SettingsCommand(  True, 1, "BYTE",    8,  275,    8,   0,    -1,  "AC Failure Report",       { '0':"None", '5':"5 Minutes", '30':"30 Minutes", '60':"60 Minutes", '180':"180 Minutes"} ),
     "userPermit"     : SettingsCommand(  True, 1, "BYTE",    8,  276,    8,   0,    -1,  "User Permit",             { '1':"Enable", '0':"Disable"} ),
-    
+
     # COMMUNICATION SETTINGS
     "autotestTime"   : SettingsCommand(  True, 1, "TIME",   16,  367,   16,   0,    -1,  "Autotest Time", {} ),
     "autotestCycle"  : SettingsCommand(  True, 1, "BYTE",    8,  369,    8,   0,    -1,  "Autotest Cycle", { '1':"1 Day", '4':"5 Days", '2':"7 Days", '3':"30 Days", '0':"Disable"}  ),
@@ -655,12 +652,12 @@ DecodePanelSettings = {
 
     "privateAttempt" : SettingsCommand( False, 1, "BYTE",    8,  365,    8,   0,    -1, "Private Telephone Dialing Attempts", { '1':"1 Attempt", '2':"2 Attempts", '3':"3 Attempts", '4':"4 Attempts"} ),
     "privateReport"  : SettingsCommand(  True, 1, "BYTE",    8,  361,    8,   0,    -1, "Reporting To Private Tel",           { '15':"All", '7':"All but Open/Close", '13':"All but Alerts", '1':"Alarms", '2':"Alerts", '8':"Open/Close", '0':"Disable Report"} ),
-    
+
     "privateAck"     : SettingsCommand( False, 1, "BYTE",    8,  285,    1,   0,     1, "Private Telephone Acknowledge",      { '0':"Single Acknowledge", '1':"All Acknowledge"} ),
     "pagerNr"        : SettingsCommand(  True, 1, "PHONE",  64,  342,   64,   0,    -1, "Pager Tel Number", {} ),
     "pagerPIN"       : SettingsCommand(  True, 1, "PHONE",  64,  350,   64,   0,    -1, "Pager PIN #", {} ),
     "pagerReport"    : SettingsCommand(  True, 1, "BYTE",    8,  360,    8,   0,    -1, "Report To Pager", { '15':"All", '3':"All + Alerts", '7':"All but Open/Close", '12':"Troubles+Open/Close", '4':"Troubles", '8':"Open/Close", '0':"Disable Report"}  ),
-    
+
     "recentClose"    : SettingsCommand(  True, 1, "BYTE",    8,0x11C,    1,   0,     3, "Recent Close Report", { '1':"On", '0':"Off"} ),
     "remoteAccess"   : SettingsCommand(  True, 1, "BYTE",    8,0x11D,    1,   0,     2, "Remote Access",       { '1':"On", '0':"Off"}),
     "installerCode"  : SettingsCommand( False, 1, "CODE",   16,0x20A,   16,   0,    -1, "Installer Code",      {} ),
@@ -675,7 +672,7 @@ DecodePanelSettings = {
     "remoteProgNr"   : SettingsCommand(  True, 1, "PHONE",  64,  376,   64,   0,    -1, "Remote Programmer Tel. No.", {} ),
     "inactiveReport" : SettingsCommand(  True, 1, "BYTE",    8,  384,    8,   0,    -1, "System Inactive Report", { '0':"Disable", '180':"7 Days", '14':"14 Days", '30':"30 Days", '90':"90 Days"} ),
     "ambientLevel"   : SettingsCommand(  True, 1, "BYTE",    8,  388,    8,   0,    -1, "Ambient Level", { '0':"High Level", '1':"Low Level"} ),
-    
+
     # GSM DEFINITIONS
     "gsmInstall"     : SettingsCommand(  True, 1, "BYTE",    8,  395,    8,   0,    -1, "GSM Install", { '1':"Installed", '0':"Not Installed"} ),
     "gsmSmsNrs"      : SettingsCommand( False, 4, "PHONE",  64,  396,   64,   8,    -1, ["GSM 1st SMS Number","GSM 2nd SMS Number","GSM 3rd SMS Number","GSM 4th SMS Number"], {} ),  #  396,404,412,420
@@ -686,7 +683,7 @@ DecodePanelSettings = {
 
     # DEFINE POWERLINK
     "plFailure"      : SettingsCommand(  True, 1, "BYTE",    8,  391,    8,   0,    -1, "PowerLink Failure", { '1':"Report", '0':"Disable Report"} ),
-    
+
     # PGM DEFINITION
     "pgmPulseTime"   : SettingsCommand(  True, 1, "BYTE",    8,  681,    8,   0,    -1, "PGM Pulse Time", { '2':"2 Seconds", '30':"30 Seconds", '120':"2 Minutes", '240':"4 Minutes"} ),
     "pgmByArmAway"   : SettingsCommand(  True, 1, "BYTE",    8,  537,    8,   0,    -1, "PGM By Arm Away", { '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active"} ),
@@ -701,10 +698,10 @@ DecodePanelSettings = {
 
     # DEFINE INTERNAL
     "intStrobe"      : SettingsCommand(  True, 1, "BYTE",    8,  283,    1,   0,     1, "Internal/Strobe Siren", { '0':"Internal Siren", '1':"Strobe"} ),
-    
+
     # X-10 GENERAL DEFINITION
     "x10HouseCode"   : SettingsCommand(  True, 1, "BYTE",    8,  536,    8,   0,    -1, "X10 House Code", { '0':"A", '1':"B", '2':"C", '3':"D", '4':"E", '5':"F", '6':"G", '7':"H", '8':"I", '9':"J", '10':"K", '11':"L", '12':"M", '13':"N", '14':"O", '15':"P"}  ),
-    
+
     "x10Flash"       : SettingsCommand(  True, 1, "BYTE",    8,  281,    1,   0,     5, "X10 Flash On Alarm", { '1':"All Lights Flash", '0':"No Flash"} ),
     "x10Trouble"     : SettingsCommand(  True, 1, "BYTE",    8,  747,    8,   0,    -1, "X10 Trouble Indication", { '1':"Enable", '0':"Disable"} ),
     "x10ReportCs1"   : SettingsCommand(  True, 1, "BYTE",    8,  749,    1,   0,     0, "X10 Report on Fail to Central Station 1", {'1':"Enable", '0':"Disable"} ),
@@ -719,7 +716,7 @@ DecodePanelSettings = {
     "panelSerialCode": SettingsCommand( False, 1, "BYTE",    8,0x437,    8,   0,    -1, "Panel Serial Code", {} ),  # page 4 offset 55
     "panelTypeCode"  : SettingsCommand( False, 1, "BYTE",    8,0x436,    8,   0,    -1, "Panel Code Type", {} ),  # page 4 offset 54 and 55 ->> Panel type code
     "panelSerial"    : SettingsCommand(  True, 1, "CODE",   48,0x430,   48,   0,    -1, "Panel Serial", {} ),  # page 4 offset 48
-    
+
     # ZONES
     "zoneNameRaw"    : SettingsCommand( False,31, "STRING", 0x80, 0x1900,  0x80,   0x10,   -1, "Zone name <x>", {} ),
     "panelEprom"     : SettingsCommand(  True, 1, "STRING",  128,  0x400,   128,   0,   -1, "Panel Eprom", {} ),
@@ -838,11 +835,11 @@ pmZoneSensorMaster_t = {
    0xFE : ZoneSensorMaster("Wired", "Wired" )
 }
 
-# fmt: on
-
 # SMD-426 PG2 (photoelectric smoke detector)
 # SMD-427 PG2 (heat and photoelectric smoke detector)
 # SMD-429 PG2 (Smoke and Heat Detector)
+
+log = logging.getLogger(__name__)
 
 
 class ElapsedFormatter:
@@ -854,10 +851,6 @@ class ElapsedFormatter:
         # using timedelta here for convenient default formatting
         elapsed = timedelta(seconds=elapsed_seconds)
         return "{} <{: >5}> {: >8}   {}".format(elapsed, record.lineno, record.levelname, record.getMessage())
-
-
-log = logging.getLogger(__name__)
-
 
 class LogPanelEvent:
     def __init__(self):
@@ -1043,7 +1036,12 @@ class ProtocolBase(asyncio.Protocol):
     log.debug("Initialising Protocol - Protocol Version {0}".format(PLUGIN_VERSION))
 
     def __init__(
-        self, loop=None, event_callback: Callable = None, disconnect_callback=None, panelConfig=None, packet_callback: Callable = None
+        self,
+        loop=None,
+        event_callback: Callable = None,
+        disconnect_callback=None,
+        panelConfig=None,
+        packet_callback: Callable = None,
     ) -> None:
         """Initialize class."""
         if loop:
@@ -1125,14 +1123,14 @@ class ProtocolBase(asyncio.Protocol):
         self.ForceStandardMode = False        # INTERFACE : Get user variable from HA to force standard mode or try for PowerLink
         self.ForceAutoEnroll = True           # INTERFACE : Force Auto Enroll when don't know panel type. Only set to true
         self.AutoSyncTime = True              # INTERFACE : sync time with the panel
-        self.DownloadCode = '56 50'           # INTERFACE : Set the Download Code 
+        self.DownloadCode = '56 50'           # INTERFACE : Set the Download Code
         self.pmLang = 'EN'                    # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
         self.MotionOffDelay = 120             # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
         self.SirenTriggerList = ["intruder"]  # INTERFACE : This is the trigger list that we can assume is making the siren sound
         self.BZero_Enable = False             # INTERFACE : B0 enable the processing of the experimental B0 message
         self.BZero_MinInterval = 30           # INTERFACE : B0 timing for the min interval between subsequent processed B0 messages
         self.BZero_MaxWaitTime = 5            # INTERFACE : B0 wait time to look for a change in the data in the B0 message
-        
+
         # Now that the defaults have been set, update them from the panel config dictionary (that may not have all settings in)
         self.updateSettings(panelConfig)
 
@@ -1218,6 +1216,9 @@ class ProtocolBase(asyncio.Protocol):
         self.pmDownloadMode = False
         self.triggeredDownload = False
 
+        # Set when the panel details have been received i.e. a 3C message
+        self.pmGotPanelDetails = False
+
         # Set when we receive a STOP from the panel, indicating that the EPROM data has finished downloading
         self.pmDownloadComplete = False
 
@@ -1251,11 +1252,11 @@ class ProtocolBase(asyncio.Protocol):
             # log.debug("[updateSettings] Settings refreshed - Using panel config {0}".format(newdata))
             if PYVConst.ForceStandard in newdata:
                 # Get user variable from HA to force standard mode or try for PowerLink
-                self.ForceStandardMode = newdata[PYVConst.ForceStandard]  
+                self.ForceStandardMode = newdata[PYVConst.ForceStandard]
                 log.debug("[Settings] Force Standard set to {0}".format(self.ForceStandardMode))
             if PYVConst.ForceAutoEnroll in newdata:
                 # Force Auto Enroll when don't know panel type. Only set to true
-                self.ForceAutoEnroll = newdata[PYVConst.ForceAutoEnroll]  
+                self.ForceAutoEnroll = newdata[PYVConst.ForceAutoEnroll]
                 log.debug("[Settings] Force Auto Enroll set to {0}".format(self.ForceAutoEnroll))
             if PYVConst.AutoSyncTime in newdata:
                 self.AutoSyncTime = newdata[PYVConst.AutoSyncTime]  # INTERFACE : sync time with the panel
@@ -1267,11 +1268,11 @@ class ProtocolBase(asyncio.Protocol):
                     log.debug("[Settings] Download Code set to {0}".format(self.DownloadCode))
             if PYVConst.PluginLanguage in newdata:
                 # Get the plugin language from HA, either "EN", "FR" or "NL"
-                self.pmLang = newdata[PYVConst.PluginLanguage]  
+                self.pmLang = newdata[PYVConst.PluginLanguage]
                 log.debug("[Settings] Language set to {0}".format(self.pmLang))
             if PYVConst.MotionOffDelay in newdata:
                 # Get the motion sensor off delay time (between subsequent triggers)
-                self.MotionOffDelay = newdata[PYVConst.MotionOffDelay]  
+                self.MotionOffDelay = newdata[PYVConst.MotionOffDelay]
                 log.debug("[Settings] Motion Off Delay set to {0}".format(self.MotionOffDelay))
             if PYVConst.SirenTriggerList in newdata:
                 tmpList = newdata[PYVConst.SirenTriggerList]
@@ -1314,6 +1315,8 @@ class ProtocolBase(asyncio.Protocol):
 
         self.suspendAllOperations = True
 
+        self.PanelMode = PanelMode.PROBLEM
+
         if exc is not None:
             # log.exception("ERROR Connection Lost : disconnected due to exception  <{0}>".format(exc))
             log.error("ERROR Connection Lost : disconnected due to exception {0}".format(exc))
@@ -1337,6 +1340,8 @@ class ProtocolBase(asyncio.Protocol):
 
         # Save the sirens
         self.pmSirenDev_t = {}
+
+        self.transport = None
 
         sleep(5.0)  # a bit of time for the watchdog timers and keep alive loops to self terminate
         if self.disconnect_callback:
@@ -1447,7 +1452,17 @@ class ProtocolBase(asyncio.Protocol):
                 self.reset_keep_alive_messages()
                 # count in seconds that we've been in download mode
                 downloadDuration = downloadDuration + 1
-                if downloadDuration > DOWNLOAD_TIMEOUT:
+
+                if downloadDuration == 5 and not self.pmGotPanelDetails:
+                    # Download has already been triggered so self.ForceStandardMode must be False and therefore no need to check it
+                    # This is a check at 5 seconds in to see if the panel details have been retrieved.  If not then kick off the download request again.
+                    log.debug("[Controller] Trigger Panel Download Attempt - Not yet received the panel details")
+                    self.pmDownloadComplete = False
+                    self.pmDownloadMode = False
+                    self.triggeredDownload = False
+                    self.startDownload()
+
+                elif downloadDuration > DOWNLOAD_TIMEOUT:
                     log.warning("[Controller] ********************** Download Timer has Expired, Download has taken too long *********************")
                     log.warning("[Controller] ************************************* Going to standard mode ***************************************")
                     # Stop download mode
@@ -1548,8 +1563,8 @@ class ProtocolBase(asyncio.Protocol):
                     log.error(
                         "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel after several minutes)"
                     )
-                    self.PanelMode = PanelMode.PROBLEM
                     self.suspendAllOperations = True
+                    self.PanelMode = PanelMode.PROBLEM
                     self.sendResponseEvent(10)  # Plugin suspended itself
 
     def reset_keep_alive_messages(self):
@@ -1637,7 +1652,7 @@ class ProtocolBase(asyncio.Protocol):
             #log.debug("[data receiver] Received message Type %d", data)
             if data != 0x00 and data in pmReceiveMsg_t:                # Is it a message type that we know about
                 self.pmCurrentPDU = pmReceiveMsg_t[data]               # set to current message type parameter settings for length, does it need an ack etc
-                self.pmIncomingPduLen = self.pmCurrentPDU.length       # for variable length messages this is the fixed length and will work with this algorithm until updated. 
+                self.pmIncomingPduLen = self.pmCurrentPDU.length       # for variable length messages this is the fixed length and will work with this algorithm until updated.
             else:
                 # build an unknown PDU. As the length is not known, leave self.pmIncomingPduLen set to 0 so we just look for 0x0A as the end of the PDU
                 self.pmCurrentPDU = pmReceiveMsg_t[0]                  # Set to unknown message structure to get settings, varlenbytepos is -1
@@ -1866,7 +1881,11 @@ class ProtocolBase(asyncio.Protocol):
             self.reset_keep_alive_messages()
             self.firstCmdSent = True
             # Log some useful information in debug mode
-            self.transport.write(sData)
+            if self.transport is not None:
+                self.transport.write(sData)
+            else:
+                log.debug("[pmSendPdu]      Comms transport has been set to none, must be in process of terminating comms")
+
             # log.debug("[pmSendPdu]      waiting for message response {}".format([hex(no).upper() for no in self.pmExpectedResponse]))
 
             if command.download:
@@ -1887,7 +1906,7 @@ class ProtocolBase(asyncio.Protocol):
     def SendCommand(self, message_type, **kwargs):
         t = self.loop.create_task(self.SendCommandAsync(message_type, kwargs), name="Send Command to Panel") #, loop=self.loop)
         #asyncio.wait_for(t, None)
-        asyncio.gather(t)            
+        asyncio.gather(t)
 
     # This is called to queue a command.
     # If it is possible, then also send the message
@@ -1962,12 +1981,12 @@ class ProtocolBase(asyncio.Protocol):
     # This puts the panel in to download mode. It is the start of determining powerlink access
     def startDownload(self):
         """ Start download mode """
-        self.PanelMode = PanelMode.DOWNLOAD
         if not self.pmDownloadComplete and not self.pmDownloadMode and not self.triggeredDownload:
             # self.pmWaitingForAckFromPanel = False
             self.pmExpectedResponse = []
             log.debug("[StartDownload] Starting download mode")
             self.SendCommand("MSG_DOWNLOAD", options=[3, bytearray.fromhex(self.DownloadCode)])  #
+            self.PanelMode = PanelMode.DOWNLOAD
             self.triggeredDownload = True
         elif self.pmDownloadComplete:
             log.debug("[StartDownload] Download has already completed (so not doing anything)")
@@ -2027,7 +2046,7 @@ class PacketHandling(ProtocolBase):
 
         secdelay = DOWNLOAD_RETRY_DELAY + 100
         self.lastSendOfDownloadEprom = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
-        
+
         # Variables to manage the PowerMAster B0 message and the triggering of Motion
         self.lastRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
         self.firstRecvOfMasterMotionData = self.getTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
@@ -2047,7 +2066,7 @@ class PacketHandling(ProtocolBase):
 
         self.pmBypassOff = False         # Do we allow the user to bypass the sensors, this is read from the EPROM data
         self.pmSilentPanic = False       # Is silent panic set in the panel. This is read from the EPROM data
-        
+
         self.lastPacket = None
         self.lastPacketCounter = 0
         self.sensorsCreated = False  # Have the sensors benn created. Either from an A5 message or the EPROM data
@@ -2151,6 +2170,7 @@ class PacketHandling(ProtocolBase):
                 return retval
         log.debug("[Read Settings]     Sorry but you havent downloaded that part of the EPROM data     page={0} index={1} length={2}".format(hex(page), hex(index), settings_len))
         if not self.pmDownloadMode:
+            self.pmDownloadComplete = False
             # prevent any more retrieval of the EPROM settings and put us back to Standard Mode
             self.delayDownload()
             # try to download panel EPROM again
@@ -2350,7 +2370,7 @@ class PacketHandling(ProtocolBase):
                 #log.debug("panic {0}   bypass {1}".format(self.lookupEpromSingle("panicAlarm"), self.lookupEpromSingle("bypass") ))
                 self.pmSilentPanic = self.lookupEpromSingle("panicAlarm") == "Silent Panic"    # special
                 self.pmBypassOff = self.lookupEpromSingle("bypass") == "No Bypass"             # special   '2':"Manual Bypass", '0':"No Bypass", '1':"Force Arm"}
-                
+
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process user pin codes
                 if self.PowerMaster:
@@ -2374,6 +2394,7 @@ class PacketHandling(ProtocolBase):
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Store partition info & check if partitions are on
+                partition = None
                 if partitionCnt > 1:  # Could the panel have more than 1 partition?
                     # If that panel type can have more than 1 partition, then check to see if the panel has defined more than 1
                     partition = self.pmReadSettings(pmDownloadItem_t["MSG_DL_PARTITIONS"])
@@ -2449,7 +2470,7 @@ class PacketHandling(ProtocolBase):
                             zoneChime = (zoneInfo >> 4) & 0x03
 
                             part = []
-                            if partitionCnt > 1:
+                            if partitionCnt > 1 and partition is not None:
                                 for j in range(0, partitionCnt):
                                     if (partition[0x11 + i] & (1 << j)) > 0:
                                         # log.debug("[Process Settings]     Adding to partition list - ref {0}  Z{1:0>2}   Partition {2}".format(i, i+1, j+1))
@@ -2798,12 +2819,14 @@ class PacketHandling(ProtocolBase):
 
         self.PowerMaster = (self.PanelType >= 7)
         self.PanelModel = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
-        
+
+        self.pmGotPanelDetails = True
+
         log.debug("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, self.PanelModel, self.PowerMaster))
 
         # We got a first response, now we can Download the panel EPROM settings
         interval = self.getTimeFunction() - self.lastSendOfDownloadEprom
-        td = timedelta(seconds=DOWNLOAD_RETRY_DELAY)  # prevent multiple requests for the EPROM panel settings, at least DOWNLOAD_RETRY_DELAY seconds 
+        td = timedelta(seconds=DOWNLOAD_RETRY_DELAY)  # prevent multiple requests for the EPROM panel settings, at least DOWNLOAD_RETRY_DELAY seconds
         log.debug("[handle_msgtype3C] interval={0}  td={1}   self.lastSendOfDownloadEprom={2}    timenow={3}".format(interval, td, self.lastSendOfDownloadEprom, self.getTimeFunction()))
         if interval > td:
             self.lastSendOfDownloadEprom = self.getTimeFunction()
@@ -3395,7 +3418,7 @@ class PacketHandling(ProtocolBase):
                 # INTERFACE Indicate whether siren active
 
                 log.debug("[handle_msgtypeA7]           self.pmSirenActive={0}   siren={1}   eventType={2}   self.pmSilentPanic={3}   tamper={4}".format(self.pmSirenActive, siren, hex(eventType), self.pmSilentPanic, tamper) )
-                
+
                 #---------------------------------------------------------------------------------------
                 if eventType == 0x60: # system restart
                     datadict['Reset'] = True
@@ -3631,20 +3654,29 @@ class EventHandling(PacketHandling):
         if client is not None:
             log.debug("[EventHandling]  client is not None, calling setPyVisonic " + str(type(client)))
             client.setPyVisonic(self)
-            self.client = client
         else:
             log.debug("[EventHandling]  client is None")
 
-    def ShutdownOperation(self):
-        self.suspendAllOperations = True
-        if self.transport is not None:
-            self.transport.close()
+    ############################################################################################################
+    ############################################################################################################
+    ############################################################################################################
+    ######################## The following functions are called from the client ################################
+    ############################################################################################################
+    ############################################################################################################
+    ############################################################################################################
 
-    async def startDownloadAgain(self):
-        if not self.pmDownloadMode:
-            log.debug("[CommandQueue]  download EPROM (again)")
-            self.pmDownloadComplete = False
-            self.startDownload()
+    def ShutdownOperation(self):
+        if not self.suspendAllOperations:
+            self.suspendAllOperations = True
+            if self.transport is not None:
+                self.transport.close()
+        self.transport = None
+
+    #async def startDownloadAgain(self):
+    #    if not self.pmDownloadMode:
+    #        log.debug("[CommandQueue]  download EPROM (again)")
+    #        self.pmDownloadComplete = False
+    #        self.startDownload()
 
     def PopulateDictionary(self, state) -> dict:
         datadict = {}
@@ -3665,14 +3697,6 @@ class EventHandling(PacketHandling):
             if self.pmSensorDev_t[key].ztamper:
                 datadict["ZoneTamper"].append(entname)
         return datadict
-
-    ############################################################################################################
-    ############################################################################################################
-    ############################################################################################################
-    ######################## The following functions are called from the client ################################
-    ############################################################################################################
-    ############################################################################################################
-    ############################################################################################################
 
     def getPanelStatus(self) -> dict:
         # log.debug("In visonic getpanelstatus")
@@ -3744,7 +3768,7 @@ class EventHandling(PacketHandling):
 
         if not self.pmDownloadMode:
             if ident >= 0 and ident <= 15:
-                log.debug("[SendX10Command]  Py Visonic : Send X10 Command : id = " + str(ident) + "   state = " + state)
+                log.debug("[SendX10Command]  Send X10 Command : id = " + str(ident) + "   state = " + state)
                 calc = 1 << ident
                 byteA = calc & 0xFF
                 byteB = (calc >> 8) & 0xFF
@@ -3777,19 +3801,19 @@ class EventHandling(PacketHandling):
             if not self.pmBypassOff:
                 bpin = self.createPin(pin)
                 bypassint = 1 << (zone - 1)
-                _LOGGER.debug("[SensorArmState]  SetSensorArmedState A " + hex(bypassint))
+                log.debug("[SensorArmState]  SetSensorArmedState A " + hex(bypassint))
                 # is it big or little endian, i'm not sure, needs testing
                 y1, y2, y3, y4 = (bypassint & 0xFFFFFFFF).to_bytes(4, "little")
                 # These could be the wrong way around, needs testing
                 bypass = bytearray([y1, y2, y3, y4])
-                _LOGGER.debug("[SensorArmState]  SetSensorArmedState B " + self.toString(bypass))
+                log.debug("[SensorArmState]  SetSensorArmedState B " + self.toString(bypass))
                 if len(bypass) == 4:
                     if bypassValue:
                         self.SendCommand("MSG_BYPASSEN", options=[1, bpin, 3, bypass])
                     else:
                         self.SendCommand("MSG_BYPASSDI", options=[1, bpin, 7, bypass])
                     # request status to check success and update sensor variable
-                    self.SendCommand("MSG_BYPASSTAT") 
+                    self.SendCommand("MSG_BYPASSTAT")
                     return 0
                 else:
                     return 4
@@ -3813,7 +3837,7 @@ class EventHandling(PacketHandling):
 
 class VisonicProtocol(EventHandling):
     """Combine preferred abstractions that form complete interface."""
-    
+
 
 class dummyclient:
     def __init__(self, *args, **kwargs) -> None:
@@ -3822,7 +3846,7 @@ class dummyclient:
     def setPyVisonic(self, pyvis):
         """ Set the pyvisonic connection. This is called from the library. """
         self.visprotocol = pyvis
-        
+
     def getPyVisonic(self) -> VisonicProtocol:
         return self.visprotocol
 
@@ -3844,7 +3868,7 @@ async def async_wait_for_connection(dc : dummyclient, loop) -> VisonicProtocol:
         log.debug("Waiting for Protocol Handler to Start")
         count = count - 1
         await asyncio.sleep(1.0)
-     
+
     return dc.getPyVisonic()
 
 
@@ -3953,7 +3977,7 @@ def create_tcp_visonic_connection(
     address, port, protocolvp=VisonicProtocol, panelConfig=None, event_callback=None, disconnect_callback=None, loop=None
 ):
     """Create Visonic manager class, returns tcp transport coroutine."""
-    
+
     dc = dummyclient()
 
     # use default protocol if not specified
@@ -4053,3 +4077,6 @@ def setupLocalLogger(level: str = "WARNING", logfile = False):
     # level = logging.getLevelName('INFO')
     level = logging.getLevelName(level)  # INFO, DEBUG
     log.setLevel(level)
+
+# Turn on auto code formatting when using black
+# fmt: on

@@ -24,6 +24,8 @@ This Component is compliant with the new Component format within the Home Assist
 
 |  Release   |    Description   |
 |------------|------------------|
+| 0.6.3.0    | *** Breaking change ***  I am still working towards submitting the integration into HA. This release does not call pyvisonic as a pypi library. More restructuring has been done, particularly to bring it in line with HA core constants. The sensors are no longer polled.  Further fixes to startup and restart. |
+| 0.6.2.0    | Not uploaded to Github |
 | 0.6.1.0    | *** Breaking change ***  I am still working towards submitting the integration into HA. This is the 2nd step. Auto code formatting has been done using black. This release does not call pyvisonic as a pypi library. Some restructuring has been done, particularly with config variables, startup and restart. |
 | 0.6.0.0    | *** Breaking change ***  I am working towards submitting the integration into HA. This is the 1st step, I have separated the panel interaction codebase in to a pypi library called pyvisonic. There is a manifest change so HA should automatically retrieve and install this library for you. I will update the wiki accordingly. I have also added access permission checking to the 5 visonic services within HA. |
 | 0.5.0.3    | Added flood sensor FLD-550 PG2, the device class is moisture.  I know it isn't ideal but that really is the best option |

@@ -2,23 +2,32 @@
 
 import logging
 
-from homeassistant.components.switch import ENTITY_ID_FORMAT, SwitchEntity
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import slugify
 from .pyvisonic import X10Device
 from .client import VisonicClient
-from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_NAME, VISONIC_UPDATE_STATE_DISPATCHER
+from .const import (
+    DOMAIN,
+    DOMAINCLIENT,
+    VISONIC_UNIQUE_NAME,
+    VISONIC_UPDATE_STATE_DISPATCHER,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
+) -> None:
     """Set up the Visonic Alarm Binary Sensors."""
     if DOMAIN in hass.data:
         client = hass.data[DOMAIN][entry.entry_id][DOMAINCLIENT]
-        devices = [VisonicSwitch(client, device) for device in hass.data[DOMAIN]["switch"]]
+        devices = [
+            VisonicSwitch(client, device) for device in hass.data[DOMAIN]["switch"]
+        ]
         hass.data[DOMAIN]["switch"] = list()
         async_add_entities(devices, True)
 
@@ -29,21 +38,25 @@ class VisonicSwitch(SwitchEntity):
     def __init__(self, client: VisonicClient, visonic_device: X10Device):
         """Initialise a Visonic X10 Device."""
         # _LOGGER.debug("Creating X10 Switch %s", visonic_device.name)
-        self.client = client
+        self._client = client
         self.visonic_device = visonic_device
-        self.x10id = self.visonic_device.id
+        self._x10id = self.visonic_device.id
         self._name = "Visonic " + self.visonic_device.name
         # Append device id to prevent name clashes in HA.
-        self.visonic_id = slugify(self._name)
+        self._visonic_id = slugify(self._name)
 
         # VISONIC_ID_FORMAT.format( slugify(self._name), visonic_device.getDeviceID())
-        self.entity_id = ENTITY_ID_FORMAT.format(self.visonic_id)
-        self.current_value = self.visonic_device.state
+        # self._entity_id = ENTITY_ID_FORMAT.format(self._visonic_id)
+        self._current_value = self.visonic_device.state
 
     async def async_added_to_hass(self):
         """Register callbacks."""
         # Register for dispatcher calls to update the state
-        self.async_on_remove(async_dispatcher_connect(self.hass, VISONIC_UPDATE_STATE_DISPATCHER, self.onChange))
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, VISONIC_UPDATE_STATE_DISPATCHER, self.onChange
+            )
+        )
         # self.visonic_device.install_change_handler(self.onChange)
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
@@ -53,17 +66,13 @@ class VisonicSwitch(SwitchEntity):
         # if self.visonic_device is not None:
         #    self.visonic_device.install_change_handler(None)
         self.visonic_device = None
-        self.client = None
+        self._client = None
         _LOGGER.debug("switch async_will_remove_from_hass")
-
-    # async def async_remove_entry(self, hass, entry) -> None:
-    #    """Handle removal of an entry."""
-    #    _LOGGER.debug("switch async_remove_entry")
 
     def onChange(self, event_id: int, datadictionary: dict):
         """Switch state has changed."""
         # _LOGGER.debug("Switch onchange %s", str(self._name))
-        self.current_value = self.visonic_device.state
+        self._current_value = self.visonic_device.state
         self.schedule_update_ha_state()
 
     @property
@@ -74,7 +83,7 @@ class VisonicSwitch(SwitchEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        return self.visonic_id
+        return self._visonic_id
 
     @property
     def name(self):
@@ -83,13 +92,13 @@ class VisonicSwitch(SwitchEntity):
 
     @property
     def assumed_state(self):
-        """Return true if unable to access real state of entity."""
+        """Return False if unable to access real state of entity."""
         return False
 
     @property
     def is_on(self):
         """Return true if device is on."""
-        return self.current_value
+        return self._current_value
 
     def turn_on(self, **kwargs):
         """Turn the device on."""
@@ -114,7 +123,7 @@ class VisonicSwitch(SwitchEntity):
     # "off"  "on"  "dim"  "brighten"
     def turnmeonandoff(self, state):
         """Send disarm command."""
-        self.client.setX10(self.x10id, state)
+        self._client.setX10(self._x10id, state)
 
     @property
     def device_state_attributes(self):

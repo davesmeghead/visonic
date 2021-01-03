@@ -1,4 +1,3 @@
-
 CONF_DEVICE_TYPE = "type"
 CONF_DEVICE_BAUD = "baud"
 
