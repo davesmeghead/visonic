@@ -77,7 +77,7 @@ from .const import (
     AvailableNotifications,
 )
 
-CLIENT_VERSION = "0.6.4.0"
+CLIENT_VERSION = "0.6.4.1"
 
 _LOGGER = logging.getLogger(__name__)
 

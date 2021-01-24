@@ -38,7 +38,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "1.0.4.0"
+PLUGIN_VERSION = "1.0.4.1"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -2792,7 +2792,7 @@ class PacketHandling(ProtocolBase):
                     elif self.ForceAutoEnroll:
                         log.debug("[handle_msgtype08]                   Try to auto enroll")
                         self.SendMsg_ENROLL()  # Auto enroll
-                else:
+                elif lastCommandData[0] != 0x0B:  # The Stop Command
                     log.debug("[handle_msgtype08] Attempt to send a command message to the panel that has been rejected")
                     self.sendResponseEvent(15)  # push changes through to the host, something has been rejected (other than the pin)
                 
