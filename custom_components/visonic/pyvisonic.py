@@ -38,7 +38,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "1.0.3.3"
+PLUGIN_VERSION = "1.0.4.0"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -116,42 +116,43 @@ NO_RECEIVE_DATA_TIMEOUT = 30
 # use a named tuple for data and acknowledge
 #    replytype   is a message type from the Panel that we should get in response
 #    waitforack, if True means that we should wait for the acknowledge from the Panel before progressing
+#    debugprint  If False then do not log the full raw data as it may contain the user code
 #    waittime    a number of seconds after sending the command to wait before sending the next command
 # fmt: off
-VisonicCommand = collections.namedtuple('VisonicCommand', 'data replytype waitforack download waittime msg')
+VisonicCommand = collections.namedtuple('VisonicCommand', 'data replytype waitforack download debugprint waittime msg')
 pmSendMsg = {
-   "MSG_EVENTLOG"    : VisonicCommand(bytearray.fromhex('A0 00 00 00 99 99 00 00 00 00 00 43'), [0xA0]                  , False, False, 0.0, "Retrieving Event Log" ),
-   "MSG_ARM"         : VisonicCommand(bytearray.fromhex('A1 00 00 00 99 99 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "(Dis)Arming System" ),
-   "MSG_STATUS"      : VisonicCommand(bytearray.fromhex('A2 00 00 00 00 00 00 00 00 00 00 43'), [0xA5]                  ,  True, False, 0.0, "Getting Status" ),
-   "MSG_BYPASSTAT"   : VisonicCommand(bytearray.fromhex('A2 00 00 20 00 00 00 00 00 00 00 43'), [0xA5]                  , False, False, 0.0, "Bypassing" ),
-   "MSG_ZONENAME"    : VisonicCommand(bytearray.fromhex('A3 00 00 00 00 00 00 00 00 00 00 43'), [0xA3, 0xA3, 0xA3, 0xA3],  True, False, 0.0, "Requesting Zone Names" ),
-   "MSG_X10PGM"      : VisonicCommand(bytearray.fromhex('A4 00 00 00 00 00 99 99 99 00 00 43'), None                    , False, False, 0.0, "X10 Data" ),
-   "MSG_ZONETYPE"    : VisonicCommand(bytearray.fromhex('A6 00 00 00 00 00 00 00 00 00 00 43'), [0xA6, 0xA6, 0xA6, 0xA6],  True, False, 0.0, "Requesting Zone Types" ),
-   "MSG_U1"          : VisonicCommand(bytearray.fromhex('A7 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "Unknown 1" ),
-   "MSG_U2"          : VisonicCommand(bytearray.fromhex('A8 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "Unknown 2" ),
-   "MSG_U3"          : VisonicCommand(bytearray.fromhex('A9 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "Unknown 3" ),
-   "MSG_BYPASSEN"    : VisonicCommand(bytearray.fromhex('AA 99 99 12 34 56 78 00 00 00 00 43'), None                    , False, False, 0.0, "BYPASS Enable" ),
-   "MSG_BYPASSDI"    : VisonicCommand(bytearray.fromhex('AA 99 99 00 00 00 00 12 34 56 78 43'), None                    , False, False, 0.0, "BYPASS Disable" ),
-   "MSG_ALIVE"       : VisonicCommand(bytearray.fromhex('AB 03 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "I'm Alive Message To Panel" ),
-   "MSG_RESTORE"     : VisonicCommand(bytearray.fromhex('AB 06 00 00 00 00 00 00 00 00 00 43'), [0xA5]                  ,  True, False, 0.0, "Restore PowerMax/Master Connection" ),  # It can take multiple of these to put the panel back in to powerlink
-   "MSG_ENROLL"      : VisonicCommand(bytearray.fromhex('AB 0A 00 00 99 99 00 00 00 00 00 43'), None                    ,  True, False, 0.0, "Auto-Enroll of the PowerMax/Master" ),  # should get a reply of [0xAB] but its not guaranteed
-   "MSG_INIT"        : VisonicCommand(bytearray.fromhex('AB 0A 00 01 00 00 00 00 00 00 00 43'), None                    ,  True, False, 8.0, "Initializing PowerMax/Master PowerLink Connection" ),
-   "MSG_X10NAMES"    : VisonicCommand(bytearray.fromhex('AC 00 00 00 00 00 00 00 00 00 00 43'), [0xAC]                  , False, False, 0.0, "Requesting X10 Names" ),
-   # Command codes (powerlink) do not have the 0x43 on the end and are only 11 values
-   "MSG_DOWNLOAD"    : VisonicCommand(bytearray.fromhex('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C]                  , False,  True, 0.0, "Start Download Mode" ),  # This gets either an acknowledge OR an Access Denied response
-   "MSG_WRITE"       : VisonicCommand(bytearray.fromhex('3D 00 00 00 00 00 00 00 00 00 00')   , None                    , False, False, 0.0, "Write Data Set" ),
-   "MSG_DL"          : VisonicCommand(bytearray.fromhex('3E 00 00 00 00 B0 00 00 00 00 00')   , [0x3F]                  ,  True, False, 0.0, "Download Data Set" ),
-   "MSG_SETTIME"     : VisonicCommand(bytearray.fromhex('46 F8 00 01 02 03 04 05 06 FF FF')   , None                    , False, False, 0.0, "Setting Time" ),   # may not need an ack
-   "MSG_SER_TYPE"    : VisonicCommand(bytearray.fromhex('5A 30 04 01 00 00 00 00 00 00 00')   , [0x33]                  , False, False, 0.0, "Get Serial Type" ),
-   # quick command codes to start and stop download/powerlink are a single value
-   "MSG_START"       : VisonicCommand(bytearray.fromhex('0A')                                 , [0x0B]                  , False, False, 0.0, "Start" ),    # waiting for STOP from panel for download complete
-   "MSG_STOP"        : VisonicCommand(bytearray.fromhex('0B')                                 , None                    , False, False, 1.5, "Stop" ),     #
-   "MSG_EXIT"        : VisonicCommand(bytearray.fromhex('0F')                                 , None                    , False, False, 1.5, "Exit" ),
-   # Acknowledges
-   "MSG_ACK"         : VisonicCommand(bytearray.fromhex('02')                                 , None                    , False, False, 0.0, "Ack" ),
-   "MSG_ACKLONG"     : VisonicCommand(bytearray.fromhex('02 43')                              , None                    , False, False, 0.0, "Ack Long" ),
-   # PowerMaster specific
-   "MSG_POWERMASTER" : VisonicCommand(bytearray.fromhex('B0 01 00 00 00 00 00 00 00 00 43')   , [0xB0]                  , False, False, 0.0, "Powermaster Command" )
+   "MSG_EVENTLOG"    : VisonicCommand(bytearray.fromhex('A0 00 00 00 99 99 00 00 00 00 00 43'), [0xA0]                  , False, False, False, 0.0, "Retrieving Event Log" ),
+   "MSG_ARM"         : VisonicCommand(bytearray.fromhex('A1 00 00 00 99 99 00 00 00 00 00 43'), None                    ,  True, False, False, 0.0, "(Dis)Arming System" ),
+   "MSG_STATUS"      : VisonicCommand(bytearray.fromhex('A2 00 00 00 00 00 00 00 00 00 00 43'), [0xA5]                  ,  True, False,  True, 0.0, "Getting Status" ),
+   "MSG_BYPASSTAT"   : VisonicCommand(bytearray.fromhex('A2 00 00 20 00 00 00 00 00 00 00 43'), [0xA5]                  , False, False,  True, 0.0, "Get Bypass Status" ),
+   "MSG_ZONENAME"    : VisonicCommand(bytearray.fromhex('A3 00 00 00 00 00 00 00 00 00 00 43'), [0xA3, 0xA3, 0xA3, 0xA3],  True, False,  True, 0.0, "Requesting Zone Names" ),
+   "MSG_X10PGM"      : VisonicCommand(bytearray.fromhex('A4 00 00 00 00 00 99 99 99 00 00 43'), None                    , False, False,  True, 0.0, "X10 Data" ),
+   "MSG_ZONETYPE"    : VisonicCommand(bytearray.fromhex('A6 00 00 00 00 00 00 00 00 00 00 43'), [0xA6, 0xA6, 0xA6, 0xA6],  True, False,  True, 0.0, "Requesting Zone Types" ),
+   "MSG_U1"          : VisonicCommand(bytearray.fromhex('A7 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "Unknown 1" ),
+   "MSG_U2"          : VisonicCommand(bytearray.fromhex('A8 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "Unknown 2" ),
+   "MSG_U3"          : VisonicCommand(bytearray.fromhex('A9 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "Unknown 3" ),
+   "MSG_BYPASSEN"    : VisonicCommand(bytearray.fromhex('AA 99 99 12 34 56 78 00 00 00 00 43'), None                    , False, False, False, 0.0, "BYPASS Enable" ),
+   "MSG_BYPASSDI"    : VisonicCommand(bytearray.fromhex('AA 99 99 00 00 00 00 12 34 56 78 43'), None                    , False, False, False, 0.0, "BYPASS Disable" ),
+   "MSG_ALIVE"       : VisonicCommand(bytearray.fromhex('AB 03 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "I'm Alive Message To Panel" ),
+   "MSG_RESTORE"     : VisonicCommand(bytearray.fromhex('AB 06 00 00 00 00 00 00 00 00 00 43'), [0xA5]                  ,  True, False,  True, 0.0, "Restore PowerMax/Master Connection" ),  # It can take multiple of these to put the panel back in to powerlink
+   "MSG_ENROLL"      : VisonicCommand(bytearray.fromhex('AB 0A 00 00 99 99 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "Auto-Enroll of the PowerMax/Master" ),  # should get a reply of [0xAB] but its not guaranteed
+   "MSG_INIT"        : VisonicCommand(bytearray.fromhex('AB 0A 00 01 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 8.0, "Initializing PowerMax/Master PowerLink Connection" ),
+   "MSG_X10NAMES"    : VisonicCommand(bytearray.fromhex('AC 00 00 00 00 00 00 00 00 00 00 43'), [0xAC]                  , False, False,  True, 0.0, "Requesting X10 Names" ),
+   # Command codes (powerlink) do not have the 0x43 on the end and are only 11 values                                            
+   "MSG_DOWNLOAD"    : VisonicCommand(bytearray.fromhex('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C]                  , False,  True, False, 0.0, "Start Download Mode" ),  # This gets either an acknowledge OR an Access Denied response
+   "MSG_WRITE"       : VisonicCommand(bytearray.fromhex('3D 00 00 00 00 00 00 00 00 00 00')   , None                    , False, False, False, 0.0, "Write Data Set" ),
+   "MSG_DL"          : VisonicCommand(bytearray.fromhex('3E 00 00 00 00 B0 00 00 00 00 00')   , [0x3F]                  ,  True, False,  True, 0.0, "Download Data Set" ),
+   "MSG_SETTIME"     : VisonicCommand(bytearray.fromhex('46 F8 00 01 02 03 04 05 06 FF FF')   , None                    , False, False,  True, 0.0, "Setting Time" ),   # may not need an ack
+   "MSG_SER_TYPE"    : VisonicCommand(bytearray.fromhex('5A 30 04 01 00 00 00 00 00 00 00')   , [0x33]                  , False, False,  True, 0.0, "Get Serial Type" ),
+   # quick command codes to start and stop download/powerlink are a single value                                                 
+   "MSG_START"       : VisonicCommand(bytearray.fromhex('0A')                                 , [0x0B]                  , False, False,  True, 0.0, "Start" ),    # waiting for STOP from panel for download complete
+   "MSG_STOP"        : VisonicCommand(bytearray.fromhex('0B')                                 , None                    , False, False,  True, 1.5, "Stop" ),     #
+   "MSG_EXIT"        : VisonicCommand(bytearray.fromhex('0F')                                 , None                    , False, False,  True, 1.5, "Exit" ),
+   # Acknowledges                                                                                                                
+   "MSG_ACK"         : VisonicCommand(bytearray.fromhex('02')                                 , None                    , False, False,  True, 0.0, "Ack" ),
+   "MSG_ACKLONG"     : VisonicCommand(bytearray.fromhex('02 43')                              , None                    , False, False,  True, 0.0, "Ack Long" ),
+   # PowerMaster specific                                                                                                        
+   "MSG_POWERMASTER" : VisonicCommand(bytearray.fromhex('B0 01 00 00 00 00 00 00 00 00 43')   , [0xB0]                  , False, False,  True, 0.0, "Powermaster Command" )
 }
 
 pmSendMsgB0_t = {
@@ -1897,7 +1898,13 @@ class ProtocolBase(asyncio.Protocol):
                 self.pmLastSentMessage = instruction
 
             self.pmLastTransactionTime = self.getTimeFunction()
-            log.debug("[pmSendPdu] Sending Command ({0})    raw data {1}   waiting for message response {2}".format(command.msg, self.toString(sData), [hex(no).upper() for no in self.pmExpectedResponse]))
+            
+            if command.debugprint:
+                log.debug("[pmSendPdu] Sending Command ({0})    raw data {1}   waiting for message response {2}".format(command.msg, self.toString(sData), [hex(no).upper() for no in self.pmExpectedResponse]))
+            else:
+                # Do not log the full raw data as it may contain the user code
+                log.debug("[pmSendPdu] Sending Command ({0})    waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
+            
             if command.waittime > 0.0:
                 log.debug("[pmSendPdu]          Command has a wait time after transmission {0}".format(command.waittime))
                 await asyncio.sleep(command.waittime)
@@ -2774,7 +2781,6 @@ class PacketHandling(ProtocolBase):
                     log.debug("[handle_msgtype08] Attempt to send a command message to the panel that has been denied, wrong pin code used")
                     # INTERFACE : tell user that wrong pin has been used
                     self.sendResponseEvent(5)  # push changes through to the host, the pin has been rejected
-
                 elif lastCommandData[0] == 0x24:
                     log.debug("[handle_msgtype08] Got an Access Denied and we have sent a Download command to the Panel")
                     self.pmDownloadMode = False
@@ -2786,6 +2792,10 @@ class PacketHandling(ProtocolBase):
                     elif self.ForceAutoEnroll:
                         log.debug("[handle_msgtype08]                   Try to auto enroll")
                         self.SendMsg_ENROLL()  # Auto enroll
+                else:
+                    log.debug("[handle_msgtype08] Attempt to send a command message to the panel that has been rejected")
+                    self.sendResponseEvent(15)  # push changes through to the host, something has been rejected (other than the pin)
+                
 
     def handle_msgtype0B(self, data):  # STOP
         """ Handle STOP from the panel """
@@ -3384,7 +3394,7 @@ class PacketHandling(ProtocolBase):
                     datadict['Zone'] = zoneData
                     datadict['Entity'] = "binary_sensor.visonic_" + self.pmSensorDev_t[zoneData-1].dname.lower()
 
-                self.PanelLastEvent                  = s
+                self.PanelLastEvent      = s
                 self.PanelAlarmStatus    = "None" if alarmStatus is None else alarmStatus
                 self.PanelTroubleStatus  = "None" if troubleStatus is None else troubleStatus
 
@@ -3745,9 +3755,20 @@ class EventHandling(PacketHandling):
                 bpin = self.pmPincode_t[0]   # if self.pmGotUserCode, then we downloaded the pin codes. Use the first one
             else:
                 bpin = bytearray.fromhex("00 00")
-        else:
+        elif len(pin) == 4:
             bpin = bytearray.fromhex(pin[0:2] + " " + pin[2:4])
+        else:
+            # default to setting it to "0000"and see what happens when its sent to the panel
+            bpin = bytearray.fromhex("00 00")
         return bpin
+        #if pin is None:
+        #    if self.pmGotUserCode:
+        #        bpin = self.pmPincode_t[0]   # if self.pmGotUserCode, then we downloaded the pin codes. Use the first one
+        #    else:
+        #        bpin = bytearray.fromhex("00 00")
+        #else:
+        #    bpin = bytearray.fromhex(pin[0:2] + " " + pin[2:4])
+        #return bpin
 
     # RequestArm
     #       state is one of: "disarmed", "stay", "armed", "stayinstant", "armedinstant"  # "UserTest"
@@ -3809,12 +3830,12 @@ class EventHandling(PacketHandling):
             if not self.pmBypassOff:
                 bpin = self.createPin(pin)
                 bypassint = 1 << (zone - 1)
-                log.debug("[SensorArmState]  SetSensorArmedState A " + hex(bypassint))
+                #log.debug("[SensorArmState]  SetSensorArmedState A " + hex(bypassint))
                 # is it big or little endian, i'm not sure, needs testing
                 y1, y2, y3, y4 = (bypassint & 0xFFFFFFFF).to_bytes(4, "little")
                 # These could be the wrong way around, needs testing
                 bypass = bytearray([y1, y2, y3, y4])
-                log.debug("[SensorArmState]  SetSensorArmedState B " + self.toString(bypass))
+                log.debug("[SensorArmState]  SetSensorArmedState bypass = " + self.toString(bypass))
                 if len(bypass) == 4:
                     if bypassValue:
                         self.SendCommand("MSG_BYPASSEN", options=[1, bpin, 3, bypass])

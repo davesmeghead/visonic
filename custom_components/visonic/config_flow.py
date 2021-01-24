@@ -14,7 +14,7 @@ from homeassistant import config_entries, data_entry_flow
 from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT
 from homeassistant.core import callback
 
-from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_NAME
+from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_NAME, CONF_ALARM_NOTIFICATIONS
 from .create_schema import (
     create_schema_device,
     create_schema_ethernet,
@@ -148,6 +148,9 @@ class MyHandlers(data_entry_flow.FlowHandler):
                 # convert comma separated string to a list
                 if CONF_SIREN_SOUNDING in self.config:
                     self.toList(self.config, CONF_SIREN_SOUNDING)
+
+                if CONF_ALARM_NOTIFICATIONS in self.config:
+                    self.toList(self.config, CONF_ALARM_NOTIFICATIONS)
 
                 if CONF_EXCLUDE_SENSOR in self.config:
                     self.toList(self.config, CONF_EXCLUDE_SENSOR)

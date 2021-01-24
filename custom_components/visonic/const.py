@@ -1,4 +1,5 @@
 """Constants for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
+from enum import Enum
 
 DOMAIN = "visonic"
 PLATFORMS = ["alarm_control_panel", "binary_sensor", "switch"]
@@ -13,7 +14,7 @@ DOMAINCLIENTTASK = f"{DOMAIN}_client_task"
 
 # Constants for sending a persistent notification to the frontend when there is a fault
 NOTIFICATION_ID = f"{DOMAIN}_notification"
-NOTIFICATION_TITLE = "Visonic Panel Setup"
+NOTIFICATION_TITLE = "Visonic Alarm Panel"
 
 # undo listener
 UNDO_VISONIC_UPDATE_LISTENER = f"{DOMAIN}_undo_update_listener"
@@ -43,3 +44,31 @@ CONF_LOG_MAX_ENTRIES = "panellog_max_entries"
 
 # Supplement the HA attributes with a bypass, this is for individual sensors in the service call. It is used as a boolean.
 ATTR_BYPASS = "bypass"
+
+# What notifications to send to the HA Frontend
+CONF_ALARM_NOTIFICATIONS = "panel_state_notifications"
+
+class AvailableNotifications(str, Enum):
+    ALWAYS = 'always'
+    SIREN = 'sirensounding'
+    TAMPER = 'paneltamper'
+    RESET = 'panelreset'
+    INVALID_PIN = 'invalidpin'
+    PANEL_OPERATION = 'paneloperation'
+    CONNECTION_PROBLEM = 'connectionproblem'
+    BYPASS_PROBLEM = 'bypassproblem'
+    EVENTLOG_PROBLEM = 'eventlogproblem'
+    COMMAND_NOT_SENT = 'commandnotsent'
+
+AvailableNotificationConfig = {
+    AvailableNotifications.SIREN : "Siren Sounding",
+    AvailableNotifications.TAMPER : "Panel Tamper",
+    AvailableNotifications.RESET : "Panel System Reset",
+    AvailableNotifications.INVALID_PIN : "Code Rejected By Panel",
+    AvailableNotifications.PANEL_OPERATION : "Panel Operation Rejected",
+    AvailableNotifications.CONNECTION_PROBLEM : "Connection Problems",
+    AvailableNotifications.BYPASS_PROBLEM : "Sensor Bypass Problems",
+    AvailableNotifications.EVENTLOG_PROBLEM : "Event Log Problems",
+    AvailableNotifications.COMMAND_NOT_SENT : "Command Not Sent To Panel"
+}
+

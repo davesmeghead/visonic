@@ -41,10 +41,13 @@ from .const import (
     CONF_LOG_MAX_ENTRIES,
     CONF_LOG_REVERSE,
     CONF_LOG_XML_FN,
+    CONF_ALARM_NOTIFICATIONS,
     DEFAULT_DEVICE_BAUD,
     DEFAULT_DEVICE_HOST,
     DEFAULT_DEVICE_PORT,
     DEFAULT_DEVICE_USB,
+    AvailableNotifications,
+    AvailableNotificationConfig,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,6 +67,8 @@ def create_default(options: dict, key: str, default: Any):
         if isinstance(options[key], list) or isinstance(options[key], NodeListClass):
             # _LOGGER.debug("      its a list")
             if CONF_SIREN_SOUNDING == key:
+                return list(options[key])
+            if CONF_ALARM_NOTIFICATIONS == key:
                 return list(options[key])
             if len(options[key]) > 0:
                 my_string = ",".join(map(str, list(options[key])))
@@ -120,7 +125,6 @@ available_siren_values = {
     "panic": "Panic",
 }
 
-
 def create_parameters2(options: dict):
     """Create parameter set 2."""
     # Panel settings - can be modified/edited
@@ -133,6 +137,10 @@ def create_parameters2(options: dict):
             CONF_SIREN_SOUNDING,
             default=create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
         ): cv.multi_select(available_siren_values),
+        vol.Optional(
+            CONF_ALARM_NOTIFICATIONS,
+            default=create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotificationConfig[AvailableNotifications.CONNECTION_PROBLEM], AvailableNotificationConfig[AvailableNotifications.SIREN]]),
+        ): cv.multi_select(AvailableNotificationConfig),
         vol.Optional(
             CONF_OVERRIDE_CODE, default=create_default(options, CONF_OVERRIDE_CODE, "")
         ): str,
@@ -262,6 +270,10 @@ def create_parameters2cv(options: dict):
             CONF_SIREN_SOUNDING,
             default=create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
         ): cv.multi_select(available_siren_values),
+        vol.Optional(
+            CONF_ALARM_NOTIFICATIONS,
+            default=create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotificationConfig[AvailableNotifications.CONNECTION_PROBLEM], AvailableNotificationConfig[AvailableNotifications.SIREN]]),
+        ): cv.multi_select(AvailableNotificationConfig),
         vol.Optional(
             CONF_OVERRIDE_CODE, default=create_default(options, CONF_OVERRIDE_CODE, "")
         ): cv.string,

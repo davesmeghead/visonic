@@ -73,9 +73,11 @@ from .const import (
     NOTIFICATION_ID,
     NOTIFICATION_TITLE,
     VISONIC_UPDATE_STATE_DISPATCHER,
+    CONF_ALARM_NOTIFICATIONS,
+    AvailableNotifications,
 )
 
-CLIENT_VERSION = "0.6.3.1"
+CLIENT_VERSION = "0.6.4.0"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -152,12 +154,19 @@ class VisonicClient:
             self.exclude_x10_list,
         )
 
-    def createWarningMessage(self, message: str):
+    def sendHANotification(self, condition : AvailableNotifications, message: str):
+        notification_config = self.config.get(CONF_ALARM_NOTIFICATIONS, [] )
+        #_LOGGER.debug("condition is {0}    notification_config {1}".format(condition, notification_config))
+        if condition == AvailableNotifications.ALWAYS or condition in notification_config:
+            #_LOGGER.debug("   condition {0} is in there".format(condition))
+            self.hass.components.persistent_notification.create(
+                message, title=NOTIFICATION_TITLE, notification_id=NOTIFICATION_ID
+            )
+
+    def createWarningMessage(self, condition : AvailableNotifications, message: str):
         """Create a Warning message in the log file and a notification on the HA Frontend."""
         _LOGGER.warning(message)
-        self.hass.components.persistent_notification.create(
-            message, title=NOTIFICATION_TITLE, notification_id=NOTIFICATION_ID
-        )
+        self.sendHANotification(condition, message)
 
     def isSirenActive(self) -> bool:
         """Is the siren active."""
@@ -354,6 +363,7 @@ class VisonicClient:
                             f.close()
                     except (IOError, AttributeError, TypeError):
                         self.createWarningMessage(
+                            AvailableNotifications.EVENTLOG_PROBLEM,
                             "Panel Event Log - Failed to write XML file"
                         )
 
@@ -379,6 +389,7 @@ class VisonicClient:
                             f.close()
                     except (IOError, AttributeError, TypeError):
                         self.createWarningMessage(
+                            AvailableNotifications.EVENTLOG_PROBLEM,
                             "Panel Event Log - Failed to write CSV file"
                         )
 
@@ -473,23 +484,24 @@ class VisonicClient:
         )
 
         # Send an event on the event bus for conditions 1 to 14.  Ignore 0 as this is used for any sensor change.
+        # General update trigger
+        #    1 is a zone update,
+        #    2 is a panel update AND the alarm is not active,
+        #    3 is a panel update AND the alarm is active,
+        #    4 is the panel has been reset,
+        #    5 is pin rejected,
+        #    6 is tamper triggered
+        #    7 is download timer expired
+        #    8 is watchdog timer expired, give up trying to achieve a better mode, resorting to Standard Mode
+        #    9 is watchdog timer expired, going to try again to get a better mode
+        #   10 is a comms problem, we have received no data so plugin has suspended itself (following starting up)
+        #   11 is local feedback on arm/disarm (this is not from the visonic panel)
+        #   12 is local feedback on bypass (this is not from the visonic panel)
+        #   13 is local feedback on event log (this is not from the visonic panel)
+        #   14 is local feedback on X10 (this is not from the visonic panel)
+        #   15 is something other than the pin code has been rejected by the panel (see 5 above)
         tmp = int(event_id)
-        if 1 <= tmp <= 14:
-            # General update trigger
-            #    1 is a zone update,
-            #    2 is a panel update AND the alarm is not active,
-            #    3 is a panel update AND the alarm is active,
-            #    4 is the panel has been reset,
-            #    5 is pin rejected,
-            #    6 is tamper triggered
-            #    7 is download timer expired
-            #    8 is watchdog timer expired, give up trying to achieve a better mode, resorting to Standard Mode
-            #    9 is watchdog timer expired, going to try again to get a better mode
-            #   10 is a comms problem, we have received no data so plugin has suspended itself (following starting up)
-            #   11 is local feedback on arm/disarm (this is not from the visonic panel)
-            #   12 is local feedback on bypass (this is not from the visonic panel)
-            #   13 is local feedback on event log (this is not from the visonic panel)
-            #   14 is local feedback on X10 (this is not from the visonic panel)
+        if 1 <= tmp <= 14: # do not send 0 or 15 as an HA event
 
             tmpdict = {}
             if datadictionary is not None:
@@ -499,10 +511,24 @@ class VisonicClient:
             _LOGGER.debug("Visonic update event %s %s", tmp, tmpdict)
             self.hass.bus.fire(ALARM_PANEL_CHANGE_EVENT, tmpdict)
 
-            if tmp == 10:
-                self.createWarningMessage(
-                    "Failed to connect to your Visonic Alarm. We have not received any data from the panel at all, not one single byte."
-                )
+#        if tmp == 0: 
+#            self.sendHANotification(AvailableNotifications.ALWAYS, "Connection Not Established - There may be a problem with the Integration or its Configuration (Ethernet or USB settings)" )
+        if tmp == 3: 
+            self.sendHANotification(AvailableNotifications.SIREN, "Siren is Sounding, Alarm has been Activated" )
+        elif tmp == 4:
+            self.sendHANotification(AvailableNotifications.RESET, "The Panel has been Reset" )
+        elif tmp == 5:
+            self.sendHANotification(AvailableNotifications.INVALID_PIN, "The Pin Code has been Rejected By the Panel" )
+        elif tmp == 6:
+            self.sendHANotification(AvailableNotifications.TAMPER, "The Panel has been Tampered" )
+        elif tmp == 7:
+            self.sendHANotification(AvailableNotifications.PANEL_OPERATION, "Panel Data download timeout, StandardMode Selected" )
+        elif tmp == 8 or tmp == 9:
+            self.sendHANotification(AvailableNotifications.CONNECTION_PROBLEM, "Communication Timeout - Perhaps there is a problem with the connection to the Alarm Panel" )
+        elif tmp == 10:
+            self.sendHANotification(AvailableNotifications.CONNECTION_PROBLEM, "Failed to connect to your Visonic Alarm. We have not received any data from the panel" )
+        elif tmp == 15:
+            self.sendHANotification(AvailableNotifications.ALWAYS, "Operation Rejected By Panel (tell the Integration Author and upload a debug log file if you're able to)" )
 
     def visonic_event_callback_handler(
         self,
@@ -707,6 +733,7 @@ class VisonicClient:
             return True
 
         self.createWarningMessage(
+            AvailableNotifications.CONNECTION_PROBLEM,
             "Failed to connect into Visonic Alarm. Check Settings."
         )
 
@@ -847,37 +874,37 @@ class VisonicClient:
         asyncio.ensure_future(self.disconnect_callback_async(), loop=self.hass.loop)
 
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
-    def pmGetPin(self, pin: str, forcedKeypad: bool):
+    def pmGetPin(self, pin: str, forcedKeypad: bool, doingBypass : bool):
         """Get pin code."""
-        _LOGGER.debug("Getting Pin Start")
+        #_LOGGER.debug("Getting Pin Start")
         if pin is None or pin == "" or len(pin) != 4:
             psc = self.getPanelStatusCode()
             panelmode = self.getPanelMode()
-            _LOGGER.debug("Getting Pin")
+            #_LOGGER.debug("Getting Pin")
             if self.isArmWithoutCode() and psc == 0 and self.hasValidOverrideCode():
                 # Panel currently disarmed, arm without user code, override is set and valid
-                _LOGGER.debug("Here A")
+                #_LOGGER.debug("Here A")
                 return True, self.config.get(CONF_OVERRIDE_CODE, "")
-            elif self.isArmWithoutCode() and psc == 0:
+            elif not doingBypass and self.isArmWithoutCode() and psc == 0:
                 # Panel currently disarmed, arm without user code, so use any code
-                _LOGGER.debug("Here B")
+                #_LOGGER.debug("Here B")
                 return True, "0000"
             elif forcedKeypad:
                 # this is used to catch the condition that the keypad is used but an invalid
                 #     number of digits has been entered
-                _LOGGER.debug("Here D")
+                #_LOGGER.debug("Here D")
                 return False, None
             elif self.hasValidOverrideCode():
                 # The override is set and valid
-                _LOGGER.debug("Here C")
+                #_LOGGER.debug("Here C")
                 return True, self.config.get(CONF_OVERRIDE_CODE, "")
             elif panelmode == "Powerlink" or panelmode == "Standard Plus":
                 # Powerlink or StdPlus and so we downloaded the pin codes
-                _LOGGER.debug("Here E")
+                #_LOGGER.debug("Here E")
                 return True, None
-            elif self.isArmWithoutCode():
+            elif not doingBypass and self.isArmWithoutCode():
                 # Here to prevent the warning to the log file
-                _LOGGER.debug("Here F")
+                #_LOGGER.debug("Here F")
                 return False, None
             else:
                 _LOGGER.warning("Warning: Valid 4 digit PIN not found")
@@ -890,7 +917,7 @@ class VisonicClient:
         2: "Not allowed without valid pin",
         3: "Disabled by user settings",
         4: "Invalid state requested",
-        5: "General X10 Prpblem",
+        5: "General X10 Problem",
         6: "Disabled by panel settings",
     }
 
@@ -902,22 +929,23 @@ class VisonicClient:
         if self.visonicProtocol is not None:
             datadict = self.visonicProtocol.PopulateDictionary(command)
         datadict["Reason"] = reason
+        datadict["Message"] = message + " " + self.messageDict[reason]
+
         self.generate_ha_bus_event(event_id, datadict)
-        # if reason > 0:
-        _LOGGER.debug(
-            "[" + message + "]  " + str(reason) + "  " + self.messageDict[reason]
-        )
+
+        _LOGGER.debug("[" + message + "]  " + str(reason) + "  " + self.messageDict[reason])
+
+        if reason > 0:
+            self.sendHANotification(AvailableNotifications.COMMAND_NOT_SENT, "" + message + " " + self.messageDict[reason])
 
     def sendCommand(self, command: str, code: str) -> bool:
         """Send a command to the panel."""
         vp = self.visonicProtocol
         if vp is not None:
             command = command.lower()
-            _LOGGER.debug("sendCommand to Visonic Alarm Panel: %s %s", command, code)
+            _LOGGER.debug("sendCommand to Visonic Alarm Panel: %s", command)
 
-            isValidPL, pin = self.pmGetPin(
-                code, self.isForceKeypad()  # len(code) == 0 or
-            )
+            isValidPL, pin = self.pmGetPin(pin = code, forcedKeypad = self.isForceKeypad(), doingBypass = False)
 
             # Do this test here as it is not applicable to pin settings for bypass and event log
             if not isValidPL and self.isArmWithoutCode() and command != "disarmed":
@@ -930,35 +958,38 @@ class VisonicClient:
                     command != "disarmed" and self.isRemoteArm()
                 ):
                     success = vp.RequestArm(command, pin)
-                    self.generateBusEventReason(11, success, command, "RequestArm")
+                    self.generateBusEventReason(11, success, command, "Request Arm/Disarm")
                 else:
-                    self.generateBusEventReason(11, 3, command, "RequestArm")
+                    self.generateBusEventReason(11, 3, command, "Request Arm/Disarm")
             else:
-                self.generateBusEventReason(11, 2, command, "RequestArm")
+                self.generateBusEventReason(11, 2, command, "Request Arm/Disarm")
             return True
         else:
             return False
 
-    def sendBypass(self, devid: int, bypass: bool, code: str):
+    def sendBypass(self, devid: int, bypass: bool, code: str) -> bool:
         """Send the bypass command to the panel."""
         vp = self.visonicProtocol
         if vp is not None:
             if self.toBool(self.config.get(CONF_ENABLE_SENSOR_BYPASS, False)):
-                isValidPL, pin = self.pmGetPin(code, False)
+                isValidPL, pin = self.pmGetPin(pin = code, forcedKeypad = False, doingBypass = True)
                 if isValidPL:
                     success = vp.SetSensorArmedState(devid, bypass, pin)
-                    self.generateBusEventReason(12, success, "Bypass", "SensorArmState")
+                    self.generateBusEventReason(12, success, "Bypass", "Sensor Arm State")
+                    # success is an integer that is 0 on sending the command to the panel
+                    return success == 0
                 else:
-                    self.generateBusEventReason(12, 2, "Bypass", "SensorArmState")
+                    self.generateBusEventReason(12, 2, "Bypass", "Sensor Arm State")
             else:
-                self.generateBusEventReason(12, 3, "Bypass", "SensorArmState")
+                self.generateBusEventReason(12, 3, "Bypass", "Sensor Arm State")
+        return False
 
     def setX10(self, ident: int, state: str):
         """Send an X10 command to the panel."""
         # ident in range 0 to 15, state can be one of "off", "on", "dim", "brighten"
         if self.visonicProtocol is not None:
             success = self.visonicProtocol.setX10(ident, state)
-            self.generateBusEventReason(14, success, "X10", "SendX10Command")
+            self.generateBusEventReason(14, success, "X10", "Send X10 Command")
 
     def decode_code(self, data) -> str:
         """Decode the alarm code."""
@@ -971,6 +1002,47 @@ class VisonicClient:
                     if len(data["code"]) == 4:
                         return data["code"]
         return ""
+
+    def isPanelConnected(self) -> bool:
+        """Are we connected to the Alarm Panel."""
+        # If we are starting up then assume we need a valid code
+        #  This is the opposite of code_format as we want to prevent operation during startup
+        # Are we just starting up
+        armcode = self.getPanelStatusCode()
+        if armcode is None or armcode == -1:
+            _LOGGER.debug("isPanelConnected: code format none as armcode is none (panel starting up?)")
+            return False
+        return True
+
+    def isCodeRequired(self) -> bool:
+        """Determine if a user code is required given the panel mode and user settings."""
+        # try powerlink or standard plus mode first, then it already has the user codes
+        panelmode = self.getPanelMode()
+        # _LOGGER.debug("code format panel mode %s", panelmode)
+        if not self.isForceKeypad() and panelmode is not None:
+            if panelmode == "Powerlink" or panelmode == "Standard Plus":
+                _LOGGER.debug("No Key Panel as powerlink or std plus ********")
+                return False
+
+        armcode = self.getPanelStatusCode()
+        if armcode is None or armcode == -1:
+            return True
+
+        # If currently Disarmed and user setting to not show panel to arm
+        if armcode == 0 and self.isArmWithoutCode():
+            _LOGGER.debug("No Key Panel as disarmed and user arm without code")
+            return False
+
+        if self.isForceKeypad():
+            _LOGGER.debug("Key Panel as force numeric keypad set in config")
+            return True
+
+        if self.hasValidOverrideCode():
+            _LOGGER.debug("No Key Panel as code set in config")
+            return False
+
+        _LOGGER.debug("Key Panel")
+        return True
 
     async def service_panel_eventlog(self, call):
         """Service call to retrieve the event log from the panel. This currently just gets dumped in the HA log file."""
@@ -1001,7 +1073,7 @@ class VisonicClient:
 
             if self.visonicProtocol is not None:
                 success = self.visonicProtocol.GetEventLog(self.decode_code(code))
-                self.generateBusEventReason(13, success, "EventLog", "EventLog")
+                self.generateBusEventReason(13, success, "EventLog", "Event Log")
 
         else:
             _LOGGER.debug(
@@ -1072,13 +1144,18 @@ class VisonicClient:
             await self.service_panel_start()
 
         except (ConnectTimeout, HTTPError) as ex:
-            _LOGGER.debug("Unable to connect to Visonic Alarm Panel: %s", str(ex))
-            self.hass.components.persistent_notification.create(
-                "Error: {}<br />"
+            createWarningMessage(
+                AvailableNotifications.CONNECTION_PROBLEM,
+                "Visonic Panel Connection Error: {}<br />"
                 "You will need to restart hass after fixing."
-                "".format(ex),
-                title=NOTIFICATION_TITLE,
-                notification_id=NOTIFICATION_ID,
-            )
+                "".format(ex))
+            #_LOGGER.debug("Unable to connect to Visonic Alarm Panel: %s", str(ex))
+            #self.hass.components.persistent_notification.create(
+            #    "Error: {}<br />"
+            #    "You will need to restart hass after fixing."
+            #    "".format(ex),
+            #    title=NOTIFICATION_TITLE,
+            #    notification_id=NOTIFICATION_ID,
+            #)
 
         return False
