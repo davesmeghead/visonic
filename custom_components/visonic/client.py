@@ -75,7 +75,7 @@ from .const import (
     VISONIC_UPDATE_STATE_DISPATCHER,
 )
 
-CLIENT_VERSION = "0.6.3.0"
+CLIENT_VERSION = "0.6.3.1"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -427,11 +427,11 @@ class VisonicClient:
 
     def process_new_devices(self, visonic_devices: defaultdict):
         """Process new devices (sensors and x10)."""
-        _LOGGER.debug(
-            "Exclude sensor list = %s     Exclude x10 list = %s",
-            self.exclude_sensor_list,
-            self.exclude_x10_list,
-        )
+        #_LOGGER.debug(
+        #    "Exclude sensor list = %s     Exclude x10 list = %s",
+        #    self.exclude_sensor_list,
+        #    self.exclude_x10_list,
+        #)
         # Process new sensors
         if len(visonic_devices["sensor"]) > 0:
             changedlist = False
@@ -527,14 +527,15 @@ class VisonicClient:
             _LOGGER.warning("Visonic attempt to add device when sensor is undefined")
             return
 
-        if not self.SystemStarted:
-            _LOGGER.warning("Visonic Panel Request to callback handler when system not started")
-            # Try to get the asyncio Coroutine within the Task to shutdown the serial link connection properly
-            if self.visonicProtocol is not None:
-                _LOGGER.debug("     Shutting Down Protocol")
-                self.visonicProtocol.ShutdownOperation()
-                self.visonicProtocol = None
-            return
+        #if not self.SystemStarted:
+        # Removed as we want to send HA events and call the HA dispatcher whether the panel is connected or not
+        #    _LOGGER.warning("Visonic Panel Request to callback handler when system not started {0} {1}".format(type(visonic_devices), visonic_devices))
+        #    # Try to get the asyncio Coroutine within the Task to shutdown the serial link connection properly
+        #    if self.visonicProtocol is not None:
+        #        _LOGGER.debug("     Shutting Down Protocol")
+        #        self.visonicProtocol.ShutdownOperation()
+        #        self.visonicProtocol = None
+        #    return
 
         # Is the passed in data a dictionary full of X10 switches and sensors
         if type(visonic_devices) == defaultdict:

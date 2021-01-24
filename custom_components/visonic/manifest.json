@@ -2,10 +2,9 @@
   "domain": "visonic",
   "name": "Visonic Intruder Alarm",
   "config_flow": true,
-  "dependencies": [],
   "documentation": "https://github.com/davesmeghead/visonic/wiki",
+  "issue_tracker": "https://github.com/davesmeghead/visonic/issues",
+  "dependencies": [],
   "codeowners": ["@davesmeghead"],
-  "ssdp": [],
-  "zeroconf": [],
-  "homekit": {}
+  "requirements": []
 }

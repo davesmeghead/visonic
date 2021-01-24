@@ -38,7 +38,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "1.0.3.2"
+PLUGIN_VERSION = "1.0.3.3"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -2448,8 +2448,16 @@ class PacketHandling(ProtocolBase):
                                 # This is a very specific workaround for that particular panel type and model number and we'll wait and see if other users have issues
                                 #          These issues could be either way, users with or without that panel/model getting wrong results
                                 #          [handle_msgtype3C] PanelType=4 : PowerMax Pro Part , Model=62   Powermaster False
+                                # User fguerzoni also has a similar problem
+                                #          User has multiple PIRs and the only difference is the date stamp 
+                                #               PIRs model "NEXT MCW/K9 MCW" (8-3591-A20 v.01) are coming through as magnet as 0xd5
+                                #                     Date stamp 01/11 on the sensor seen as 'magnet'
+                                #                     Date stamp 05/10 on the sensor seen as 'motion'
+                                #          [handle_msgtype3C] PanelType=1 : PowerMax+ , Model=32 Powermaster False 
+                                
                                 powermax_pro_sensortypes = {0xE5: "Motion", 0xD5: "Motion"}
-                                if self.PanelType == 4 and self.ModelType == 62 and sensorID_c in powermax_pro_sensortypes:
+                                #if self.PanelType == 4 and self.ModelType == 62 and sensorID_c in powermax_pro_sensortypes:
+                                if ((self.PanelType == 4 and self.ModelType == 62) or (self.PanelType == 1 and self.ModelType == 32)) and sensorID_c in powermax_pro_sensortypes:
                                     sensorTypeStr = powermax_pro_sensortypes[sensorID_c]
                                 elif tmpid in pmZoneSensorMax_t:
                                     # if tmpid in pmZoneSensorMax_t:
