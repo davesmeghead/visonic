@@ -6,7 +6,7 @@ import logging
 from time import sleep
 from typing import Union, Any
 
-CLIENT_VERSION = "0.6.4.2"
+CLIENT_VERSION = "0.6.4.4"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
