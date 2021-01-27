@@ -139,7 +139,7 @@ def create_parameters2(options: dict):
         ): cv.multi_select(available_siren_values),
         vol.Optional(
             CONF_ALARM_NOTIFICATIONS,
-            default=create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotificationConfig[AvailableNotifications.CONNECTION_PROBLEM], AvailableNotificationConfig[AvailableNotifications.SIREN]]),
+            default=create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
         ): cv.multi_select(AvailableNotificationConfig),
         vol.Optional(
             CONF_OVERRIDE_CODE, default=create_default(options, CONF_OVERRIDE_CODE, "")
@@ -272,7 +272,7 @@ def create_parameters2cv(options: dict):
         ): cv.multi_select(available_siren_values),
         vol.Optional(
             CONF_ALARM_NOTIFICATIONS,
-            default=create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotificationConfig[AvailableNotifications.CONNECTION_PROBLEM], AvailableNotificationConfig[AvailableNotifications.SIREN]]),
+            default=create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
         ): cv.multi_select(AvailableNotificationConfig),
         vol.Optional(
             CONF_OVERRIDE_CODE, default=create_default(options, CONF_OVERRIDE_CODE, "")

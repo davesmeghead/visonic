@@ -38,7 +38,7 @@ from functools import partial
 from typing import Callable, List
 from collections import namedtuple
 
-PLUGIN_VERSION = "1.0.4.1"
+PLUGIN_VERSION = "1.0.4.2"
 
 # the set of configuration parameters in to this client class
 class PYVConst(Enum):
@@ -64,11 +64,6 @@ class PanelMode(Enum):
     POWERLINK = 5
     DOWNLOAD = 6
 
-
-# 0d f1 07 43 00 00 8b 56 0a
-#  Might be a coincidence but the checksum works out as 0x38 which in decimal is 56, which is the checksum in the message
-#    Is it a bug in the panel firmware?  It's putting the decimal in as the checksum directly?
-
 # Maximum number of CRC errors on receiving data from the alarm panel before performing a restart
 #    This means a maximum of 5 CRC errors in 10 minutes before resetting the connection
 MAX_CRC_ERROR = 5
@@ -85,7 +80,7 @@ RESEND_MESSAGE_TIMEOUT = timedelta(seconds=100)
 # We must get specific messages from the panel, if we do not in this time period (seconds) then trigger a restore/status request
 WATCHDOG_TIMEOUT = 120
 
-# If there has been a watchdog timeout this many times then go to standard mode
+# If there has been a watchdog timeout this many times per 24 hours then go to standard (plus) mode
 WATCHDOG_MAXIMUM_EVENTS = 10
 
 RESPONSE_TIMEOUT = 10
@@ -1421,7 +1416,12 @@ class ProtocolBase(asyncio.Protocol):
         self.reset_watchdog_timeout()
         self.reset_keep_alive_messages()
         status_counter = 0  # don't trigger first time!
-        watchdog_events = 0
+        
+        # declare a list and fill it with zeroes
+        watchdog_timeout = [0] * WATCHDOG_MAXIMUM_EVENTS
+        # The starting point doesn't really matter
+        watchdog_pos = WATCHDOG_MAXIMUM_EVENTS - 1
+        
         download_counter = 0
         powerlink_counter = POWERLINK_RETRY_DELAY - 10  # set so first time it does it after 10 seconds
         downloadDuration = 0
@@ -1431,6 +1431,9 @@ class ProtocolBase(asyncio.Protocol):
 
             # Watchdog functionality
             self.watchdog_counter = self.watchdog_counter + 1
+            
+            # every iteration, decrement all WATCHDOG_MAXIMUM_EVENTS watchdog counters (loop time is 1 second approx, doesn't have to be accurate)
+            watchdog_timeout = [x - 1 if x > 0 else 0 for x in watchdog_timeout]
 
             # Keep alive functionality
             self.keep_alive_counter = self.keep_alive_counter + 1
@@ -1513,13 +1516,25 @@ class ProtocolBase(asyncio.Protocol):
                 status_counter = 0  # delay status requests
                 self.reset_watchdog_timeout()
                 self.reset_keep_alive_messages()
-                watchdog_events = watchdog_events + 1
+
+                # move to the next position and set it to 1 day in seconds
+                watchdog_pos = (watchdog_pos + 1) % WATCHDOG_MAXIMUM_EVENTS
+                watchdog_timeout[watchdog_pos] = 60 * 60 * 24  # seconds in 1 day
+                # this represents the oldest entry
+                watchdog_oldest = (watchdog_pos + 1) % WATCHDOG_MAXIMUM_EVENTS  
+
+                log.debug("[Controller]    Watchdog counter array, current=" + str(watchdog_pos) + "  oldest=" + str(watchdog_oldest))
+                log.debug("[Controller]           " + str(watchdog_timeout))
+                
                 self.WatchdogTimeout = self.WatchdogTimeout + 1
-                if not self.giveupTrying and watchdog_events >= WATCHDOG_MAXIMUM_EVENTS:
-                    log.debug("[Controller]               **************** Going to Standard Mode ***************")
-                    watchdog_events = 0
+
+                # When watchdog_timeout[watchdog_oldest] > 0 then the 24 hour period from the timeout WATCHDOG_MAXIMUM_EVENTS times ago hasn't decremented to 0.
+                #    So it's been less than 1 day for the previous WATCHDOG_MAXIMUM_EVENTS timeouts
+
+                if not self.giveupTrying and watchdog_timeout[watchdog_oldest] > 0:
+                    log.debug("[Controller]               **************** Going to Standard (Plus) Mode ***************")
                     self.gotoStandardMode()
-                    self.sendResponseEvent(8)  # watchdog timer expired, going to standard mode
+                    self.sendResponseEvent(8)  # watchdog timer expired, going to standard (plus) mode
                 else:
                     log.debug("[Controller]               **************** Trigger Restore Status ***************")
                     self.triggerRestoreStatus()
@@ -1562,7 +1577,7 @@ class ProtocolBase(asyncio.Protocol):
                 no_data_received_counter = no_data_received_counter + 1
                 if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
                     log.error(
-                        "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel after several minutes)"
+                        "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)"
                     )
                     self.suspendAllOperations = True
                     self.PanelMode = PanelMode.PROBLEM
@@ -2327,20 +2342,6 @@ class PacketHandling(ProtocolBase):
             devices = ""
 
             if self.pmDownloadComplete:
-                # ------------------------------------------------------------------------------------------------------------------------------------------------
-                # Check if time sync was OK
-                #  if (pmSyncTimeCheck ~= nil) then
-                #     setting = pmReadSettings(pmDownloadItem_t.MSG_DL_TIME)
-                #     local timeRead = os.time({ day = string.byte(setting, 4), month = string.byte(setting, 5), year = string.byte(setting, 6) + 2000,
-                #        hour = string.byte(setting, 3), min = string.byte(setting, 2), sec = string.byte(setting, 1) })
-                #     local timeSet = os.time(pmSyncTimeCheck)
-                #     if (timeRead == timeSet) or (timeRead == timeSet + 1) then
-                #        debug("Time sync OK (" .. os.date("%d/%m/%Y %H:%M:%S", timeRead) .. ")")
-                #     else
-                #        debug("Time sync FAILED (got " .. os.date("%d/%m/%Y %H:%M:%S", timeRead) .. "; expected " .. os.date("%d/%m/%Y %H:%M:%S", timeSet))
-                #     end
-                #  end
-
                 log.debug("[Process Settings] Processing settings information")
 
                 visonic_devices = defaultdict(list)
@@ -2659,6 +2660,24 @@ class PacketHandling(ProtocolBase):
             else:
                 log.debug("[Process Settings] Please correct your local time.")
 
+        # ------------------------------------------------------------------------------------------------------------------------------------------------
+        # THIS WILL NOT WORK AS IT DOES NOT GET THE DATA FROM THE PANEL
+        #  Check if time sync was OK
+        #  if (pmSyncTimeCheck ~= nil) then
+        #     setting = pmReadSettings(pmDownloadItem_t.MSG_DL_TIME)
+        #     local timeRead = os.time({ day = string.byte(setting, 4), month = string.byte(setting, 5), year = string.byte(setting, 6) + 2000,
+        #        hour = string.byte(setting, 3), min = string.byte(setting, 2), sec = string.byte(setting, 1) })
+        #     local timeSet = os.time(pmSyncTimeCheck)
+        #     if (timeRead == timeSet) or (timeRead == timeSet + 1) then
+        #        debug("Time sync OK (" .. os.date("%d/%m/%Y %H:%M:%S", timeRead) .. ")")
+        #     else
+        #        debug("Time sync FAILED (got " .. os.date("%d/%m/%Y %H:%M:%S", timeRead) .. "; expected " .. os.date("%d/%m/%Y %H:%M:%S", timeSet))
+        #     end
+        #  end
+        # ------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
     # This function handles a received message packet and processes it
     def handle_packet(self, packet):
         """Handle one raw incoming packet."""
@@ -2787,12 +2806,12 @@ class PacketHandling(ProtocolBase):
                     self.doneAutoEnroll = False
                     if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
                         if self.PanelType >= 3:     # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
-                            log.debug("[handle_msgtype08]                   Try to auto enroll")
+                            log.debug("[handle_msgtype08]                   Try to auto enroll (panel type {0})".format(self.PanelType))
                             self.SendMsg_ENROLL()  # Auto enroll
                     elif self.ForceAutoEnroll:
-                        log.debug("[handle_msgtype08]                   Try to auto enroll")
+                        log.debug("[handle_msgtype08]                   Try to force auto enroll (panel type unknown)")
                         self.SendMsg_ENROLL()  # Auto enroll
-                elif lastCommandData[0] != 0x0B:  # The Stop Command
+                elif lastCommandData[0] != 0xAB and lastCommandData[0] != 0x0B:  # Powerlink command and the Stop Command
                     log.debug("[handle_msgtype08] Attempt to send a command message to the panel that has been rejected")
                     self.sendResponseEvent(15)  # push changes through to the host, something has been rejected (other than the pin)
                 
