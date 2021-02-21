@@ -52,7 +52,7 @@ from typing import Callable, List
 from collections import namedtuple
 from .pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.5.4"
+PLUGIN_VERSION = "1.0.5.5"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -566,19 +566,19 @@ pmPanelType_t = {
    10 : "PowerMaster33"
 }
 
-# Config for each panel type (0-8)
+# Config for each panel type (0-10).  8 is a PowerMaster 30, 10 is a PowerMaster 33.  Don't know what 9 is.
 pmPanelConfig_t = {
-   "CFG_PARTITIONS"  : (   1,   1,   1,   1,   3,   3,   1,   3,   3 ),
-   "CFG_EVENTS"      : ( 250, 250, 250, 250, 250, 250, 250, 250,1000 ),
-   "CFG_KEYFOBS"     : (   8,   8,   8,   8,   8,   8,   8,   8,  32 ),
-   "CFG_1WKEYPADS"   : (   8,   8,   8,   8,   8,   8,   8,   0,   0 ),
-   "CFG_2WKEYPADS"   : (   2,   2,   2,   2,   2,   2,   2,   8,  32 ),
-   "CFG_SIRENS"      : (   2,   2,   2,   2,   2,   2,   2,   4,   8 ),
-   "CFG_USERCODES"   : (   8,   8,   8,   8,   8,   8,   8,   8,  48 ),
-   "CFG_PROXTAGS"    : (   0,   0,   8,   0,   8,   8,   0,   8,  32 ),
-   "CFG_WIRELESS"    : (  28,  28,  28,  28,  28,  28,  28,  29,  62 ), # 30, 64
-   "CFG_WIRED"       : (   2,   2,   2,   2,   2,   2,   1,   1,   2 ),
-   "CFG_ZONECUSTOM"  : (   0,   5,   5,   5,   5,   5,   5,   5,   5 )
+   "CFG_PARTITIONS"  : (   1,   1,   1,   1,   3,   3,   1,   3,   3,   3,   3   ),
+   "CFG_EVENTS"      : ( 250, 250, 250, 250, 250, 250, 250, 250,1000,1000,1000   ),
+   "CFG_KEYFOBS"     : (   8,   8,   8,   8,   8,   8,   8,   8,  32,  32,  32   ),
+   "CFG_1WKEYPADS"   : (   8,   8,   8,   8,   8,   8,   8,   0,   0,   0,   0   ),
+   "CFG_2WKEYPADS"   : (   2,   2,   2,   2,   2,   2,   2,   8,  32,  32,  32   ),
+   "CFG_SIRENS"      : (   2,   2,   2,   2,   2,   2,   2,   4,   8,   8,   8   ),
+   "CFG_USERCODES"   : (   8,   8,   8,   8,   8,   8,   8,   8,  48,  48,  48   ),
+   "CFG_PROXTAGS"    : (   0,   0,   8,   0,   8,   8,   0,   8,  32,  32,  32   ),
+   "CFG_WIRELESS"    : (  28,  28,  28,  28,  28,  28,  28,  29,  62,  62,  62   ), # 30, 64
+   "CFG_WIRED"       : (   2,   2,   2,   2,   2,   2,   1,   1,   2,   2,   2   ),
+   "CFG_ZONECUSTOM"  : (   0,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5   )
 }
 
 # PMAX EEPROM CONFIGURATION version 1_2
@@ -2356,6 +2356,7 @@ class PacketHandling(ProtocolBase):
         if pmPanelTypeNrStr is not None and len(pmPanelTypeNrStr) > 0:
             pmPanelTypeNr = int(pmPanelTypeNrStr)
             self.PanelModel = pmPanelType_t[pmPanelTypeNr] if pmPanelTypeNr in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
+            #log.debug("[Process Settings] EPROM Data")
             #self._dumpEPROMSettings()
             log.debug("[Process Settings] pmPanelTypeNr {0} ({1})    model {2}".format(pmPanelTypeNr, self.PanelType, self.PanelModel))
             if self.PanelType is None:
@@ -2373,7 +2374,7 @@ class PacketHandling(ProtocolBase):
                 log.debug("[Process Settings] Processing settings information")
 
                 # log.debug("[Process Settings] Panel Type Number " + str(pmPanelTypeNr) + "    serial string " + self._toString(panelSerialType))
-                log.debug("[Process Settings] Getting Wireless Settings")
+                log.debug("[Process Settings] Getting Wireless/Wired Settings")
                 zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][pmPanelTypeNr] + pmPanelConfig_t["CFG_WIRED"][pmPanelTypeNr]
                 log.debug("[Process Settings] Getting Custom Zones Settings")
                 dummy_customCnt = pmPanelConfig_t["CFG_ZONECUSTOM"][pmPanelTypeNr]
@@ -2401,6 +2402,8 @@ class PacketHandling(ProtocolBase):
                 pmPanelTypeCodeStr = self._lookupEpromSingle("panelTypeCode")
                 idx = "{0:0>2}{1:0>2}".format(hex(pmPanelTypeNr).upper()[2:], hex(int(pmPanelTypeCodeStr)).upper()[2:])
                 pmPanelName = pmPanelName_t[idx] if idx in pmPanelName_t else "Unknown"
+                
+                log.debug("[Process Settings] Processing settings code index {0}".format(idx))
 
                 #  INTERFACE : Add this param to the status panel first
                 self.PanelStatus["Panel Name"] = pmPanelName
