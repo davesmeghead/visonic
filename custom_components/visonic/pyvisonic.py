@@ -52,7 +52,7 @@ from typing import Callable, List
 from collections import namedtuple
 from .pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.5.5"
+PLUGIN_VERSION = "1.0.5.6"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -779,7 +779,8 @@ pmPanelName_t = {
    "070f" : "PowerMaster10 7_15", "0710" : "PowerMaster10 7_16", "0711" : "PowerMaster10 7_17", "0712" : "PowerMaster10 7_18",
    "0713" : "PowerMaster10 7_19", "0802" : "PowerMax Complete PowerCode-G 8_2", "0803" : "PowerMaster30 8_3",
    "080f" : "PowerMaster30 8_15", "0810" : "PowerMaster30 8_16", "0812" : "PowerMaster30 8_18", "0813" : "PowerMaster30 8_19",
-   "0815" : "PowerMaster30 8_21"
+   "0815" : "PowerMaster30 8_21", 
+   "0A47" : "PowerMaster33 10_71"
 }
 
 pmZoneType_t = {
@@ -2374,27 +2375,17 @@ class PacketHandling(ProtocolBase):
                 log.debug("[Process Settings] Processing settings information")
 
                 # log.debug("[Process Settings] Panel Type Number " + str(pmPanelTypeNr) + "    serial string " + self._toString(panelSerialType))
-                log.debug("[Process Settings] Getting Wireless/Wired Settings")
                 zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][pmPanelTypeNr] + pmPanelConfig_t["CFG_WIRED"][pmPanelTypeNr]
-                log.debug("[Process Settings] Getting Custom Zones Settings")
                 dummy_customCnt = pmPanelConfig_t["CFG_ZONECUSTOM"][pmPanelTypeNr]
-                log.debug("[Process Settings] Getting usercode Settings")
                 userCnt = pmPanelConfig_t["CFG_USERCODES"][pmPanelTypeNr]
-                log.debug("[Process Settings] Getting Partition Settings")
                 partitionCnt = pmPanelConfig_t["CFG_PARTITIONS"][pmPanelTypeNr]
-                log.debug("[Process Settings] Getting Siren Settings")
                 sirenCnt = pmPanelConfig_t["CFG_SIRENS"][pmPanelTypeNr]
-                log.debug("[Process Settings] Getting Keypad Settings")
                 keypad1wCnt = pmPanelConfig_t["CFG_1WKEYPADS"][pmPanelTypeNr]
-                log.debug("[Process Settings] Getting Kepfob Settings")
                 keypad2wCnt = pmPanelConfig_t["CFG_2WKEYPADS"][pmPanelTypeNr]
                 
-                log.debug("[Process Settings] Setting PinCodes")
                 self.pmPincode_t = [bytearray.fromhex("00 00")] * userCnt  # allow maximum of userCnt user pin codes
 
                 devices = ""
-
-                #visonic_devices = defaultdict(list)
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process panel type and serial
@@ -2403,7 +2394,7 @@ class PacketHandling(ProtocolBase):
                 idx = "{0:0>2}{1:0>2}".format(hex(pmPanelTypeNr).upper()[2:], hex(int(pmPanelTypeCodeStr)).upper()[2:])
                 pmPanelName = pmPanelName_t[idx] if idx in pmPanelName_t else "Unknown"
                 
-                log.debug("[Process Settings] Processing settings code index {0}".format(idx))
+                log.debug("[Process Settings] Processing settings - panel code index {0}".format(idx))
 
                 #  INTERFACE : Add this param to the status panel first
                 self.PanelStatus["Panel Name"] = pmPanelName
@@ -2951,8 +2942,12 @@ class PacketHandling(ProtocolBase):
         iPage = data[1]
         iLength = data[2]
 
+        # PowerMaster 33 (Model 10) has a very specific problem with downloading the Panel EPROM and doesn't respond with the correct number of bytes
         if self.PanelType is not None and self.ModelType is not None and self.PanelType == 10 and self.ModelType == 71:
-             log.debug("[handle_msgtype3F] Not checking data length as it could be incorrect.  We requested {0} and received {1}".format(iLength, len(data) - 3))
+            if iLength != len(data) - 3:
+                log.debug("[handle_msgtype3F] Not checking data length as it could be incorrect.  We requested {0} and received {1}".format(iLength, len(data) - 3))
+                log.debug("[handle_msgtype3F]                            " + self._toString(data))
+            
         elif iLength != len(data) - 3:  # 3 because -->   index & page & length
             log.warning("[handle_msgtype3F] ERROR: Type=3F has an invalid length, Received: {0}, Expected: {1}".format(len(data)-3, iLength))
             log.warning("[handle_msgtype3F]                            " + self._toString(data))
