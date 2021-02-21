@@ -2,7 +2,7 @@
 
 import logging
 
-from .pconst import (
+from .const import (
     CONF_DEVICE_BAUD,
     CONF_DEVICE_TYPE,
     CONF_EXCLUDE_SENSOR,
@@ -42,7 +42,6 @@ _LOGGER = logging.getLogger(__name__)
 #     If we achieve Standard Plus or Powerlink with the panel then self.powermaster will be set to False or True, depending on the panel type
 #     - if self.powermaster
 #     -     Parameters4
-
 
 class MyHandlers(data_entry_flow.FlowHandler):
     """My generic handler for config flow ConfigFlow and OptionsFlow."""
@@ -115,8 +114,6 @@ class MyHandlers(data_entry_flow.FlowHandler):
 
     async def async_step_parameters3(self, user_input=None):
         """Config flow step 3."""
-        # import custom_components.visonic.pyvisonic as visonicApi  # Connection to python Library
-
         if user_input is not None:
             self.config.update(user_input)
 
@@ -212,7 +209,7 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
     async def async_step_device(self, user_input=None):
         """Handle the input processing of the config flow."""
         _LOGGER.debug("async_step_device %s", user_input)
-        self.dumpMyState()
+        #self.dumpMyState()
         if user_input is not None and CONF_DEVICE_TYPE in user_input:
             self.config[CONF_DEVICE_TYPE] = user_input[CONF_DEVICE_TYPE].lower()
             if self.config[CONF_DEVICE_TYPE] == "ethernet":
@@ -242,7 +239,7 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         if self._async_current_entries():
             return self.async_abort(reason="already_configured")
 
-        self.dumpMyState()
+        #self.dumpMyState()
 
         # is this a raw configuration (not called from importint yaml)
         if not user_input:
@@ -261,7 +258,7 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
     async def async_step_import(self, import_config):
         """Import a config entry from configuration.yaml."""
         # _LOGGER.debug("Visonic in async_step_import in %s", import_config)
-        self.dumpMyState()
+        #self.dumpMyState()
 
         # convert the yaml file format for the device (ethernet or usb) settings to a flat dictionary structure
         data = {}

@@ -6,11 +6,13 @@ import logging
 import voluptuous as vol
 
 from homeassistant.auth.permissions.const import POLICY_CONTROL
+from .pconst import PyPanelCommand, PyPanelStatus
 import homeassistant.components.alarm_control_panel as alarm
 from homeassistant.components.alarm_control_panel.const import (
     SUPPORT_ALARM_ARM_AWAY,
     SUPPORT_ALARM_ARM_HOME,
     SUPPORT_ALARM_ARM_NIGHT,
+    SUPPORT_ALARM_TRIGGER,
 )
 from homeassistant.config_entries import ConfigEntry
 
@@ -173,26 +175,16 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             else:
                 armcode = self._client.getPanelStatusCode()
 
-                # armcode values
-                # -1  Not yet defined
-                # 0   Disarmed (Also includes 0x0A "Home Bypass", 0x0B "Away Bypass", 0x0C "Ready", 0x0D "Not Ready" and 0x10 "Disarmed Instant")
-                # 1   Home Exit Delay  or  Home Instant Exit Delay
-                # 2   Away Exit Delay  or  Away Instant Exit Delay
-                # 3   Entry Delay
-                # 4   Armed Home  or  Home Bypass  or  Entry Delay Instant  or  Armed Home Instant
-                # 5   Armed Away  or  Away Bypass  or  Armed Away Instant
-                # 6   User Test  or  Downloading  or  Programming  or  Installer
-
                 # _LOGGER.debug("alarm armcode is %s", str(armcode))
-                if armcode == 0 or armcode == 6:
+                if armcode == PyPanelStatus.DISARMED or armcode == PyPanelStatus.SPECIAL or armcode == PyPanelStatus.DOWNLOADING:
                     self._mystate = STATE_ALARM_DISARMED
-                elif armcode == 1 or armcode == 3:
+                elif armcode == PyPanelStatus.ARMING_HOME or armcode == PyPanelStatus.ENTRY_DELAY:
                     self._mystate = STATE_ALARM_PENDING
-                elif armcode == 2:
+                elif armcode == PyPanelStatus.ARMING_AWAY:
                     self._mystate = STATE_ALARM_ARMING
-                elif armcode == 4:
+                elif armcode == PyPanelStatus.ARMED_HOME:
                     self._mystate = STATE_ALARM_ARMED_HOME
-                elif armcode == 5:
+                elif armcode == PyPanelStatus.ARMED_AWAY:
                     self._mystate = STATE_ALARM_ARMED_AWAY
 
             # Currently may only contain self.hass.data[DOMAIN][DOMAINDATA]["Exception Count"]
@@ -236,46 +228,31 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             return alarm.FORMAT_NUMBER if self._client.isCodeRequired() else None
         return None    
 
-    # For the function call self._client.sendCommand
-    #       state is one of: "Disarmed", "Stay", "Armed", "UserTest", "StayInstant", "ArmedInstant"
-    #       optional code, if not provided then try to use the EPROM downloaded pin if in powerlink
-    #       Return value of False indicates that we are not connected to the panel
-    # call in to pyvisonic in an async way this function : def self._client.sendCommand(state, pin = ""):
-
-    def send_alarm_command(self, message : str, command : str, code):
-        codeRequired = self._client.isCodeRequired()
-        if (codeRequired and code is not None) or not codeRequired:
-            pcode = self._client.decode_code(code) if codeRequired else ""
-            if not self._client.sendCommand(command, pcode):
-                self._client.createWarningMessage(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, not sent to panel")
-        else:
-            self._client.createWarningMessage(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, an alarm code is required")
-
     def alarm_disarm(self, code=None):
         """Send disarm command."""
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
-        self.send_alarm_command("Disarm", "disarmed", code)
+        self._client.sendCommand("Disarm", PyPanelCommand.DISARM, code)
 
     def alarm_arm_night(self, code=None):
         """Send arm night command (Same as arm home)."""
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
-        self.send_alarm_command("Arm Night", "stayinstant", code)
+        self._client.sendCommand("Arm Night", PyPanelCommand.ARM_HOME_INSTANT, code)
 
     def alarm_arm_home(self, code=None):
         """Send arm home command."""
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
-        command = "stayinstant" if self._client.isArmHomeInstant() else "stay"
-        self.send_alarm_command("Arm Home", command, code)
+        command = PyPanelCommand.ARM_HOME_INSTANT if self._client.isArmHomeInstant() else PyPanelCommand.ARM_HOME
+        self._client.sendCommand("Arm Home", command, code)
 
     def alarm_arm_away(self, code=None):
         """Send arm away command."""
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
-        command = "armedinstant" if self._client.isArmAwayInstant() else "armed"
-        self.send_alarm_command("Arm Away", command, code)
+        command = PyPanelCommand.ARM_AWAY_INSTANT if self._client.isArmAwayInstant() else PyPanelCommand.ARM_AWAY
+        self._client.sendCommand("Arm Away", command, code)
 
     def alarm_trigger(self, code=None):
         """Send alarm trigger command."""
@@ -295,11 +272,11 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         # This function concerns itself with bypassing a sensor and the visonic panel interaction
 
         armcode = self._client.getPanelStatusCode()
-        if armcode is None or armcode == -1:
+        if armcode is None or armcode == PyPanelStatus.UNKNOWN:
             self._client.createWarningMessage(AvailableNotifications.CONNECTION_PROBLEM, "Attempt to bypass sensor, check panel connection")
             return False
 
-        if armcode == 0:
+        if armcode == PyPanelStatus.DISARMED:
             # If currently Disarmed
             mybpstate = self.hass.states.get(eid)
             if mybpstate is not None:

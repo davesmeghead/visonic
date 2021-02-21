@@ -7,7 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import slugify
-from .pyvisonic import X10Device
+from .pconst import PyX10Command, PySwitchDevice
 from .client import VisonicClient
 from .const import (
     DOMAIN,
@@ -35,19 +35,19 @@ async def async_setup_entry(
 class VisonicSwitch(SwitchEntity):
     """Representation of a Visonic X10 Switch."""
 
-    def __init__(self, client: VisonicClient, visonic_device: X10Device):
+    def __init__(self, client: VisonicClient, visonic_device: PySwitchDevice):
         """Initialise a Visonic X10 Device."""
         # _LOGGER.debug("Creating X10 Switch %s", visonic_device.name)
         self._client = client
         self.visonic_device = visonic_device
-        self._x10id = self.visonic_device.id
-        self._name = "Visonic " + self.visonic_device.name
+        self._x10id = self.visonic_device.getDeviceID()
+        self._name = "Visonic " + self.visonic_device.getName()
         # Append device id to prevent name clashes in HA.
         self._visonic_id = slugify(self._name)
 
         # VISONIC_ID_FORMAT.format( slugify(self._name), visonic_device.getDeviceID())
         # self._entity_id = ENTITY_ID_FORMAT.format(self._visonic_id)
-        self._current_value = self.visonic_device.state
+        self._current_value = self.visonic_device.isOn()
 
     async def async_added_to_hass(self):
         """Register callbacks."""
@@ -63,8 +63,6 @@ class VisonicSwitch(SwitchEntity):
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
         await super().async_will_remove_from_hass()
-        # if self.visonic_device is not None:
-        #    self.visonic_device.install_change_handler(None)
         self.visonic_device = None
         self._client = None
         _LOGGER.debug("switch async_will_remove_from_hass")
@@ -72,7 +70,7 @@ class VisonicSwitch(SwitchEntity):
     def onChange(self, event_id: int, datadictionary: dict):
         """Switch state has changed."""
         # _LOGGER.debug("Switch onchange %s", str(self._name))
-        self._current_value = self.visonic_device.state
+        self._current_value = self.visonic_device.isOn()
         self.schedule_update_ha_state()
 
     @property
@@ -102,11 +100,11 @@ class VisonicSwitch(SwitchEntity):
 
     def turn_on(self, **kwargs):
         """Turn the device on."""
-        self.turnmeonandoff("on")
+        self.turnmeonandoff(PyX10Command.ON)
 
     def turn_off(self, **kwargs):
         """Turn the device off."""
-        self.turnmeonandoff("off")
+        self.turnmeonandoff(PyX10Command.OFF)
 
     @property
     def device_info(self):
@@ -114,14 +112,14 @@ class VisonicSwitch(SwitchEntity):
         return {
             "manufacturer": "Visonic",
             "identifiers": {(DOMAIN, self._name)},
-            "name": f"Visonic X10 ({self.visonic_device.name})",
-            "model": self.visonic_device.type,
+            "name": f"Visonic X10 ({self.visonic_device.getName()})",
+            "model": self.visonic_device.getType(),
             "via_device": (DOMAIN, VISONIC_UNIQUE_NAME),
             # "sw_version": self._api.information.version_string,
         }
 
     # "off"  "on"  "dim"  "brighten"
-    def turnmeonandoff(self, state):
+    def turnmeonandoff(self, state : PyX10Command):
         """Send disarm command."""
         self._client.setX10(self._x10id, state)
 
@@ -130,9 +128,9 @@ class VisonicSwitch(SwitchEntity):
         """Return the state attributes of the device."""
         attr = {}
 
-        attr["Location"] = self.visonic_device.location
-        attr["Name"] = self.visonic_device.name
-        attr["Type"] = self.visonic_device.type
-        attr["Visonic Device"] = self.visonic_device.id
-        #        attr["State"] = "Yes" if self.visonic_device.state else "No"
+        attr["Location"] = self.visonic_device.getLocation()
+        attr["Name"] = self.visonic_device.getName()
+        attr["Type"] = self.visonic_device.getType()
+        attr["Visonic Device"] = self.visonic_device.getDeviceID()
+        #        attr["State"] = "on" if self.is_on() else "off"
         return attr

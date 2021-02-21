@@ -18,17 +18,10 @@ from .const import (
     UNDO_VISONIC_UPDATE_LISTENER,
     DOMAINCLIENTTASK,
 )
-from .create_schema import create_schema, set_defaults
+#from .create_schema import create_schema, set_defaults
+from .create_schema import set_defaults
 
 _LOGGER = logging.getLogger(__name__)
-
-CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: vol.Schema(create_schema()),
-    },
-    extra=vol.ALLOW_EXTRA,
-)
-
 
 def configured_hosts(hass):
     """Return a set of the configured hosts."""
@@ -71,28 +64,6 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry) -> bool:
 
 async def async_setup(hass: HomeAssistant, base_config: dict):
     """Set up the visonic component."""
-    # initially empty the settings for this component
-    hass.data[DOMAIN] = {}
-    hass.data[DOMAIN][DOMAINDATA] = {}
-
-    # if there are no configuration.yaml settings then terminate
-    if DOMAIN not in base_config:
-        return True
-
-    # has there been a flow configured panel connection before
-    configured = configured_hosts(hass)
-
-    # if there is not a flow configured connection previously
-    #   then create a flow connection from the configuration.yaml data
-    if len(configured) == 0:
-        # get the configuration.yaml settings and make a 'flow' task :)
-        #   this will run 'async_step_import' in config_flow.py
-        conf = base_config.get(DOMAIN)
-        hass.async_create_task(
-            hass.config_entries.flow.async_init(
-                DOMAIN, context={"source": config_entries.SOURCE_IMPORT}, data=conf
-            )
-        )
     return True
 
 
@@ -104,6 +75,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up visonic from a config entry."""
 
     # _LOGGER.debug("************* create connection here **************")
+    hass.data[DOMAIN] = {}
+    hass.data[DOMAIN][DOMAINDATA] = {}
 
     # initially empty the settings for this component
     hass.data[DOMAIN][entry.entry_id] = {}
@@ -150,9 +123,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     updateListener = hass.data[DOMAIN][entry.entry_id][UNDO_VISONIC_UPDATE_LISTENER]
 
     # stop the comms to/from the panel
-    await client.service_comms_stop(None)
+    await client.service_comms_stop()
     # stop all activity in the client
-    await client.service_panel_stop(None)
+    await client.service_panel_stop()
 
     # Wait for all the platforms to unload.  Does this get called within core or do I need to doit?
     # all(await asyncio.gather(*[hass.config_entries.async_forward_entry_unload(entry, component) for component in PLATFORMS]))
