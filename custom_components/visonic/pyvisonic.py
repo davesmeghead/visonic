@@ -52,7 +52,7 @@ from typing import Callable, List
 from collections import namedtuple
 from .pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.5.2"
+PLUGIN_VERSION = "1.0.5.3"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -562,7 +562,8 @@ pmPanelTroubleType_t = {
 
 pmPanelType_t = {
    0 : "PowerMax", 1 : "PowerMax+", 2 : "PowerMax Pro", 3 : "PowerMax Complete", 4 : "PowerMax Pro Part",
-   5  : "PowerMax Complete Part", 6 : "PowerMax Express", 7 : "PowerMaster10",   8 : "PowerMaster30"
+   5  : "PowerMax Complete Part", 6 : "PowerMax Express", 7 : "PowerMaster10",   8 : "PowerMaster30",
+   10 : "PowerMaster33"
 }
 
 # Config for each panel type (0-8)
@@ -2938,10 +2939,10 @@ class PacketHandling(ProtocolBase):
         iLength = data[2]
 
         # Check length and data-length
-        if iLength != len(data) - 3:  # 3 because -->   index & page & length
-            log.warning("[handle_msgtype3F] ERROR: Type=3F has an invalid length, Received: {0}, Expected: {1}".format(len(data)-3, iLength))
-            log.warning("[handle_msgtype3F]                            " + self._toString(data))
-            return
+#        if iLength != len(data) - 3:  # 3 because -->   index & page & length
+#            log.warning("[handle_msgtype3F] ERROR: Type=3F has an invalid length, Received: {0}, Expected: {1}".format(len(data)-3, iLength))
+#            log.warning("[handle_msgtype3F]                            " + self._toString(data))
+#            return
 
         # Write to memory map structure, but remove the first 4 bytes (3F/index/page/length) from the data
         self._writeEPROMSettings(iPage, iIndex, data[3:])
