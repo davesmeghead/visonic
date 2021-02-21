@@ -52,7 +52,7 @@ from typing import Callable, List
 from collections import namedtuple
 from .pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.5.1"
+PLUGIN_VERSION = "1.0.5.2"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -2366,7 +2366,7 @@ class PacketHandling(ProtocolBase):
 
         # ------------------------------------------------------------------------------------------------------------------------------------------------
         # Need the panel type to be valid so we can decode some of the remaining downloaded data correctly
-        if self.PanelType is not None and 0 <= self.PanelType <= 8:
+        if self.PanelType is not None and 0 <= self.PanelType <= 10:
             # log.debug("[Process Settings] Panel Type Number " + str(pmPanelTypeNr) + "    serial string " + self._toString(panelSerialType))
             zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][pmPanelTypeNr] + pmPanelConfig_t["CFG_WIRED"][pmPanelTypeNr]
             dummy_customCnt = pmPanelConfig_t["CFG_ZONECUSTOM"][pmPanelTypeNr]
