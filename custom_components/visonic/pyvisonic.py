@@ -52,7 +52,7 @@ from typing import Callable, List
 from collections import namedtuple
 from .pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.5.3"
+PLUGIN_VERSION = "1.0.5.4"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -2368,20 +2368,30 @@ class PacketHandling(ProtocolBase):
         # ------------------------------------------------------------------------------------------------------------------------------------------------
         # Need the panel type to be valid so we can decode some of the remaining downloaded data correctly
         if self.PanelType is not None and 0 <= self.PanelType <= 10:
-            # log.debug("[Process Settings] Panel Type Number " + str(pmPanelTypeNr) + "    serial string " + self._toString(panelSerialType))
-            zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][pmPanelTypeNr] + pmPanelConfig_t["CFG_WIRED"][pmPanelTypeNr]
-            dummy_customCnt = pmPanelConfig_t["CFG_ZONECUSTOM"][pmPanelTypeNr]
-            userCnt = pmPanelConfig_t["CFG_USERCODES"][pmPanelTypeNr]
-            partitionCnt = pmPanelConfig_t["CFG_PARTITIONS"][pmPanelTypeNr]
-            sirenCnt = pmPanelConfig_t["CFG_SIRENS"][pmPanelTypeNr]
-            keypad1wCnt = pmPanelConfig_t["CFG_1WKEYPADS"][pmPanelTypeNr]
-            keypad2wCnt = pmPanelConfig_t["CFG_2WKEYPADS"][pmPanelTypeNr]
-            self.pmPincode_t = [bytearray.fromhex("00 00")] * userCnt  # allow maximum of userCnt user pin codes
-
-            devices = ""
 
             if self.pmDownloadComplete:
                 log.debug("[Process Settings] Processing settings information")
+
+                # log.debug("[Process Settings] Panel Type Number " + str(pmPanelTypeNr) + "    serial string " + self._toString(panelSerialType))
+                log.debug("[Process Settings] Getting Wireless Settings")
+                zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][pmPanelTypeNr] + pmPanelConfig_t["CFG_WIRED"][pmPanelTypeNr]
+                log.debug("[Process Settings] Getting Custom Zones Settings")
+                dummy_customCnt = pmPanelConfig_t["CFG_ZONECUSTOM"][pmPanelTypeNr]
+                log.debug("[Process Settings] Getting usercode Settings")
+                userCnt = pmPanelConfig_t["CFG_USERCODES"][pmPanelTypeNr]
+                log.debug("[Process Settings] Getting Partition Settings")
+                partitionCnt = pmPanelConfig_t["CFG_PARTITIONS"][pmPanelTypeNr]
+                log.debug("[Process Settings] Getting Siren Settings")
+                sirenCnt = pmPanelConfig_t["CFG_SIRENS"][pmPanelTypeNr]
+                log.debug("[Process Settings] Getting Keypad Settings")
+                keypad1wCnt = pmPanelConfig_t["CFG_1WKEYPADS"][pmPanelTypeNr]
+                log.debug("[Process Settings] Getting Kepfob Settings")
+                keypad2wCnt = pmPanelConfig_t["CFG_2WKEYPADS"][pmPanelTypeNr]
+                
+                log.debug("[Process Settings] Setting PinCodes")
+                self.pmPincode_t = [bytearray.fromhex("00 00")] * userCnt  # allow maximum of userCnt user pin codes
+
+                devices = ""
 
                 #visonic_devices = defaultdict(list)
 
@@ -2938,11 +2948,12 @@ class PacketHandling(ProtocolBase):
         iPage = data[1]
         iLength = data[2]
 
-        # Check length and data-length
-#        if iLength != len(data) - 3:  # 3 because -->   index & page & length
-#            log.warning("[handle_msgtype3F] ERROR: Type=3F has an invalid length, Received: {0}, Expected: {1}".format(len(data)-3, iLength))
-#            log.warning("[handle_msgtype3F]                            " + self._toString(data))
-#            return
+        if self.PanelType is not None and self.ModelType is not None and self.PanelType == 10 and self.ModelType == 71:
+             log.debug("[handle_msgtype3F] Not checking data length as it could be incorrect.  We requested {0} and received {1}".format(iLength, len(data) - 3))
+        elif iLength != len(data) - 3:  # 3 because -->   index & page & length
+            log.warning("[handle_msgtype3F] ERROR: Type=3F has an invalid length, Received: {0}, Expected: {1}".format(len(data)-3, iLength))
+            log.warning("[handle_msgtype3F]                            " + self._toString(data))
+            return
 
         # Write to memory map structure, but remove the first 4 bytes (3F/index/page/length) from the data
         self._writeEPROMSettings(iPage, iIndex, data[3:])
