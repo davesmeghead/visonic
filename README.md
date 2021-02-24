@@ -3,7 +3,7 @@
 A Custom Integration for Home Assistant
 
 ## Introduction
-Visonic produce the Powermax and Powermaster alarm panel series including (PowerMax+, PowerMaxExpress, PowerMaxPro and PowerMaxComplete, PowerMaster 10 and PowerMaster 30).
+Visonic produce the Powermax and Powermaster alarm panel series including (PowerMax+, PowerMaxExpress, PowerMaxPro and PowerMaxComplete, PowerMaster 10, PowerMaster30 and PowerMaster 33).
 
 This Home Assistant Integration allows you to control the alarm panel (arm/disarm) and allows you to use the Visonic sensors and events (movement, door contact, ...) and X10 devices within Home Assistant.
 
