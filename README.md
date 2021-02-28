@@ -24,6 +24,7 @@ This Component is compliant with the new Component format within the Home Assist
 
 |  Release   |    Description   |
 |------------|------------------|
+| 0.6.6.0    | *** Breaking Change *** Added PowerMaster 33 and breaking change to the available Services and the data that goes with them. |
 | 0.6.4.5    | Further tweaks to the watchdog operation, looks for 10 timeouts within a 24 hour (approx) period. |
 | 0.6.4.4    | *** Breaking change ***  The configuration.yaml file is no longer used, please remove the configuration from the file. |
 | 0.6.3.0    | *** Breaking change ***  I am still working towards submitting the integration into HA. This release does not call pyvisonic as a pypi library. More restructuring has been done, particularly to bring it in line with HA core constants. The sensors are no longer polled.  Further fixes to startup and restart. |
