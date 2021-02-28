@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 import logging
-
+import re 
 import voluptuous as vol
 
 from homeassistant.auth.permissions.const import POLICY_CONTROL
@@ -12,7 +12,6 @@ from homeassistant.components.alarm_control_panel.const import (
     SUPPORT_ALARM_ARM_AWAY,
     SUPPORT_ALARM_ARM_HOME,
     SUPPORT_ALARM_ARM_NIGHT,
-    SUPPORT_ALARM_TRIGGER,
 )
 from homeassistant.config_entries import ConfigEntry
 
@@ -44,6 +43,8 @@ from .const import (
     VISONIC_UPDATE_STATE_DISPATCHER,
     NOTIFICATION_ID,
     NOTIFICATION_TITLE,
+    AvailableNotifications,
+    PIN_REGEX,
 )
 
 # Schema for the 'alarm_sensor_bypass' HA service
@@ -267,33 +268,35 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
 
     # Service alarm_control_panel.alarm_sensor_bypass
     # {"entity_id": "binary_sensor.visonic_z01", "bypass":"True", "code":"1234" }
-    def sensor_bypass(self, eid : str, bypass : bool, code : str) -> bool:
+    def sensor_bypass(self, eid : str, bypass : bool, code : str):
         """Bypass individual sensors."""
         # This function concerns itself with bypassing a sensor and the visonic panel interaction
 
         armcode = self._client.getPanelStatusCode()
         if armcode is None or armcode == PyPanelStatus.UNKNOWN:
             self._client.createWarningMessage(AvailableNotifications.CONNECTION_PROBLEM, "Attempt to bypass sensor, check panel connection")
-            return False
-
-        if armcode == PyPanelStatus.DISARMED:
-            # If currently Disarmed
-            mybpstate = self.hass.states.get(eid)
-            if mybpstate is not None:
-                devid = mybpstate.attributes["visonic device"]
-                if devid >= 1 and devid <= 64:
-                    if bypass:
-                        _LOGGER.debug("Attempt to bypass sensor device id = %s", str(devid))
-                    else:
-                        _LOGGER.debug("Attempt to restore (arm) sensor device id = %s", str(devid))
-                    return self._client.sendBypass(devid, bypass, self._client.decode_code(code))
-                else:
-                    self._client.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor, incorrect device {str(devid)} for entity {eid}")
-            else:
-                self._client.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor, unknown device state for entity {eid}")
         else:
-            self._client.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, "Visonic Alarm Panel: Attempt to bypass sensor, panel needs to be in the disarmed state")
-        return False
+            if armcode == PyPanelStatus.DISARMED:
+                # If currently Disarmed
+                mybpstate = self.hass.states.get(eid)
+                if mybpstate is not None:
+                    if "visonic device" in mybpstate.attributes:
+                        devid = mybpstate.attributes["visonic device"]
+                        if devid >= 1 and devid <= 64:
+                            if bypass:
+                                _LOGGER.debug("Attempt to bypass sensor device id = %s", str(devid))
+                            else:
+                                _LOGGER.debug("Attempt to restore (arm) sensor device id = %s", str(devid))
+                            self._client.sendBypass(devid, bypass, code)
+                        else:
+                            self._client.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor, incorrect device {str(devid)} for entity {eid}")
+                    else:
+                        self._client.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor, incorrect entity {eid}")
+                else:
+                    self._client.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor, unknown device state for entity {eid}")
+            else:
+                self._client.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, "Visonic Alarm Panel: Attempt to bypass sensor, panel needs to be in the disarmed state")
+
 
     def alarm_arm_custom_bypass(self, data=None):
         """Bypass Panel."""
@@ -336,9 +339,14 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
                     bypass = False
                     if ATTR_BYPASS in call.data:
                         bypass = call.data[ATTR_BYPASS]
+
                     code = ""
                     if ATTR_CODE in call.data:
                         code = call.data[ATTR_CODE]
+                        # If the code is defined then it must be a 4 digit string
+                        if len(code) > 0 and not re.search(PIN_REGEX, code):
+                            code = "0000"
+
                     self.sensor_bypass(eid, bypass, code)
                 else:
                     self._client.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor, invalid entity {eid}")

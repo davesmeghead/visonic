@@ -5,8 +5,9 @@ from collections import defaultdict
 import logging
 from time import sleep
 from typing import Union, Any
+import re
 
-CLIENT_VERSION = "0.6.5.0"
+CLIENT_VERSION = "0.6.6.0"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -76,6 +77,7 @@ from .const import (
     VISONIC_UPDATE_STATE_DISPATCHER,
     CONF_ALARM_NOTIFICATIONS,
     AvailableNotifications,
+    PIN_REGEX,
 )
 
 class PanelCondition(IntEnum):
@@ -96,7 +98,7 @@ ALARM_SERVICE_EVENTLOG = vol.Schema(
 CONF_COMMAND = "command"
 ALARM_SERVICE_COMMAND = vol.Schema(
     {
-        vol.Required(CONF_COMMAND) : vol.In([item.name for item in PyPanelCommand]),
+        vol.Required(CONF_COMMAND) : cv.enum(PyPanelCommand),
         vol.Optional(ATTR_CODE, default=""): cv.string,
     }
 )
@@ -145,8 +147,6 @@ class VisonicClient:
         self.visonicTask = None
         self.visonicProtocol : PyPanelInterface = None
         self.SystemStarted = False
-        
-        self.SupportSoundSiren = False
 
         # variables for creating the event log for csv and xml
         self.csvdata = None
@@ -184,33 +184,33 @@ class VisonicClient:
         return False
 
     def isPowerMaster(self) -> bool:
-        """Is it a PowerMaster panel."""
+        """Is it a PowerMaster panel"""
         if self.visonicProtocol is not None:
             return self.visonicProtocol.isPowerMaster()
         return False
 
     def isForceKeypad(self) -> bool:
-        """Is it a PowerMaster panel."""
+        """Force Keypad"""
         return self.toBool(self.config.get(CONF_FORCE_KEYPAD, False))
 
     def isArmWithoutCode(self) -> bool:
-        """Is it a PowerMaster panel."""
+        """Is Arm Without Use Code"""
         return self.toBool(self.config.get(CONF_ARM_CODE_AUTO, False))
 
     def isArmAwayInstant(self) -> bool:
-        """Is it a PowerMaster panel."""
+        """Is Arm Away Instant"""
         return self.toBool(self.config.get(CONF_INSTANT_ARM_AWAY, False))
 
     def isArmHomeInstant(self) -> bool:
-        """Is it a PowerMaster panel."""
+        """Is Arm Home Instant"""
         return self.toBool(self.config.get(CONF_INSTANT_ARM_HOME, False))
 
     def isRemoteArm(self) -> bool:
-        """Is it a PowerMaster panel."""
+        """Is it Remote Arm"""
         return self.toBool(self.config.get(CONF_ENABLE_REMOTE_ARM, False))
 
     def isRemoteDisarm(self) -> bool:
-        """Is it a PowerMaster panel."""
+        """Is it Remote Disarm"""
         return self.toBool(self.config.get(CONF_ENABLE_REMOTE_DISARM, False))
 
     def getPanelStatusCode(self) -> PyPanelStatus:
@@ -283,7 +283,7 @@ class VisonicClient:
             self.csvdata = ""
 
         if self.csvdata is not None:
-            _LOGGER.debug("Panel Event - Saving csv data")
+            #_LOGGER.debug("Panel Event - Saving csv data")
             if reverse:
                 self.csvdata = (
                     "{0}, {1}, {2}, {3}, {4}, {5}, {6}\n".format(
@@ -311,7 +311,7 @@ class VisonicClient:
                     )
                 )
 
-            _LOGGER.debug("Panel Event - Saving xml data")
+            #_LOGGER.debug("Panel Event - Saving xml data")
             datadict = {
                 "partition": "{0}".format(event_log_entry.partition),
                 "current": "{0}".format(current),
@@ -602,7 +602,6 @@ class VisonicClient:
 
         # Connect in the way defined by the user in the config file, ethernet or usb
         if device_type == "ethernet":
-            self.SupportSoundSiren = False
             host = self.config.get(CONF_HOST)
             port = self.config.get(CONF_PORT)
 
@@ -617,7 +616,6 @@ class VisonicClient:
             )
 
         elif device_type == "usb":
-            self.SupportSoundSiren = False
             path = self.config.get(CONF_PATH)
             baud = self.config.get(CONF_DEVICE_BAUD)
             (
@@ -782,7 +780,7 @@ class VisonicClient:
         asyncio.ensure_future(self.disconnect_callback_async(), loop=self.hass.loop)
 
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
-    def pmGetPin(self, pin: str, forcedKeypad: bool, doingBypass : bool):
+    def pmGetPin(self, pin: str, forcedKeypad: bool):
         """Get pin code."""
         #_LOGGER.debug("Getting Pin Start")
         if pin is None or pin == "" or len(pin) != 4:
@@ -793,7 +791,7 @@ class VisonicClient:
                 # Panel currently disarmed, arm without user code, override is set and valid
                 #_LOGGER.debug("Here A")
                 return True, self.config.get(CONF_OVERRIDE_CODE, "")
-            elif not doingBypass and self.isArmWithoutCode() and psc == PyPanelStatus.DISARMED:
+            elif self.isArmWithoutCode() and psc == PyPanelStatus.DISARMED:
                 # Panel currently disarmed, arm without user code, so use any code
                 #_LOGGER.debug("Here B")
                 return True, "0000"
@@ -810,12 +808,29 @@ class VisonicClient:
                 # Powerlink or StdPlus and so we downloaded the pin codes
                 #_LOGGER.debug("Here E")
                 return True, None
-            elif not doingBypass and self.isArmWithoutCode():
+            elif self.isArmWithoutCode():
                 # Here to prevent the warning to the log file
                 #_LOGGER.debug("Here F")
                 return False, None
             else:
                 _LOGGER.warning("Warning: Valid 4 digit PIN not found")
+                return False, None
+        return True, pin
+
+    # pmGetPinSimple: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
+    def pmGetPinSimple(self, pin: str):
+        """Get pin code."""
+        #_LOGGER.debug("Getting Pin Start")
+        if pin is None or pin == "" or len(pin) != 4:
+            panelmode = self.getPanelMode()
+            if self.hasValidOverrideCode():
+                # The override is set and valid
+                return True, self.config.get(CONF_OVERRIDE_CODE, "")
+            elif panelmode == PyPanelMode.POWERLINK or panelmode == PyPanelMode.STANDARD_PLUS:
+                # Powerlink or StdPlus and so we downloaded the pin codes
+                return True, None
+            else:
+                _LOGGER.warning("Warning: [pmGetPinSimple] Valid 4 digit PIN not found")
                 return False, None
         return True, pin
 
@@ -848,26 +863,21 @@ class VisonicClient:
     def sendCommand(self, message : str, command : PyPanelCommand, code : str):
         codeRequired = self.isCodeRequired()
         if (codeRequired and code is not None) or not codeRequired:
-            pcode = self.decode_code(code) if codeRequired else ""
+            pcode = self.decode_code(code) if codeRequired or (code is not None and len(code) > 0) else ""
             vp = self.visonicProtocol
             if vp is not None:
                 _LOGGER.debug("send_alarm_command to Visonic Alarm Panel: %s", command)
 
-                isValidPL, pin = self.pmGetPin(pin = pcode, forcedKeypad = self.isForceKeypad(), doingBypass = False)
+                isValidPL, pin = self.pmGetPin(pin = pcode, forcedKeypad = self.isForceKeypad())
 
-                # Do this test here as it is not applicable to pin settings for bypass and event log
                 if not isValidPL and self.isArmWithoutCode() and command != PyPanelCommand.DISARM:
                     # if we dont have pin codes and we can arm without a code and we're arming and arming is allowed
                     isValidPL = True
                     pin = "0000"
 
                 if isValidPL:
-                    if command == PyPanelCommand.SOUND_ALARM:
-                        retval = vp.requestArm(command, pin)
-                        self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Sound Alarm")
-                    elif (command == PyPanelCommand.DISARM and self.isRemoteDisarm()) or (
-                        command != PyPanelCommand.DISARM and self.isRemoteArm()
-                    ):
+                    if (command == PyPanelCommand.DISARM and self.isRemoteDisarm()) or (
+                        command != PyPanelCommand.DISARM and self.isRemoteArm()):
                         retval = vp.requestArm(command, pin)
                         self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request Arm/Disarm")
                     else:
@@ -879,18 +889,18 @@ class VisonicClient:
         else:
             self.createWarningMessage(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, an alarm code is required")
 
-    def sendBypass(self, devid: int, bypass: bool, code: str) -> bool:
+    def sendBypass(self, devid: int, bypass: bool, code: str):
         """Send the bypass command to the panel."""
         vp = self.visonicProtocol
         if vp is not None:
             if self.toBool(self.config.get(CONF_ENABLE_SENSOR_BYPASS, False)):
-                isValidPL, pin = self.pmGetPin(pin = code, forcedKeypad = False, doingBypass = True)
+                dpin = self.decode_code(code)
+                isValidPL, pin = self.pmGetPinSimple(pin = dpin)
                 if isValidPL:
                     # The device id in the range 1 to N
                     retval = vp.setSensorBypassState(devid, bypass, pin)
                     self.generateBusEventReason(PanelCondition.CHECK_BYPASS_COMMAND, retval, "Bypass", "Sensor Arm State")
                     # retval is an PyCommandStatus that is SUCCESS on sending the command to the panel
-                    return retval == PyCommandStatus.Success
                 else:
                     self.generateBusEventReason(PanelCondition.CHECK_BYPASS_COMMAND, PyCommandStatus.FAIL_INVALID_PIN, "Bypass", "Sensor Arm State")
             else:
@@ -934,7 +944,7 @@ class VisonicClient:
         # _LOGGER.debug("code format panel mode %s", panelmode)
         if not self.isForceKeypad() and panelmode is not None:
             if panelmode == PyPanelMode.POWERLINK or panelmode == PyPanelMode.STANDARD_PLUS:
-                _LOGGER.debug("No Key Panel as powerlink or std plus ********")
+                _LOGGER.debug("No Code Required as powerlink or std plus ********")
                 return False
 
         armcode = self.getPanelStatusCode()
@@ -943,18 +953,18 @@ class VisonicClient:
 
         # If currently Disarmed and user setting to not show panel to arm
         if armcode == PyPanelStatus.DISARMED and self.isArmWithoutCode():
-            _LOGGER.debug("No Key Panel as disarmed and user arm without code")
+            _LOGGER.debug("No Code Required as disarmed and user arm without code")
             return False
 
         if self.isForceKeypad():
-            _LOGGER.debug("Key Panel as force numeric keypad set in config")
+            _LOGGER.debug("Code Required as force numeric keypad set in config")
             return True
 
         if self.hasValidOverrideCode():
-            _LOGGER.debug("No Key Panel as code set in config")
+            _LOGGER.debug("No Code Required as code set in config")
             return False
 
-        _LOGGER.debug("Key Panel")
+        _LOGGER.debug("Code Required")
         return True
 
     async def service_panel_eventlog(self, call):
@@ -979,14 +989,25 @@ class VisonicClient:
 
         _LOGGER.debug("alarm control panel received event log request - user approved")
         if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>":
-            code = ""
-            if ATTR_CODE in call.data:
-                code = call.data[ATTR_CODE]
-            _LOGGER.debug("alarm control panel making event log request")
 
             if self.visonicProtocol is not None:
-                retval = self.visonicProtocol.getEventLog(self.decode_code(code))
-                self.generateBusEventReason(PanelCondition.CHECK_EVENT_LOG_COMMAND, retval, "EventLog", "Event Log")
+                code = ""
+                if ATTR_CODE in call.data:
+                    code = call.data[ATTR_CODE]
+                    # If the code is defined then it must be a 4 digit string
+                    if len(code) > 0 and not re.search(PIN_REGEX, code):
+                        code = "0000"
+                        
+                _LOGGER.debug("alarm control panel making event log request")
+                pcode = self.decode_code(code)
+                isValidPL, pin = self.pmGetPinSimple(pin = pcode)
+                if isValidPL:
+                    retval = self.visonicProtocol.getEventLog(pin)
+                    self.generateBusEventReason(PanelCondition.CHECK_EVENT_LOG_COMMAND, retval, "EventLog", "Event Log Request")
+                else:
+                    self.generateBusEventReason(PanelCondition.CHECK_EVENT_LOG_COMMAND, PyCommandStatus.FAIL_INVALID_PIN, "EventLog", "Event Log Request")
+            else:
+                self.createWarningMessage(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending Event Log Request Command, not sent to panel")
 
         else:
             _LOGGER.debug(
@@ -1018,17 +1039,20 @@ class VisonicClient:
 
         _LOGGER.debug("alarm control panel received command request - user approved")
         if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>":
+            command = call.data[CONF_COMMAND]
             code = ""
             if ATTR_CODE in call.data:
                 code = call.data[ATTR_CODE]
-            command = call.data[CONF_COMMAND]
-            self.sendCommand("Alarm Service Call " + command, PyPanelCommand[command], code)
+                # If the code is defined then it must be a 4 digit string
+                if len(code) > 0 and not re.search(PIN_REGEX, code):
+                    code = "0000"
+            try:
+                self.sendCommand("Alarm Service Call " + str(command), command, code)
+            except Exception as ex:
+                _LOGGER.debug("Alarm control panel not making command request %s %s", type(call.data), call.data )
+                _LOGGER.debug(ex)
         else:
-            _LOGGER.debug(
-                "alarm control panel not making command request %s %s",
-                type(call.data),
-                call.data,
-            )
+            _LOGGER.debug("Alarm control panel not making command request %s %s", type(call.data), call.data )
 
     async def connect(self):
         """Connect to the alarm panel using the pyvisonic library."""

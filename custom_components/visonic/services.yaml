@@ -9,8 +9,8 @@ alarm_panel_command:
   description: Send a command to the Alarm Panel.
   fields:
     command:
-      description: "The command to send to the panel, one of 'DISARM', 'ARM_AWAY', 'ARM_AWAY_INSTANT', 'ARM_HOME', 'ARM_HOME_INSTANT'"
-      example: 'DISARM'
+      description: "The command to send to the panel"
+      example: 'disarm'
     code:
       description: An optional code to send to the panel.
       example: "1234"

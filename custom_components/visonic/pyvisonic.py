@@ -52,7 +52,7 @@ from typing import Callable, List
 from collections import namedtuple
 from .pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.5.6"
+PLUGIN_VERSION = "1.0.6.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -101,15 +101,6 @@ NO_RECEIVE_DATA_TIMEOUT = 30
 # Messages left to work out
 #      Panel sent 0d 22 fd 0a 01 16 15 00 0d 00 00 00 9c 0a    No idea what this means
 
-
-#    case Pmax_ALARM:
-#        {
-#            unsigned char buff[] = {0xA1,0x00,0x00,0x07,0x12,0x34,0x00,0x00,0x00,0x00,0x00,0x43}; 
-#            addPin(buff, 4, true);
-#            return sendBuffer(buff, sizeof(buff));
-#        }
-
-
 # use a named tuple for data and acknowledge
 #    replytype   is a message type from the Panel that we should get in response
 #    waitforack, if True means that we should wait for the acknowledge from the Panel before progressing
@@ -125,9 +116,6 @@ pmSendMsg = {
    "MSG_ZONENAME"    : VisonicCommand(bytearray.fromhex('A3 00 00 00 00 00 00 00 00 00 00 43'), [0xA3, 0xA3, 0xA3, 0xA3],  True, False,  True, 0.0, "Requesting Zone Names" ),
    "MSG_X10PGM"      : VisonicCommand(bytearray.fromhex('A4 00 00 00 00 00 99 99 99 00 00 43'), None                    , False, False,  True, 0.0, "X10 Data" ),
    "MSG_ZONETYPE"    : VisonicCommand(bytearray.fromhex('A6 00 00 00 00 00 00 00 00 00 00 43'), [0xA6, 0xA6, 0xA6, 0xA6],  True, False,  True, 0.0, "Requesting Zone Types" ),
-   "MSG_U1"          : VisonicCommand(bytearray.fromhex('A7 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "Unknown 1" ),
-   "MSG_U2"          : VisonicCommand(bytearray.fromhex('A8 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "Unknown 2" ),
-   "MSG_U3"          : VisonicCommand(bytearray.fromhex('A9 04 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "Unknown 3" ),
    "MSG_BYPASSEN"    : VisonicCommand(bytearray.fromhex('AA 99 99 12 34 56 78 00 00 00 00 43'), None                    , False, False, False, 0.0, "BYPASS Enable" ),
    "MSG_BYPASSDI"    : VisonicCommand(bytearray.fromhex('AA 99 99 00 00 00 00 12 34 56 78 43'), None                    , False, False, False, 0.0, "BYPASS Disable" ),
    "MSG_ALIVE"       : VisonicCommand(bytearray.fromhex('AB 03 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "I'm Alive Message To Panel" ),
@@ -3078,6 +3066,10 @@ class PacketHandling(ProtocolBase):
     #     0d a5 00 04 00 61 03 05 00 05 00 00 43 a4 0a
     def handle_msgtypeA5(self, data) -> bool:  # Status Message
 
+        #zoneCnt = 0  # this means it wont work in case we're in standard mode and the panel type is not set
+        #if self.PanelType is not None:
+        #    zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
+
         # msgTot = data[0]
         eventType = data[1]
 
@@ -3285,50 +3277,41 @@ class PacketHandling(ProtocolBase):
                 if key in self.pmSensorDev_t:
                     if eventType == 1:  # Tamper Alarm
                         self.pmSensorDev_t[key].tamper = True
-                        #self.pmSensorDev_t[key].pushChange()
                     elif eventType == 2:  # Tamper Restore
                         self.pmSensorDev_t[key].tamper = False
-                        #self.pmSensorDev_t[key].pushChange()
                     elif eventType == 3:  # Zone Open
                         self.pmSensorDev_t[key].triggered = True
                         self.pmSensorDev_t[key].status = True
                         self.pmSensorDev_t[key].triggertime = self._getTimeFunction()
-                        #self.pmSensorDev_t[key].pushChange()
                     elif eventType == 4:  # Zone Closed
                         self.pmSensorDev_t[key].triggered = False
                         self.pmSensorDev_t[key].status = False
-                        #self.pmSensorDev_t[key].pushChange()
                     elif eventType == 5:  # Zone Violated
                         if not self.pmSensorDev_t[key].triggered:
                             self.pmSensorDev_t[key].triggertime = self._getTimeFunction()
                             self.pmSensorDev_t[key].triggered = True
-                            #self.pmSensorDev_t[key].pushChange()
                     # elif eventType == 6: # Panic Alarm
                     # elif eventType == 7: # RF Jamming
-                    # elif eventType == 8: # Tamper Open
-                    #    self.pmSensorDev_t[key].pushChange()
+                    elif eventType == 8: # Tamper Open
+                        self.pmSensorDev_t[key].tamper = True
                     # elif eventType == 9: # Comms Failure
                     # elif eventType == 10: # Line Failure
                     # elif eventType == 11: # Fuse
                     # elif eventType == 12: # Not Active
                     #    self.pmSensorDev_t[key].triggered = False
                     #    self.pmSensorDev_t[key].status = False
-                    #    self.pmSensorDev_t[key].pushChange()
                     elif eventType == 13:  # Low Battery
                         self.pmSensorDev_t[key].lowbatt = True
                         #self.pmSensorDev_t[key].pushChange()
                     # elif eventType == 14: # AC Failure
                     # elif eventType == 15: # Fire Alarm
                     # elif eventType == 16: # Emergency
-                    # elif eventType == 17: # Siren Tamper
-                    #    self.pmSensorDev_t[key].tamper = True
-                    #    self.pmSensorDev_t[key].pushChange()
-                    # elif eventType == 18: # Siren Tamper Restore
-                    #    self.pmSensorDev_t[key].tamper = False
-                    #    self.pmSensorDev_t[key].pushChange()
-                    # elif eventType == 19: # Siren Low Battery
-                    #    self.pmSensorDev_t[key].lowbatt = True
-                    #    self.pmSensorDev_t[key].pushChange()
+                    elif eventType == 17: # Siren Tamper
+                        self.pmSensorDev_t[key].tamper = True
+                    elif eventType == 18: # Siren Tamper Restore
+                        self.pmSensorDev_t[key].tamper = False
+                    elif eventType == 19: # Siren Low Battery
+                        self.pmSensorDev_t[key].lowbatt = True
                     # elif eventType == 20: # Siren AC Fail
 
                     datadict = {}
@@ -3749,7 +3732,7 @@ class PacketHandling(ProtocolBase):
                                         'Yes' if self.PanelArmed else 'No', self.PanelTroubleStatus, self.PanelAlarmStatus))
         log.debug("==============================================================================================================")
 
-    def _createPin(self, pin):
+    def _createPin(self, pin : str):
         # Pin is None when either we can perform the action without a code OR we're in Powerlink/StandardPlus and have the pin code to use
         # Other cases, the pin must be set
         if pin is None:
@@ -3763,15 +3746,6 @@ class PacketHandling(ProtocolBase):
             # default to setting it to "0000" and see what happens when its sent to the panel
             bpin = bytearray.fromhex("00 00")
         return bpin
-        #if pin is None:
-        #    if self.pmGotUserCode:
-        #        bpin = self.pmPincode_t[0]   # if self.pmGotUserCode, then we downloaded the pin codes. Use the first one
-        #    else:
-        #        bpin = bytearray.fromhex("00 00")
-        #else:
-        #    bpin = bytearray.fromhex(pin[0:2] + " " + pin[2:4])
-        #return bpin
-
 
 # Event handling and externally callable client functions (plus updatestatus)
 class VisonicProtocol(PacketHandling, PyPanelInterface):
@@ -3934,9 +3908,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
                 bpin = self._createPin(pin)
                 bypassint = 1 << (sensor - 1)
                 #log.debug("[SensorArmState]  setSensorBypassState A " + hex(bypassint))
-                # is it big or little endian, i'm not sure, needs testing
                 y1, y2, y3, y4 = (bypassint & 0xFFFFFFFF).to_bytes(4, "little")
-                # These could be the wrong way around, needs testing
                 bypass = bytearray([y1, y2, y3, y4])
                 log.debug("[SensorArmState]  setSensorBypassState bypass = " + self._toString(bypass))
                 if len(bypass) == 4:

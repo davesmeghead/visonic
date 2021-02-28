@@ -79,6 +79,8 @@ CONF_B0_ENABLE_MOTION_PROCESSING = "b0_enable_motion_processing"
 CONF_B0_MIN_TIME_BETWEEN_TRIGGERS = "b0_min_time_between_triggers"
 CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT = "b0_max_time_for_trigger_event"
 
+PIN_REGEX = "^[0-9]{4}$"
+
 class AvailableNotifications(str, Enum):
     ALWAYS = 'always'
     SIREN = 'sirensounding'

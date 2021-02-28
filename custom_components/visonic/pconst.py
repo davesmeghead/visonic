@@ -38,12 +38,31 @@ class PyPanelStatus(IntEnum):
     DOWNLOADING = 7
 
 class PyPanelCommand(IntEnum):
+    # Include all case variations for the alarm_panel_command HA service
+    #   The values used in the code have to be first
     DISARM = 0
     ARM_HOME = 1
     ARM_AWAY = 2
     ARM_HOME_INSTANT = 3
     ARM_AWAY_INSTANT = 4
-    SOUND_ALARM = 5
+    disarm = 0
+    Disarm = 0
+    arm_home = 1
+    arm_away = 2
+    arm_home_instant = 3
+    arm_away_instant = 4
+    armhome = 1
+    armaway = 2
+    armhomeinstant = 3
+    armawayinstant = 4
+    Arm_Home = 1
+    Arm_Away = 2
+    Arm_Home_Instant = 3
+    Arm_Away_Instant = 4
+    ArmHome = 1
+    ArmAway = 2
+    ArmHomeInstant = 3
+    ArmAwayInstant = 4
 
 class PyX10Command(IntEnum):
     OFF = 0

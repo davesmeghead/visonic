@@ -62,14 +62,13 @@ class VisonicSensor(BinarySensorEntity):
 
     def __init__(self, client: VisonicClient, visonic_device: PySensorDevice):
         """Initialize the sensor."""
-        # _LOGGER.debug("Creating binary sensor %s",visonic_device.getDeviceName())
+        #_LOGGER.debug("Creating binary sensor %s",visonic_device.getDeviceName())
         self.visonic_device = visonic_device
         self._name = "visonic_" + self.visonic_device.getDeviceName().lower()
         # Append device id to prevent name clashes in HA.
         self._visonic_id = slugify(self._name)
-        self._current_value = (
-            self.visonic_device.isTriggered() or self.visonic_device.isOpen()
-        )
+        self._current_value = (self.visonic_device.isTriggered() or self.visonic_device.isOpen())
+        self._is_available = self.visonic_device.isEnrolled()
 
     async def async_added_to_hass(self):
         """Register callbacks."""
@@ -89,12 +88,11 @@ class VisonicSensor(BinarySensorEntity):
 
     def onChange(self, event_id: int, datadictionary: dict):
         """Call on any change to the sensor."""
-        # _LOGGER.debug("Sensor onchange %s", str(self._visonic_id))
+        #_LOGGER.debug("Sensor onchange %s", str(self._visonic_id))
         # Update the current value based on the device state
         if self.visonic_device is not None:
-            self._current_value = (
-                self.visonic_device.isTriggered() or self.visonic_device.isOpen()
-            )
+            self._current_value = (self.visonic_device.isTriggered() or self.visonic_device.isOpen())
+            self._is_available = self.visonic_device.isEnrolled()
             # Ask HA to schedule an update
             self.schedule_update_ha_state()
         else:
@@ -168,9 +166,7 @@ class VisonicSensor(BinarySensorEntity):
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        if self.visonic_device is not None:
-            return self.visonic_device.isEnrolled()
-        return False
+        return self._is_available
 
     @property
     def device_state_attributes(self):
