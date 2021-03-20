@@ -52,7 +52,7 @@ from typing import Callable, List
 from collections import namedtuple
 from .pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.6.0"
+PLUGIN_VERSION = "1.0.6.1"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -3344,7 +3344,8 @@ class PacketHandling(ProtocolBase):
                             self.pmSensorDev_t[i].enrolled = True
                         else:
                             # we dont know about it so create it and make it enrolled
-                            self.pmSensorDev_t[i] = SensorDevice(dname="Z{0:0>2}".format(i + 1), id=i + 1, enrolled=True)
+                            pushChange = True
+                            self.pmSensorDev_t[i] = SensorDevice(dname="Z{0:0>2}".format(i + 1), id=i + 1, stype="Magnet", enrolled=True)
                             #visonic_devices["sensor"].append(self.pmSensorDev_t[i])
                             if self.new_sensor_callback is not None:
                                 self.new_sensor_callback(self.pmSensorDev_t[i])
@@ -3389,6 +3390,8 @@ class PacketHandling(ProtocolBase):
                 if (offset+i) in self.pmSensorDev_t:
                     self.pmSensorDev_t[offset+i].ztypeName = pmZoneType_t[self.pmLang][zoneType]
                     self.pmSensorDev_t[offset+i].ztype = zoneType
+                    if zoneType == 6 or zoneType == 12:
+                        self.pmSensorDev_t[offset+i].stype = "Motion"
                     #self.pmSensorDev_t[offset+i].zchime = pmZoneChime_t[self.pmLang][zoneChime]
                     pushChange = True
                     #self.pmSensorDev_t[offset+i].pushChange()
