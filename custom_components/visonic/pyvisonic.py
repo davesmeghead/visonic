@@ -52,7 +52,7 @@ from typing import Callable, List
 from collections import namedtuple
 from .pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.6.1"
+PLUGIN_VERSION = "1.0.6.2"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -1118,6 +1118,9 @@ class ProtocolBase(asyncio.Protocol):
         self.PanelStatus = {}
         self.PanelType = None
 
+        # determine when MSG_ENROLL is sent to the panel
+        self.doneAutoEnroll = False
+
         # Whether its a powermax or powermaster
         self.PowerMaster = None
 
@@ -1428,16 +1431,33 @@ class ProtocolBase(asyncio.Protocol):
         else:
             self._sendCommand("MSG_STATUS")
 
+    # We can only use this function when the panel has sent a "installing powerlink" message i.e. AB 0A 00 01
+    #   We need to clear the send queue and reset the send parameters to immediately send an MSG_ENROLL
+    def _sendMsgENROLL(self, triggerdownload):
+        """ Auto enroll the PowerMax/Master unit """
+        if not self.doneAutoEnroll:
+            self.doneAutoEnroll = True
+            self._sendCommand("MSG_ENROLL", options=[4, bytearray.fromhex(self.DownloadCode)])
+            if triggerdownload:
+                self._startDownload()
+        elif self.DownloadCode == "DF FD":
+            log.warning("[_sendMsgENROLL] Warning: Trying to re enroll, already tried DFFD and still not successful")
+        else:
+            log.debug("[_sendMsgENROLL] Warning: Trying to re enroll but not triggering download")
+            self.DownloadCode = "DF FD"  # Force the Download code to be something different and try again ?????
+            self._sendCommand("MSG_ENROLL", options=[4, bytearray.fromhex(self.DownloadCode)])
+
     def _triggerEnroll(self, force):
-        if (force or self.PanelType >= 3):  
+        if force or (self.PanelType is not None and self.PanelType >= 3):  
             # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
             log.debug("[Controller] Trigger Powerlink Attempt")
             # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel,
             #      this should kick it in to powerlink after we just enrolled
             self.allowAckToTriggerRestore = True
             # Send enroll to the panel to try powerlink
-            self._sendCommand("MSG_ENROLL", options=[4, bytearray.fromhex(self.DownloadCode)])
-        elif (self.PanelType >= 1):  
+            # self._sendCommand("MSG_ENROLL", options=[4, bytearray.fromhex(self.DownloadCode)])
+            self._sendMsgENROLL(False)  # Auto enroll, do not request download
+        elif self.PanelType is not None and self.PanelType >= 1:
             # Powermax+ or Powermax Pro, attempt to just send a MSG_RESTORE to prompt the panel in to taking action if it is able to
             log.debug("[Controller] Trigger Powerlink Prompt attempt to a Powermax+ or Powermax Pro panel")
             # Prevent the receipt of a powerlink ack to then send a MSG_RESTORE to the panel,
@@ -2112,14 +2132,11 @@ class PacketHandling(ProtocolBase):
         self.zonetamper_old = -1
 
         self.pmBypassOff = False         # Do we allow the user to bypass the sensors, this is read from the EPROM data
-        self.pmSilentPanic = False       # Is silent panic set in the panel. This is read from the EPROM data
+        self.pmPanicAlarmSilent = False  # Is Panic Alarm set to silent panic set in the panel. This is read from the EPROM data
 
         self.lastPacket = None
         self.lastPacketCounter = 0
         self.sensorsCreated = False  # Have the sensors benn created. Either from an A5 message or the EPROM data
-
-        # determine when MSG_ENROLL is sent to the panel
-        self.doneAutoEnroll = False
 
         asyncio.create_task(self._resetTriggeredStateTimer(), name="Turn Sensor Off After Timeout") #, loop=self.loop)
 
@@ -2142,21 +2159,6 @@ class PacketHandling(ProtocolBase):
                 self._sendResponseEvent(PyCondition.PUSH_CHANGE)  # 0 means push through an HA Frontend change, do not create an HA Event
             # check every 1 second
             await asyncio.sleep(1.0)  # must be less than 5 seconds for self.suspendAllOperations:
-
-    # We can only use this function when the panel has sent a "installing powerlink" message i.e. AB 0A 00 01
-    #   We need to clear the send queue and reset the send parameters to immediately send an MSG_ENROLL
-    def _sendMsgENROLL(self):
-        """ Auto enroll the PowerMax/Master unit """
-        if not self.doneAutoEnroll:
-            self.doneAutoEnroll = True
-            self._sendCommand("MSG_ENROLL", options=[4, bytearray.fromhex(self.DownloadCode)])
-            self._startDownload()
-        elif self.DownloadCode == "DF FD":
-            log.warning("[_sendMsgENROLL] Warning: Trying to re enroll, already tried DFFD and still not successful")
-        else:
-            log.debug("[_sendMsgENROLL] Warning: Trying to re enroll but not triggering download")
-            self.DownloadCode = "DF FD"  # Force the Download code to be something different and try again ?????
-            self._sendCommand("MSG_ENROLL", options=[4, bytearray.fromhex(self.DownloadCode)])
 
     # _writeEPROMSettings: add a certain setting to the settings table
     #  So, to explain
@@ -2407,8 +2409,8 @@ class PacketHandling(ProtocolBase):
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process alarm settings
                 #log.debug("panic {0}   bypass {1}".format(self._lookupEpromSingle("panicAlarm"), self._lookupEpromSingle("bypass") ))
-                self.pmSilentPanic = self._lookupEpromSingle("panicAlarm") == "Silent Panic"    # special
-                self.pmBypassOff = self._lookupEpromSingle("bypass") == "No Bypass"             # special   '2':"Manual Bypass", '0':"No Bypass", '1':"Force Arm"}
+                self.pmPanicAlarmSilent = self._lookupEpromSingle("panicAlarm") == "Silent Panic"    # special
+                self.pmBypassOff = self._lookupEpromSingle("bypass") == "No Bypass"                  # special   '2':"Manual Bypass", '0':"No Bypass", '1':"Force Arm"}
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process user pin codes
@@ -2847,10 +2849,10 @@ class PacketHandling(ProtocolBase):
                     if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
                         if self.PanelType >= 3:     # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
                             log.debug("[handle_msgtype08]                   Try to auto enroll (panel type {0})".format(self.PanelType))
-                            self._sendMsgENROLL()  # Auto enroll
+                            self._sendMsgENROLL(True)  # Auto enroll, retrigger download
                     elif self.ForceAutoEnroll:
                         log.debug("[handle_msgtype08]                   Try to force auto enroll (panel type unknown)")
-                        self._sendMsgENROLL()  # Auto enroll
+                        self._sendMsgENROLL(True)  #  Auto enroll, retrigger download
                 elif lastCommandData[0] != 0xAB and lastCommandData[0] != 0x0B:  # Powerlink command and the Stop Command
                     log.debug("[handle_msgtype08] Attempt to send a command message to the panel that has been rejected")
                     self._sendResponseEvent(PyCondition.COMMAND_REJECTED)  # push changes through to the host, something has been rejected (other than the pin)
@@ -3510,7 +3512,7 @@ class PacketHandling(ProtocolBase):
                     datadict["Tamper"] = True
 
                 # no clauses as if siren gets true again then keep updating self.pmSirenActive with the time
-                if siren and not self.pmSilentPanic:
+                if siren: # and not self.pmPanicAlarmSilent:
                     self.pmSirenActive = self._getTimeFunction()
                     datadict["Siren"] = True
                     log.debug("[handle_msgtypeA7] ******************** Alarm Active *******************")
@@ -3529,7 +3531,7 @@ class PacketHandling(ProtocolBase):
 
                 # INTERFACE Indicate whether siren active
 
-                log.debug("[handle_msgtypeA7]           self.pmSirenActive={0}   siren={1}   eventType={2}   self.pmSilentPanic={3}   tamper={4}".format(self.pmSirenActive, siren, hex(eventType), self.pmSilentPanic, tamper) )
+                log.debug("[handle_msgtypeA7]           self.pmSirenActive={0}   siren={1}   eventType={2}   self.pmPanicAlarmSilent={3}   tamper={4}".format(self.pmSirenActive, siren, hex(eventType), self.pmPanicAlarmSilent, tamper) )
 
                 #---------------------------------------------------------------------------------------
                 if eventType == 0x60: # system restart
