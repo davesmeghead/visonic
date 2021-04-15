@@ -7,5 +7,5 @@
   "issue_tracker": "https://github.com/davesmeghead/visonic/issues",
   "dependencies": [],
   "codeowners": ["@davesmeghead"],
-  "requirements": []
+  "requirements": ["pyserial_asyncio==0.4"]
 }

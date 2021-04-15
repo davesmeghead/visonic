@@ -17,6 +17,7 @@
 #################################################################
 ######### Known Panel Types to work (or not) ####################
 #    PanelType=0 : PowerMax , Model=21   Powermaster False  <<== THIS DOES NOT WORK (NO POWERLINK SUPPORT and only supports EPROM download i.e no sensor data) ==>>
+#    PanelType=1 : PowerMax+ , Model=33   Powermaster False
 #    PanelType=1 : PowerMax+ , Model=47   Powermaster False
 #    PanelType=2 : PowerMax Pro , Model=22   Powermaster False
 #    PanelType=4 : PowerMax Pro Part , Model=17   Powermaster False
@@ -50,9 +51,9 @@ from time import sleep
 from functools import partial
 from typing import Callable, List
 from collections import namedtuple
-from .pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
+from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.6.2"
+PLUGIN_VERSION = "1.0.6.4"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -100,6 +101,7 @@ NO_RECEIVE_DATA_TIMEOUT = 30
 
 # Messages left to work out
 #      Panel sent 0d 22 fd 0a 01 16 15 00 0d 00 00 00 9c 0a    No idea what this means
+#                Powermax+ panel 0d f1 07 43 00 00 8b 56 0a    checksum calcs 0X38
 
 # use a named tuple for data and acknowledge
 #    replytype   is a message type from the Panel that we should get in response
@@ -118,6 +120,7 @@ pmSendMsg = {
    "MSG_ZONETYPE"    : VisonicCommand(bytearray.fromhex('A6 00 00 00 00 00 00 00 00 00 00 43'), [0xA6, 0xA6, 0xA6, 0xA6],  True, False,  True, 0.0, "Requesting Zone Types" ),
    "MSG_BYPASSEN"    : VisonicCommand(bytearray.fromhex('AA 99 99 12 34 56 78 00 00 00 00 43'), None                    , False, False, False, 0.0, "BYPASS Enable" ),
    "MSG_BYPASSDI"    : VisonicCommand(bytearray.fromhex('AA 99 99 00 00 00 00 12 34 56 78 43'), None                    , False, False, False, 0.0, "BYPASS Disable" ),
+   "MSG_GETTIME"     : VisonicCommand(bytearray.fromhex('AB 01 00 00 00 00 00 00 00 00 00 43'), [0xAB]                  ,  True, False,  True, 0.0, "Get Panel Time" ),   # Returns with an AB 01 message back
    "MSG_ALIVE"       : VisonicCommand(bytearray.fromhex('AB 03 00 00 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "I'm Alive Message To Panel" ),
    "MSG_RESTORE"     : VisonicCommand(bytearray.fromhex('AB 06 00 00 00 00 00 00 00 00 00 43'), [0xA5]                  ,  True, False,  True, 0.0, "Restore PowerMax/Master Connection" ),  # It can take multiple of these to put the panel back in to powerlink
    "MSG_ENROLL"      : VisonicCommand(bytearray.fromhex('AB 0A 00 00 99 99 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "Auto-Enroll of the PowerMax/Master" ),  # should get a reply of [0xAB] but its not guaranteed
@@ -151,7 +154,7 @@ pmSendMsgB0_t = {
 # To use the following, use  "MSG_DL" above and replace bytes 1 to 4 with the following
 #    index page lenlow lenhigh
 pmDownloadItem_t = {
-   "MSG_DL_TIME"         : bytearray.fromhex('F8 00 06 00'),   # could be F8 00 20 00
+   "MSG_DL_TIME"         : bytearray.fromhex('F8 00 06 00'),   # used
    "MSG_DL_COMMDEF"      : bytearray.fromhex('01 01 1E 00'),
    "MSG_DL_PHONENRS"     : bytearray.fromhex('36 01 20 00'),
    "MSG_DL_PINCODES"     : bytearray.fromhex('FA 01 10 00'),   # used
@@ -161,17 +164,18 @@ pmDownloadItem_t = {
    "MSG_DL_PARTITIONS"   : bytearray.fromhex('00 03 F0 00'),   # used
    "MSG_DL_PANELFW"      : bytearray.fromhex('00 04 20 00'),   # used
    "MSG_DL_SERIAL"       : bytearray.fromhex('30 04 08 00'),   # used
+   "MSG_DL_EVENTLOG"     : bytearray.fromhex('DF 04 28 03'),
    "MSG_DL_ZONES"        : bytearray.fromhex('00 09 78 00'),   # used
    "MSG_DL_KEYFOBS"      : bytearray.fromhex('78 09 40 00'),
+   "MSG_DL_ZONESIGNAL"   : bytearray.fromhex('DA 09 1C 00'),   # used    # zone signal strength - the 1C may be the zone count i.e. the 28 wireless zones
    "MSG_DL_2WKEYPAD"     : bytearray.fromhex('00 0A 08 00'),   # used
    "MSG_DL_1WKEYPAD"     : bytearray.fromhex('20 0A 40 00'),   # used
    "MSG_DL_SIRENS"       : bytearray.fromhex('60 0A 08 00'),   # used
    "MSG_DL_X10NAMES"     : bytearray.fromhex('30 0B 10 00'),   # used
    "MSG_DL_ZONENAMES"    : bytearray.fromhex('40 0B 1E 00'),   # used
-   "MSG_DL_EVENTLOG"     : bytearray.fromhex('DF 04 28 03'),
    "MSG_DL_ZONESTR"      : bytearray.fromhex('00 19 00 02'),
-   "MSG_DL_ZONESIGNAL"   : bytearray.fromhex('DA 09 1C 00'),   # used    # zone signal strength - the 1C may be the zone count i.e. the 28 wireless zones
    "MSL_DL_ZONECUSTOM"   : bytearray.fromhex('A0 1A 50 00'),
+   
    "MSG_DL_MR_ZONENAMES" : bytearray.fromhex('60 09 40 00'),   # used
    "MSG_DL_MR_PINCODES"  : bytearray.fromhex('98 0A 60 00'),   # used
    "MSG_DL_MR_SIRENS"    : bytearray.fromhex('E2 B6 50 00'),   # used
@@ -182,6 +186,7 @@ pmDownloadItem_t = {
    "MSG_DL_MR_ZONES3"    : bytearray.fromhex('B2 B9 A0 00'),   # used
    "MSG_DL_MR_ZONES4"    : bytearray.fromhex('52 BA A0 00'),   # used
    "MSG_DL_MR_SIRKEYZON" : bytearray.fromhex('E2 B6 10 04'),    # Combines Sirens keypads and sensors
+
    "MSG_DL_ALL"          : bytearray.fromhex('00 00 00 00')     #
 }
 
@@ -262,85 +267,144 @@ pmReceiveMsgB0_t = {
 
 pmLogEvent_t = {
    "EN" : (
-           "None", "Interior Alarm", "Perimeter Alarm", "Delay Alarm", "24h Silent Alarm", "24h Audible Alarm",
-           "Tamper", "Control Panel Tamper", "Tamper Alarm", "Tamper Alarm", "Communication Loss", "Panic From Keyfob",
-           "Panic From Control Panel", "Duress", "Confirm Alarm", "General Trouble", "General Trouble Restore",
-           "Interior Restore", "Perimeter Restore", "Delay Restore", "24h Silent Restore", "24h Audible Restore",
-           "Tamper Restore", "Control Panel Tamper Restore", "Tamper Restore", "Tamper Restore", "Communication Restore",
-           "Cancel Alarm", "General Restore", "Trouble Restore", "Not used", "Recent Close", "Fire", "Fire Restore",
-           "Not Active", "Emergency", "Remove User", "Disarm Latchkey", "Confirm Alarm Emergency", "Supervision (Inactive)",
-           "Supervision Restore (Active)", "Low Battery", "Low Battery Restore", "AC Fail", "AC Restore",
-           "Control Panel Low Battery", "Control Panel Low Battery Restore", "RF Jamming", "RF Jamming Restore",
-           "Communications Failure", "Communications Restore", "Telephone Line Failure", "Telephone Line Restore",
-           "Auto Test", "Fuse Failure", "Fuse Restore", "Keyfob Low Battery", "Keyfob Low Battery Restore", "Engineer Reset",
-           "Battery Disconnect", "1-Way Keypad Low Battery", "1-Way Keypad Low Battery Restore", "1-Way Keypad Inactive",
-           "1-Way Keypad Restore Active", "Low Battery Ack", "Clean Me", "Fire Trouble", "Low Battery", "Battery Restore",
-           "AC Fail", "AC Restore", "Supervision (Inactive)", "Supervision Restore (Active)", "Gas Alert", "Gas Alert Restore",
-           "Gas Trouble", "Gas Trouble Restore", "Flood Alert", "Flood Alert Restore", "X-10 Trouble", "X-10 Trouble Restore",
-           "Arm Home", "Arm Away", "Quick Arm Home", "Quick Arm Away", "Disarm", "Fail To Auto-Arm", "Enter To Test Mode",
-           "Exit From Test Mode", "Force Arm", "Auto Arm", "Instant Arm", "Bypass", "Fail To Arm", "Door Open",
-           "Communication Established By Control Panel", "System Reset", "Installer Programming", "Wrong Password",
-           "Not Sys Event", "Not Sys Event", "Extreme Hot Alert", "Extreme Hot Alert Restore", "Freeze Alert",
-           "Freeze Alert Restore", "Human Cold Alert", "Human Cold Alert Restore", "Human Hot Alert",
-           "Human Hot Alert Restore", "Temperature Sensor Trouble", "Temperature Sensor Trouble Restore",
-           #110
+           "None", 
+           # 1
+           "Interior Alarm", "Perimeter Alarm", "Delay Alarm", "24h Silent Alarm", "24h Audible Alarm",
+           "Tamper", "Control Panel Tamper", "Tamper Alarm", "Tamper Alarm", "Communication Loss", 
+           "Panic From Keyfob", "Panic From Control Panel", "Duress", "Confirm Alarm", "General Trouble", 
+           "General Trouble Restore", "Interior Restore", "Perimeter Restore", "Delay Restore", "24h Silent Restore", 
+           # 21
+           "24h Audible Restore", "Tamper Restore", "Control Panel Tamper Restore", "Tamper Restore", "Tamper Restore", 
+           "Communication Restore", "Cancel Alarm", "General Restore", "Trouble Restore", "Not used", 
+           "Recent Close", "Fire", "Fire Restore", "Not Active", "Emergency", 
+           "Remove User", "Disarm Latchkey", "Confirm Alarm Emergency", "Supervision (Inactive)", "Supervision Restore (Active)", 
+           "Low Battery", "Low Battery Restore", "AC Fail", "AC Restore", "Control Panel Low Battery", 
+           "Control Panel Low Battery Restore", "RF Jamming", "RF Jamming Restore", "Communications Failure", "Communications Restore", 
+           # 51
+           "Telephone Line Failure", "Telephone Line Restore", "Auto Test", "Fuse Failure", "Fuse Restore", 
+           "Keyfob Low Battery", "Keyfob Low Battery Restore", "Engineer Reset", "Battery Disconnect", "1-Way Keypad Low Battery", 
+           "1-Way Keypad Low Battery Restore", "1-Way Keypad Inactive", "1-Way Keypad Restore Active", "Low Battery Ack", "Clean Me", 
+           "Fire Trouble", "Low Battery", "Battery Restore", "AC Fail", "AC Restore", 
+           "Supervision (Inactive)", "Supervision Restore (Active)", "Gas Alert", "Gas Alert Restore", "Gas Trouble", 
+           "Gas Trouble Restore", "Flood Alert", "Flood Alert Restore", "X-10 Trouble", "X-10 Trouble Restore",
+           # 81
+           "Arm Home", "Arm Away", "Quick Arm Home", "Quick Arm Away", "Disarm", 
+           "Fail To Auto-Arm", "Enter To Test Mode", "Exit From Test Mode", "Force Arm", "Auto Arm", 
+           "Instant Arm", "Bypass", "Fail To Arm", "Door Open", "Communication Established By Control Panel", 
+           "System Reset", "Installer Programming", "Wrong Password", "Not Sys Event", "Not Sys Event", 
+           # 101
+           "Extreme Hot Alert", "Extreme Hot Alert Restore", "Freeze Alert", "Freeze Alert Restore", "Human Cold Alert", 
+           "Human Cold Alert Restore", "Human Hot Alert", "Human Hot Alert Restore", "Temperature Sensor Trouble", "Temperature Sensor Trouble Restore",
+           
            # New values for PowerMaster and models with partitions
            "PIR Mask", "PIR Mask Restore", "Repeater low battery", "Repeater low battery restore", "Repeater inactive",
            "Repeater inactive restore", "Repeater tamper", "Repeater tamper restore", "Siren test end", "Devices test end",
-           "One way comm. trouble", "One way comm. trouble restore",
-           #122
-           "Sensor outdoor alarm", "Sensor outdoor restore", "Guard sensor alarmed", "Guard sensor alarmed restore",
-           "Date time change", "System shutdown", "System power up", "Missed Reminder", "Pendant test fail", "Basic KP inactive",
-           "Basic KP inactive restore", "Basic KP tamper", "Basic KP tamper Restore",
-           #135
-           "Heat", "Heat restore", "LE Heat Trouble", "CO alarm", "CO alarm restore", "CO trouble", "CO trouble restore",
-           "Exit Installer", "Enter Installer", "Self test trouble", "Self test restore", "Confirm panic event", "n/a", "Soak test fail",
-           "Fire Soak test fail", "Gas Soak test fail", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a"),
+           # 121
+           "One way comm. trouble", "One way comm. trouble restore", "Sensor outdoor alarm", "Sensor outdoor restore", "Guard sensor alarmed", 
+           "Guard sensor alarmed restore", "Date time change", "System shutdown", "System power up", "Missed Reminder", 
+           "Pendant test fail", "Basic KP inactive", "Basic KP inactive restore", "Basic KP tamper", "Basic KP tamper Restore",
+           "Heat", "Heat restore", "LE Heat Trouble", "CO alarm", "CO alarm restore", 
+           # 141
+           "CO trouble", "CO trouble restore", "Exit Installer", "Enter Installer", "Self test trouble", 
+           "Self test restore", "Confirm panic event", "n/a", "Soak test fail", "Fire Soak test fail", 
+           "Gas Soak test fail", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a"),
    "NL" : (
-           "Geen", "In alarm", "In alarm", "In alarm", "In alarm", "In alarm",
-           "Sabotage alarm", "Systeem sabotage", "Sabotage alarm", "Add user", "Communicate fout", "Paniekalarm",
-           "Code bedieningspaneel paniek", "Dwang", "Bevestig alarm", "Successful U/L", "Probleem herstel",
-           "Herstel", "Herstel", "Herstel", "Herstel", "Herstel",
-           "Sabotage herstel", "Systeem sabotage herstel", "Sabotage herstel", "Sabotage herstel", "Communicatie herstel",
-           "Stop alarm", "Algemeen herstel", "Brand probleem herstel", "Systeem inactief", "Recent close", "Brand", "Brand herstel",
-           "Niet actief", "Noodoproep", "Remove user", "Controleer code", "Bevestig alarm", "Supervisie",
-           "Supervisie herstel", "Batterij laag", "Batterij OK", "230VAC uitval", "230VAC herstel",
-           "Controlepaneel batterij laag", "Controlepaneel batterij OK", "Radio jamming", "Radio herstel",
-           "Communicatie mislukt", "Communicatie hersteld", "Telefoonlijn fout", "Telefoonlijn herstel",
-           "Automatische test", "Zekeringsfout", "Zekering herstel", "Batterij laag", "Batterij OK", "Monteur reset",
-           "Accu vermist", "Batterij laag", "Batterij OK", "Supervisie",
-           "Supervisie herstel", "Lage batterij bevestiging", "Reinigen", "Probleem", "Batterij laag", "Batterij OK",
-           "230VAC uitval", "230VAC herstel", "Supervisie", "Supervisie herstel", "Gas alarm", "Gas herstel",
-           "Gas probleem", "Gas probleem herstel", "Lekkage alarm", "Lekkage herstel", "Probleem", "Probleem herstel",
-           "Deelschakeling", "Ingeschakeld", "Snel deelschakeling", "Snel ingeschakeld", "Uitgezet", "Inschakelfout (auto)", "Test gestart",
-           "Test gestopt", "Force aan", "Geheel in (auto)", "Onmiddelijk", "Overbruggen", "Inschakelfout",
-           "Log verzenden", "Systeem reset", "Installateur programmeert", "Foutieve code", "Overbruggen" ),
+           "Geen", 
+           # 1
+           "In alarm", "In alarm", "In alarm", "In alarm", "In alarm", 
+           "Sabotage alarm", "Systeem sabotage", "Sabotage alarm", "Add user", "Communicate fout", 
+           "Paniekalarm", "Code bedieningspaneel paniek", "Dwang", "Bevestig alarm", "Successful U/L", 
+           "Probleem herstel", "Herstel", "Herstel", "Herstel", "Herstel", 
+           "Herstel", "Sabotage herstel", "Systeem sabotage herstel", "Sabotage herstel", "Sabotage herstel", 
+           "Communicatie herstel", "Stop alarm", "Algemeen herstel", "Brand probleem herstel", "Systeem inactief", 
+           "Recent close", "Brand", "Brand herstel", "Niet actief", "Noodoproep", 
+           "Remove user", "Controleer code", "Bevestig alarm", "Supervisie", "Supervisie herstel", 
+           "Batterij laag", "Batterij OK", "230VAC uitval", "230VAC herstel", "Controlepaneel batterij laag", 
+           "Controlepaneel batterij OK", "Radio jamming", "Radio herstel", "Communicatie mislukt", "Communicatie hersteld", 
+           # 51
+           "Telefoonlijn fout", "Telefoonlijn herstel", "Automatische test", "Zekeringsfout", "Zekering herstel", 
+           "Batterij laag", "Batterij OK", "Monteur reset", "Accu vermist", "Batterij laag", 
+           "Batterij OK", "Supervisie", "Supervisie herstel", "Lage batterij bevestiging", "Reinigen", 
+           "Probleem", "Batterij laag", "Batterij OK", "230VAC uitval", "230VAC herstel", 
+           "Supervisie", "Supervisie herstel", "Gas alarm", "Gas herstel", "Gas probleem", 
+           "Gas probleem herstel", "Lekkage alarm", "Lekkage herstel", "X-10 Probleem", "X-10 Probleem herstel", 
+           # 81
+           "Deelschakeling", "Ingeschakeld", "Snel deelschakeling", "Snel ingeschakeld", "Uitgezet", 
+           "Inschakelfout (auto)", "Test gestart", "Test gestopt", "Force aan", "Geheel in (auto)", 
+           "Onmiddelijk", "Overbruggen", "Inschakelfout", "Door Open", "Communication Established By Control Panel",
+           "Systeem reset", "Installateur programmeert", "Foutieve code", "Not Sys Event", "Not Sys Event",
+           # 101
+           "Extreme Hot Alert", "Extreme Hot Alert Restore", "Freeze Alert", "Freeze Alert Restore", "Human Cold Alert", 
+           "Human Cold Alert Restore", "Human Hot Alert", "Human Hot Alert Restore", "Temperature Sensor Trouble", "Temperature Sensor Trouble Restore",
+           
+           # New values for PowerMaster and models with partitions
+           "PIR Mask", "PIR Mask Restore", "Repeater low battery", "Repeater low battery restore", "Repeater inactive",
+           "Repeater inactive restore", "Repeater tamper", "Repeater tamper restore", "Siren test end", "Devices test end",
+           # 121
+           "One way comm. trouble", "One way comm. trouble restore", "Sensor outdoor alarm", "Sensor outdoor restore", "Guard sensor alarmed", 
+           "Guard sensor alarmed restore", "Date time change", "System shutdown", "System power up", "Missed Reminder", 
+           "Pendant test fail", "Basic KP inactive", "Basic KP inactive restore", "Basic KP tamper", "Basic KP tamper Restore",
+           "Heat", "Heat restore", "LE Heat Trouble", "CO alarm", "CO alarm restore", 
+           # 141
+           "CO trouble", "CO trouble restore", "Exit Installer", "Enter Installer", "Self test trouble", 
+           "Self test restore", "Confirm panic event", "n/a", "Soak test fail", "Fire Soak test fail", 
+           "Gas Soak test fail", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a"),
    "FR" : (
-           "Aucun", "Alarme Intérieure", "Alarme Périphérie", "Alarme Différée", "Alarme Silencieuse 24H", "Alarme Audible 24H",
-           "Autoprotection", "Alarme Autoprotection Centrale", "Alarme Autoprotection", "Alarme Autoprotection", "Défaut de communication", "Alarme Panique Depuis Memclé",
-           "Alarme Panique depuis Centrale", "Contrainte", "Confirmer l'alarme", "Perte de Communication", "Rétablissement Défaut Supervision",
-           "Rétablissement Alarme Intérieure", "Rétablissement Alarme Périphérie", "Rétablissement Alarme Différée", "Rétablissement Alarme Silencieuse 24H", "Rétablissement Alarme Audible 24H",
-           "Rétablissement Autoprotection", "Rétablissement Alarme Autoprotection Centrale", "Rétablissement Alarme Autoprotection", "Rétablissement Alarme Autoprotection", "Rétablissement des Communications",
-           "Annuler Alarme", "Rétablissement Général", "Rétablissement Défaut", "Pas utilisé", "Evenement Fermeture Récente", "Alarme Incendie", "Rétablissement Alarme Incendie",
-           "Non Actif", "Urgence", "Pas utilisé", "Désarmement Latchkey", "Rétablissement Alarme Panique", "Défaut Supervision (Inactive)",
-           "Rétablissement Supervision (Active)", "Batterie Faible", "Rétablissement Batterie Faible", "Coupure Secteur", "Rétablissement Secteur",
-           "Batterie Centrale Faible", "Rétablissement Batterie Centrale Faible", "Détection Brouillage Radio", "Rétablissement Détection Brouillage Radio",
-           "Défaut Communication", "Rétablissement Communications", "Défaut Ligne Téléphonique", "Rétablissement Ligne Téléphonique",
-           "Auto Test", "Coupure Secteur/Fusible", "Rétablissement Secteur/Fusible", "Memclé Batterie Faible", "Rétablissement Memclé Batterie Faible", "Réinitialisation Technicien",
-           "Batterie Déconnectée ", "Clavier/Télécommande Batterie Faible", "Rétablissement Clavier/Télécommande Batterie Faible", "Clavier/Télécommande Inactif",
-           "Rétablissement Clavier/Télécommande Actif", "Batterie Faible", "Nettoyage Détecteur Incendie", "Alarme incendie", "Batterie Faible", "Rétablissement Batterie",
-           "Coupure Secteur", "Rétablissement Secteur", "Défaut Supervision (Inactive)", "Rétablissement Supervision (Active)", "Alarme Gaz", "Rétablissement Alarme Gaz",
-           "Défaut Gaz", "Rétablissement Défaut Gaz", "Alarme Inondation", "Rétablissement Alarme Inondation", "Défaut X-10", "Rétablissement Défaut X-10",
-           "Armement Partiel", "Armement Total", "Armement Partiel Instantané", "Armement Total Instantané", "Désarmement", "Echec d'armement", "Entrer dans Mode Test",
-           "Sortir du Mode Test", "Fermeture Forcée", "Armement Automatique", "Armement Instantané", "Bypass", "Echec d'Armement", "Porte Ouverte",
-           "Communication établie par le panneau de control", "Réinitialisation du Système", "Installer Programming", "Mauvais code PIN",
-           "Not Sys Event", "Not Sys Event", "Alerte Chaleure Extrême", "Rétablissement Alerte Chaleure Extrême", "Alerte Gel",
-           "Rétablissement Alerte Gel", "Alerte Froid", "Rétablissement Alerte Froid", "Alerte Chaud",
-           "Rétablissement Alerte Chaud", "Défaut Capteur de Température", "Rétablissement Défaut Capteur de Température",
-           # new values partition models
-           "PIR Masqué", "Rétablissement PIR Masqué", "", "", "", "", "", "", "", "", "", "",
-           "Intrusion Vérifiée", "Rétablissement", "Intrusion Vérifiée", "Rétablissement", "", "", "", "", "", "", "", "", "", "",
-           "", "", "", "", "", "Sortir Mode Installeur", "Entrer Mode Installeur", "", "", "", "", "" )
+           "Aucun", 
+           # 1
+           "Alarme Intérieure", "Alarme Périphérie", "Alarme Différée", "Alarme Silencieuse 24H", "Alarme Audible 24H",
+           "Autoprotection", "Alarme Autoprotection Centrale", "Alarme Autoprotection", "Alarme Autoprotection", "Défaut de communication", 
+           "Alarme Panique Depuis Memclé", "Alarme Panique depuis Centrale", "Contrainte", "Confirmer l'alarme", "Perte de Communication", 
+           "Rétablissement Défaut Supervision", "Rétablissement Alarme Intérieure", "Rétablissement Alarme Périphérie", "Rétablissement Alarme Différée", "Rétablissement Alarme Silencieuse 24H", 
+           "Rétablissement Alarme Audible 24H", "Rétablissement Autoprotection", "Rétablissement Alarme Autoprotection Centrale", "Rétablissement Alarme Autoprotection", "Rétablissement Alarme Autoprotection", 
+           "Rétablissement des Communications", "Annuler Alarme", "Rétablissement Général", "Rétablissement Défaut", "Pas utilisé", 
+           "Evenement Fermeture Récente", "Alarme Incendie", "Rétablissement Alarme Incendie", "Non Actif", "Urgence", 
+           "Pas utilisé", "Désarmement Latchkey", "Rétablissement Alarme Panique", "Défaut Supervision (Inactive)", "Rétablissement Supervision (Active)", 
+           "Batterie Faible", "Rétablissement Batterie Faible", "Coupure Secteur", "Rétablissement Secteur", "Batterie Centrale Faible", 
+           "Rétablissement Batterie Centrale Faible", "Détection Brouillage Radio", "Rétablissement Détection Brouillage Radio", "Défaut Communication", "Rétablissement Communications", 
+           # 51
+           "Défaut Ligne Téléphonique", "Rétablissement Ligne Téléphonique", "Auto Test", "Coupure Secteur/Fusible", "Rétablissement Secteur/Fusible", 
+           "Memclé Batterie Faible", "Rétablissement Memclé Batterie Faible", "Réinitialisation Technicien", "Batterie Déconnectée ", "Clavier/Télécommande Batterie Faible", 
+           "Rétablissement Clavier/Télécommande Batterie Faible", "Clavier/Télécommande Inactif", "Rétablissement Clavier/Télécommande Actif", "Batterie Faible", "Nettoyage Détecteur Incendie", 
+           "Alarme incendie", "Batterie Faible", "Rétablissement Batterie", "Coupure Secteur", "Rétablissement Secteur", 
+           "Défaut Supervision (Inactive)", "Rétablissement Supervision (Active)", "Alarme Gaz", "Rétablissement Alarme Gaz", "Défaut Gaz", 
+           "Rétablissement Défaut Gaz", "Alarme Inondation", "Rétablissement Alarme Inondation", "Défaut X-10", "Rétablissement Défaut X-10",
+           # 81
+           "Armement Partiel", "Armement Total", "Armement Partiel Instantané", "Armement Total Instantané", "Désarmement", 
+           "Echec d'armement", "Entrer dans Mode Test", "Sortir du Mode Test", "Fermeture Forcée", "Armement Automatique", 
+           "Armement Instantané", "Bypass", "Echec d'Armement", "Porte Ouverte", "Communication établie par le panneau de control", 
+           "Réinitialisation du Système", "Installer Programming", "Mauvais code PIN", "Not Sys Event", "Not Sys Event", 
+           # 101
+           "Alerte Chaleure Extrême", "Rétablissement Alerte Chaleure Extrême", "Alerte Gel", "Rétablissement Alerte Gel", "Alerte Froid", 
+           "Rétablissement Alerte Froid", "Alerte Chaud", "Rétablissement Alerte Chaud", "Défaut Capteur de Température", "Rétablissement Défaut Capteur de Température",
+
+           # New values for PowerMaster and models with partitions
+           "PIR Masqué", "Rétablissement PIR Masqué", "Repeater low battery", "Repeater low battery restore", "Repeater inactive",
+           "Repeater inactive restore", "Repeater tamper", "Repeater tamper restore", "Siren test end", "Devices test end",
+           # 121
+           "One way comm. trouble", "One way comm. trouble restore", "Sensor outdoor alarm", "Sensor outdoor restore", "Guard sensor alarmed", 
+           "Guard sensor alarmed restore", "Date time change", "System shutdown", "System power up", "Missed Reminder", 
+           "Pendant test fail", "Basic KP inactive", "Basic KP inactive restore", "Basic KP tamper", "Basic KP tamper Restore",
+           "Heat", "Heat restore", "LE Heat Trouble", "CO alarm", "CO alarm restore", 
+           # 141
+           "CO trouble", "CO trouble restore", "Sortir Mode Installeur", "Entrer Mode Installeur", "Self test trouble", 
+           "Self test restore", "Confirm panic event", "n/a", "Soak test fail", "Fire Soak test fail", 
+           "Gas Soak test fail", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a", "n/a", "n/a", "n/a", "n/a", 
+           "n/a")
 }
 
 
@@ -572,7 +636,7 @@ pmPanelConfig_t = {
 # PMAX EEPROM CONFIGURATION version 1_2
 SettingsCommand = collections.namedtuple('SettingsCommand', 'show count type size poff psize pstep pbitoff name values')
 DecodePanelSettings = {
-    # USER SETTINGS
+    # USER SETTINGS                                      # size poff  psize pstep pbitoff
     "usePhoneNrs"    : SettingsCommand( False, 4, "PHONE",  64,  310,   64,   8,    -1,  ["1st Private Tel. No.","2nd Private Tel. No.","3rd Private Tel. No.","4th Private Tel. No."],  {} ),  # 310, 318, 326, 334
     "usrVoice"       : SettingsCommand(  True, 1, "BYTE",    8,  763,    8,   0,    -1,  "Set Voice Option", { '0':"Disable Voice", '1':"Enable Voice"} ),
     "usrArmOption"   : SettingsCommand(  True, 1, "BYTE",    8,  280,    1,   0,     5,  "Auto Arm Option",  { '1':"Enable", '0':"Disable"} ),
@@ -1491,8 +1555,16 @@ class ProtocolBase(asyncio.Protocol):
         powerlink_counter = POWERLINK_RETRY_DELAY - 10  # set so first time it does it after 10 seconds
         downloadDuration = 0
         no_data_received_counter = 0
-
+        settime_counter = 0
+        
         while not self.suspendAllOperations:
+        
+            if self.pmPowerlinkMode and self.AutoSyncTime:
+                settime_counter = settime_counter + 1
+                if settime_counter == 14400:      # every 4 hours (approx)
+                    settime_counter = 0
+                    # Get the time from the panel (this will compare to local time and set the panel time if different)
+                    self._sendCommand("MSG_GETTIME")
 
             # Watchdog functionality
             self.watchdog_counter = self.watchdog_counter + 1
@@ -1854,11 +1926,11 @@ class ProtocolBase(asyncio.Protocol):
             return False
 
         if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] + 1:
-            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!!")
+            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {0} and {1}".format(packet[-2:-1][0], self._calculateCRC(packet[1:-2])[0]))
             return True
 
         if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] - 1:
-            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!!")
+            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {0} and {1}".format(packet[-2:-1][0], self._calculateCRC(packet[1:-2])[0]))
             return True
 
         # Check the CRC
@@ -2682,34 +2754,6 @@ class PacketHandling(ProtocolBase):
             self.PanelMode = PyPanelMode.STANDARD_PLUS
         else:
             self.PanelMode = PyPanelMode.STANDARD
-
-        if self.AutoSyncTime:  # should we sync time between the HA and the Alarm Panel
-            t = datetime.now()
-            if t.year > 2000:
-                year = t.year - 2000
-                values = [t.second, t.minute, t.hour, t.day, t.month, year]
-                timePdu = bytearray(values)
-                # self.pmSyncTimeCheck = t
-                self._sendCommand("MSG_SETTIME", options=[3, timePdu])
-            else:
-                log.debug("[Process Settings] Please correct your local time.")
-
-        # ------------------------------------------------------------------------------------------------------------------------------------------------
-        # THIS WILL NOT WORK AS IT DOES NOT GET THE DATA FROM THE PANEL
-        #  Check if time sync was OK
-        #  if (pmSyncTimeCheck ~= nil) then
-        #     setting = _readEPROMSettings(pmDownloadItem_t.MSG_DL_TIME)
-        #     local timeRead = os.time({ day = string.byte(setting, 4), month = string.byte(setting, 5), year = string.byte(setting, 6) + 2000,
-        #        hour = string.byte(setting, 3), min = string.byte(setting, 2), sec = string.byte(setting, 1) })
-        #     local timeSet = os.time(pmSyncTimeCheck)
-        #     if (timeRead == timeSet) or (timeRead == timeSet + 1) then
-        #        debug("Time sync OK (" .. os.date("%d/%m/%Y %H:%M:%S", timeRead) .. ")")
-        #     else
-        #        debug("Time sync FAILED (got " .. os.date("%d/%m/%Y %H:%M:%S", timeRead) .. "; expected " .. os.date("%d/%m/%Y %H:%M:%S", timeSet))
-        #     end
-        #  end
-        # ------------------------------------------------------------------------------------------------------------------------------------------------
-
 
 
     # This function handles a received message packet and processes it
@@ -3563,7 +3607,30 @@ class PacketHandling(ProtocolBase):
         self._reset_watchdog_timeout()
 
         subType = data[0]
-        if subType == 3:  # keepalive message
+        if subType == 1:
+            # Panel Time
+            log.debug("[handle_msgtypeAB] ***************************** Got Panel Time ****************************")
+
+            dt = datetime(2000 + data[7], data[6], data[5], data[4], data[3], data[2])
+            log.debug("[handle_msgtypeAB]    Panel time is {0}".format(dt))
+
+            if self.AutoSyncTime:  # should we sync time between the HA and the Alarm Panel
+                t = self._getTimeFunction()
+                if t.year > 2020:
+                    duration = dt - t                              # Get Time Difference, timedelta
+                    duration_in_s = abs(duration.total_seconds())  # Convert to seconds (and make it a positive value)
+                    log.debug("[handle_msgtypeAB]    Local time is {0}      time difference {1} seconds".format(t, duration_in_s))
+                    
+                    if duration_in_s > 20:                         # More than 20 seconds difference
+                        year = t.year - 2000
+                        values = [t.second, t.minute, t.hour, t.day, t.month, year]
+                        timePdu = bytearray(values)
+                        log.debug("[handle_msgtypeAB]        Setting Time " + self._toString(timePdu))
+                        self._sendCommand("MSG_SETTIME", options=[3, timePdu])
+                else:
+                    log.debug("[handle_msgtypeAB] Please correct your local time.")
+
+        elif subType == 3:  # keepalive message
             # Example 0D AB 03 00 1E 00 31 2E 31 35 00 00 43 2A 0A
             log.debug("[handle_msgtypeAB] ***************************** Got PowerLink Keep-Alive ****************************")
             # It is possible to receive this between enrolling (when the panel accepts the enroll successfully) and the EPROM download
@@ -3575,6 +3642,11 @@ class PacketHandling(ProtocolBase):
                 self.PanelMode = PyPanelMode.POWERLINK  # it is truly in powerlink now we are receiving powerlink alive messages from the panel
                 self._triggerRestoreStatus()
                 self._dumpSensorsToLogFile()
+                
+                # Get the time from the panel
+                if self.AutoSyncTime:
+                    self._sendCommand("MSG_GETTIME")
+
             elif not self.pmPowerlinkMode and not self.ForceStandardMode:
                 if self.pmDownloadMode:
                     log.debug("[handle_msgtypeAB]         Got alive message while not in Powerlink mode but we're in Download mode")
