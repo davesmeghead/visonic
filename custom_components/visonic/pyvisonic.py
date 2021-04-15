@@ -57,7 +57,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.6.5"
+PLUGIN_VERSION = "1.0.6.6"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -619,7 +619,7 @@ pmPanelTroubleType_t = {
 pmPanelType_t = {
    0 : "PowerMax", 1 : "PowerMax+", 2 : "PowerMax Pro", 3 : "PowerMax Complete", 4 : "PowerMax Pro Part",
    5  : "PowerMax Complete Part", 6 : "PowerMax Express", 7 : "PowerMaster10",   8 : "PowerMaster30",
-   10 : "PowerMaster33"
+   10 : "PowerMaster33", 15 : "PowerMaster33"
 }
 
 # Config for each panel type (0-10).  8 is a PowerMaster 30, 10 is a PowerMaster 33.  Don't know what 9 is.
@@ -1035,6 +1035,8 @@ class SensorDevice(PySensorDevice):
         return attr
 
     def _decodeSensorType(self, s : str) -> PySensorType:
+        if s is None:
+            return PySensorType.UNKNOWN
         s = s.lower()
         if s == "motion":
             return PySensorType.MOTION
@@ -2435,7 +2437,7 @@ class PacketHandling(ProtocolBase):
 
         # ------------------------------------------------------------------------------------------------------------------------------------------------
         # Need the panel type to be valid so we can decode some of the remaining downloaded data correctly
-        if self.PanelType is not None and 0 <= self.PanelType <= 10:
+        if self.PanelType is not None and self.PanelType in pmPanelType_t:
 
             if self.pmDownloadComplete:
                 log.debug("[Process Settings] Processing settings information")
@@ -2747,7 +2749,7 @@ class PacketHandling(ProtocolBase):
         elif pmPanelTypeNr is None or pmPanelTypeNr == 0xFF:
             log.warning("[Process Settings] WARNING: Cannot process panel EPROM settings, we're probably connected to the panel in standard mode")
         else:
-            log.warning("[Process Settings] WARNING: Cannot process panel EPROM settings, the panel is too new")
+            log.warning("[Process Settings] WARNING: Cannot process panel EPROM settings, the panel is too new {0}".format(self.PanelType))
 
         self._dumpSensorsToLogFile()
 
