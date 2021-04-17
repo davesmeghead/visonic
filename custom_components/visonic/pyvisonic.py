@@ -57,7 +57,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.6.6"
+PLUGIN_VERSION = "1.0.6.7"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -622,19 +622,19 @@ pmPanelType_t = {
    10 : "PowerMaster33", 15 : "PowerMaster33"
 }
 
-# Config for each panel type (0-10).  8 is a PowerMaster 30, 10 is a PowerMaster 33.  Don't know what 9 is.
+# Config for each panel type (0-16).  8 is a PowerMaster 30, 10 is a PowerMaster 33, 15 is a PowerMaster 33 later model.  Don't know what 9 is.
 pmPanelConfig_t = {
-   "CFG_PARTITIONS"  : (   1,   1,   1,   1,   3,   3,   1,   3,   3,   3,   3   ),
-   "CFG_EVENTS"      : ( 250, 250, 250, 250, 250, 250, 250, 250,1000,1000,1000   ),
-   "CFG_KEYFOBS"     : (   8,   8,   8,   8,   8,   8,   8,   8,  32,  32,  32   ),
-   "CFG_1WKEYPADS"   : (   8,   8,   8,   8,   8,   8,   8,   0,   0,   0,   0   ),
-   "CFG_2WKEYPADS"   : (   2,   2,   2,   2,   2,   2,   2,   8,  32,  32,  32   ),
-   "CFG_SIRENS"      : (   2,   2,   2,   2,   2,   2,   2,   4,   8,   8,   8   ),
-   "CFG_USERCODES"   : (   8,   8,   8,   8,   8,   8,   8,   8,  48,  48,  48   ),
-   "CFG_PROXTAGS"    : (   0,   0,   8,   0,   8,   8,   0,   8,  32,  32,  32   ),
-   "CFG_WIRELESS"    : (  28,  28,  28,  28,  28,  28,  28,  29,  62,  62,  62   ), # 30, 64
-   "CFG_WIRED"       : (   2,   2,   2,   2,   2,   2,   1,   1,   2,   2,   2   ),
-   "CFG_ZONECUSTOM"  : (   0,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5   )
+   "CFG_PARTITIONS"  : (   1,   1,   1,   1,   3,   3,   1,   3,   3,   3,   3,   3,   3,   3,   3,   3,   3 ),
+   "CFG_EVENTS"      : ( 250, 250, 250, 250, 250, 250, 250, 250,1000,1000,1000,1000,1000,1000,1000,1000,1000 ),
+   "CFG_KEYFOBS"     : (   8,   8,   8,   8,   8,   8,   8,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
+   "CFG_1WKEYPADS"   : (   8,   8,   8,   8,   8,   8,   8,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 ),
+   "CFG_2WKEYPADS"   : (   2,   2,   2,   2,   2,   2,   2,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
+   "CFG_SIRENS"      : (   2,   2,   2,   2,   2,   2,   2,   4,   8,   8,   8,   8,   8,   8,   8,   8,   8 ),
+   "CFG_USERCODES"   : (   8,   8,   8,   8,   8,   8,   8,   8,  48,  48,  48,  48,  48,  48,  48,  48,  48 ),
+   "CFG_PROXTAGS"    : (   0,   0,   8,   0,   8,   8,   0,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
+   "CFG_WIRELESS"    : (  28,  28,  28,  28,  28,  28,  28,  29,  62,  62,  62,  62,  62,  62,  62,  62,  62 ), # 30, 64
+   "CFG_WIRED"       : (   2,   2,   2,   2,   2,   2,   1,   1,   2,   2,   2,   2,   2,   2,   2,   2,   2 ),
+   "CFG_ZONECUSTOM"  : (   0,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5 )
 }
 
 # PMAX EEPROM CONFIGURATION version 1_2
@@ -836,7 +836,8 @@ pmPanelName_t = {
    "0713" : "PowerMaster10 7_19", "0802" : "PowerMax Complete PowerCode-G 8_2", "0803" : "PowerMaster30 8_3",
    "080f" : "PowerMaster30 8_15", "0810" : "PowerMaster30 8_16", "0812" : "PowerMaster30 8_18", "0813" : "PowerMaster30 8_19",
    "0815" : "PowerMaster30 8_21", 
-   "0A47" : "PowerMaster33 10_71"
+   "0A47" : "PowerMaster33 10_71",
+   "0F92" : "PowerMaster33 15_146"
 }
 
 pmZoneType_t = {
