@@ -15,26 +15,27 @@ from collections import defaultdict
 
 from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-from const import (
-    CONF_FORCE_STANDARD,
-    CONF_FORCE_AUTOENROLL,
-    CONF_AUTO_SYNC_TIME,
-    CONF_LANGUAGE,
-    CONF_MOTION_OFF_DELAY,
-    CONF_SIREN_SOUNDING,
-    CONF_B0_ENABLE_MOTION_PROCESSING,
-    CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,
-    CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
-    CONF_DEVICE_BAUD,
-    CONF_DEVICE_TYPE,
-    CONF_HOST,
-    CONF_PATH,
-    CONF_PORT,
-    CONF_DOWNLOAD_CODE,
-)
+CONF_DEVICE_TYPE = "type"
+CONF_DEVICE_BAUD = "baud"
+CONF_HOST = "host"
+CONF_PORT = "port"
+CONF_PATH = "path"
+CONF_DOWNLOAD_CODE = "download_code"
+CONF_FORCE_AUTOENROLL = "force_autoenroll"
+CONF_AUTO_SYNC_TIME = "sync_time"
+CONF_LANGUAGE = "language"
+CONF_FORCE_STANDARD = "force_standard"
+
+CONF_MOTION_OFF_DELAY = "motion_off"
+CONF_SIREN_SOUNDING = "siren_sounding"
+
+# Temporary B0 Config Items
+CONF_B0_ENABLE_MOTION_PROCESSING = "b0_enable_motion_processing"
+CONF_B0_MIN_TIME_BETWEEN_TRIGGERS = "b0_min_time_between_triggers"
+CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT = "b0_max_time_for_trigger_event"
 
 myconfig = { 
-    CONF_DOWNLOAD_CODE: "5650",
+    CONF_DOWNLOAD_CODE: "",
     CONF_FORCE_STANDARD: False,
     CONF_FORCE_AUTOENROLL: True,
     CONF_AUTO_SYNC_TIME : True,

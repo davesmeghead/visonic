@@ -1,6 +1,7 @@
 """Create a Client connection to a Visonic PowerMax or PowerMaster Alarm System."""
 #! /usr/bin/python3
 
+# set the parent directory on the import path
 import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -11,7 +12,9 @@ from collections import defaultdict
 from time import sleep
 import pyvisonic 
 import argparse
+from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
+# Try to import aconsole, if it fails then print an error message
 try:
     import aconsole
 except:
@@ -22,25 +25,59 @@ except:
     print("")
     sys.exit(0)
 
-from const import (
-    CONF_FORCE_STANDARD,
-    CONF_FORCE_AUTOENROLL,
-    CONF_AUTO_SYNC_TIME,
-    CONF_LANGUAGE,
-    CONF_MOTION_OFF_DELAY,
-    CONF_SIREN_SOUNDING,
-    CONF_B0_ENABLE_MOTION_PROCESSING,
-    CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,
-    CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
-    CONF_DEVICE_BAUD,
-    CONF_DEVICE_TYPE,
-    CONF_HOST,
-    CONF_PATH,
-    CONF_PORT,
-    CONF_DOWNLOAD_CODE,
-)
+# config parameters for myconfig, just to make the defaults easier
+CONF_DEVICE_TYPE = "type"
+CONF_DEVICE_BAUD = "baud"
+CONF_HOST = "host"
+CONF_PORT = "port"
+CONF_PATH = "path"
+CONF_DOWNLOAD_CODE = "download_code"
+CONF_FORCE_AUTOENROLL = "force_autoenroll"
+CONF_AUTO_SYNC_TIME = "sync_time"
+CONF_LANGUAGE = "language"
+CONF_FORCE_STANDARD = "force_standard"
 
-from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
+CONF_MOTION_OFF_DELAY = "motion_off"
+CONF_SIREN_SOUNDING = "siren_sounding"
+
+# Temporary B0 Config Items
+CONF_B0_ENABLE_MOTION_PROCESSING = "b0_enable_motion_processing"
+CONF_B0_MIN_TIME_BETWEEN_TRIGGERS = "b0_min_time_between_triggers"
+CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT = "b0_max_time_for_trigger_event"
+
+
+parser = argparse.ArgumentParser(description="Connect to Visonic Alarm Panel")
+parser.add_argument("-usb", help="visonic alarm usb device", default="")
+parser.add_argument("-address", help="visonic alarm ip address", default="")
+parser.add_argument("-port", help="visonic alarm ip port", type=int)
+parser.add_argument("-baud", help="visonic alarm baud", type=int, default="9600")
+args = parser.parse_args()
+
+conn_type = "ethernet" if len(args.address) > 0 else "usb"
+
+myconfig = { 
+    CONF_DEVICE_TYPE: conn_type,    # then path and baud are used (as this is for a direct RS232 as well).
+    CONF_HOST: args.address,
+    CONF_PORT: str(args.port),
+    CONF_PATH: args.usb,
+    CONF_DEVICE_BAUD: args.baud,
+    CONF_DOWNLOAD_CODE: "",
+    CONF_FORCE_STANDARD: False,
+    CONF_FORCE_AUTOENROLL: True,
+    CONF_AUTO_SYNC_TIME : True,
+    CONF_LANGUAGE: "EN",
+    CONF_MOTION_OFF_DELAY: 50,
+    CONF_SIREN_SOUNDING: ["Intruder"],
+    CONF_B0_ENABLE_MOTION_PROCESSING: False,
+    CONF_B0_MIN_TIME_BETWEEN_TRIGGERS: 5,
+    CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT: 30
+}
+
+string_type="string"
+int_type = "int"
+bool_type = "bool"
+list_type = "list"
+myconfigtypes = [string_type, string_type, int_type, string_type, int_type, string_type, bool_type, bool_type, bool_type, string_type, bool_type, bool_type, bool_type, int_type, string_type, bool_type, bool_type, list_type, bool_type, int_type, int_type]
 
 class VisonicClient:
 
@@ -388,38 +425,6 @@ class MyAsyncConsole(aconsole.AsyncConsole):
             self._AsyncConsole__input_text.config(font=('Courier New', s))
             self._AsyncConsole__input_prompt.config(font=('Courier New', s))
 
-parser = argparse.ArgumentParser(description="Connect to Visonic Alarm Panel")
-parser.add_argument("-usb", help="visonic alarm usb device", default="")
-parser.add_argument("-address", help="visonic alarm ip address", default="")
-parser.add_argument("-port", help="visonic alarm ip port", type=int)
-parser.add_argument("-baud", help="visonic alarm baud", type=int, default="9600")
-args = parser.parse_args()
-
-conn_type = "ethernet" if len(args.address) > 0 else "usb"
-
-myconfig = { 
-    CONF_DEVICE_TYPE: conn_type,    # then path and baud are used (as this is for a direct RS232 as well).
-    CONF_HOST: args.address,
-    CONF_PORT: str(args.port),
-    CONF_PATH: args.usb,
-    CONF_DEVICE_BAUD: args.baud,
-    CONF_DOWNLOAD_CODE: "5650",
-    CONF_FORCE_STANDARD: False,
-    CONF_FORCE_AUTOENROLL: True,
-    CONF_AUTO_SYNC_TIME : True,
-    CONF_LANGUAGE: "EN",
-    CONF_MOTION_OFF_DELAY: 50,
-    CONF_SIREN_SOUNDING: ["Intruder"],
-    CONF_B0_ENABLE_MOTION_PROCESSING: False,
-    CONF_B0_MIN_TIME_BETWEEN_TRIGGERS: 5,
-    CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT: 30
-}
-
-string_type="string"
-int_type = "int"
-bool_type = "bool"
-list_type = "list"
-myconfigtypes = [string_type, string_type, int_type, string_type, int_type, string_type, bool_type, bool_type, bool_type, string_type, bool_type, bool_type, bool_type, int_type, string_type, bool_type, bool_type, list_type, bool_type, int_type, int_type]
 
 async def controller(client : VisonicClient, console : MyAsyncConsole):
     

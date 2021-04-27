@@ -30,7 +30,8 @@
 #    PanelType=7 : PowerMaster10 , Model=153   Powermaster True
 #    PanelType=8 : PowerMaster30 , Model=6   Powermaster True
 #    PanelType=8 : PowerMaster30 , Model=53   Powermaster True
-#    PanelType=10: PowerMaster33 , Model=71   Powermaster True  #  Under investigation. Problem with 0x3F Message data (EPROM) being less than requested
+#    PanelType=10: PowerMaster33 , Model=71   Powermaster True   #  Under investigation. Problem with 0x3F Message data (EPROM) being less than requested
+#    PanelType=15: PowerMaster33 , Model=146   Powermaster True  #  Under investigation.
 #################################################################
 
 import asyncio
@@ -57,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.6.7"
+PLUGIN_VERSION = "1.0.7.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -868,32 +869,45 @@ pmZoneChime_t = {
 }
 
 # Note: names need to match to VAR_xxx
-pmZoneSensorMax_t = {
-   0x0 : "Vibration", 0x2 : "Shock", 0x3 : "Motion", 0x4 : "Motion", 0x5 : "Magnet", 0x6 : "Magnet", 0x7 : "Magnet", 0xA : "Smoke", 0xB : "Gas", 0xC : "Motion", 0xF : "Wired"
+pmZoneSensorMaxGeneric_t = {
+   0x0 : PySensorType.VIBRATION, 0x2 : PySensorType.SHOCK, 0x3 : PySensorType.MOTION, 0x4 : PySensorType.MOTION, 0x5 : PySensorType.MAGNET, 
+   0x6 : PySensorType.MAGNET, 0x7 : PySensorType.MAGNET, 0xA : PySensorType.SMOKE, 0xB : PySensorType.GAS, 0xC : PySensorType.MOTION, 
+   0xF : PySensorType.WIRED
 } # unknown to date: Push Button, Flood, Universal
 
-ZoneSensorMaster = collections.namedtuple("ZoneSensorMaster", 'name func' )
-pmZoneSensorMaster_t = {
-   0x01 : ZoneSensorMaster("Next PG2", "Motion" ),
-   0x03 : ZoneSensorMaster("Clip PG2", "Motion" ),
-   0x04 : ZoneSensorMaster("Next CAM PG2", "Camera" ),
-   0x0A : ZoneSensorMaster("TOWER CAM PG2", "Camera" ),
-   0x0C : ZoneSensorMaster("MP-802 PG2", "Motion" ),
-   0x15 : ZoneSensorMaster("SMD-426 PG2", "Smoke" ),
-   0x16 : ZoneSensorMaster("SMD-429 PG2", "Smoke" ),
-   0x18 : ZoneSensorMaster("GSD-442 PG2", "Smoke" ),
-   0x19 : ZoneSensorMaster("FLD-550 PG2", "Flood" ),
-   0x1A : ZoneSensorMaster("TMD-560 PG2", "Temperature" ),
-   0x29 : ZoneSensorMaster("MC-302V PG2", "Magnet"),
-   0x2A : ZoneSensorMaster("MC-302 PG2", "Magnet"),
-   0x2D : ZoneSensorMaster("MC-302 PG2 (ID 104-5624)", "Magnet"),
-   0x35 : ZoneSensorMaster("SD-304 PG2", "Shock"),
-   0xFE : ZoneSensorMaster("Wired", "Wired" )
+ZoneSensorType = collections.namedtuple("ZoneSensorType", 'name func' )
+pmZoneSensorMax_t = {
+   0x95 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me
+   0x96 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, g4seb
+   0xC0 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # g4seb
+   0xD3 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me
+   0xD5 : ZoneSensorType("Next K9", PySensorType.MOTION ),         # fguerzoni
+   0xE4 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me
+   0xE5 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # g4seb, fguerzoni
+   0xFF : ZoneSensorType("Wired", PySensorType.WIRED )
 }
 
 # SMD-426 PG2 (photoelectric smoke detector)
 # SMD-427 PG2 (heat and photoelectric smoke detector)
 # SMD-429 PG2 (Smoke and Heat Detector)
+pmZoneSensorMaster_t = {
+   0x01 : ZoneSensorType("Next PG2", PySensorType.MOTION ),
+   0x03 : ZoneSensorType("Clip PG2", PySensorType.MOTION ),
+   0x04 : ZoneSensorType("Next CAM PG2", PySensorType.CAMERA ),
+   0x0A : ZoneSensorType("TOWER CAM PG2", PySensorType.CAMERA ),
+   0x0C : ZoneSensorType("MP-802 PG2", PySensorType.MOTION ),
+   0x15 : ZoneSensorType("SMD-426 PG2", PySensorType.SMOKE ),
+   0x16 : ZoneSensorType("SMD-429 PG2", PySensorType.SMOKE ),
+   0x18 : ZoneSensorType("GSD-442 PG2", PySensorType.SMOKE ),
+   0x19 : ZoneSensorType("FLD-550 PG2", PySensorType.FLOOD ),
+   0x1A : ZoneSensorType("TMD-560 PG2", PySensorType.TEMPERATURE ),
+   0x29 : ZoneSensorType("MC-302V PG2", PySensorType.MAGNET),
+   0x2A : ZoneSensorType("MC-302 PG2", PySensorType.MAGNET),
+   0x2D : ZoneSensorType("MC-302 PG2 (ID 104-5624)", PySensorType.MAGNET),
+   0x35 : ZoneSensorType("SD-304 PG2", PySensorType.SHOCK),
+   0xFE : ZoneSensorType("Wired", PySensorType.WIRED )
+}
+
 
 log = logging.getLogger(__name__)
 
@@ -917,7 +931,7 @@ class SensorDevice(PySensorDevice):
     def __init__(self, **kwargs):
         self.id = kwargs.get("id", None)  # int   device id
         self.dname = kwargs.get("dname", None)  # str   device name
-        self.stype = kwargs.get("stype", None)  # str   sensor type
+        self.stype = kwargs.get("stype", PySensorType.UNKNOWN)  # PySensorType  sensor type
         self.sid = kwargs.get("sid", None)  # int   sensor id
         self.ztype = kwargs.get("ztype", None)  # int   zone type
         self.zname = kwargs.get("zname", None)  # str   zone name
@@ -933,12 +947,21 @@ class SensorDevice(PySensorDevice):
         self.enrolled = kwargs.get("enrolled", False)  # bool  enrolled, as returned by the A5 message
         self.triggered = kwargs.get("triggered", False)  # bool  triggered, as returned by the A5 message
         self.triggertime = None  # datetime  This is used to time out the triggered value and set it back to false
+        self.model = kwargs.get("model", None)  # str   device model
 
     def __str__(self):
+        stypestr = ""
+        if self.stype != PySensorType.UNKNOWN:
+            stypestr = str(self.stype)
+        elif self.sid is not None:
+            stypestr = "Unk " + str(self.sid)
+        else:
+            stypestr = "Unknown"
         strn = ""
         strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
         strn = strn + (" dname=None" if self.dname == None else " dname={0:<4}".format(self.dname[:4]))
-        strn = strn + (" stype=None" if self.stype == None else " stype={0:<8}".format(self.stype[:8]))
+        strn = strn + (" stype={0:<8}".format(stypestr))
+        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" model=None" if self.model == None else " model={0:<8}".format(self.model[:14]))
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" sid=None"       if self.sid == None else       " sid={0:<3}".format(self.sid, type(self.sid)))
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" ztype=None"     if self.ztype == None else     " ztype={0:<2}".format(self.ztype, type(self.ztype)))
         strn = strn + (" zname=None" if self.zname == None else " zname={0:<14}".format(self.zname[:14]))
@@ -965,6 +988,7 @@ class SensorDevice(PySensorDevice):
             and self.dname == other.dname
             and self.stype == other.stype
             and self.sid == other.sid
+            and self.model == other.model
             and self.ztype == other.ztype
             and self.zname == other.zname
             and self.zchime == other.zchime
@@ -1004,9 +1028,14 @@ class SensorDevice(PySensorDevice):
 
     def getDeviceName(self) -> str:
         return self.dname
-        
+
+    def getSensorModel(self) -> str:
+        if self.model is not None:
+            return self.model
+        return "Unknown"    
+    
     def getSensorType(self) -> PySensorType:
-        return self._decodeSensorType(self.stype)
+        return self.stype
 
     def getLastTriggerTime(self) -> datetime:
         return self.triggertime
@@ -1016,8 +1045,10 @@ class SensorDevice(PySensorDevice):
 
         attr["device name"] = self.dname
 
-        if self.stype is not None:
-            attr["sensor type"] = self.stype
+        if self.stype != PySensorType.UNKNOWN:
+            attr["sensor type"] = str(self.stype)
+        elif self.sid is not None:
+            attr["sensor type"] = "Undefined " + str(self.sid)
         else:
             attr["sensor type"] = "Undefined"
 
@@ -1027,6 +1058,7 @@ class SensorDevice(PySensorDevice):
         attr["zone chime"] = self.zchime
         attr["zone tripped"] = "Yes" if self.ztrip else "No"
         attr["zone tamper"] = "Yes" if self.ztamper else "No"
+        #attr["device model"] = self.getSensorModel()
         attr["device tamper"] = "Yes" if self.tamper else "No"
         attr["zone open"] = "Yes" if self.status else "No"
         attr["visonic device"] = self.id
@@ -1035,31 +1067,6 @@ class SensorDevice(PySensorDevice):
         #    self.partition = kwargs.get('partition', None)  # set   partition set (could be in more than one partition)
         return attr
 
-    def _decodeSensorType(self, s : str) -> PySensorType:
-        if s is None:
-            return PySensorType.UNKNOWN
-        s = s.lower()
-        if s == "motion":
-            return PySensorType.MOTION
-        elif s == "magnet":
-            return PySensorType.MAGNET
-        elif s == "camera":
-            return PySensorType.CAMERA
-        elif s == "wired":
-            return PySensorType.WIRED
-        elif s == "smoke":
-            return PySensorType.SMOKE
-        elif s == "flood":
-            return PySensorType.FLOOD
-        elif s == "gas":
-            return PySensorType.GAS
-        elif s == "vibration":
-            return PySensorType.VIBRATION
-        elif s == "shock":
-            return PySensorType.SHOCK
-        elif s == "temperature":
-            return PySensorType.TEMPERATURE
-        return PySensorType.UNKNOWN
 
 class X10Device(PySwitchDevice):
     def __init__(self, **kwargs):
@@ -2556,13 +2563,14 @@ class PacketHandling(ProtocolBase):
                         if zoneEnrolled:
                             zoneInfo = 0
                             sensorID_c = 0
-                            sensorTypeStr = ""
+                            sensorType = PySensorType.UNKNOWN
+                            sensorModel = "Model Unknown"
 
                             if not self.PowerMaster:  #  PowerMax models
                                 zoneInfo = int(setting[i * 4 + 3])  # extract the zoneType and zoneChime settings
                                 sensorID_c = int(setting[i * 4 + 2])  # extract the sensorType
                                 tmpid = sensorID_c & 0x0F
-                                sensorTypeStr = "UNKNOWN " + str(tmpid)
+                                #sensorType = "UNKNOWN " + str(tmpid)
 
                                 # User cybfox77 found that PIR sensors were returning the sensor type 'sensorID_c' as 0xe5 and 0xd5, these would be decoded as Magnet sensors
                                 # This is a very specific workaround for that particular panel type and model number and we'll wait and see if other users have issues
@@ -2574,23 +2582,26 @@ class PacketHandling(ProtocolBase):
                                 #                     Date stamp 01/11 on the sensor seen as 'magnet'
                                 #                     Date stamp 05/10 on the sensor seen as 'motion'
                                 #          [handle_msgtype3C] PanelType=1 : PowerMax+ , Model=32 Powermaster False 
+                                # Yet another user G4seb has an issue with sensor types being wrong
+                                #          [handle_msgtype3C] PanelType=4 : PowerMax Pro Part , Model=81   Powermaster False
+                                #                Sensor Types 0x96  0xC0 and 0xE5     I hope that E5 is a Motion as that is what it has been previously
                                 
-                                powermax_pro_sensortypes = {0xE5: "Motion", 0xD5: "Motion"}
-                                #if self.PanelType == 4 and self.ModelType == 62 and sensorID_c in powermax_pro_sensortypes:
-                                if ((self.PanelType == 4 and self.ModelType == 62) or (self.PanelType == 1 and self.ModelType == 32)) and sensorID_c in powermax_pro_sensortypes:
-                                    sensorTypeStr = powermax_pro_sensortypes[sensorID_c]
-                                elif tmpid in pmZoneSensorMax_t:
-                                    # if tmpid in pmZoneSensorMax_t:
-                                    sensorTypeStr = pmZoneSensorMax_t[tmpid]
+                                if sensorID_c in pmZoneSensorMax_t:
+                                    sensorType = pmZoneSensorMax_t[sensorID_c].func
+                                    sensorModel = pmZoneSensorMax_t[sensorID_c].name
+                                elif tmpid in pmZoneSensorMaxGeneric_t:
+                                    # if tmpid in pmZoneSensorMaxGeneric_t:
+                                    sensorType = pmZoneSensorMaxGeneric_t[tmpid]
                                 else:
                                     log.debug("[Process Settings] Found unknown sensor type " + str(sensorID_c))
 
                             else:  # PowerMaster models
                                 zoneInfo = int(setting[i])
                                 sensorID_c = int(settingMr[i * 10 + 5])
-                                sensorTypeStr = "UNKNOWN " + str(sensorID_c)
+                                #sensorType = "UNKNOWN " + str(sensorID_c)
                                 if sensorID_c in pmZoneSensorMaster_t:
-                                    sensorTypeStr = pmZoneSensorMaster_t[sensorID_c].func
+                                    sensorType = pmZoneSensorMaster_t[sensorID_c].func
+                                    sensorModel = pmZoneSensorMaster_t[sensorID_c].name
                                 else:
                                     log.debug("[Process Settings] Found unknown sensor type " + str(sensorID_c))
 
@@ -2606,12 +2617,14 @@ class PacketHandling(ProtocolBase):
                             else:
                                 part = [1]
 
-                            log.debug("[Process Settings]      i={0} :    SensorID={1}   zoneInfo={2}   ZTypeName={3}   Chime={4}   sensorTypeStr={5}   zoneName={6}".format(
-                                   i, hex(sensorID_c), hex(zoneInfo), pmZoneType_t[self.pmLang][zoneType], pmZoneChime_t[self.pmLang][zoneChime], sensorTypeStr, zoneName))
+                            log.debug("[Process Settings]      i={0} :    SensorID={1}   zoneInfo={2}   ZTypeName={3}   Chime={4}   sensorType={5}   zoneName={6}".format(
+                                   i, hex(sensorID_c), hex(zoneInfo), pmZoneType_t["EN"][zoneType], pmZoneChime_t["EN"][zoneChime], sensorType, zoneName))
 
                             if i in self.pmSensorDev_t:
-                                self.pmSensorDev_t[i].stype = sensorTypeStr
+                                # If we get EPROM data, assume it is all correct and override any existing settings (as they were assumptions)
+                                self.pmSensorDev_t[i].stype = sensorType
                                 self.pmSensorDev_t[i].sid = sensorID_c
+                                self.pmSensorDev_t[i].model = sensorModel
                                 self.pmSensorDev_t[i].ztype = zoneType
                                 self.pmSensorDev_t[i].ztypeName = pmZoneType_t[self.pmLang][zoneType]
                                 self.pmSensorDev_t[i].zname = zoneName
@@ -2621,7 +2634,7 @@ class PacketHandling(ProtocolBase):
                                 self.pmSensorDev_t[i].id = i + 1
                                 self.pmSensorDev_t[i].enrolled = True
                             else:
-                                self.pmSensorDev_t[i] = SensorDevice(stype = sensorTypeStr, sid = sensorID_c, ztype = zoneType,
+                                self.pmSensorDev_t[i] = SensorDevice(stype = sensorType, sid = sensorID_c, model = sensorModel, ztype = zoneType,
                                              ztypeName = pmZoneType_t[self.pmLang][zoneType], zname = zoneName, zchime = pmZoneChime_t[self.pmLang][zoneChime],
                                              dname="Z{0:0>2}".format(i+1), partition = part, id=i+1, enrolled = True)
                                 #visonic_devices['sensor'].append(self.pmSensorDev_t[i])
@@ -2629,11 +2642,11 @@ class PacketHandling(ProtocolBase):
                                     self.new_sensor_callback(self.pmSensorDev_t[i])
 
                             if i in self.pmSensorDev_t:
-                                if sensorTypeStr == "Magnet" or sensorTypeStr == "Wired":
+                                if sensorType == PySensorType.MAGNET or sensorType == PySensorType.WIRED:
                                     doorZoneStr = "{0},Z{1:0>2}".format(doorZoneStr, i + 1)
-                                elif sensorTypeStr == "Motion" or sensorTypeStr == "Camera":
+                                elif sensorType == PySensorType.MOTION or sensorType == PySensorType.CAMERA:
                                     motionZoneStr = "{0},Z{1:0>2}".format(motionZoneStr, i + 1)
-                                elif sensorTypeStr == "Smoke" or sensorTypeStr == "Gas":
+                                elif sensorType == PySensorType.SMOKE or sensorType == PySensorType.GAS:
                                     smokeZoneStr = "{0},Z{1:0>2}".format(smokeZoneStr, i + 1)
                                 else:
                                     otherZoneStr = "{0},Z{1:0>2}".format(otherZoneStr, i + 1)
@@ -3078,18 +3091,18 @@ class PacketHandling(ProtocolBase):
         """ MsgType=A3 - Zone Names """
         log.debug("[handle_MsgTypeA3] Packet = {0}".format(self._toString(data)))
         pushChange = False
-        if not self.pmPowerlinkMode:
-            msgCnt = int(data[0])
-            offset = 8 * (int(data[1]) - 1)
-            for i in range(0, 8):
-                zoneName = pmZoneName_t[int(data[2+i]) & 0x1F]
-                log.debug("                        Zone name for zone {0} is {1}     Message Count is {2}".format( offset+i+1, zoneName, msgCnt ))
-                if offset+i in self.pmSensorDev_t:
-                    if not self.pmSensorDev_t[offset+i].zname:     # if not already set
-                        self.pmSensorDev_t[offset+i].zname = zoneName
-                        pushChange = True
-                        # self.pmSensorDev_t[offset+i].pushChange()
-                        # log.debug("                        Found Sensor")
+        msgCnt = int(data[0])
+        offset = 8 * (int(data[1]) - 1)
+        log.debug("            Message Count is {0}   offset={1}     self.pmPowerlinkMode={2}".format( msgCnt, offset, self.pmPowerlinkMode ))
+        for i in range(0, 8):
+            zoneName = pmZoneName_t[int(data[2+i]) & 0x1F]
+            log.debug("                        Zone name for sensor {0} is {1} : {2}".format( offset+i+1, int(data[2+i]), zoneName ))
+            if not self.pmPowerlinkMode and offset+i in self.pmSensorDev_t:
+                if not self.pmSensorDev_t[offset+i].zname:     # if not already set
+                    log.debug("                            Setting Zone Name")
+                    self.pmSensorDev_t[offset+i].zname = zoneName
+                    pushChange = True
+    
         return pushChange
 
     #    def displaySensorBypass(self, sensor):
@@ -3398,7 +3411,7 @@ class PacketHandling(ProtocolBase):
                         else:
                             # we dont know about it so create it and make it enrolled
                             pushChange = True
-                            self.pmSensorDev_t[i] = SensorDevice(dname="Z{0:0>2}".format(i + 1), id=i + 1, stype="Magnet", enrolled=True)
+                            self.pmSensorDev_t[i] = SensorDevice(dname="Z{0:0>2}".format(i + 1), id=i + 1, stype=PySensorType.MAGNET, enrolled=True)
                             #visonic_devices["sensor"].append(self.pmSensorDev_t[i])
                             if self.new_sensor_callback is not None:
                                 self.new_sensor_callback(self.pmSensorDev_t[i])
@@ -3429,25 +3442,25 @@ class PacketHandling(ProtocolBase):
         #    log.debug("[handle_msgtypeA5]      Unknown A5 Message: " + self._toString(data))
         return pushChange
 
-
     def handle_msgtypeA6(self, data) -> bool:
         """ MsgType=A6 - Zone Types I think """
         log.debug("[handle_MsgTypeA6] Packet = {0}".format(self._toString(data)))
         pushChange = False
-        if not self.pmPowerlinkMode:
-            dummy_msgCnt = int(data[0])
-            offset = 8 * (int(data[1]) - 1)
-            for i in range (0, 8):
-                zoneType = ((int(data[2+i])) - 0x1E) & 0x0F
-                log.debug("                        Zone type for {0} is {1} {2}".format( offset+i+1, hex(zoneType).upper(), pmZoneType_t[self.pmLang][zoneType] ))
-                if (offset+i) in self.pmSensorDev_t:
+        msgCnt = int(data[0])
+        offset = 8 * (int(data[1]) - 1)
+        log.debug("            Message Count is {0}   offset={1}     self.pmPowerlinkMode={2}".format( msgCnt, offset, self.pmPowerlinkMode ))
+        for i in range(0, 8):
+            zoneType = ((int(data[2+i])) - 0x1E) & 0x0F
+            log.debug("                        Zone type for sensor {0} is {1} : {2}".format( offset+i+1, (int(data[2+i])) - 0x1E, pmZoneType_t["EN"][zoneType] ))
+            if not self.pmPowerlinkMode and (offset+i) in self.pmSensorDev_t:
+                if not self.pmSensorDev_t[offset+i].ztypeName:     # if not already set
+                    log.debug("                            Setting Zone Type")
                     self.pmSensorDev_t[offset+i].ztypeName = pmZoneType_t[self.pmLang][zoneType]
                     self.pmSensorDev_t[offset+i].ztype = zoneType
+                    # This is based on an assumption that "Interior" and "Interior-Follow" zone types are motion sensors
                     if zoneType == 6 or zoneType == 12:
-                        self.pmSensorDev_t[offset+i].stype = "Motion"
-                    #self.pmSensorDev_t[offset+i].zchime = pmZoneChime_t[self.pmLang][zoneChime]
+                        self.pmSensorDev_t[offset+i].stype = PySensorType.MOTION
                     pushChange = True
-                    #self.pmSensorDev_t[offset+i].pushChange()
         return pushChange
 
     def handle_msgtypeA7(self, data) -> bool:
@@ -3649,7 +3662,7 @@ class PacketHandling(ProtocolBase):
                 self.PanelMode = PyPanelMode.POWERLINK  # it is truly in powerlink now we are receiving powerlink alive messages from the panel
                 self._triggerRestoreStatus()
                 self._dumpSensorsToLogFile()
-                
+
                 # Get the time from the panel
                 if self.AutoSyncTime:
                     self._sendCommand("MSG_GETTIME")
@@ -3712,17 +3725,32 @@ class PacketHandling(ProtocolBase):
         #                       0x16, 0x18, 0x19, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x24, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x38, 0x39, 0x3A ]
         # Format: <Type> <SubType> <Length> <Data>
 
+        # From the same user
+        #  Received PowerMaster30 message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
+        #  Received PowerMaster33 message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 0e 00 00 00 00 00 00 00 19 27 14 11 04 15 14 07 01 05 81 00 00 cb 43 
+        #  Received PowerMaster33 message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 0e 00 00 00 00 00 00 00 22 27 14 11 04 15 14 07 01 00 81 00 00 d6 43
+        #  Received PowerMaster33 message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 0e 00 00 00 00 00 00 00 2b 19 0d 01 01 00 14 07 01 00 81 00 00 29 43   siren is sounding according to user
+
+        #  Received PowerMaster33 message 3/59 (len = 11)    full data = 03 3b 0b ff 28 ff 06 03 06 00 01 05 13 ca 43
+        
+        
         pushChange = False
 
         msgType = data[0]
         subType = data[1]
         msgLen  = data[2]
         log.debug("[handle_msgtypeB0] Received {0} message {1}/{2} (len = {3})    full data = {4}".format(self.PanelModel or "UNKNOWN", msgType, subType, msgLen, self._toString(data)))
-        #  Received PowerMaster30 message 3/36 (len = 26)   full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
 
         if msgType == 0x03 and subType == 0x39:
             # Movement detected (probably)
             #  Received PowerMaster10 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
+            
+            # From the same panel:
+            #  Received PowerMaster33 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 59 b8 43
+            #  Received PowerMaster33 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 59 ba 43  # PM33 this maybe after a siren is cancelled (disarmed)
+            #  Received PowerMaster33 message 3/57 (len = 8)    full data = 03 39 08 ff 08 ff 03 18 24 4b cc 43
+            #  Received PowerMaster33 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 59 dd 43
+            
             #  Received PowerMaster30 message 3/57 (len = 8)    full data = 03 39 08 ff 08 ff 03 18 24 4b 90 43
             log.debug("[handle_msgtypeB0]      Sending special {0} Commands to the panel".format(self.PanelModel or "UNKNOWN"))
             self._sendCommand("MSG_POWERMASTER", options=[2, pmSendMsgB0_t["ZONE_STAT1"]])  # This asks the panel to send 03 04 messages
@@ -3734,7 +3762,14 @@ class PacketHandling(ProtocolBase):
             # Zone information (probably)
             #  Received PowerMaster10 message 3/4 (len = 35)    full data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 <24 * 00> 0c 43
             #  Received PowerMaster30 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 11 08 08 04 08 08 <58 * 00> 89 43
-
+            
+            #  Received PowerMaster33 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 11 11 15 15 11 15 15 11 <56 * 00> b9 43  # user has 8 sensors, Z01 to Z08
+            #  Received PowerMaster33 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 11 11 15 15 11 15 15 11 <56 * 00> bb 43
+            #  Received PowerMaster33 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 15 04 11 08 04 08 08 08 <56 * 00> c9 43
+            #  Received PowerMaster33 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 15 04 11 08 04 08 08 08 <56 * 00> cd 43
+            
+            
+            
             interval = self._getTimeFunction() - self.lastRecvOfMasterMotionData
             self.lastRecvOfMasterMotionData = self._getTimeFunction()
             td = timedelta(seconds=self.BZero_MinInterval)  #
@@ -3759,7 +3794,7 @@ class PacketHandling(ProtocolBase):
                         if z in self.pmSensorDev_t:
                             # zone z
                             log.debug("[handle_msgtypeB0]           Checking Zone {0}".format(z))
-                            if self.pmSensorDev_t[z].stype == "Motion":
+                            if self.pmSensorDev_t[z].stype == PySensorType.MOTION:
                                 # log.debug("[handle_msgtypeB0]             And its motion")
                                 s1 = data[7 + z]
                                 s2 = self.zoneDataMasterMotion[7 + z]

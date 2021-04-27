@@ -109,14 +109,17 @@ class VisonicSwitch(SwitchEntity):
     @property
     def device_info(self):
         """Return information about the device."""
-        return {
-            "manufacturer": "Visonic",
-            "identifiers": {(DOMAIN, self._name)},
-            "name": f"Visonic X10 ({self.visonic_device.getName()})",
-            "model": self.visonic_device.getType(),
-            "via_device": (DOMAIN, VISONIC_UNIQUE_NAME),
-            # "sw_version": self._api.information.version_string,
-        }
+        if self.visonic_device is not None:
+            return {
+                "manufacturer": "Visonic",
+                "identifiers": {(DOMAIN, self._name)},
+                "name": f"Visonic X10 ({self.visonic_device.getName()})",
+                "model": self.visonic_device.getType(),
+                "via_device": (DOMAIN, VISONIC_UNIQUE_NAME),
+                # "sw_version": self._api.information.version_string,
+            }
+        return { "manufacturer": "Visonic", 
+                 "via_device": (DOMAIN, VISONIC_UNIQUE_NAME) }
 
     # "off"  "on"  "dim"  "brighten"
     def turnmeonandoff(self, state : PyX10Command):

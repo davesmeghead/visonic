@@ -106,6 +106,8 @@ class PySensorType(IntEnum):
     VIBRATION = 7
     SHOCK = 8
     TEMPERATURE = 9
+    def __str__(self):
+        return str(self.name).title()
 
 
 class PySensorDevice(ABC):

@@ -128,10 +128,10 @@ class VisonicSensor(BinarySensorEntity):
                 "manufacturer": "Visonic",
                 "identifiers": {(DOMAIN, self._name)},
                 "name": f"Visonic Sensor ({self.visonic_device.getDeviceName()})",
-                "model": self.visonic_device.getSensorType(),
+                "model": self.visonic_device.getSensorModel(),
                 "via_device": (DOMAIN, VISONIC_UNIQUE_NAME),
             }
-        return { }
+        return { "manufacturer": "Visonic", "via_device": (DOMAIN, VISONIC_UNIQUE_NAME) }
 
     #    # Called when an entity has their entity_id and hass object assigned, before it is written to the state machine for the first time.
     #    #     Example uses: restore the state, subscribe to updates or set callback/dispatch function/listener.
@@ -175,7 +175,9 @@ class VisonicSensor(BinarySensorEntity):
         if self.visonic_device is not None:
             attr = self.visonic_device.getAttributes()
             attr[ATTR_TRIPPED] = "True" if self.visonic_device.isTriggered() else "False"
-            attr[ATTR_BATTERY_LEVEL] = 0 if self.visonic_device.isLowBattery() else 100
+            stype = self.visonic_device.getSensorType()
+            if stype is not None and stype != PySensorType.WIRED:
+                attr[ATTR_BATTERY_LEVEL] = 0 if self.visonic_device.isLowBattery() else 100
             attr[ATTR_ARMED] = "False" if self.visonic_device.isBypass() else "True"
             if self.visonic_device.getLastTriggerTime() is None:
                 attr[ATTR_LAST_TRIP_TIME] = None
