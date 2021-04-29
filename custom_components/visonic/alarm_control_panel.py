@@ -145,11 +145,25 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     @property
     def device_info(self):
         """Return information about the device."""
+        if self._client is not None:
+            ps = self._client.getPanelStatus()
+            if "Panel Model" in ps:
+                pm = ps["Panel Model"]
+                _LOGGER.debug("Model is = {0}  type {1}".format(pm, type(pm)))
+                if pm.lower() != "unknown":
+                    return {
+                        "manufacturer": "Visonic",
+                        "identifiers": {(DOMAIN, self._myname)},
+                        "name": f"Visonic Alarm Panel (Partition {self._partition_id})",
+                        "model": pm,
+                        # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
+                    }
         return {
             "manufacturer": "Visonic",
             "identifiers": {(DOMAIN, self._myname)},
             "name": f"Visonic Alarm Panel (Partition {self._partition_id})",
-            "model": "Alarm Panel",
+            "model": None,
+            # "model": "Alarm Panel",
             # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
         }
 

@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.6.8.0"
+CLIENT_VERSION = "0.6.8.1"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -112,6 +112,7 @@ class VisonicClient:
         """Initialize the Visonic Client."""
         self.hass = hass
         self.entry = entry
+        self.createdAlarmPanel = False
         # Get the user defined config
         self.config = cf.copy()
         
@@ -435,6 +436,13 @@ class VisonicClient:
         if self.hass is None:
             _LOGGER.warning("Visonic attempt to add sensor when hass is undefined")
             return
+        if not self.createdAlarmPanel:
+            self.createdAlarmPanel = True
+            self.hass.async_create_task(
+                self.hass.config_entries.async_forward_entry_setup(
+                    self.entry, "alarm_control_panel"
+                )
+            )
         if sensor is None:
             _LOGGER.warning("Visonic attempt to add sensor when sensor is undefined")
             return
@@ -722,11 +730,7 @@ class VisonicClient:
 
         if await self.connect_to_alarm():
             # if not alarm_entity_exists:
-            self.hass.async_create_task(
-                self.hass.config_entries.async_forward_entry_setup(
-                    self.entry, "alarm_control_panel"
-                )
-            )
+            _LOGGER.debug("........... connection made")
 
     async def service_panel_reconnect(self, call):
         """Service call to re-connect the connection."""

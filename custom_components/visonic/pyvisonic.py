@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.7.0"
+PLUGIN_VERSION = "1.0.7.1"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -896,6 +896,7 @@ pmZoneSensorMaster_t = {
    0x04 : ZoneSensorType("Next CAM PG2", PySensorType.CAMERA ),
    0x0A : ZoneSensorType("TOWER CAM PG2", PySensorType.CAMERA ),
    0x0C : ZoneSensorType("MP-802 PG2", PySensorType.MOTION ),
+   0x0F : ZoneSensorType("MP-902 PG2", PySensorType.MOTION ),
    0x15 : ZoneSensorType("SMD-426 PG2", PySensorType.SMOKE ),
    0x16 : ZoneSensorType("SMD-429 PG2", PySensorType.SMOKE ),
    0x18 : ZoneSensorType("GSD-442 PG2", PySensorType.SMOKE ),
