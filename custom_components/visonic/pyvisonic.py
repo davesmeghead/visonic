@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.7.1"
+PLUGIN_VERSION = "1.0.7.2"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -107,6 +107,9 @@ NO_RECEIVE_DATA_TIMEOUT = 30
 # Messages left to work out
 #      Panel sent 0d 22 fd 0a 01 16 15 00 0d 00 00 00 9c 0a    No idea what this means
 #                Powermax+ panel 0d f1 07 43 00 00 8b 56 0a    checksum calcs 0X38
+
+# A gregorian year, on average, contains 365.2425 days
+# Thus, expressed as seconds per average year, we get 365.2425 × 24 × 60 × 60 = 31,556,952 seconds/year
 
 # use a named tuple for data and acknowledge
 #    replytype   is a message type from the Panel that we should get in response
@@ -623,7 +626,7 @@ pmPanelType_t = {
    10 : "PowerMaster33", 15 : "PowerMaster33"
 }
 
-# Config for each panel type (0-16).  8 is a PowerMaster 30, 10 is a PowerMaster 33, 15 is a PowerMaster 33 later model.  Don't know what 9 is.
+# Config for each panel type (0-16).  8 is a PowerMaster 30, 10 is a PowerMaster 33, 15 is a PowerMaster 33 later model.  Don't know what 9, 11, 12, 13 or 14 is.
 pmPanelConfig_t = {
    "CFG_PARTITIONS"  : (   1,   1,   1,   1,   3,   3,   1,   3,   3,   3,   3,   3,   3,   3,   3,   3,   3 ),
    "CFG_EVENTS"      : ( 250, 250, 250, 250, 250, 250, 250, 250,1000,1000,1000,1000,1000,1000,1000,1000,1000 ),
@@ -894,6 +897,7 @@ pmZoneSensorMaster_t = {
    0x01 : ZoneSensorType("Next PG2", PySensorType.MOTION ),
    0x03 : ZoneSensorType("Clip PG2", PySensorType.MOTION ),
    0x04 : ZoneSensorType("Next CAM PG2", PySensorType.CAMERA ),
+   0x07 : ZoneSensorType("TOWER-32AMK9", PySensorType.MOTION ),
    0x0A : ZoneSensorType("TOWER CAM PG2", PySensorType.CAMERA ),
    0x0C : ZoneSensorType("MP-802 PG2", PySensorType.MOTION ),
    0x0F : ZoneSensorType("MP-902 PG2", PySensorType.MOTION ),
@@ -904,7 +908,7 @@ pmZoneSensorMaster_t = {
    0x1A : ZoneSensorType("TMD-560 PG2", PySensorType.TEMPERATURE ),
    0x29 : ZoneSensorType("MC-302V PG2", PySensorType.MAGNET),
    0x2A : ZoneSensorType("MC-302 PG2", PySensorType.MAGNET),
-   0x2D : ZoneSensorType("MC-302 PG2 (ID 104-5624)", PySensorType.MAGNET),
+   0x2D : ZoneSensorType("MC-302V PG2", PySensorType.MAGNET),
    0x35 : ZoneSensorType("SD-304 PG2", PySensorType.SHOCK),
    0xFE : ZoneSensorType("Wired", PySensorType.WIRED )
 }
@@ -3075,6 +3079,7 @@ class PacketHandling(ProtocolBase):
                 # This alarm panel only has a single partition so it must either be panel or partition 1
                 self.pmEventLogDictionary[idx].partition = (iEventZone == 0) and "Panel" or "1"
                 self.pmEventLogDictionary[idx].time = "{0:0>2}:{1:0>2}:{2:0>2}".format(iHour, iMin, iSec)
+            
             self.pmEventLogDictionary[idx].date = "{0:0>2}/{1:0>2}/{2}".format(iDay, iMonth, iYear)
             self.pmEventLogDictionary[idx].zone = zoneStr
             self.pmEventLogDictionary[idx].event = eventStr
