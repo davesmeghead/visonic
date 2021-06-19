@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.7.2"
+PLUGIN_VERSION = "1.0.8.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -69,7 +69,7 @@ MAX_CRC_ERROR = 5
 CRC_ERROR_PERIOD = 600  # seconds, 10 minutes
 
 # Maximum number of received messages that are exactly the same from the alarm panel before performing a restart
-SAME_PACKET_ERROR = 20
+SAME_PACKET_ERROR = 40
 
 # If we are waiting on a message back from the panel or we are explicitly waiting for an acknowledge,
 #    then wait this time before resending the message.
@@ -880,7 +880,8 @@ pmZoneSensorMaxGeneric_t = {
 
 ZoneSensorType = collections.namedtuple("ZoneSensorType", 'name func' )
 pmZoneSensorMax_t = {
-   0x95 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me
+   0x7A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # fguerzoni
+   0x95 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, fguerzoni
    0x96 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, g4seb
    0xC0 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # g4seb
    0xD3 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me
@@ -2567,17 +2568,17 @@ class PacketHandling(ProtocolBase):
 
                         if zoneEnrolled:
                             zoneInfo = 0
-                            sensorID_c = 0
+                            visonicSensorRef = 0
                             sensorType = PySensorType.UNKNOWN
                             sensorModel = "Model Unknown"
 
                             if not self.PowerMaster:  #  PowerMax models
                                 zoneInfo = int(setting[i * 4 + 3])  # extract the zoneType and zoneChime settings
-                                sensorID_c = int(setting[i * 4 + 2])  # extract the sensorType
-                                tmpid = sensorID_c & 0x0F
+                                visonicSensorRef = int(setting[i * 4 + 2])  # extract the sensorType
+                                tmpid = visonicSensorRef & 0x0F
                                 #sensorType = "UNKNOWN " + str(tmpid)
 
-                                # User cybfox77 found that PIR sensors were returning the sensor type 'sensorID_c' as 0xe5 and 0xd5, these would be decoded as Magnet sensors
+                                # User cybfox77 found that PIR sensors were returning the sensor type 'visonicSensorRef' as 0xe5 and 0xd5, these would be decoded as Magnet sensors
                                 # This is a very specific workaround for that particular panel type and model number and we'll wait and see if other users have issues
                                 #          These issues could be either way, users with or without that panel/model getting wrong results
                                 #          [handle_msgtype3C] PanelType=4 : PowerMax Pro Part , Model=62   Powermaster False
@@ -2591,24 +2592,24 @@ class PacketHandling(ProtocolBase):
                                 #          [handle_msgtype3C] PanelType=4 : PowerMax Pro Part , Model=81   Powermaster False
                                 #                Sensor Types 0x96  0xC0 and 0xE5     I hope that E5 is a Motion as that is what it has been previously
                                 
-                                if sensorID_c in pmZoneSensorMax_t:
-                                    sensorType = pmZoneSensorMax_t[sensorID_c].func
-                                    sensorModel = pmZoneSensorMax_t[sensorID_c].name
+                                if visonicSensorRef in pmZoneSensorMax_t:
+                                    sensorType = pmZoneSensorMax_t[visonicSensorRef].func
+                                    sensorModel = pmZoneSensorMax_t[visonicSensorRef].name
                                 elif tmpid in pmZoneSensorMaxGeneric_t:
                                     # if tmpid in pmZoneSensorMaxGeneric_t:
                                     sensorType = pmZoneSensorMaxGeneric_t[tmpid]
                                 else:
-                                    log.debug("[Process Settings] Found unknown sensor type " + str(sensorID_c))
+                                    log.debug("[Process Settings] Found unknown sensor type " + str(visonicSensorRef))
 
                             else:  # PowerMaster models
                                 zoneInfo = int(setting[i])
-                                sensorID_c = int(settingMr[i * 10 + 5])
-                                #sensorType = "UNKNOWN " + str(sensorID_c)
-                                if sensorID_c in pmZoneSensorMaster_t:
-                                    sensorType = pmZoneSensorMaster_t[sensorID_c].func
-                                    sensorModel = pmZoneSensorMaster_t[sensorID_c].name
+                                visonicSensorRef = int(settingMr[i * 10 + 5])
+                                #sensorType = "UNKNOWN " + str(visonicSensorRef)
+                                if visonicSensorRef in pmZoneSensorMaster_t:
+                                    sensorType = pmZoneSensorMaster_t[visonicSensorRef].func
+                                    sensorModel = pmZoneSensorMaster_t[visonicSensorRef].name
                                 else:
-                                    log.debug("[Process Settings] Found unknown sensor type " + str(sensorID_c))
+                                    log.debug("[Process Settings] Found unknown sensor type " + str(visonicSensorRef))
 
                             zoneType = zoneInfo & 0x0F
                             zoneChime = (zoneInfo >> 4) & 0x03
@@ -2622,13 +2623,13 @@ class PacketHandling(ProtocolBase):
                             else:
                                 part = [1]
 
-                            log.debug("[Process Settings]      i={0} :    SensorID={1}   zoneInfo={2}   ZTypeName={3}   Chime={4}   sensorType={5}   zoneName={6}".format(
-                                   i, hex(sensorID_c), hex(zoneInfo), pmZoneType_t["EN"][zoneType], pmZoneChime_t["EN"][zoneChime], sensorType, zoneName))
+                            log.debug("[Process Settings]      i={0} :    VisonicSensorRef={1}   zoneInfo={2}   ZTypeName={3}   Chime={4}   SensorType={5}   zoneName={6}".format(
+                                   i, hex(visonicSensorRef), hex(zoneInfo), pmZoneType_t["EN"][zoneType], pmZoneChime_t["EN"][zoneChime], sensorType, zoneName))
 
                             if i in self.pmSensorDev_t:
                                 # If we get EPROM data, assume it is all correct and override any existing settings (as they were assumptions)
                                 self.pmSensorDev_t[i].stype = sensorType
-                                self.pmSensorDev_t[i].sid = sensorID_c
+                                self.pmSensorDev_t[i].sid = visonicSensorRef
                                 self.pmSensorDev_t[i].model = sensorModel
                                 self.pmSensorDev_t[i].ztype = zoneType
                                 self.pmSensorDev_t[i].ztypeName = pmZoneType_t[self.pmLang][zoneType]
@@ -2639,7 +2640,7 @@ class PacketHandling(ProtocolBase):
                                 self.pmSensorDev_t[i].id = i + 1
                                 self.pmSensorDev_t[i].enrolled = True
                             else:
-                                self.pmSensorDev_t[i] = SensorDevice(stype = sensorType, sid = sensorID_c, model = sensorModel, ztype = zoneType,
+                                self.pmSensorDev_t[i] = SensorDevice(stype = sensorType, sid = visonicSensorRef, model = sensorModel, ztype = zoneType,
                                              ztypeName = pmZoneType_t[self.pmLang][zoneType], zname = zoneName, zchime = pmZoneChime_t[self.pmLang][zoneChime],
                                              dname="Z{0:0>2}".format(i+1), partition = part, id=i+1, enrolled = True)
                                 #visonic_devices['sensor'].append(self.pmSensorDev_t[i])

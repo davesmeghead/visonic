@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.6.8.2"
+CLIENT_VERSION = "0.6.9.0"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -664,6 +664,7 @@ class VisonicClient:
         self.visonicTask = None
         self.visonicProtocol = None
         self.SystemStarted = False
+        self.createdAlarmPanel = False
         
         await asyncio.sleep(0.5)
         return False
@@ -714,6 +715,7 @@ class VisonicClient:
             _LOGGER.debug("          ........... Current Task not set")
         self.visonicTask = None
         self.SystemStarted = False
+        self.createdAlarmPanel = False
 
     async def service_panel_start(self):
         """Service call to start the connection."""
