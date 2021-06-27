@@ -26,7 +26,7 @@
 #    PanelType=5 : PowerMax Complete Part , Model=18   Powermaster False
 #    PanelType=5 : PowerMax Complete Part , Model=79   Powermaster False
 #    PanelType=7 : PowerMaster10 , Model=32   Powermaster True
-#    PanelType=7 : PowerMaster10 , Model=68   Powermaster True
+#    PanelType=7 : PowerMaster10 , Model=68   Powermaster True   #  Under investigation. Problem with 0x3F Message data (EPROM) being less than requested
 #    PanelType=7 : PowerMaster10 , Model=153   Powermaster True
 #    PanelType=8 : PowerMaster30 , Model=6   Powermaster True
 #    PanelType=8 : PowerMaster30 , Model=53   Powermaster True
@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.8.0"
+PLUGIN_VERSION = "1.0.9.1"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -103,6 +103,9 @@ POWERLINK_TIMEOUT = 4.5 * POWERLINK_RETRY_DELAY
 
 # The number of seconds that if we have not received any data packets from the panel at all then suspend this plugin and report to HA
 NO_RECEIVE_DATA_TIMEOUT = 30
+
+# The number of seconds between receiving data from the panel and then no communication (the panel has stopped sending data for this period of time) then suspend this plugin and report to HA
+LAST_RECEIVE_DATA_TIMEOUT = 600  # 10 minutes
 
 # Messages left to work out
 #      Panel sent 0d 22 fd 0a 01 16 15 00 0d 00 00 00 9c 0a    No idea what this means
@@ -1430,6 +1433,8 @@ class ProtocolBase(asyncio.Protocol):
 
         # Save the EPROM data when downloaded
         self.pmRawSettings = {}
+        
+        self.lastRecvOfPanelData = None
 
         # Save the sirens
         self.pmSirenDev_t = {}
@@ -1730,15 +1735,27 @@ class ProtocolBase(asyncio.Protocol):
             # sleep, doesn't need to be highly accurate so just count each second
             await asyncio.sleep(1.0)
 
-            if self.lastRecvOfPanelData is None:  ## has any data been received from the panel yet?
-                no_data_received_counter = no_data_received_counter + 1
-                if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
-                    log.error(
-                        "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)"
-                    )
-                    self.suspendAllOperations = True
-                    self.PanelMode = PyPanelMode.PROBLEM
-                    self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
+            if not self.suspendAllOperations:  ## To make sure as if could have changed in the 1 second sleep
+                if self.lastRecvOfPanelData is None:  ## has any data been received from the panel yet?
+                    no_data_received_counter = no_data_received_counter + 1
+                    if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
+                        log.error(
+                            "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)"
+                        )
+                        self.suspendAllOperations = True
+                        self.PanelMode = PyPanelMode.PROBLEM
+                        self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
+                else:  # Data has been received from the panel but check when it was last received
+                    # calc time difference between now and when data was last received
+                    interval = self._getTimeFunction() - self.lastRecvOfPanelData
+                    # log.debug("Checking last receive time {0}".format(interval))
+                    if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
+                        log.error(
+                            "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(LAST_RECEIVE_DATA_TIMEOUT) + " seconds)"
+                        )
+                        self.suspendAllOperations = True
+                        self.PanelMode = PyPanelMode.PROBLEM
+                        self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
 
     # Process any received bytes (in data as a bytearray)
     def data_received(self, data):
@@ -1779,6 +1796,20 @@ class ProtocolBase(asyncio.Protocol):
         if 0 < self.pmIncomingPduLen <= pdu_len:                       # waiting for pmIncomingPduLen bytes but got more and haven't been able to validate a PDU
             log.debug("[data receiver] PDU Too Large: Dumping current buffer {0}    The next byte is {1}".format(self._toString(self.ReceiveData), hex(data).upper()))
             pdu_len = 0                                                # Reset the incoming data to 0 length
+            self._resetMessageData()
+
+        isFlexibleMatch = False
+        if self.pmFlexibleLength and self.PanelType is not None and self.ModelType is not None and data == 0x0A and pdu_len + 1 < self.pmIncomingPduLen and (self.pmIncomingPduLen - pdu_len - 1) < 5:
+            # Only do this 
+            #    - for PowerMaster 10 panel (model 68) PowerMaster 33 (model 71)
+            #    - and for a message length between -5 and -1 of the correct length
+            # Do not do this when (pdu_len + 1 == self.pmIncomingPduLen) i.e. the correct length
+            # At the time of writing this, only the 0x3F EPROM Download PDU does this
+            #    - There is possibly a fault with these panels as they sometimes do not send the full EPROM data.
+            test1 = self.PanelType == 7 and self.ModelType == 68     # Powermaster 10 model 68   Pocket
+            test2 = self.PanelType == 10 and self.ModelType == 71    # Powermaster 33 model 71
+            # ****** Also look in the 3F received PDU function as there's a check in there too ********
+            isFlexibleMatch = test1 or test2
 
         # If this is the start of a new message, then check to ensure it is a 0x0D (message preamble)
         if pdu_len == 0:
@@ -1800,7 +1831,7 @@ class ProtocolBase(asyncio.Protocol):
             #log.debug("[data receiver] Building PDU: It's a message {0}; pmIncomingPduLen = {1}   variable = {2}".format(hex(data).upper(), self.pmIncomingPduLen, self.pmCurrentPDU.isvariablelength))
             self.ReceiveData.append(data)                              # Add on the message type to the buffer
 
-        elif self.PanelType is not None and self.ModelType is not None and self.PanelType == 10 and self.ModelType == 71 and self.pmFlexibleLength and data == 0x0A and pdu_len + 1 < self.pmIncomingPduLen:
+        elif isFlexibleMatch:
             self.ReceiveData.append(data)  # add byte to the message buffer
             # log.debug("[data receiver] Building PDU: Checking it " + self._toString(self.ReceiveData))
             msgType = self.ReceiveData[1]
@@ -1836,6 +1867,12 @@ class ProtocolBase(asyncio.Protocol):
                     if msgType in pmReceiveMsg_t:
                         # A known message with zero length and an incorrect checksum. Reset the message data and resync
                         log.warning("[data receiver] Warning : Construction of incoming packet validation failed - Message = {0}  checksum calcs {1}".format(self._toString(self.ReceiveData), hex(a).upper()))
+                        
+                        # Send an ack even though the its an invalid packet to prevent the panel getting confused
+                        if self.pmCurrentPDU.ackneeded:
+                            # log.debug("[data receiver] Sending an ack as needed by last panel status message " + hex(msgType).upper())
+                            self._sendAck(data=self.ReceiveData)
+                        
                         # Dump the message and carry on
                         self._processCRCFailure()
                         self._resetMessageData()
@@ -1845,6 +1882,12 @@ class ProtocolBase(asyncio.Protocol):
                 else:
                     # When here then the message is a known message type of the correct length but has failed it's validation
                     log.warning("[data receiver] Warning : Construction of incoming packet validation failed - Message = {0}   checksum calcs {1}".format(self._toString(self.ReceiveData), hex(a).upper()))
+
+                    # Send an ack even though the its an invalid packet to prevent the panel getting confused
+                    if self.pmCurrentPDU.ackneeded:
+                        # log.debug("[data receiver] Sending an ack as needed by last panel status message " + hex(msgType).upper())
+                        self._sendAck(data=self.ReceiveData)
+
                     # Dump the message and carry on
                     self._processCRCFailure()
                     self._resetMessageData()
@@ -2795,7 +2838,7 @@ class PacketHandling(ProtocolBase):
         self.lastPacket = packet
 
         if self.lastPacketCounter == SAME_PACKET_ERROR:
-            log.debug("[_processReceivedPacket] Had the same packet for 20 times in a row : %s", self._toString(packet))
+            log.debug("[_processReceivedPacket] Had the same packet for " + str(SAME_PACKET_ERROR) + " times in a row : %s", self._toString(packet))
             # _performDisconnect
             self._performDisconnect("Same Packet for {0} times in a row".format(SAME_PACKET_ERROR))
         # else:
@@ -2993,17 +3036,18 @@ class PacketHandling(ProtocolBase):
 
     def handle_msgtype3F(self, data):
         """MsgType=3F - Download information
-        Multiple 3F can follow eachother, if we request more then &HFF bytes"""
+        Multiple 3F can follow each other, if we request more then &HFF bytes"""
 
-        log.debug("[handle_msgtype3F]")
         # data format is normally: <index> <page> <length> <data ...>
         # If the <index> <page> = FF, then it is an additional PowerMaster MemoryMap
         iIndex = data[0]
         iPage = data[1]
         iLength = data[2]
 
-        # PowerMaster 33 (Model 10) has a very specific problem with downloading the Panel EPROM and doesn't respond with the correct number of bytes
-        if self.PanelType is not None and self.ModelType is not None and self.PanelType == 10 and self.ModelType == 71:
+        log.debug("[handle_msgtype3F] actual data block length=" + str(len(data)-3) + "   data content length=" + str(iLength))
+
+        # PowerMaster 10 (Model 7) and PowerMaster 33 (Model 10) has a very specific problem with downloading the Panel EPROM and doesn't respond with the correct number of bytes
+        if self.PanelType is not None and self.ModelType is not None and ((self.PanelType == 7 and self.ModelType == 68) or (self.PanelType == 10 and self.ModelType == 71)):
             if iLength != len(data) - 3:
                 log.debug("[handle_msgtype3F] Not checking data length as it could be incorrect.  We requested {0} and received {1}".format(iLength, len(data) - 3))
                 log.debug("[handle_msgtype3F]                            " + self._toString(data))
