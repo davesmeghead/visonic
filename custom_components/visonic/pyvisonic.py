@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.9.1"
+PLUGIN_VERSION = "1.0.10.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -94,6 +94,9 @@ DOWNLOAD_TIMEOUT = 180
 
 # Number of seconds delay between trying to achieve EPROM download
 DOWNLOAD_RETRY_DELAY = 90
+
+# Number of times to retry the retrieval of a block to download, this is a total across all blocks to download and not each block
+DOWNLOAD_RETRY_COUNT = 30
 
 # Number of seconds delay between trying to achieve powerlink (must have achieved download first)
 POWERLINK_RETRY_DELAY = 180
@@ -1319,6 +1322,9 @@ class ProtocolBase(asyncio.Protocol):
         # Set when we receive a STOP from the panel, indicating that the EPROM data has finished downloading
         self.pmDownloadComplete = False
 
+        # Download block retry count        
+        self.pmDownloadRetryCount = 0
+
         # Set when the EPROM has been downloaded and we have extracted a user pin code
         self.pmGotUserCode = False
 
@@ -1735,7 +1741,7 @@ class ProtocolBase(asyncio.Protocol):
             # sleep, doesn't need to be highly accurate so just count each second
             await asyncio.sleep(1.0)
 
-            if not self.suspendAllOperations:  ## To make sure as if could have changed in the 1 second sleep
+            if not self.suspendAllOperations:  ## To make sure as it could have changed in the 1 second sleep
                 if self.lastRecvOfPanelData is None:  ## has any data been received from the panel yet?
                     no_data_received_counter = no_data_received_counter + 1
                     if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
@@ -1798,19 +1804,6 @@ class ProtocolBase(asyncio.Protocol):
             pdu_len = 0                                                # Reset the incoming data to 0 length
             self._resetMessageData()
 
-        isFlexibleMatch = False
-        if self.pmFlexibleLength and self.PanelType is not None and self.ModelType is not None and data == 0x0A and pdu_len + 1 < self.pmIncomingPduLen and (self.pmIncomingPduLen - pdu_len - 1) < 5:
-            # Only do this 
-            #    - for PowerMaster 10 panel (model 68) PowerMaster 33 (model 71)
-            #    - and for a message length between -5 and -1 of the correct length
-            # Do not do this when (pdu_len + 1 == self.pmIncomingPduLen) i.e. the correct length
-            # At the time of writing this, only the 0x3F EPROM Download PDU does this
-            #    - There is possibly a fault with these panels as they sometimes do not send the full EPROM data.
-            test1 = self.PanelType == 7 and self.ModelType == 68     # Powermaster 10 model 68   Pocket
-            test2 = self.PanelType == 10 and self.ModelType == 71    # Powermaster 33 model 71
-            # ****** Also look in the 3F received PDU function as there's a check in there too ********
-            isFlexibleMatch = test1 or test2
-
         # If this is the start of a new message, then check to ensure it is a 0x0D (message preamble)
         if pdu_len == 0:
             self._resetMessageData()
@@ -1831,18 +1824,26 @@ class ProtocolBase(asyncio.Protocol):
             #log.debug("[data receiver] Building PDU: It's a message {0}; pmIncomingPduLen = {1}   variable = {2}".format(hex(data).upper(), self.pmIncomingPduLen, self.pmCurrentPDU.isvariablelength))
             self.ReceiveData.append(data)                              # Add on the message type to the buffer
 
-        elif isFlexibleMatch:
+        elif self.pmFlexibleLength and data == 0x0A and pdu_len + 1 < self.pmIncomingPduLen and (self.pmIncomingPduLen - pdu_len) < 6:
+            # Only do this when:
+            #       Looking for "flexible" messages 
+            #              At the time of writing this, only the 0x3F EPROM Download PDU does this with some PowerMaster panels
+            #       Have got the 0x0A message terminator
+            #       We have not yet received all bytes we expect to get
+            #       We are within 5 bytes of the expected message length, self.pmIncomingPduLen - pdu_len is the old length as we already have another byte in data
+            #              At the time of writing this, the 0x3F was always only up to 3 bytes short of the expected length and it would pass the CRC checks
+            # Do not do this when (pdu_len + 1 == self.pmIncomingPduLen) i.e. the correct length
+            # There is possibly a fault with some panels as they sometimes do not send the full EPROM data.
+            #    - Rather than making it panel specific I decided to make this a generic capability
             self.ReceiveData.append(data)  # add byte to the message buffer
-            # log.debug("[data receiver] Building PDU: Checking it " + self._toString(self.ReceiveData))
-            msgType = self.ReceiveData[1]
-            if self._validatePDU(self.ReceiveData):
+            if self._validatePDU(self.ReceiveData):  # if the message passes CRC checks then process it
                 # We've got a validated message
-                log.debug("[data receiver] Validated PDU: Got Validated PDU type 0x%02x   full data %s", int(msgType), self._toString(self.ReceiveData))
+                log.debug("[data receiver] Validated PDU: Got Validated PDU type 0x%02x   full data %s", int(self.ReceiveData[1]), self._toString(self.ReceiveData))
                 self._processReceivedMessage(ackneeded=self.pmCurrentPDU.ackneeded, data=self.ReceiveData)
                 self._resetMessageData()
 
         elif (self.pmIncomingPduLen == 0 and data == 0x0A) or (pdu_len + 1 == self.pmIncomingPduLen): # postamble (the +1 is to include the current data byte)
-            # (waiting for 0x0A and got it) OR (actual length == calculated length)
+            # (waiting for 0x0A and got it) OR (actual length == calculated expected length)
             self.ReceiveData.append(data)  # add byte to the message buffer
             # log.debug("[data receiver] Building PDU: Checking it " + self._toString(self.ReceiveData))
             msgType = self.ReceiveData[1]
@@ -2192,10 +2193,9 @@ class ProtocolBase(asyncio.Protocol):
         else:
             log.debug("[StartDownload] Already in Download Mode (so not doing anything)")
 
-    # Attempt to enroll with the panel in the same was as a powerlink module would inside the panel
-    def _readPanelSettings(self, isPowerMaster):
-        """ Attempt to Enroll as a Powerlink """
-        log.debug("[Panel Settings] Uploading panel settings")
+
+    def _populateEPROMDownload(self, isPowerMaster):
+        """ Populate the EPROM Download List """
 
         # Empty list and start at the beginning
         self.myDownloadList = []
@@ -2233,6 +2233,16 @@ class ProtocolBase(asyncio.Protocol):
             self.myDownloadList.append(pmBlockDownload_t["MSG_DL_BlockBA0"])
             self.myDownloadList.append(pmBlockDownload_t["MSG_DL_BlockBA1"])
 
+
+    # Attempt to enroll with the panel in the same was as a powerlink module would inside the panel
+    def _readPanelSettings(self, isPowerMaster):
+        """ Attempt to Enroll as a Powerlink """
+        log.debug("[Panel Settings] Uploading panel settings")
+        
+        # Populate the full list of EPROM blocks
+        self._populateEPROMDownload(isPowerMaster)
+
+        # Send the first EPROM block to the panel to retrieve
         self._sendCommand("MSG_DL", options=[1, self.myDownloadList.pop(0)])  # Read the names of the zones
 
 
@@ -2304,7 +2314,7 @@ class PacketHandling(ProtocolBase):
         wrap = index + settings_len - 0x100
         sett = [bytearray(b""), bytearray(b"")]
 
-        # log.debug("[Write Settings]   Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len))
+        #log.debug("[Write Settings]   Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len))
         if settings_len > 0xB1:
             log.debug("[Write Settings] ********************* Write Settings too long ********************")
             return
@@ -3047,21 +3057,31 @@ class PacketHandling(ProtocolBase):
         log.debug("[handle_msgtype3F] actual data block length=" + str(len(data)-3) + "   data content length=" + str(iLength))
 
         # PowerMaster 10 (Model 7) and PowerMaster 33 (Model 10) has a very specific problem with downloading the Panel EPROM and doesn't respond with the correct number of bytes
-        if self.PanelType is not None and self.ModelType is not None and ((self.PanelType == 7 and self.ModelType == 68) or (self.PanelType == 10 and self.ModelType == 71)):
-            if iLength != len(data) - 3:
-                log.debug("[handle_msgtype3F] Not checking data length as it could be incorrect.  We requested {0} and received {1}".format(iLength, len(data) - 3))
-                log.debug("[handle_msgtype3F]                            " + self._toString(data))
-            
-        elif iLength != len(data) - 3:  # 3 because -->   index & page & length
-            log.warning("[handle_msgtype3F] ERROR: Type=3F has an invalid length, Received: {0}, Expected: {1}".format(len(data)-3, iLength))
+        #if self.PanelType is not None and self.ModelType is not None and ((self.PanelType == 7 and self.ModelType == 68) or (self.PanelType == 10 and self.ModelType == 71)):
+        #    if iLength != len(data) - 3:
+        #        log.debug("[handle_msgtype3F] Not checking data length as it could be incorrect.  We requested {0} and received {1}".format(iLength, len(data) - 3))
+        #        log.debug("[handle_msgtype3F]                            " + self._toString(data))
+        #    # Write to memory map structure, but remove the first 3 bytes (index/page/length) from the data
+        #    self._writeEPROMSettings(iPage, iIndex, data[3:])
+        
+        if self.pmDownloadRetryCount < DOWNLOAD_RETRY_COUNT and iLength != len(data) - 3:  # 3 because -->   index & page & length
+            log.warning("[handle_msgtype3F] ERROR: Invalid data block length, Received: {0}, Expected: {1}    Adding page {2} Index {3} to the end of the list".format(len(data)-3, iLength, iPage, iIndex))
             log.warning("[handle_msgtype3F]                            " + self._toString(data))
-            return
-
-        # Write to memory map structure, but remove the first 4 bytes (3F/index/page/length) from the data
-        self._writeEPROMSettings(iPage, iIndex, data[3:])
+            # Add it back on to the end to re-download it
+            repeatDownloadCommand = bytearray(4)
+            repeatDownloadCommand[0] = iIndex
+            repeatDownloadCommand[1] = iPage
+            repeatDownloadCommand[2] = iLength
+            repeatDownloadCommand[3] = 0
+            self.myDownloadList.append(repeatDownloadCommand)
+            # Increment counter
+            self.pmDownloadRetryCount = self.pmDownloadRetryCount + 1
+        else:
+            # Write to memory map structure, but remove the first 3 bytes (index/page/length) from the data
+            self._writeEPROMSettings(iPage, iIndex, data[3:])
 
         if len(self.myDownloadList) > 0:
-            self._sendCommand("MSG_DL", options=[1, self.myDownloadList.pop(0)])  # Read the names of the zones
+            self._sendCommand("MSG_DL", options=[1, self.myDownloadList.pop(0)])  # Read the next block of EPROM data
         else:
             # This is the message to tell us that the panel has finished download mode, so we too should stop download mode
             self.pmDownloadMode = False
@@ -3995,6 +4015,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
             "Watchdog Timeout (Total)": self.WatchdogTimeout,
             "Watchdog Timeout (Past 24 Hours)": self.WatchdogTimeoutPastDay,
             "Download Timeout": self.DownloadTimeout,
+            "Download Retries": self.pmDownloadRetryCount,
             "Panel Last Event": self.PanelLastEvent,
             "Panel Last Event Data": self.PanelLastEventData,
             "Panel Alarm Status": self.PanelAlarmStatus,

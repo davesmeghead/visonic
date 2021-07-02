@@ -24,6 +24,7 @@ This Component is compliant with the new Component format within the Home Assist
 
 |  Release   |    Description   |
 |------------|------------------|
+| 0.6.10.0   | Updated download procedure. We download 20 or 30 blocks of data, depending on panel type, where each block is 128 bytes. The procedure includes up to 30 block retries if errors are detected. |
 | 0.6.9.0    | Updates to sensor model types, increased same packet error count, fixes to the restart service. |
 | 0.6.8.0    | Updates to sensor model types, wired sensors no longer have battery setting. |
 | 0.6.6.0    | *** Breaking Change *** Added PowerMaster 33 and breaking change to the available Services and the data that goes with them. |

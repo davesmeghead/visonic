@@ -149,7 +149,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             ps = self._client.getPanelStatus()
             if "Panel Model" in ps:
                 pm = ps["Panel Model"]
-                _LOGGER.debug("Model is = {0}  type {1}".format(pm, type(pm)))
+                #_LOGGER.debug("Model is = {0}  type {1}".format(pm, type(pm)))
                 if pm.lower() != "unknown":
                     return {
                         "manufacturer": "Visonic",
