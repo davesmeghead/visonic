@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.10.0"
+PLUGIN_VERSION = "1.0.10.1"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -249,28 +249,28 @@ pmBlockDownload_t = {
 #             the length is the fixed number of bytes in the message.  Add this to the variable part when it is received to get the total packet length.
 #             varlenbytepos is the byte position of the variable length of the message.
 #    When length is 0 then we stop processing the message on the first 0x0A. This is only used for the short messages (4 or 5 bytes long) like ack, stop, denied and timeout
-PanelCallBack = collections.namedtuple("PanelCallBack", 'length varlenbytepos ackneeded isvariablelength isflexiblelength' )
+PanelCallBack = collections.namedtuple("PanelCallBack", 'length ackneeded isvariablelength varlenbytepos flexiblelength' )
 pmReceiveMsg_t = {
-   0x00 : PanelCallBack(  0, -1,  True, False, False ),   # Dummy message used in the algorithm when the message type is unknown. The -1 is used to indicate an unknown message in the algorithm
-   0x02 : PanelCallBack(  0,  0, False, False, False ),   # Ack
-   0x06 : PanelCallBack(  0,  0, False, False, False ),   # Timeout. See the receiver function for ACK handling
-   0x08 : PanelCallBack(  0,  0, False, False, False ),   # Access Denied
-   0x0B : PanelCallBack(  0,  0,  True, False, False ),   # Stop --> Download Complete
-   0x22 : PanelCallBack( 14,  0,  True, False, False ),   # 14 Panel Info (older visonic powermax panels)
-   0x25 : PanelCallBack( 14,  0,  True, False, False ),   # 14 Download Retry
-   0x33 : PanelCallBack( 14,  0,  True, False, False ),   # 14 Download Settings
-   0x3C : PanelCallBack( 14,  0,  True, False, False ),   # 14 Panel Info
-   0x3F : PanelCallBack(  7,  4,  True,  True,  True ),   # Download Info in varying lengths  (For variable length, the length is the fixed number of bytes).  
-   0xA0 : PanelCallBack( 15,  0,  True, False, False ),   # 15 Event Log
-   0xA3 : PanelCallBack( 15,  0,  True, False, False ),   # 15 Zone Names
-   0xA5 : PanelCallBack( 15,  0,  True, False, False ),   # 15 Status Update       Length was 15 but panel seems to send different lengths
-   0xA6 : PanelCallBack( 15,  0,  True, False, False ),   # 15 Zone Types I think!!!!
-   0xA7 : PanelCallBack( 15,  0,  True, False, False ),   # 15 Panel Status Change
-   0xAB : PanelCallBack( 15,  0,  True, False, False ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
-   0xAC : PanelCallBack( 15,  0,  True, False, False ),   # 15 X10 Names ???
-   0xB0 : PanelCallBack(  8,  4,  True,  True, False ),   # The B0 message comes in varying lengths
-   0xF1 : PanelCallBack(  0,  0,  True,  True, False ),   # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it
-   0xF4 : PanelCallBack(  7,  4,  True,  True, False )    # The F4 message comes in varying lengths. Can't decode it yet but accept and ignore it. Not sure about the length of 7 for the fixed part.
+   0x00 : PanelCallBack(  0,  True, False, -1, 0 ),   # Dummy message used in the algorithm when the message type is unknown. The -1 is used to indicate an unknown message in the algorithm
+   0x02 : PanelCallBack(  0, False, False,  0, 0 ),   # Ack
+   0x06 : PanelCallBack(  0, False, False,  0, 0 ),   # Timeout. See the receiver function for ACK handling
+   0x08 : PanelCallBack(  0, False, False,  0, 0 ),   # Access Denied
+   0x0B : PanelCallBack(  0,  True, False,  0, 0 ),   # Stop --> Download Complete
+   0x22 : PanelCallBack( 14,  True, False,  0, 0 ),   # 14 Panel Info (older visonic powermax panels)
+   0x25 : PanelCallBack( 14,  True, False,  0, 0 ),   # 14 Download Retry
+   0x33 : PanelCallBack( 14,  True, False,  0, 0 ),   # 14 Download Settings
+   0x3C : PanelCallBack( 14,  True, False,  0, 0 ),   # 14 Panel Info
+   0x3F : PanelCallBack(  7,  True,  True,  4, 5 ),   # Download Info in varying lengths  (For variable length, the length is the fixed number of bytes).  
+   0xA0 : PanelCallBack( 15,  True, False,  0, 0 ),   # 15 Event Log
+   0xA3 : PanelCallBack( 15,  True, False,  0, 0 ),   # 15 Zone Names
+   0xA5 : PanelCallBack( 15,  True, False,  0, 0 ),   # 15 Status Update       Length was 15 but panel seems to send different lengths
+   0xA6 : PanelCallBack( 15,  True, False,  0, 0 ),   # 15 Zone Types I think!!!!
+   0xA7 : PanelCallBack( 15,  True, False,  0, 0 ),   # 15 Panel Status Change
+   0xAB : PanelCallBack( 15,  True, False,  0, 0 ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
+   0xAC : PanelCallBack( 15,  True, False,  0, 0 ),   # 15 X10 Names ???
+   0xB0 : PanelCallBack(  8,  True,  True,  4, 2 ),   # The B0 message comes in varying lengths, sometimes it is shorter than what is states and the CRC is sometimes wrong
+   0xF1 : PanelCallBack(  0,  True,  True,  0, 0 ),   # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it
+   0xF4 : PanelCallBack(  7,  True,  True,  4, 2 )    # The F4 message comes in varying lengths. Can't decode it yet but accept and ignore it. Not sure about the length of 7 for the fixed part.
 }
 
 pmReceiveMsgB0_t = {
@@ -1233,10 +1233,10 @@ class ProtocolBase(asyncio.Protocol):
         ########################################################################
         # Variables that are only used in handle_received_message function
         ########################################################################
-        self.pmIncomingPduLen = 0          # The length of the incoming message
-        self.pmCrcErrorCount = 0           # The CRC Error Count for Received Messages
+        self.pmIncomingPduLen = 0             # The length of the incoming message
+        self.pmCrcErrorCount = 0              # The CRC Error Count for Received Messages
         self.pmCurrentPDU = pmReceiveMsg_t[0] # The current receiving message type
-        self.pmFlexibleLength = False
+        self.pmFlexibleLength = 0             # How many bytes less then the proper message size do we start checking for 0x0A and a valid CRC 
 
         ########################################################################
         # Variables that are only used in this class and not subclasses
@@ -1795,7 +1795,7 @@ class ProtocolBase(asyncio.Protocol):
         if self.pmCurrentPDU.isvariablelength and pdu_len == self.pmCurrentPDU.varlenbytepos:
             # Determine total length of the message by getting the variable part int(data) and adding it to the fixed length part
             self.pmIncomingPduLen = self.pmCurrentPDU.length + int(data)
-            self.pmFlexibleLength = self.pmCurrentPDU.isflexiblelength
+            self.pmFlexibleLength = self.pmCurrentPDU.flexiblelength
             log.debug("[data receiver] Variable length Message Being Received  Message Type {0}     pmIncomingPduLen {1}".format(hex(self.ReceiveData[1]).upper(), self.pmIncomingPduLen))
 
         # If we were expecting a message of a particular length (i.e. self.pmIncomingPduLen > 0) and what we have is already greater then that length then dump the message and resynchronise.
@@ -1816,15 +1816,19 @@ class ProtocolBase(asyncio.Protocol):
             if data != 0x00 and data in pmReceiveMsg_t:                # Is it a message type that we know about
                 self.pmCurrentPDU = pmReceiveMsg_t[data]               # set to current message type parameter settings for length, does it need an ack etc
                 self.pmIncomingPduLen = self.pmCurrentPDU.length       # for variable length messages this is the fixed length and will work with this algorithm until updated.
+                self.ReceiveData.append(data)                          # Add on the message type to the buffer
+                #log.debug("[data receiver] Building PDU: It's a message {0}; pmIncomingPduLen = {1}   variable = {2}".format(hex(data).upper(), self.pmIncomingPduLen, self.pmCurrentPDU.isvariablelength))
+            elif data == 0x00 or data == 0xFD:                         # Special case for pocket and PowerMaster 10
+                log.debug("[data receiver] Received message type {0} so not processing it".format(hex(data).upper()))
+                self._resetMessageData()
             else:
                 # build an unknown PDU. As the length is not known, leave self.pmIncomingPduLen set to 0 so we just look for 0x0A as the end of the PDU
                 self.pmCurrentPDU = pmReceiveMsg_t[0]                  # Set to unknown message structure to get settings, varlenbytepos is -1
                 self.pmIncomingPduLen = 0                              # self.pmIncomingPduLen should already be set to 0 but just to make sure !!!
                 log.warning("[data receiver] Warning : Construction of incoming packet unknown - Message Type {0}".format(hex(data).upper()))
-            #log.debug("[data receiver] Building PDU: It's a message {0}; pmIncomingPduLen = {1}   variable = {2}".format(hex(data).upper(), self.pmIncomingPduLen, self.pmCurrentPDU.isvariablelength))
-            self.ReceiveData.append(data)                              # Add on the message type to the buffer
+                self.ReceiveData.append(data)                          # Add on the message type to the buffer
 
-        elif self.pmFlexibleLength and data == 0x0A and pdu_len + 1 < self.pmIncomingPduLen and (self.pmIncomingPduLen - pdu_len) < 6:
+        elif self.pmFlexibleLength > 0 and data == 0x0A and pdu_len + 1 < self.pmIncomingPduLen and (self.pmIncomingPduLen - pdu_len) < self.pmFlexibleLength:
             # Only do this when:
             #       Looking for "flexible" messages 
             #              At the time of writing this, only the 0x3F EPROM Download PDU does this with some PowerMaster panels
@@ -1907,7 +1911,7 @@ class ProtocolBase(asyncio.Protocol):
         # Reset control variables ready for next time
         self.pmCurrentPDU = pmReceiveMsg_t[0]
         self.pmIncomingPduLen = 0
-        self.pmFlexibleLength = False
+        self.pmFlexibleLength = 0
 
     def _processCRCFailure(self):
         msgType = self.ReceiveData[1]
@@ -1955,7 +1959,8 @@ class ProtocolBase(asyncio.Protocol):
     def _sendAck(self, data=bytearray(b"")):
         """ Send ACK if packet is valid """
 
-        ispm = len(data) > 3 and (data[1] >= 0xA5 or (data[1] < 0x10 and data[-2] == 0x43))
+        #ispm = len(data) > 3 and (data[1] >= 0xA5 or (data[1] < 0x10 and data[-2] == 0x43))
+        ispm = len(data) > 3 and (data[1] == 0xAB or (data[1] < 0x10 and data[-2] == 0x43))
 
         # ---------------------- debug only start ----------------
         #lastType = 0
@@ -3065,7 +3070,7 @@ class PacketHandling(ProtocolBase):
         #    self._writeEPROMSettings(iPage, iIndex, data[3:])
         
         if self.pmDownloadRetryCount < DOWNLOAD_RETRY_COUNT and iLength != len(data) - 3:  # 3 because -->   index & page & length
-            log.warning("[handle_msgtype3F] ERROR: Invalid data block length, Received: {0}, Expected: {1}    Adding page {2} Index {3} to the end of the list".format(len(data)-3, iLength, iPage, iIndex))
+            log.warning("[handle_msgtype3F] Invalid data block length, Received: {0}, Expected: {1}    Adding page {2} Index {3} to the end of the list".format(len(data)-3, iLength, iPage, iIndex))
             log.warning("[handle_msgtype3F]                            " + self._toString(data))
             # Add it back on to the end to re-download it
             repeatDownloadCommand = bytearray(4)
@@ -3076,9 +3081,9 @@ class PacketHandling(ProtocolBase):
             self.myDownloadList.append(repeatDownloadCommand)
             # Increment counter
             self.pmDownloadRetryCount = self.pmDownloadRetryCount + 1
-        else:
-            # Write to memory map structure, but remove the first 3 bytes (index/page/length) from the data
-            self._writeEPROMSettings(iPage, iIndex, data[3:])
+
+        # Write to memory map structure, but remove the first 3 bytes (index/page/length) from the data
+        self._writeEPROMSettings(iPage, iIndex, data[3:])
 
         if len(self.myDownloadList) > 0:
             self._sendCommand("MSG_DL", options=[1, self.myDownloadList.pop(0)])  # Read the next block of EPROM data
@@ -3794,7 +3799,7 @@ class PacketHandling(ProtocolBase):
         #                  https://github.com/nlrb/com.visonic.powermax/blob/master/node_modules/powermax-api/lib/handlers.js
         #        msgSubTypes = [0x00, 0x01, 0x02, 0x03, 0x04, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x11, 0x12, 0x13, 0x14, 0x15,
         #                       0x16, 0x18, 0x19, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x24, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x38, 0x39, 0x3A ]
-        # Format: <Type> <SubType> <Length> <Data>
+        # Format: <Type> <SubType> <Length> <Data> <0x43>
 
         # From the same user
         #  Received PowerMaster30 message 3/36 (len = 26)    full data = 03 24 1a ff 08 ff 15 00 00 00 00 00 00 00 00 26 35 12 15 03 00 14 03 01 00 81 00 00 0a 43
@@ -3804,15 +3809,21 @@ class PacketHandling(ProtocolBase):
 
         #  Received PowerMaster33 message 3/59 (len = 11)    full data = 03 3b 0b ff 28 ff 06 03 06 00 01 05 13 ca 43
         
-        
         pushChange = False
 
         msgType = data[0]
         subType = data[1]
         msgLen  = data[2]
         log.debug("[handle_msgtypeB0] Received {0} message {1}/{2} (len = {3})    full data = {4}".format(self.PanelModel or "UNKNOWN", msgType, subType, msgLen, self._toString(data)))
+        
+        # The data block should contain <Type> <SubType> <Length> <Data> <0x43>
+        # Therefore the data length should be 4 bytes less then the length of the data block
+        if len(data) != msgLen + 4:
+            log.debug("[handle_msgtypeB0]              Invalid Length, not processing")
+            # Do not process this B0 message as it seems to be incorrect
+            return False
 
-        if msgType == 0x03 and subType == 0x39:
+        if self.BZero_Enable and msgType == 0x03 and subType == 0x39:
             # Movement detected (probably)
             #  Received PowerMaster10 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
             
@@ -3838,8 +3849,6 @@ class PacketHandling(ProtocolBase):
             #  Received PowerMaster33 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 11 11 15 15 11 15 15 11 <56 * 00> bb 43
             #  Received PowerMaster33 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 15 04 11 08 04 08 08 08 <56 * 00> c9 43
             #  Received PowerMaster33 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 15 04 11 08 04 08 08 08 <56 * 00> cd 43
-            
-            
             
             interval = self._getTimeFunction() - self.lastRecvOfMasterMotionData
             self.lastRecvOfMasterMotionData = self._getTimeFunction()
