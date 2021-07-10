@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.10.1"
+PLUGIN_VERSION = "1.0.10.2"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -256,6 +256,7 @@ pmReceiveMsg_t = {
    0x06 : PanelCallBack(  0, False, False,  0, 0 ),   # Timeout. See the receiver function for ACK handling
    0x08 : PanelCallBack(  0, False, False,  0, 0 ),   # Access Denied
    0x0B : PanelCallBack(  0,  True, False,  0, 0 ),   # Stop --> Download Complete
+   0x0F : PanelCallBack(  0, False, False,  0, 0 ),   # THE PANEL DOES NOT SEND THIS. THIS IS USED FOR A LOOP BACK TEST
    0x22 : PanelCallBack( 14,  True, False,  0, 0 ),   # 14 Panel Info (older visonic powermax panels)
    0x25 : PanelCallBack( 14,  True, False,  0, 0 ),   # 14 Download Retry
    0x33 : PanelCallBack( 14,  True, False,  0, 0 ),   # 14 Download Settings
@@ -1208,6 +1209,10 @@ class ProtocolBase(asyncio.Protocol):
         self.PanelStatus = {}
         self.PanelType = None
 
+        # Loopback capability added. Connect Rx and Tx together without connecting to the panel
+        self.loopbackTest = False
+        self.loopbackCounter = 0
+
         # determine when MSG_ENROLL is sent to the panel
         self.doneAutoEnroll = False
 
@@ -1589,179 +1594,185 @@ class ProtocolBase(asyncio.Protocol):
         settime_counter = 0
         
         while not self.suspendAllOperations:
+
+            if self.loopbackTest:
+                await asyncio.sleep(5.0)
+                self._clearList()
+                self._sendCommand("MSG_EXIT")
         
-            if self.pmPowerlinkMode and self.AutoSyncTime:
-                settime_counter = settime_counter + 1
-                if settime_counter == 14400:      # every 4 hours (approx)
-                    settime_counter = 0
-                    # Get the time from the panel (this will compare to local time and set the panel time if different)
-                    self._sendCommand("MSG_GETTIME")
-
-            # Watchdog functionality
-            self.watchdog_counter = self.watchdog_counter + 1
-            # every iteration, decrement all WATCHDOG_MAXIMUM_EVENTS watchdog counters (loop time is 1 second approx, doesn't have to be accurate)
-            watchdog_list = [x - 1 if x > 0 else 0 for x in watchdog_list]
-
-            # Keep alive functionality
-            self.keep_alive_counter = self.keep_alive_counter + 1
-
-            # The Expected Response Timer
-            self.expectedResponseTimeout = self.expectedResponseTimeout + 1
-
-            if not self.pmDownloadMode:
-                downloadDuration = 0
-
-            # log.debug("[Controller] is {0}".format(self.watchdog_counter))
-
-            if not self.giveupTrying and self.pmDownloadMode:
-                # First, during actual download keep resetting the watchdogs and timers to prevent any other comms to the panel, check for download timeout
-                # Disable watchdog and keep-alive during download (and keep flushing send queue)
-                self._reset_watchdog_timeout()
-                self._reset_keep_alive_messages()
-                # count in seconds that we've been in download mode
-                downloadDuration = downloadDuration + 1
-
-                if downloadDuration == 5 and not self.pmGotPanelDetails:
-                    # Download has already been triggered so self.ForceStandardMode must be False and therefore no need to check it
-                    # This is a check at 5 seconds in to see if the panel details have been retrieved.  If not then kick off the download request again.
-                    log.debug("[Controller] Trigger Panel Download Attempt - Not yet received the panel details")
-                    self.pmDownloadComplete = False
-                    self.pmDownloadMode = False
-                    self.triggeredDownload = False
-                    self._startDownload()
-
-                elif downloadDuration > DOWNLOAD_TIMEOUT:
-                    log.warning("[Controller] ********************** Download Timer has Expired, Download has taken too long *********************")
-                    log.warning("[Controller] ************************************* Going to standard mode ***************************************")
-                    # Stop download mode
-                    self.pmDownloadMode = False
-                    # goto standard mode
-                    self._gotoStandardMode()
-                    self.DownloadTimeout = self.DownloadTimeout + 1
-                    self._sendResponseEvent(PyCondition.DOWNLOAD_TIMEOUT)  # download timer expired
-
-            elif not self.giveupTrying and not self.pmDownloadComplete and not self.ForceStandardMode and not self.pmDownloadMode:
-                # Second, if not actually doing download but download is incomplete then try every DOWNLOAD_RETRY_DELAY seconds
-                self._reset_watchdog_timeout()
-                download_counter = download_counter + 1
-                log.debug("[Controller] download_counter is {0}".format(download_counter))
-                if download_counter >= DOWNLOAD_RETRY_DELAY:  #
-                    download_counter = 0
-                    # trigger a download
-                    log.debug("[Controller] Trigger Panel Download Attempt")
-                    self.triggeredDownload = False
-                    self._startDownload()
-
-            elif (
-                not self.giveupTrying
-                and self.pmPowerlinkModePending
-                and not self.ForceStandardMode
-                and self.pmDownloadComplete
-                and not self.pmPowerlinkMode
-            ):
-                # Third, when download has completed successfully, and not ForceStandard from the user, then attempt to connect in powerlink
-                if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
-                    # Attempt to enter powerlink mode
-                    self._reset_watchdog_timeout()
-                    powerlink_counter = powerlink_counter + 1
-                    log.debug("[Controller] Powerlink Counter {0}".format(powerlink_counter))
-                    if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
-                        self._triggerEnroll(False)
-                    elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
-                        log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
-                        self.pmExpectedResponse = []
-                        self.expectedResponseTimeout = 0
-                    elif powerlink_counter >= POWERLINK_TIMEOUT:
-                        # give up on trying to get to powerlink and goto standard mode (could be either Standard Plus or Standard)
-                        log.debug("[Controller] Giving up on Powerlink Attempts, going to one of the standard modes")
-                        self._gotoStandardMode()
-
-            elif self.watchdog_counter >= WATCHDOG_TIMEOUT:  #  the clock runs at 1 second
-                # Fourth, check to see if the watchdog timer has expired
-                # watchdog timeout
-                log.debug("[Controller] ****************************** WatchDog Timer Expired ********************************")
-                status_counter = 0  # delay status requests
-                self._reset_watchdog_timeout()
-                self._reset_keep_alive_messages()
-
-                # Total Watchdog timeouts
-                self.WatchdogTimeout = self.WatchdogTimeout + 1
-                # Total Watchdog timeouts in last 24 hours. Total up the entries > 0
-                self.WatchdogTimeoutPastDay = 1 + sum(1 if x > 0 else 0 for x in watchdog_list)    # in range 1 to 11
-
-                # move to the next position which is the oldest entry in the list
-                watchdog_pos = (watchdog_pos + 1) % WATCHDOG_MAXIMUM_EVENTS
-                
-                # When watchdog_list[watchdog_pos] > 0 then the 24 hour period from the timeout WATCHDOG_MAXIMUM_EVENTS times ago hasn't decremented to 0.
-                #    So it's been less than 1 day for the previous WATCHDOG_MAXIMUM_EVENTS timeouts
-                if not self.giveupTrying and watchdog_list[watchdog_pos] > 0:
-                    log.debug("[Controller]               **************** Going to Standard (Plus) Mode and re-establish panel connection ***************")
-                    self._sendResponseEvent(PyCondition.WATCHDOG_TIMEOUT_GIVINGUP)   # watchdog timer expired, going to standard (plus) mode
-                    self._gotoStandardMode()     # This sets self.giveupTrying to True
-                else:
-                    log.debug("[Controller]               ******************* Trigger Restore Status *******************")
-                    self._sendResponseEvent(PyCondition.WATCHDOG_TIMEOUT_RETRYING)   # watchdog timer expired, going to try again
-                    self._triggerRestoreStatus() # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
-
-                # Overwrite the oldest entry and set it to 1 day in seconds. Keep the stats going in all modes for the statistics
-                #    Note that the asyncio 1 second sleep does not create an accurate time and this may be slightly more than 24 hours.
-                watchdog_list[watchdog_pos] = 60 * 60 * 24  # seconds in 1 day
-                log.debug("[Controller]               Watchdog counter array, current=" + str(watchdog_pos))
-                log.debug("[Controller]                       " + str(watchdog_list))
-
-            elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
-                log.debug("[Controller] ****************************** Response Timer Expired ********************************")
-                self._triggerRestoreStatus()     # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
-
-            # Is it time to send an I'm Alive message to the panel
-            if len(self.SendList) == 0 and not self.pmDownloadMode and self.keep_alive_counter >= KEEP_ALIVE_PERIOD:  #
-                # Every KEEP_ALIVE_PERIOD seconds, unless watchdog has been reset
-                # log.debug("[Controller]   Send list is empty so sending I'm alive message or get status")
-                # reset counter
-                self._reset_keep_alive_messages()
-
-                status_counter = status_counter + 1
-                if status_counter >= 3:  # around the loop i.e every KEEP_ALIVE_PERIOD * 3 seconds
-                    status_counter = 0
-                    if not self.pmPowerlinkMode:
-                        # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
-                        self._sendCommand("MSG_STATUS")  # Asks the panel to send us the A5 message set
-                    elif self.PowerMaster is not None and self.PowerMaster:
-                        # When in powerlink mode and the panel is PowerMaster get the status to make sure the sensor states get updated
-                        #   (if powerlink and powermax panel then no need to keep doing this)
-                        # self._sendCommand("MSG_RESTORE")  # Commented out on 3/12/2020 as user with PM10, the panel keeps ignoring the MSG_RESTORE
-                        self._sendCommand("MSG_STATUS")  #
-                elif not self.pmPowerlinkMode:
-                    # When not in powerlink mode, send I'm Alive to the panel so it knows we're still here
-                    self._sendCommand("MSG_ALIVE")
             else:
-                # Every 1.0 seconds, try to flush the send queue
-                self._sendCommand(None)  # check send queue
+                if self.pmPowerlinkMode and self.AutoSyncTime:
+                    settime_counter = settime_counter + 1
+                    if settime_counter == 14400:      # every 4 hours (approx)
+                        settime_counter = 0
+                        # Get the time from the panel (this will compare to local time and set the panel time if different)
+                        self._sendCommand("MSG_GETTIME")
 
-            # sleep, doesn't need to be highly accurate so just count each second
-            await asyncio.sleep(1.0)
+                # Watchdog functionality
+                self.watchdog_counter = self.watchdog_counter + 1
+                # every iteration, decrement all WATCHDOG_MAXIMUM_EVENTS watchdog counters (loop time is 1 second approx, doesn't have to be accurate)
+                watchdog_list = [x - 1 if x > 0 else 0 for x in watchdog_list]
 
-            if not self.suspendAllOperations:  ## To make sure as it could have changed in the 1 second sleep
-                if self.lastRecvOfPanelData is None:  ## has any data been received from the panel yet?
-                    no_data_received_counter = no_data_received_counter + 1
-                    if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
-                        log.error(
-                            "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)"
-                        )
-                        self.suspendAllOperations = True
-                        self.PanelMode = PyPanelMode.PROBLEM
-                        self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
-                else:  # Data has been received from the panel but check when it was last received
-                    # calc time difference between now and when data was last received
-                    interval = self._getTimeFunction() - self.lastRecvOfPanelData
-                    # log.debug("Checking last receive time {0}".format(interval))
-                    if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
-                        log.error(
-                            "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(LAST_RECEIVE_DATA_TIMEOUT) + " seconds)"
-                        )
-                        self.suspendAllOperations = True
-                        self.PanelMode = PyPanelMode.PROBLEM
-                        self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
+                # Keep alive functionality
+                self.keep_alive_counter = self.keep_alive_counter + 1
+
+                # The Expected Response Timer
+                self.expectedResponseTimeout = self.expectedResponseTimeout + 1
+
+                if not self.pmDownloadMode:
+                    downloadDuration = 0
+
+                # log.debug("[Controller] is {0}".format(self.watchdog_counter))
+
+                if not self.giveupTrying and self.pmDownloadMode:
+                    # First, during actual download keep resetting the watchdogs and timers to prevent any other comms to the panel, check for download timeout
+                    # Disable watchdog and keep-alive during download (and keep flushing send queue)
+                    self._reset_watchdog_timeout()
+                    self._reset_keep_alive_messages()
+                    # count in seconds that we've been in download mode
+                    downloadDuration = downloadDuration + 1
+
+                    if downloadDuration == 5 and not self.pmGotPanelDetails:
+                        # Download has already been triggered so self.ForceStandardMode must be False and therefore no need to check it
+                        # This is a check at 5 seconds in to see if the panel details have been retrieved.  If not then kick off the download request again.
+                        log.debug("[Controller] Trigger Panel Download Attempt - Not yet received the panel details")
+                        self.pmDownloadComplete = False
+                        self.pmDownloadMode = False
+                        self.triggeredDownload = False
+                        self._startDownload()
+
+                    elif downloadDuration > DOWNLOAD_TIMEOUT:
+                        log.warning("[Controller] ********************** Download Timer has Expired, Download has taken too long *********************")
+                        log.warning("[Controller] ************************************* Going to standard mode ***************************************")
+                        # Stop download mode
+                        self.pmDownloadMode = False
+                        # goto standard mode
+                        self._gotoStandardMode()
+                        self.DownloadTimeout = self.DownloadTimeout + 1
+                        self._sendResponseEvent(PyCondition.DOWNLOAD_TIMEOUT)  # download timer expired
+
+                elif not self.giveupTrying and not self.pmDownloadComplete and not self.ForceStandardMode and not self.pmDownloadMode:
+                    # Second, if not actually doing download but download is incomplete then try every DOWNLOAD_RETRY_DELAY seconds
+                    self._reset_watchdog_timeout()
+                    download_counter = download_counter + 1
+                    log.debug("[Controller] download_counter is {0}".format(download_counter))
+                    if download_counter >= DOWNLOAD_RETRY_DELAY:  #
+                        download_counter = 0
+                        # trigger a download
+                        log.debug("[Controller] Trigger Panel Download Attempt")
+                        self.triggeredDownload = False
+                        self._startDownload()
+
+                elif (
+                    not self.giveupTrying
+                    and self.pmPowerlinkModePending
+                    and not self.ForceStandardMode
+                    and self.pmDownloadComplete
+                    and not self.pmPowerlinkMode
+                ):
+                    # Third, when download has completed successfully, and not ForceStandard from the user, then attempt to connect in powerlink
+                    if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
+                        # Attempt to enter powerlink mode
+                        self._reset_watchdog_timeout()
+                        powerlink_counter = powerlink_counter + 1
+                        log.debug("[Controller] Powerlink Counter {0}".format(powerlink_counter))
+                        if (powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
+                            self._triggerEnroll(False)
+                        elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
+                            log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
+                            self.pmExpectedResponse = []
+                            self.expectedResponseTimeout = 0
+                        elif powerlink_counter >= POWERLINK_TIMEOUT:
+                            # give up on trying to get to powerlink and goto standard mode (could be either Standard Plus or Standard)
+                            log.debug("[Controller] Giving up on Powerlink Attempts, going to one of the standard modes")
+                            self._gotoStandardMode()
+
+                elif self.watchdog_counter >= WATCHDOG_TIMEOUT:  #  the clock runs at 1 second
+                    # Fourth, check to see if the watchdog timer has expired
+                    # watchdog timeout
+                    log.debug("[Controller] ****************************** WatchDog Timer Expired ********************************")
+                    status_counter = 0  # delay status requests
+                    self._reset_watchdog_timeout()
+                    self._reset_keep_alive_messages()
+
+                    # Total Watchdog timeouts
+                    self.WatchdogTimeout = self.WatchdogTimeout + 1
+                    # Total Watchdog timeouts in last 24 hours. Total up the entries > 0
+                    self.WatchdogTimeoutPastDay = 1 + sum(1 if x > 0 else 0 for x in watchdog_list)    # in range 1 to 11
+
+                    # move to the next position which is the oldest entry in the list
+                    watchdog_pos = (watchdog_pos + 1) % WATCHDOG_MAXIMUM_EVENTS
+                    
+                    # When watchdog_list[watchdog_pos] > 0 then the 24 hour period from the timeout WATCHDOG_MAXIMUM_EVENTS times ago hasn't decremented to 0.
+                    #    So it's been less than 1 day for the previous WATCHDOG_MAXIMUM_EVENTS timeouts
+                    if not self.giveupTrying and watchdog_list[watchdog_pos] > 0:
+                        log.debug("[Controller]               **************** Going to Standard (Plus) Mode and re-establish panel connection ***************")
+                        self._sendResponseEvent(PyCondition.WATCHDOG_TIMEOUT_GIVINGUP)   # watchdog timer expired, going to standard (plus) mode
+                        self._gotoStandardMode()     # This sets self.giveupTrying to True
+                    else:
+                        log.debug("[Controller]               ******************* Trigger Restore Status *******************")
+                        self._sendResponseEvent(PyCondition.WATCHDOG_TIMEOUT_RETRYING)   # watchdog timer expired, going to try again
+                        self._triggerRestoreStatus() # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
+
+                    # Overwrite the oldest entry and set it to 1 day in seconds. Keep the stats going in all modes for the statistics
+                    #    Note that the asyncio 1 second sleep does not create an accurate time and this may be slightly more than 24 hours.
+                    watchdog_list[watchdog_pos] = 60 * 60 * 24  # seconds in 1 day
+                    log.debug("[Controller]               Watchdog counter array, current=" + str(watchdog_pos))
+                    log.debug("[Controller]                       " + str(watchdog_list))
+
+                elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
+                    log.debug("[Controller] ****************************** Response Timer Expired ********************************")
+                    self._triggerRestoreStatus()     # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
+
+                # Is it time to send an I'm Alive message to the panel
+                if len(self.SendList) == 0 and not self.pmDownloadMode and self.keep_alive_counter >= KEEP_ALIVE_PERIOD:  #
+                    # Every KEEP_ALIVE_PERIOD seconds, unless watchdog has been reset
+                    # log.debug("[Controller]   Send list is empty so sending I'm alive message or get status")
+                    # reset counter
+                    self._reset_keep_alive_messages()
+
+                    status_counter = status_counter + 1
+                    if status_counter >= 3:  # around the loop i.e every KEEP_ALIVE_PERIOD * 3 seconds
+                        status_counter = 0
+                        if not self.pmPowerlinkMode:
+                            # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
+                            self._sendCommand("MSG_STATUS")  # Asks the panel to send us the A5 message set
+                        elif self.PowerMaster is not None and self.PowerMaster:
+                            # When in powerlink mode and the panel is PowerMaster get the status to make sure the sensor states get updated
+                            #   (if powerlink and powermax panel then no need to keep doing this)
+                            # self._sendCommand("MSG_RESTORE")  # Commented out on 3/12/2020 as user with PM10, the panel keeps ignoring the MSG_RESTORE
+                            self._sendCommand("MSG_STATUS")  #
+                    elif not self.pmPowerlinkMode:
+                        # When not in powerlink mode, send I'm Alive to the panel so it knows we're still here
+                        self._sendCommand("MSG_ALIVE")
+                else:
+                    # Every 1.0 seconds, try to flush the send queue
+                    self._sendCommand(None)  # check send queue
+
+                # sleep, doesn't need to be highly accurate so just count each second
+                await asyncio.sleep(1.0)
+
+                if not self.suspendAllOperations:  ## To make sure as it could have changed in the 1 second sleep
+                    if self.lastRecvOfPanelData is None:  ## has any data been received from the panel yet?
+                        no_data_received_counter = no_data_received_counter + 1
+                        if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
+                            log.error(
+                                "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)"
+                            )
+                            self.suspendAllOperations = True
+                            self.PanelMode = PyPanelMode.PROBLEM
+                            self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
+                    else:  # Data has been received from the panel but check when it was last received
+                        # calc time difference between now and when data was last received
+                        interval = self._getTimeFunction() - self.lastRecvOfPanelData
+                        # log.debug("Checking last receive time {0}".format(interval))
+                        if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
+                            log.error(
+                                "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(LAST_RECEIVE_DATA_TIMEOUT) + " seconds)"
+                            )
+                            self.suspendAllOperations = True
+                            self.PanelMode = PyPanelMode.PROBLEM
+                            self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
 
     # Process any received bytes (in data as a bytearray)
     def data_received(self, data):
@@ -2030,11 +2041,11 @@ class ProtocolBase(asyncio.Protocol):
         """Encode and put packet string onto write buffer."""
 
         if self.suspendAllOperations:
-            log.debug("[_sendPdu] Suspended all operations, not sending PDU")
+            log.debug("[sendPdu] Suspended all operations, not sending PDU")
             return
 
         if instruction is None:
-            log.error("[_sendPdu] Attempt to send a command that is empty")
+            log.error("[sendPdu] Attempt to send a command that is empty")
             return
 
         if self.sendlock is None:
@@ -2049,20 +2060,20 @@ class ProtocolBase(asyncio.Protocol):
                 # the length of instruction.options has to be an even number
                 # it is a list of couples:  bitoffset , bytearray to insert
                 op = int(len(instruction.options) / 2)
-                # log.debug("[_sendPdu] Options {0} {1}".format(instruction.options, op))
+                # log.debug("[sendPdu] Options {0} {1}".format(instruction.options, op))
                 for o in range(0, op):
                     s = instruction.options[o * 2]  # bit offset as an integer
                     a = instruction.options[o * 2 + 1]  # the bytearray to insert
                     if isinstance(a, int):
-                        # log.debug("[_sendPdu] Options {0} {1} {2} {3}".format(type(s), type(a), s, a))
+                        # log.debug("[sendPdu] Options {0} {1} {2} {3}".format(type(s), type(a), s, a))
                         data[s] = a
                     else:
-                        # log.debug("[_sendPdu] Options {0} {1} {2} {3} {4}".format(type(s), type(a), s, a, len(a)))
+                        # log.debug("[sendPdu] Options {0} {1} {2} {3} {4}".format(type(s), type(a), s, a, len(a)))
                         for i in range(0, len(a)):
                             data[s + i] = a[i]
-                            # log.debug("[_sendPdu]        Inserting at {0}".format(s+i))
+                            # log.debug("[sendPdu]        Inserting at {0}".format(s+i))
 
-            # log.debug('[_sendPdu] input data: %s', self._toString(packet))
+            # log.debug('[sendPdu] input data: %s', self._toString(packet))
             # First add header (0x0D), then the packet, then crc and footer (0x0A)
             sData = b"\x0D"
             sData += data
@@ -2072,7 +2083,7 @@ class ProtocolBase(asyncio.Protocol):
             interval = self._getTimeFunction() - self.pmLastTransactionTime
             sleepytime = timedelta(milliseconds=150) - interval
             if sleepytime > timedelta(milliseconds=0):
-                # log.debug("[_sendPdu] Speepytime {0}".format(sleepytime.total_seconds()))
+                # log.debug("[sendPdu] Speepytime {0}".format(sleepytime.total_seconds()))
                 await asyncio.sleep(sleepytime.total_seconds())
 
             # no need to send i'm alive message for a while as we're about to send a command anyway
@@ -2082,14 +2093,14 @@ class ProtocolBase(asyncio.Protocol):
             if self.transport is not None:
                 self.transport.write(sData)
             else:
-                log.debug("[_sendPdu]      Comms transport has been set to none, must be in process of terminating comms")
+                log.debug("[sendPdu]      Comms transport has been set to none, must be in process of terminating comms")
 
-            # log.debug("[_sendPdu]      waiting for message response {}".format([hex(no).upper() for no in self.pmExpectedResponse]))
+            # log.debug("[sendPdu]      waiting for message response {}".format([hex(no).upper() for no in self.pmExpectedResponse]))
 
             if command.download:
                 self.pmDownloadMode = True
                 self.triggeredDownload = False
-                log.debug("[_sendPdu] Setting Download Mode to true")
+                log.debug("[sendPdu] Setting Download Mode to true")
 
             if sData[1] != ACK_MESSAGE:  # the message is not an acknowledge back to the panel
                 self.pmLastSentMessage = instruction
@@ -2097,13 +2108,13 @@ class ProtocolBase(asyncio.Protocol):
             self.pmLastTransactionTime = self._getTimeFunction()
             
             if command.debugprint:
-                log.debug("[_sendPdu] Sending Command ({0})    raw data {1}   waiting for message response {2}".format(command.msg, self._toString(sData), [hex(no).upper() for no in self.pmExpectedResponse]))
+                log.debug("[sendPdu] Sending Command ({0})    raw data {1}   waiting for message response {2}".format(command.msg, self._toString(sData), [hex(no).upper() for no in self.pmExpectedResponse]))
             else:
                 # Do not log the full raw data as it may contain the user code
-                log.debug("[_sendPdu] Sending Command ({0})    waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
+                log.debug("[sendPdu] Sending Command ({0})    waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
             
             if command.waittime > 0.0:
-                log.debug("[_sendPdu]          Command has a wait time after transmission {0}".format(command.waittime))
+                log.debug("[sendPdu]          Command has a wait time after transmission {0}".format(command.waittime))
                 await asyncio.sleep(command.waittime)
 
     # This is called to queue a command.
@@ -2164,7 +2175,7 @@ class ProtocolBase(asyncio.Protocol):
                 instruction = self.SendList.pop(0)
 
                 if len(instruction.response) > 0:
-                    log.debug("[_sendPdu] Resetting expected response counter, it got to {0}   Response list length before {1}  after {2}".format(self.expectedResponseTimeout, len(self.pmExpectedResponse), len(self.pmExpectedResponse) + len(instruction.response)))
+                    log.debug("[sendPdu] Resetting expected response counter, it got to {0}   Response list length before {1}  after {2}".format(self.expectedResponseTimeout, len(self.pmExpectedResponse), len(self.pmExpectedResponse) + len(instruction.response)))
                     self.expectedResponseTimeout = 0
                     # update the expected response list straight away (without having to wait for it to be actually sent) to make sure protocol is followed
                     self.pmExpectedResponse.extend(instruction.response)  # if an ack is needed it will already be in this list
@@ -2872,6 +2883,8 @@ class PacketHandling(ProtocolBase):
             self.handle_msgtype08(packet[2:-2])
         elif packet[1] == 0x0B:  # Stopped
             self.handle_msgtype0B(packet[2:-2])
+        elif packet[1] == 0x0F:  # LOOPBACK TEST, EXIT (0x0F) IS THE FIRST COMMAND SENT TO THE PANEL WHEN THIS INTEGRATION STARTS
+            self.handle_msgtype0F(packet[2:-2])
         elif packet[1] == 0x22:  
             # Message from Powermax Panel when starting the download. Seems to be similar to a 3C message.
             log.warning("[_processReceivedPacket] WARNING: Message 0x22 is not decoded, are you using an old Powermax Panel?")
@@ -2989,6 +3002,12 @@ class PacketHandling(ProtocolBase):
     def handle_msgtype0B(self, data):  # STOP
         """ Handle STOP from the panel """
         log.debug("[handle_msgtype0B] Stop    data is {0}".format(self._toString(data)))
+
+    def handle_msgtype0F(self, data):  # LOOPBACK TEST SUCCESS, EXIT COMMAND (0x0F) IS THE FIRST COMMAND SENT TO THE PANEL WHEN THIS INTEGRATION STARTS
+        """ Handle STOP from the panel """
+        self.loopbackTest = True
+        self.loopbackCounter = self.loopbackCounter + 1
+        log.warning("[handle_msgtype0F] LOOPBACK TEST SUCCESS, Counter is {0}".format(self.loopbackCounter))
 
     def handle_msgtype25(self, data):  # Download retry
         """ MsgType=25 - Download retry. Unit is not ready to enter download mode """
