@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.6.10.2"
+CLIENT_VERSION = "0.6.11.0"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -117,6 +117,7 @@ class VisonicClient:
         self.config = cf.copy()
         
         self.sensor_task = None
+        self.select_task = None
         self.switch_task = None
 
         _LOGGER.debug("init self.config = %s  %s", PyConfiguration.DownloadCode, self.config)
@@ -154,6 +155,7 @@ class VisonicClient:
         self.templatedata = None
 
         # Create empty lists
+        self.hass.data[DOMAIN]["select"] = list()
         self.hass.data[DOMAIN]["binary_sensor"] = list()
         self.hass.data[DOMAIN]["switch"] = list()
         self.hass.data[DOMAIN]["alarm_control_panel"] = list()
@@ -455,7 +457,10 @@ class VisonicClient:
                     self.hass.data[DOMAIN]["binary_sensor"].append(sensor)
                     if self.sensor_task is None or self.sensor_task.done():
                         self.sensor_task = self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, "binary_sensor"))
-                    #_LOGGER.debug("Visonic: %s binary sensors", len(self.hass.data[DOMAIN]["binary_sensor"]))
+                if sensor not in self.hass.data[DOMAIN]["select"]:
+                    self.hass.data[DOMAIN]["select"].append(sensor)
+                    if self.select_task is None or self.select_task.done():
+                        self.select_task = self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, "select"))
                 else:
                     _LOGGER.debug("       Sensor %s already in the list", sensor.getDeviceID())
             else:
@@ -587,6 +592,7 @@ class VisonicClient:
 
         # Empty out the lists
         self.hass.data[DOMAIN]["binary_sensor"] = list()
+        self.hass.data[DOMAIN]["select"] = list()
         self.hass.data[DOMAIN]["switch"] = list()
         self.hass.data[DOMAIN]["alarm_control_panel"] = list()
 
@@ -693,14 +699,17 @@ class VisonicClient:
         # stop the usb/ethernet comms with the panel
         await self.service_comms_stop()
 
-        # unload the alarm, sensors and the switches
+        # unload the alarm, select, sensors and the switches
+        await self.hass.config_entries.async_forward_entry_unload(
+            self.entry, "select"
+        )
         await self.hass.config_entries.async_forward_entry_unload(
             self.entry, "binary_sensor"
         )
+        await self.hass.config_entries.async_forward_entry_unload(self.entry, "switch")
         await self.hass.config_entries.async_forward_entry_unload(
             self.entry, "alarm_control_panel"
         )
-        await self.hass.config_entries.async_forward_entry_unload(self.entry, "switch")
 
         # cancel the task from within HA
         if self.visonicTask is not None:

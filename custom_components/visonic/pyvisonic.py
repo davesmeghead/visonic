@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.10.2"
+PLUGIN_VERSION = "1.0.11.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -69,7 +69,7 @@ MAX_CRC_ERROR = 5
 CRC_ERROR_PERIOD = 600  # seconds, 10 minutes
 
 # Maximum number of received messages that are exactly the same from the alarm panel before performing a restart
-SAME_PACKET_ERROR = 40
+SAME_PACKET_ERROR = 10000
 
 # If we are waiting on a message back from the panel or we are explicitly waiting for an acknowledge,
 #    then wait this time before resending the message.
@@ -1150,8 +1150,10 @@ class ProtocolBase(asyncio.Protocol):
         """Initialize class."""
         if loop:
             self.loop = loop
+            log.debug("Initialising Protocol - Using Home Assistant Loop")
         else:
             self.loop = asyncio.get_event_loop()
+            log.debug("Initialising Protocol - Using Event Loop")
 
         # install the packet callback handler
         self.packet_callback = packet_callback
@@ -2117,15 +2119,44 @@ class ProtocolBase(asyncio.Protocol):
                 log.debug("[sendPdu]          Command has a wait time after transmission {0}".format(command.waittime))
                 await asyncio.sleep(command.waittime)
 
+
+    def _addMessageToSendList(self, message_type, options=[]):
+        if message_type is not None:
+            message = pmSendMsg[message_type]
+            assert message is not None
+            #options = kwargs.get("options", None)
+            e = VisonicListEntry(command=message, options=options)
+            self.SendList.append(e)
+    
+
     # This is called to queue a command.
-    def _sendCommand(self, message_type, **kwargs):
-        t = self.loop.create_task(self._sendCommandAsync(message_type, kwargs), name="Send Command to Panel") #, loop=self.loop)
-        #asyncio.wait_for(t, None)
-        asyncio.gather(t)
+    def _sendCommand(self, message_type, options=[] ):
+        """ Queue a command to send to the panel """
+        # Up until HA version 2021-6-6 this function worked with the 3 lines in the "try" part all the time
+        # With version 2021-7-1 it began to fail with exceptions.  There are also the same exceptions in other components, including the old built in zwave component.
+        # I haven't checked but this could be to do with the version of python or changes that the core team have made to the code, I don't know
+        #    It only fails when it is called from a loop other than the MainLoop from HA
+
+        # This is a "fix" for HA 2021-7-1 onwards
+
+        # When this function works is is because it has the current asyncio Main loop
+        # So the external calls to arm/disarm, bypass/arm and get the event log are now handled by _addMessageToSendList as they may be from a different loop
+        try:
+            t = self.loop.create_task(self._sendCommandAsync(message_type, options), name="Send Command to Panel") #, loop=self.loop)
+            asyncio.gather(t)
+        except RuntimeError as ex:
+            log.debug("[_sendCommand] Exception {0}".format(ex))
+            #if "there is no current event loop in thread" in str(ex).lower() or "operation invoked on an event loop other than the current one" in str(ex).lower():
+            #    # External command from worker loop, this is not the main loop
+            #    #      Simply add it to the list of messages to be sent and it will be sent in the next 1 second
+            #    self._addMessageToSendList(message_type, kwargs)
+            #    # We could terminate the sleep function early in _keep_alive_and_watchdog_timer but I don't know how (and it would screw up the timing in that function anyway)
+            #    #   As it is, it will take up to 1 second to send the message (also remember that it is queued with other messages as well)
+                
 
     # This is called to queue a command.
     # If it is possible, then also send the message
-    async def _sendCommandAsync(self, message_type, kwargs):
+    async def _sendCommandAsync(self, message_type, options=[]):
         """Add a command to the send List
         The List is needed to prevent sending messages too quickly normally it requires 500msec between messages"""
 
@@ -2136,7 +2167,7 @@ class ProtocolBase(asyncio.Protocol):
         if self.commandlock is None:
             self.commandlock = asyncio.Lock()
 
-        # log.debug("[_sendCommand] kwargs  {0}  {1}".format(type(kwargs), kwargs))
+        # log.debug("[_sendCommand] options  {0}  {1}".format(type(options), options))
 
         async with self.commandlock:
             interval = self._getTimeFunction() - self.pmLastTransactionTime
@@ -2145,12 +2176,7 @@ class ProtocolBase(asyncio.Protocol):
             # command may be set to None on entry
             # Always add the command to the list
             if message_type is not None:
-                message = pmSendMsg[message_type]
-                assert message is not None
-                options = kwargs.get("options", None)
-                e = VisonicListEntry(command=message, options=options)
-                self.SendList.append(e)
-                # log.debug("[_sendCommand] %s", message.msg)
+                self._addMessageToSendList(message_type, options)
 
             # self.pmExpectedResponse will prevent us sending another message to the panel
             #   If the panel is lazy or we've got the timing wrong........
@@ -4080,7 +4106,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
                 armCode = bytearray()
                 # Retrieve the code to send to the panel
                 armCode.append(pmArmMode_t[state])
-                self._sendCommand("MSG_ARM", options=[3, armCode, 4, bpin])  #
+                self._addMessageToSendList("MSG_ARM", options=[3, armCode, 4, bpin])  #
                 return PyCommandStatus.SUCCESS
             else:
                 return PyCommandStatus.FAIL_INVALID_STATE
@@ -4099,7 +4125,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
                 byteB = (calc >> 8) & 0xFF
                 if state in pmX10State_t:
                     what = pmX10State_t[state]
-                    self._sendCommand("MSG_X10PGM", options=[6, what, 7, byteA, 8, byteB])
+                    self._addMessageToSendList("MSG_X10PGM", options=[6, what, 7, byteA, 8, byteB])
                     return PyCommandStatus.SUCCESS
                 else:
                     return PyCommandStatus.FAIL_INVALID_STATE
@@ -4132,11 +4158,11 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
                 log.debug("[SensorArmState]  setSensorBypassState bypass = " + self._toString(bypass))
                 if len(bypass) == 4:
                     if bypassValue:
-                        self._sendCommand("MSG_BYPASSEN", options=[1, bpin, 3, bypass])
+                        self._addMessageToSendList("MSG_BYPASSEN", options=[1, bpin, 3, bypass])
                     else:
-                        self._sendCommand("MSG_BYPASSDI", options=[1, bpin, 7, bypass])
+                        self._addMessageToSendList("MSG_BYPASSDI", options=[1, bpin, 7, bypass])
                     # request status to check success and update sensor variable
-                    self._sendCommand("MSG_BYPASSTAT")
+                    self._addMessageToSendList("MSG_BYPASSTAT")
                     return PyCommandStatus.SUCCESS
                 else:
                     return PyCommandStatus.FAIL_INVALID_STATE
@@ -4153,7 +4179,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
         self.pmEventLogDictionary = {}
         if not self.pmDownloadMode:
             bpin = self._createPin(pin)
-            self._sendCommand("MSG_EVENTLOG", options=[4, bpin])
+            self._addMessageToSendList("MSG_EVENTLOG", options=[4, bpin])
             return PyCommandStatus.SUCCESS
         return PyCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
 
