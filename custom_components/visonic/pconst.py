@@ -79,6 +79,7 @@ class PyCommandStatus(IntEnum):
     FAIL_X10_PROBLEM = 5
     FAIL_PANEL_CONFIG_PREVENTED = 6
     FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED = 7
+    FAIL_PANEL_NO_CONNECTION = 8
 
 class PyCondition(IntEnum):
     PUSH_CHANGE = 0

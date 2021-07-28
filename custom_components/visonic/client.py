@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.6.11.0"
+CLIENT_VERSION = "0.6.11.1"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -904,7 +904,7 @@ class VisonicClient:
         else:
             self.createWarningMessage(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, an alarm code is required")
 
-    def sendBypass(self, devid: int, bypass: bool, code: str):
+    def sendBypass(self, devid: int, bypass: bool, code: str) -> PyCommandStatus:
         """Send the bypass command to the panel."""
         vp = self.visonicProtocol
         if vp is not None:
@@ -914,13 +914,15 @@ class VisonicClient:
                 if isValidPL:
                     # The device id in the range 1 to N
                     retval = vp.setSensorBypassState(devid, bypass, pin)
-                    self.generateBusEventReason(PanelCondition.CHECK_BYPASS_COMMAND, retval, "Bypass", "Sensor Arm State")
-                    # retval is an PyCommandStatus that is SUCCESS on sending the command to the panel
                 else:
-                    self.generateBusEventReason(PanelCondition.CHECK_BYPASS_COMMAND, PyCommandStatus.FAIL_INVALID_PIN, "Bypass", "Sensor Arm State")
+                    retval = PyCommandStatus.FAIL_INVALID_PIN
             else:
-                self.generateBusEventReason(PanelCondition.CHECK_BYPASS_COMMAND, PyCommandStatus.FAIL_USER_CONFIG_PREVENTED, "Bypass", "Sensor Arm State")
-        return False
+                retval = PyCommandStatus.FAIL_USER_CONFIG_PREVENTED
+        else:
+            retval = PyCommandStatus.FAIL_PANEL_NO_CONNECTION
+
+        self.generateBusEventReason(PanelCondition.CHECK_BYPASS_COMMAND, retval, "Bypass", "Sensor Arm State")
+        return retval
 
     def setX10(self, ident: int, state: PyX10Command):
         """Send an X10 command to the panel."""
