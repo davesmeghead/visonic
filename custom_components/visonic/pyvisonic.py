@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.11.0"
+PLUGIN_VERSION = "1.0.12.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -1744,6 +1744,10 @@ class ProtocolBase(asyncio.Protocol):
                             #   (if powerlink and powermax panel then no need to keep doing this)
                             # self._sendCommand("MSG_RESTORE")  # Commented out on 3/12/2020 as user with PM10, the panel keeps ignoring the MSG_RESTORE
                             self._sendCommand("MSG_STATUS")  #
+                        else:
+                            # When in powerlink mode and the panel is PowerMax, get the bypass status to make sure the sensor states get updated
+                            # This is to make sure that if the user changes the setting on the panel itself, this updates the sensor state here
+                            self._addMessageToSendList("MSG_BYPASSTAT")
                     elif not self.pmPowerlinkMode:
                         # When not in powerlink mode, send I'm Alive to the panel so it knows we're still here
                         self._sendCommand("MSG_ALIVE")
@@ -4107,6 +4111,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
                 # Retrieve the code to send to the panel
                 armCode.append(pmArmMode_t[state])
                 self._addMessageToSendList("MSG_ARM", options=[3, armCode, 4, bpin])  #
+                self._addMessageToSendList("MSG_BYPASSTAT")
                 return PyCommandStatus.SUCCESS
             else:
                 return PyCommandStatus.FAIL_INVALID_STATE
@@ -4126,6 +4131,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
                 if state in pmX10State_t:
                     what = pmX10State_t[state]
                     self._addMessageToSendList("MSG_X10PGM", options=[6, what, 7, byteA, 8, byteB])
+                    self._addMessageToSendList("MSG_BYPASSTAT")
                     return PyCommandStatus.SUCCESS
                 else:
                     return PyCommandStatus.FAIL_INVALID_STATE
