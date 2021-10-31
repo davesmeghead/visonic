@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.12.0"
+PLUGIN_VERSION = "1.0.12.1"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -3433,8 +3433,9 @@ class PacketHandling(ProtocolBase):
 
             if not self.pmPowerlinkMode:
                 # if the system status has the panel armed and there has been an alarm event, assume that the alarm is sounding
+                #        and that the sensor that triggered it isn't an entry delay
                 #   Normally this would only be directly available in Powerlink mode with A7 messages, but an assumption is made here
-                if self.PanelArmed and self.PanelAlarmEvent:
+                if self.PanelArmed and self.PanelAlarmEvent and self.PanelStatusCode != PyPanelStatus.ENTRY_DELAY:
                     log.debug("[handle_msgtypeA5]      Alarm Event Assumed while in Standard Mode")
                     # Alarm Event
                     self.pmSirenActive = self._getTimeFunction()
