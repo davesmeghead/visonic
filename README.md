@@ -1,19 +1,26 @@
+[![](https://img.shields.io/github/release/davesmeghead/visonic/all.svg?style=for-the-badge)](https://github.com/rospogrigio/localtuya-homeassistant/releases)
+[![](https://img.shields.io/badge/MAINTAINER-%40Davesmeghead-green?style=for-the-badge)](https://github.com/Davesmeghead)
+
 # Visonic Alarm Panel for Home Assistant
 
-A Custom Integration for Home Assistant
+This is a *custom integration* for [Home Assistant](https://www.home-assistant.io/).
 
 ## Introduction
-Visonic produce the Powermax and Powermaster alarm panel series including (PowerMax+, PowerMaxExpress, PowerMaxPro and PowerMaxComplete, PowerMaster 10, PowerMaster30 and PowerMaster 33).
+This is a custom integration to allow the control of a Visonic alarm system. Visonic produce a series of Alarm Systems and this integration is compatible with the following models:
+- PowerMax: PowerMax+ (plus), PowerMax Express, PowerMax Pro , PowerMax Pro Plus and PowerMax Complete
+- PowerMaster: PowerMaster-10, PowerMaster-30 and PowerMaster-33
 
-This Home Assistant Integration allows you to control the alarm panel (arm/disarm) and allows you to use the Visonic sensors and events (movement, door contact, ...) and X10 devices within Home Assistant.
+This Home Assistant Integration allows you to:
+- Control the alarm panel to arm and disarm,
+- Bypass individual sensors,
+- Use the various sensors as devices and entities,
+- Use the X10 devices.
 
-Please note that after extensive work, the original PowerMax Panel is not able to be used as it does not support the Powerlink protocol that this component relies on. 
-
-Also the Visonic 360R Alarm Panel is not fitted with an RS232 connection and cannot have a Powerlink3 fitted, it is therefore not compatible with this HA Component.
-
-## Wiki
-Remember to check out our Wiki-section, this contains all the documentation.
-
-- [Wiki Home](https://github.com/davesmeghead/visonic/wiki)
+Remember to check out the Wiki-section, this contains all the documentation [Wiki Home](https://github.com/davesmeghead/visonic/wiki)
 
 _If you have notes related to a specific solution where this component is used, you're mostly welcome to provide both details and full guides to the Wiki-section!_
+
+## Configuration
+The only way to setup this integration is by using the Integration page within Home Assistant. This integration does not support auto discovery.  To do this you either manually install the files or add this Github repository to HACS and install through HACS.
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=visonic)

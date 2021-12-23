@@ -2,5 +2,5 @@
   "name": "Visonic Intruder Alarm - PowerMax and PowerMaster Series",
   "domains": ["alarm_control_panel", "binary_sensor", "switch", "select"],
   "homeassistant": "2021.11.1",
-  "render_readme": true
+  "render_readme": false
 }
