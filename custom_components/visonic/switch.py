@@ -127,7 +127,7 @@ class VisonicSwitch(SwitchEntity):
         self._client.setX10(self._x10id, state)
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the state attributes of the device."""
         attr = {}
 

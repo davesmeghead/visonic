@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.12.1"
+PLUGIN_VERSION = "1.0.12.2"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -887,6 +887,7 @@ pmZoneSensorMaxGeneric_t = {
 
 ZoneSensorType = collections.namedtuple("ZoneSensorType", 'name func' )
 pmZoneSensorMax_t = {
+   0x75 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # thermostat (Visonic part number 0-3592-B, NEXT K985 DDMCW)
    0x7A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # fguerzoni
    0x95 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, fguerzoni
    0x96 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, g4seb

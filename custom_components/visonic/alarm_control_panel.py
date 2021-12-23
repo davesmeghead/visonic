@@ -224,7 +224,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         return self._mystate
 
     @property
-    def device_state_attributes(self):  #
+    def extra_state_attributes(self):  #
         """Return the state attributes of the device."""
         return self._device_state_attributes
 
