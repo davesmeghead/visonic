@@ -1,4 +1,4 @@
-[![](https://img.shields.io/github/release/davesmeghead/visonic/all.svg?style=for-the-badge)](https://github.com/rospogrigio/localtuya-homeassistant/releases)
+[![](https://img.shields.io/github/release/davesmeghead/visonic/all.svg?style=for-the-badge)](https://github.com/davesmeghead/releases)
 [![](https://img.shields.io/badge/MAINTAINER-%40Davesmeghead-green?style=for-the-badge)](https://github.com/Davesmeghead)
 
 # Visonic Alarm Panel for Home Assistant
