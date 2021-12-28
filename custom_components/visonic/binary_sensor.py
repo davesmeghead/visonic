@@ -4,17 +4,7 @@ import logging
 from datetime import datetime
 from typing import Callable, List
 
-from homeassistant.components.binary_sensor import (
-    DEVICE_CLASS_DOOR,
-    DEVICE_CLASS_GAS,
-    DEVICE_CLASS_SMOKE,
-    DEVICE_CLASS_MOISTURE,
-    DEVICE_CLASS_MOTION,
-    DEVICE_CLASS_VIBRATION,
-    DEVICE_CLASS_WINDOW,
-    DEVICE_CLASS_HEAT,
-    BinarySensorEntity,
-)
+from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -34,7 +24,6 @@ from .client import VisonicClient
 from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_NAME, VISONIC_UPDATE_STATE_DISPATCHER
 
 _LOGGER = logging.getLogger(__name__)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -146,21 +135,21 @@ class VisonicSensor(BinarySensorEntity):
             stype = self.visonic_device.getSensorType()
             if stype is not None:                
                 if stype == PySensorType.MOTION or stype == PySensorType.CAMERA:
-                    return DEVICE_CLASS_MOTION
+                    return BinarySensorDeviceClass.MOTION
                 if stype == PySensorType.MAGNET:
-                    return DEVICE_CLASS_WINDOW
+                    return BinarySensorDeviceClass.WINDOW
                 if stype == PySensorType.WIRED:
-                    return DEVICE_CLASS_DOOR
+                    return BinarySensorDeviceClass.DOOR
                 if stype == PySensorType.SMOKE:
-                    return DEVICE_CLASS_SMOKE
+                    return BinarySensorDeviceClass.SMOKE
                 if stype == PySensorType.FLOOD:
-                    return DEVICE_CLASS_MOISTURE
+                    return BinarySensorDeviceClass.MOISTURE
                 if stype == PySensorType.GAS:
-                    return DEVICE_CLASS_GAS
+                    return BinarySensorDeviceClass.GAS
                 if stype == PySensorType.VIBRATION or stype == PySensorType.SHOCK:
-                    return DEVICE_CLASS_VIBRATION
+                    return BinarySensorDeviceClass.VIBRATION
                 if stype == PySensorType.TEMPERATURE:
-                    return DEVICE_CLASS_HEAT
+                    return BinarySensorDeviceClass.HEAT
         return None
 
     @property
