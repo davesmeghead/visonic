@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.12.2"
+PLUGIN_VERSION = "1.0.12.3"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -725,8 +725,8 @@ DecodePanelSettings = {
 
     "recentClose"    : SettingsCommand(  True, 1, "BYTE",    8,0x11C,    1,   0,     3, "Recent Close Report", { '1':"On", '0':"Off"} ),
     "remoteAccess"   : SettingsCommand(  True, 1, "BYTE",    8,0x11D,    1,   0,     2, "Remote Access",       { '1':"On", '0':"Off"}),
-    "installerCode"  : SettingsCommand( False, 1, "CODE",   16,0x20A,   16,   0,    -1, "Installer Code",      {} ),
-    "masterCode"     : SettingsCommand( False, 1, "CODE",   16,0x20C,   16,   0,    -1, "Master Code",         {} ),
+    "masterCode"     : SettingsCommand( False, 1, "CODE",   16,0x20A,   16,   0,    -1, "Master Code",      {} ),
+    "installerCode"  : SettingsCommand( False, 1, "CODE",   16,0x20C,   16,   0,    -1, "Installer Code",         {} ),
     "masterDlCode"   : SettingsCommand( False, 1, "CODE",   16,0x20E,   16,   0,    -1, "Master Download Code", {} ),
     "instalDlCode"   : SettingsCommand( False, 1, "CODE",   16,0x210,   16,   0,    -1, "Installer Download Code", {} ),
 
