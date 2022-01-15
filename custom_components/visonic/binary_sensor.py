@@ -150,6 +150,8 @@ class VisonicSensor(BinarySensorEntity):
                     return BinarySensorDeviceClass.VIBRATION
                 if stype == PySensorType.TEMPERATURE:
                     return BinarySensorDeviceClass.HEAT
+                if stype == PySensorType.SOUND:
+                    return BinarySensorDeviceClass.SOUND
         return None
 
     @property
