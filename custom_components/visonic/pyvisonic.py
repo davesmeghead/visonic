@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.13.0"
+PLUGIN_VERSION = "1.0.13.1"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -887,6 +887,7 @@ pmZoneSensorMaxGeneric_t = {
 
 ZoneSensorType = collections.namedtuple("ZoneSensorType", 'name func' )
 pmZoneSensorMax_t = {
+   0x1A : ZoneSensorType("MCW-K980", PySensorType.MOTION ),        # Botap
    0x75 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # thermostat (Visonic part number 0-3592-B, NEXT K985 DDMCW)
    0x7A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # fguerzoni
    0x95 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, fguerzoni
@@ -896,6 +897,7 @@ pmZoneSensorMax_t = {
    0xD5 : ZoneSensorType("Next K9", PySensorType.MOTION ),         # fguerzoni
    0xE4 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me
    0xE5 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # g4seb, fguerzoni
+   0xF3 : ZoneSensorType("MCW-K980", PySensorType.MOTION ),        # Botap
    0xFF : ZoneSensorType("Wired", PySensorType.WIRED )
 }
 
@@ -4288,7 +4290,7 @@ async def async_create_tcp_visonic_connection(address, port, protocolvp=VisonicP
 
 
 # Create a connection using asyncio through a linux port (usb or rs232)
-async def async_create_usb_visonic_connection(path, baud=9600, protocolvp=VisonicProtocol, panelConfig=None, loop=None):
+async def async_create_usb_visonic_connection(path, baud="9600", protocolvp=VisonicProtocol, panelConfig=None, loop=None):
     """Create Visonic manager class, returns rs232 transport coroutine."""
     from serial_asyncio import create_serial_connection
 

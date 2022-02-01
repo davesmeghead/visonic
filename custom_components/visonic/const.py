@@ -29,9 +29,9 @@ ALARM_PANEL_LOG_FILE_ENTRY = f"{DOMAIN}_alarm_panel_event_log_entry"
 
 # Default connection details (connection can be one of Ethernet, USB, RS232)
 DEFAULT_DEVICE_HOST = "127.0.0.1"
-DEFAULT_DEVICE_PORT = 30000
+DEFAULT_DEVICE_PORT = "30000"
 DEFAULT_DEVICE_USB = "/dev/ttyUSB1"
-DEFAULT_DEVICE_BAUD = 9600
+DEFAULT_DEVICE_BAUD = "9600"
 
 # Event processing for the log files from the panel. These are the control flow names for the config variables.
 CONF_LOG_EVENT = "panellog_logentry_event"
