@@ -19,7 +19,6 @@ _LOGGER = logging.getLogger(__name__)
 
 BYPASS = "Bypass"
 ARMED = "Armed"
-PENDING = "Pending"
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -44,8 +43,6 @@ async def async_setup_entry(
 class VisonicSelect(SelectEntity):
     """Representation of a visonic arm/bypass select entity."""
 
-    _attr_options = [BYPASS, ARMED, PENDING]
-
     def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: PySensorDevice):
         """Initialize the visonic binary sensor arm/bypass select entity."""
         SelectEntity.__init__(self)
@@ -58,7 +55,6 @@ class VisonicSelect(SelectEntity):
         self._is_available = self._visonic_device.isEnrolled()
         self._is_armed = not self._visonic_device.isBypass()
         self._pending_state_is_armed = None
-        self._lastSendOfCommand = None
 
     async def async_added_to_hass(self):
         """Register callbacks."""
@@ -81,18 +77,32 @@ class VisonicSelect(SelectEntity):
         #_LOGGER.debug("Select Sensor onchange %s", str(self._visonic_id))
         # Update the current value based on the device state
         if self._visonic_device is not None:
-            #self._current_value = (self._visonic_device.isTriggered() or self._visonic_device.isOpen())
             self._is_available = self._visonic_device.isEnrolled()
             self._is_armed = not self._visonic_device.isBypass()
-            # Ask HA to schedule an update
-            self.schedule_update_ha_state()
         else:
-            _LOGGER.debug("select on change called but sensor is not defined")
+            _LOGGER.debug("Select on change called but sensor is not defined")
+
+        if self._pending_state_is_armed is not None and self._pending_state_is_armed == self._is_armed:
+            _LOGGER.debug("Change Implemented in panel")
+            self._pending_state_is_armed = None
+
+        # Ask HA to schedule an update
+        self.schedule_update_ha_state(True)
+
+    @property
+    def options(self) -> list[str]:
+        """Return a set of selectable options."""
+        return [BYPASS, ARMED]
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the selected entity option to represent the entity state."""
+        return ARMED if self._is_armed else BYPASS
 
     @property
     def should_poll(self):
         """Get polling requirement from visonic device."""
-        return True
+        return False
 
     @property
     def available(self) -> bool:
@@ -110,76 +120,37 @@ class VisonicSelect(SelectEntity):
         return self._name
 
     @property
-    def options(self) -> list[str]:
-        """Return a set of selectable options."""
-        if self._pending_state_is_armed is not None and self._pending_state_is_armed != self._is_armed:
-            return [PENDING]
-        return [BYPASS, ARMED]
-
-    @property
     def icon(self) -> str | None:
         """Return the icon to use in the frontend, if any."""
-        if self._pending_state_is_armed is not None and self._pending_state_is_armed != self._is_armed:
+        if self._pending_state_is_armed is not None:
             return "mdi:alarm-snooze"
         elif self._is_armed:
             return "mdi:alarm"
         return "mdi:alarm-off"
 
-    # get the current date and time
-    def _getTimeFunction(self) -> datetime:
-        return datetime.now()
-
-    @property
-    def current_option(self) -> str:
-        """Return the visonic sensor armed state.
-            The setting must represent the panel state for sensor armed/bypass so may take a few seconds to update"""
-        if self._visonic_device is not None:
-            self._is_armed = not self._visonic_device.isBypass()
-    
-        if self._pending_state_is_armed is not None and self._pending_state_is_armed != self._is_armed:
-            interval = self._getTimeFunction() - self._lastSendOfCommand
-            # log.debug("Checking last receive time {0}".format(interval))
-            if interval <= timedelta(seconds=3):
-                #_LOGGER.debug("Current Wait {0}".format(self.unique_id))
-                return PENDING
-            else:
-                _LOGGER.debug("Sensor Bypass: Timeout, Panel state was not changed {0}".format(self.unique_id))
-                client.sendHANotification(AvailableNotifications.ALWAYS, "Sensor Bypass: Timeout, Panel state was not changed")
-        self._pending_state_is_armed = None
-        if self._is_armed:
-            #_LOGGER.debug("Current Armed {0}".format(self.unique_id))
-            return ARMED
-        #_LOGGER.debug("Current Bypassed {0}".format(self.unique_id))
-        return BYPASS
-
     def select_option(self, option: str) -> None:
         """Change the visonic sensor armed state"""
-        if self._pending_state_is_armed is not None and self._pending_state_is_armed != self._is_armed:
+        if self._pending_state_is_armed is not None:
             _LOGGER.debug("Currently Pending {0} so ignoring request to select option".format(self.unique_id))
+            client.sendHANotification(AvailableNotifications.ALWAYS, "Sensor Bypass: Change in arm/bypass already in progress, please try again")
         elif option in self.options:
-            if option != PENDING:
-                _LOGGER.debug("Sending Option {0} to {1}".format(option, self.unique_id))
-                result = self._client.sendBypass(self._visonic_device.getDeviceID(), option == BYPASS, "") # pin code to "" to use default if set
-                if result == PyCommandStatus.SUCCESS:
-                    self._pending_state_is_armed = (option != BYPASS)
-                    self.schedule_update_ha_state()
-                    self._lastSendOfCommand = self._getTimeFunction()
-                else:
-                    # Command not sent to panel
-                    _LOGGER.debug("Sensor Bypass: Command not sent to panel")
-                    message = "Command not sent to panel"
-                    if result == PyCommandStatus.FAIL_PANEL_CONFIG_PREVENTED:
-                        message = "Sensor Bypass: Please check your panel settings and enable sensor bypass"
-                    elif result == PyCommandStatus.FAIL_USER_CONFIG_PREVENTED:
-                        message = "Sensor Bypass: Please check your HA Configuration settings for this Integration and enable sensor bypass"
-                    elif result == PyCommandStatus.FAIL_INVALID_PIN:
-                        message = "Sensor Bypass: Invalid PIN"
-                    elif result == PyCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
-                        message = "Sensor Bypass: EPROM Download is in progress, please try again after this is complete"
-                    client.sendHANotification(AvailableNotifications.ALWAYS, message)
+            #_LOGGER.debug("Sending Option {0} to {1}".format(option, self.unique_id))
+            result = self._client.sendBypass(self._visonic_device.getDeviceID(), option == BYPASS, "") # pin code to "" to use default if set
+            if result == PyCommandStatus.SUCCESS:
+                self._pending_state_is_armed = (option == ARMED)
             else:
-                # Option set to pending by the user, there must be an ongoing command to the panel.  Note that this should never happen, only if things have gone horribly wrong
-                client.sendHANotification(AvailableNotifications.ALWAYS, "Sensor Bypass: Change in arm/bypass already in progress, please try again")
+                # Command not sent to panel
+                _LOGGER.debug("Sensor Bypass: Command not sent to panel")
+                message = "Command not sent to panel"
+                if result == PyCommandStatus.FAIL_PANEL_CONFIG_PREVENTED:
+                    message = "Sensor Bypass: Please check your panel settings and enable sensor bypass"
+                elif result == PyCommandStatus.FAIL_USER_CONFIG_PREVENTED:
+                    message = "Sensor Bypass: Please check your HA Configuration settings for this Integration and enable sensor bypass"
+                elif result == PyCommandStatus.FAIL_INVALID_PIN:
+                    message = "Sensor Bypass: Invalid PIN"
+                elif result == PyCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
+                    message = "Sensor Bypass: EPROM Download is in progress, please try again after this is complete"
+                client.sendHANotification(AvailableNotifications.ALWAYS, message)
         else:
             raise ValueError(f"Can't set the armed state to {option}. Allowed states are: {self.options}")
-        self.schedule_update_ha_state()
+        self.schedule_update_ha_state(True)

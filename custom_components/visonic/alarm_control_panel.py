@@ -324,7 +324,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
 
-        if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>":
+        if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
             # _LOGGER.debug("  Sensor_bypass = %s", str(type(call.data)))
             # self.dump_dict(call.data)
             if ATTR_ENTITY_ID in call.data:

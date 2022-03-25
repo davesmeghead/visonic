@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.6.16.0"
+CLIENT_VERSION = "0.7.0.0"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -475,6 +475,13 @@ class VisonicClient:
         if event_id is None:
             _LOGGER.warning("Visonic attempt to generate HA event when sensor is undefined")
             return
+        if not self.createdAlarmPanel:
+            self.createdAlarmPanel = True
+            self.hass.async_create_task(
+                self.hass.config_entries.async_forward_entry_setup(
+                    self.entry, "alarm_control_panel"
+                )
+            )
         # The event_id is in the range 0 to 15 inclusive
         #   When it is set to 0, any of the possible changes have been made in the sensors/X10 devices
         #   So use any value of event_id to fire an HA event to get the sensors to update themselves
