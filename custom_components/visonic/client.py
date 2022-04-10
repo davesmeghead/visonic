@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.7.0.1"
+CLIENT_VERSION = "0.7.0.2"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -1012,8 +1012,8 @@ class VisonicClient:
                 )
 
         _LOGGER.debug("alarm control panel received event log request - user approved")
-        if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
-
+        #if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
+        if isinstance(call.data, dict):
             if self.visonicProtocol is not None:
                 code = ""
                 if ATTR_CODE in call.data:
@@ -1062,7 +1062,8 @@ class VisonicClient:
                 )
 
         _LOGGER.debug("alarm control panel received command request - user approved")
-        if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
+        #if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
+        if isinstance(call.data, dict):
             command = call.data[CONF_COMMAND]
             code = ""
             if ATTR_CODE in call.data:

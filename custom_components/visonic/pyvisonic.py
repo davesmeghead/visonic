@@ -58,7 +58,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.13.1"
+PLUGIN_VERSION = "1.0.14.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -964,7 +964,8 @@ class SensorDevice(PySensorDevice):
         self.ztrip = kwargs.get("ztrip", False)  # bool  zone trip, as returned by the A5 message
         self.enrolled = kwargs.get("enrolled", False)  # bool  enrolled, as returned by the A5 message
         self.triggered = kwargs.get("triggered", False)  # bool  triggered, as returned by the A5 message
-        self.triggertime = None  # datetime  This is used to time out the triggered value and set it back to false
+        self.utctriggertime = None  # datetime  This is used to time out the triggered value and set it back to false
+        self.triggertime = None     # datetime  This is used to time stamp in local time the occurance of the trigger
         self.model = kwargs.get("model", None)  # str   device model
 
     def __str__(self):
@@ -1020,6 +1021,7 @@ class SensorDevice(PySensorDevice):
             and self.ztrip == other.ztrip
             and self.enrolled == other.enrolled
             and self.triggered == other.triggered
+            and self.utctriggertime == other.utctriggertime
             and self.triggertime == other.triggertime
         )
 
@@ -1284,11 +1286,11 @@ class ProtocolBase(asyncio.Protocol):
         self.myDownloadList = []
 
         # This is the time stamp of the last Send
-        self.pmLastTransactionTime = self._getTimeFunction() - timedelta(
+        self.pmLastTransactionTime = self._getUTCTimeFunction() - timedelta(
             seconds=1
         )  # take off 1 second so the first command goes through immediately
 
-        self.pmFirstCRCErrorTime = self._getTimeFunction() - timedelta(
+        self.pmFirstCRCErrorTime = self._getUTCTimeFunction() - timedelta(
             seconds=1
         )  # take off 1 second so the first command goes through immediately
 
@@ -1409,6 +1411,10 @@ class ProtocolBase(asyncio.Protocol):
     # get the current date and time
     def _getTimeFunction(self) -> datetime:
         return datetime.now()
+
+    # get the current date and time
+    def _getUTCTimeFunction(self) -> datetime:
+        return datetime.utcnow()
 
     # This is called from the loop handler when the connection to the transport is made
     def connection_made(self, transport):
@@ -1775,7 +1781,7 @@ class ProtocolBase(asyncio.Protocol):
                             self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
                     else:  # Data has been received from the panel but check when it was last received
                         # calc time difference between now and when data was last received
-                        interval = self._getTimeFunction() - self.lastRecvOfPanelData
+                        interval = self._getUTCTimeFunction() - self.lastRecvOfPanelData
                         # log.debug("Checking last receive time {0}".format(interval))
                         if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
                             log.error(
@@ -1794,7 +1800,7 @@ class ProtocolBase(asyncio.Protocol):
             log.debug("[data receiver] Ignoring garbage data: " + self._toString(data))
             return
         # log.debug('[data receiver] received data: %s', self._toString(data))
-        self.lastRecvOfPanelData = self._getTimeFunction()
+        self.lastRecvOfPanelData = self._getUTCTimeFunction()
         for databyte in data:
             # process a single byte at a time
             self._handle_received_byte(databyte)
@@ -1941,10 +1947,10 @@ class ProtocolBase(asyncio.Protocol):
             self.pmCrcErrorCount = self.pmCrcErrorCount + 1
             if self.pmCrcErrorCount >= MAX_CRC_ERROR:
                 self.pmCrcErrorCount = 0
-                interval = self._getTimeFunction() - self.pmFirstCRCErrorTime
+                interval = self._getUTCTimeFunction() - self.pmFirstCRCErrorTime
                 if interval <= timedelta(seconds=CRC_ERROR_PERIOD):
                     self._performDisconnect("CRC errors")
-                self.pmFirstCRCErrorTime = self._getTimeFunction()
+                self.pmFirstCRCErrorTime = self._getUTCTimeFunction()
 
     def _processReceivedMessage(self, ackneeded, data):
         # Unknown Message has been received
@@ -2091,7 +2097,7 @@ class ProtocolBase(asyncio.Protocol):
             sData += self._calculateCRC(data)
             sData += b"\x0A"
 
-            interval = self._getTimeFunction() - self.pmLastTransactionTime
+            interval = self._getUTCTimeFunction() - self.pmLastTransactionTime
             sleepytime = timedelta(milliseconds=150) - interval
             if sleepytime > timedelta(milliseconds=0):
                 # log.debug("[sendPdu] Speepytime {0}".format(sleepytime.total_seconds()))
@@ -2116,7 +2122,7 @@ class ProtocolBase(asyncio.Protocol):
             if sData[1] != ACK_MESSAGE:  # the message is not an acknowledge back to the panel
                 self.pmLastSentMessage = instruction
 
-            self.pmLastTransactionTime = self._getTimeFunction()
+            self.pmLastTransactionTime = self._getUTCTimeFunction()
             
             if command.debugprint:
                 log.debug("[sendPdu] Sending Command ({0})    raw data {1}   waiting for message response {2}".format(command.msg, self._toString(sData), [hex(no).upper() for no in self.pmExpectedResponse]))
@@ -2179,7 +2185,7 @@ class ProtocolBase(asyncio.Protocol):
         # log.debug("[_sendCommand] options  {0}  {1}".format(type(options), options))
 
         async with self.commandlock:
-            interval = self._getTimeFunction() - self.pmLastTransactionTime
+            interval = self._getUTCTimeFunction() - self.pmLastTransactionTime
             timeout = interval > RESEND_MESSAGE_TIMEOUT
 
             # command may be set to None on entry
@@ -2308,15 +2314,15 @@ class PacketHandling(ProtocolBase):
         self.eventCount = 0
 
         secdelay = DOWNLOAD_RETRY_DELAY + 100
-        self.lastSendOfDownloadEprom = self._getTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
+        self.lastSendOfDownloadEprom = self._getUTCTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
 
         # Variables to manage the PowerMAster B0 message and the triggering of Motion
-        self.lastRecvOfMasterMotionData = self._getTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
-        self.firstRecvOfMasterMotionData = self._getTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
+        self.lastRecvOfMasterMotionData = self._getUTCTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
+        self.firstRecvOfMasterMotionData = self._getUTCTimeFunction() - timedelta(seconds=secdelay)  # take off X seconds so the first command goes through immediately
         self.zoneNumberMasterMotion = 0
         self.zoneDataMasterMotion = bytearray(b"")
 
-        self.pmSirenActive = None
+        self.pmSirenActive = False
 
         # These are used in the A5 message to reduce processing but mainly to reduce the amount of callbacks in to HA when nothing changes
         self.lowbatt_old = -1
@@ -2345,7 +2351,7 @@ class PacketHandling(ProtocolBase):
             pushChange = False
             for key in self.pmSensorDev_t:
                 if self.pmSensorDev_t[key].triggered:
-                    interval = self._getTimeFunction() - self.pmSensorDev_t[key].triggertime
+                    interval = self._getUTCTimeFunction() - self.pmSensorDev_t[key].utctriggertime
                     # at least self.MotionOffDelay seconds as it also depends on the frequency the panel sends messages
                     if interval > td:
                         self.pmSensorDev_t[key].triggered = False
@@ -2623,11 +2629,10 @@ class PacketHandling(ProtocolBase):
                         self.pmGotUserCode = True
                     # log.debug("[Process Settings]      User {0} has code {1}".format(i, self._toString(code)))
 
-                # if not self.PowerMaster:
-                #    setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_INSTPIN"])
-                #    log.debug("[Process Settings]      Installer Code {0}".format(self._toString(setting)))
-                #    setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_DOWNLOADPIN"])
-                #    log.debug("[Process Settings]      Download  Code {0}".format(self._toString(setting)))
+                #setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_INSTPIN"])
+                #log.debug("[Process Settings]      Installer Code {0}".format(self._toString(setting)))
+                #setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_DOWNLOADPIN"])
+                #log.debug("[Process Settings]      Download  Code {0}".format(self._toString(setting)))
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Store partition info & check if partitions are on
@@ -2815,37 +2820,39 @@ class PacketHandling(ProtocolBase):
                     setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_1WKEYPAD"])
                     for i in range(0, keypad1wCnt):
                         keypadEnrolled = setting[i * 4 : i * 4 + 2] != bytearray.fromhex("00 00")
-                        log.debug("[Process Settings] Found a 1keypad {0} enrolled {1}".format(i, keypadEnrolled))
+                        #log.debug("[Process Settings] Found a 1keypad {0} enrolled {1}".format(i, keypadEnrolled))
                         if keypadEnrolled:
+                            log.debug("[Process Settings] Found an enrolled PowerMax 1-way keypad {0}".format(i))
                             deviceStr = "{0},K1{1:0>2}".format(deviceStr, i)
                     setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_2WKEYPAD"])
                     for i in range(0, keypad2wCnt):
                         keypadEnrolled = setting[i * 4 : i * 4 + 3] != bytearray.fromhex("00 00 00")
-                        log.debug("[Process Settings] Found a 2keypad {0} enrolled {1}".format(i, keypadEnrolled))
+                        #log.debug("[Process Settings] Found a 2keypad {0} enrolled {1}".format(i, keypadEnrolled))
                         if keypadEnrolled:
+                            log.debug("[Process Settings] Found an enrolled PowerMax 2-way keypad {0}".format(i))
                             deviceStr = "{0},K2{1:0>2}".format(deviceStr, i)
 
                     # Process siren settings
                     setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_SIRENS"])
                     for i in range(0, sirenCnt):
                         sirenEnrolled = setting[i * 4 : i * 4 + 3] != bytearray.fromhex("00 00 00")
-                        log.debug("[Process Settings] Found a siren {0} enrolled {1}".format(i, sirenEnrolled))
                         if sirenEnrolled:
+                            log.debug("[Process Settings] Found a PowerMax siren {0}".format(i))
                             deviceStr = "{0},S{1:0>2}".format(deviceStr, i)
                 else:  # PowerMaster
                     # Process keypad settings
                     setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_MR_KEYPADS"])
                     for i in range(0, keypad2wCnt):
                         keypadEnrolled = setting[i * 10 : i * 10 + 5] != bytearray.fromhex("00 00 00 00 00")
-                        log.debug("[Process Settings] Found a PMaster keypad {0} enrolled {1}".format(i, keypadEnrolled))
                         if keypadEnrolled:
+                            log.debug("[Process Settings] Found an enrolled PowerMaster keypad {0}".format(i))
                             deviceStr = "{0},K2{1:0>2}".format(deviceStr, i)
                     # Process siren settings
                     setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_MR_SIRENS"])
                     for i in range(0, sirenCnt):
                         sirenEnrolled = setting[i * 10 : i * 10 + 5] != bytearray.fromhex("00 00 00 00 00")
-                        log.debug("[Process Settings] Found a siren {0} enrolled {1}".format(i, sirenEnrolled))
                         if sirenEnrolled:
+                            log.debug("[Process Settings] Found an enrolled PowerMaster siren {0}".format(i))
                             deviceStr = "{0},S{1:0>2}".format(deviceStr, i)
 
                 doorZones = doorZoneStr[1:]
@@ -3087,11 +3094,11 @@ class PacketHandling(ProtocolBase):
         log.debug("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, self.PanelModel, self.PowerMaster))
 
         # We got a first response, now we can Download the panel EPROM settings
-        interval = self._getTimeFunction() - self.lastSendOfDownloadEprom
+        interval = self._getUTCTimeFunction() - self.lastSendOfDownloadEprom
         td = timedelta(seconds=DOWNLOAD_RETRY_DELAY)  # prevent multiple requests for the EPROM panel settings, at least DOWNLOAD_RETRY_DELAY seconds
-        log.debug("[handle_msgtype3C] interval={0}  td={1}   self.lastSendOfDownloadEprom={2}    timenow={3}".format(interval, td, self.lastSendOfDownloadEprom, self._getTimeFunction()))
+        log.debug("[handle_msgtype3C] interval={0}  td={1}   self.lastSendOfDownloadEprom(UTC)={2}    timenow(UTC)={3}".format(interval, td, self.lastSendOfDownloadEprom, self._getUTCTimeFunction()))
         if interval > td:
-            self.lastSendOfDownloadEprom = self._getTimeFunction()
+            self.lastSendOfDownloadEprom = self._getUTCTimeFunction()
             self._readPanelSettings(self.PowerMaster)
         elif self.triggeredDownload and not self.pmDownloadComplete and len(self.myDownloadList) > 0:
             # Download has already started and we've already started asking for the EPROM Data
@@ -3100,7 +3107,7 @@ class PacketHandling(ProtocolBase):
             #       We received nothing for 10 seconds and then another 3C from the panel.
             #       Originally we ignored this and then the panel sent a timeout 20 seconds later, so lets try resending the request
             log.debug("[handle_msgtype3C]          Asking for panel EPROM again")
-            self.lastSendOfDownloadEprom = self._getTimeFunction()
+            self.lastSendOfDownloadEprom = self._getUTCTimeFunction()
             self._readPanelSettings(self.PowerMaster)
 
     def handle_msgtype3F(self, data):
@@ -3312,6 +3319,7 @@ class PacketHandling(ProtocolBase):
                         if not alreadyset and self.pmSensorDev_t[i].status:
                             self.pmSensorDev_t[i].triggered = True
                             self.pmSensorDev_t[i].triggertime = self._getTimeFunction()
+                            self.pmSensorDev_t[i].utctriggertime = self._getUTCTimeFunction()
                         pushChange = True
                         #self.pmSensorDev_t[i].pushChange()
 
@@ -3443,7 +3451,7 @@ class PacketHandling(ProtocolBase):
                 if self.PanelArmed and self.PanelAlarmEvent and self.PanelStatusCode != PyPanelStatus.ENTRY_DELAY:
                     log.debug("[handle_msgtypeA5]      Alarm Event Assumed while in Standard Mode")
                     # Alarm Event
-                    self.pmSirenActive = self._getTimeFunction()
+                    self.pmSirenActive = True
 
                     datadict = {}
                     datadict["Zone"] = 0
@@ -3451,7 +3459,7 @@ class PacketHandling(ProtocolBase):
                     datadict["Tamper"] = False
                     datadict["Siren"] = True
                     datadict["Reset"] = False
-                    datadict["Time"] = self.pmSirenActive
+                    datadict["Time"] = self._getTimeFunction()
                     datadict["Count"] = 0
                     datadict["Type"] = []
                     datadict["Event"] = []
@@ -3460,9 +3468,9 @@ class PacketHandling(ProtocolBase):
                     self._sendResponseEvent(PyCondition.PANEL_UPDATE_ALARM_ACTIVE, datadict)  # Alarm Event
 
             # Clear any alarm event if the panel alarm has been triggered before (while armed) but now that the panel is disarmed (in all modes)
-            if self.pmSirenActive is not None and sarm == "Disarmed":
+            if self.pmSirenActive and sarm == "Disarmed":
                 log.debug("[handle_msgtypeA5] ******************** Alarm Not Sounding (Disarmed) ****************")
-                self.pmSirenActive = None
+                self.pmSirenActive = False
 
             if sysFlags & 0x20 != 0:  # Zone Event
                 sEventLog = pmEventType_t[self.pmLang][eventType]
@@ -3480,12 +3488,14 @@ class PacketHandling(ProtocolBase):
                         self.pmSensorDev_t[key].triggered = True
                         self.pmSensorDev_t[key].status = True
                         self.pmSensorDev_t[key].triggertime = self._getTimeFunction()
+                        self.pmSensorDev_t[key].utctriggertime = self._getUTCTimeFunction()
                     elif eventType == 4:  # Zone Closed
                         self.pmSensorDev_t[key].triggered = False
                         self.pmSensorDev_t[key].status = False
                     elif eventType == 5:  # Zone Violated
                         if not self.pmSensorDev_t[key].triggered:
                             self.pmSensorDev_t[key].triggertime = self._getTimeFunction()
+                            self.pmSensorDev_t[key].utctriggertime = self._getUTCTimeFunction()
                             self.pmSensorDev_t[key].triggered = True
                     # elif eventType == 6: # Panic Alarm
                     # elif eventType == 7: # RF Jamming
@@ -3601,7 +3611,7 @@ class PacketHandling(ProtocolBase):
         #   In a log file I reveiced from pocket,    there was this A7 message 0d a7 ff fc 00 60 00 ff 00 0c 00 00 43 45 0a
         #   In a log file I reveiced from UffeNisse, there was this A7 message 0d a7 ff 64 00 60 00 ff 00 0c 00 00 43 45 0a     msgCnt is 0xFF and temp is 0x64 ????
         #
-        pmTamperActive = None
+        pmTamperActive = False
         msgCnt = int(data[0])
 
         # don't know what this is (It is 0x00 in test messages so could be the higher 8 bits for msgCnt)
@@ -3615,7 +3625,7 @@ class PacketHandling(ProtocolBase):
             datadict["Zone"] = 0
             datadict["Entity"] = None
             datadict["Tamper"] = False
-            datadict["Siren"] = self.pmSirenActive is not None
+            datadict["Siren"] = self.pmSirenActive
             datadict["Reset"] = False
             datadict["Time"] = self._getTimeFunction()
             datadict["Count"] = msgCnt
@@ -3703,24 +3713,24 @@ class PacketHandling(ProtocolBase):
                 ignore = eventType == 0x13 or eventType == 0x0E
 
                 if tamper:
-                    pmTamperActive = self._getTimeFunction()
+                    pmTamperActive = True
                     datadict["Tamper"] = True
 
                 # no clauses as if siren gets true again then keep updating self.pmSirenActive with the time
                 if siren: # and not self.pmPanicAlarmSilent:
-                    self.pmSirenActive = self._getTimeFunction()
+                    self.pmSirenActive = True
                     datadict["Siren"] = True
                     log.debug("[handle_msgtypeA7] ******************** Alarm Active *******************")
 
                 # cancel alarm and the alarm has been triggered
-                if cancel and self.pmSirenActive is not None:  # Cancel Alarm
-                    self.pmSirenActive = None
+                if cancel and self.pmSirenActive:  # Cancel Alarm
+                    self.pmSirenActive = False
                     datadict["Siren"] = False
                     log.debug("[handle_msgtypeA7] ******************** Alarm Cancelled ****************")
 
                 # Siren has been active but it is no longer active (probably timed out and has then been disarmed)
-                if not ignore and not siren and self.pmSirenActive is not None:  # Alarm Timed Out ????
-                    self.pmSirenActive = None
+                if not ignore and not siren and self.pmSirenActive:  # Alarm Timed Out ????
+                    self.pmSirenActive = False
                     datadict["Siren"] = False
                     log.debug("[handle_msgtypeA7] ******************** Alarm Not Sounding ****************")
 
@@ -3734,11 +3744,11 @@ class PacketHandling(ProtocolBase):
                     log.warning("[handle_msgtypeA7]          Panel has been reset. Don't do anything and the comms might reconnect and magically continue")
                     self._sendResponseEvent ( PyCondition.PANEL_RESET , datadict )   # push changes through to the host, the panel itself has been reset
 
-            if pmTamperActive is not None:
+            if pmTamperActive:
                 log.debug("[handle_msgtypeA7] ******************** Tamper Triggered *******************")
                 self._sendResponseEvent(PyCondition.PANEL_TAMPER_ALARM)  # push changes through to the host to get it to update, tamper is active!
 
-            if self.pmSirenActive is not None:
+            if self.pmSirenActive:
                 self._sendResponseEvent(PyCondition.PANEL_UPDATE_ALARM_ACTIVE, datadict)  # push changes through to the host to get it to update, alarm is active!!!!!!!!!
             else:
                 self._sendResponseEvent(PyCondition.PANEL_UPDATE, datadict)  # push changes through to the host to get it to update
@@ -3871,8 +3881,8 @@ class PacketHandling(ProtocolBase):
         msgLen  = data[2]
         log.debug("[handle_msgtypeB0] Received {0} message {1}/{2} (len = {3})    full data = {4}".format(self.PanelModel or "UNKNOWN", msgType, subType, msgLen, self._toString(data)))
         
-        # The data block should contain <Type> <SubType> <Length> <Data> <0x43>
-        # Therefore the data length should be 4 bytes less then the length of the data block
+        # The data block should contain <Type> <SubType> <Length> <Data> <MessageCounter> <0x43>
+        # The data <Length> value is 4 bytes less then the length of the data block (as the <MessageCounter> is part of the data count)
         if len(data) != msgLen + 4:
             log.debug("[handle_msgtypeB0]              Invalid Length, not processing")
             # Do not process this B0 message as it seems to be incorrect
@@ -3905,19 +3915,19 @@ class PacketHandling(ProtocolBase):
             #  Received PowerMaster33 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 15 04 11 08 04 08 08 08 <56 * 00> c9 43
             #  Received PowerMaster33 message 3/4 (len = 69)    full data = 03 04 45 ff 08 03 40 15 04 11 08 04 08 08 08 <56 * 00> cd 43
             
-            interval = self._getTimeFunction() - self.lastRecvOfMasterMotionData
-            self.lastRecvOfMasterMotionData = self._getTimeFunction()
+            interval = self._getUTCTimeFunction() - self.lastRecvOfMasterMotionData
+            self.lastRecvOfMasterMotionData = self._getUTCTimeFunction()
             td = timedelta(seconds=self.BZero_MinInterval)  #
             if interval > td:
                 # more than 30 seconds since the last B0 03 04 message so reset variables ready
                 # also, it should enter here first time around as self.lastRecvOfMasterMotionData should be 100 seconds ago
                 log.debug("[handle_msgtypeB0]         03 04 Data Reset")
                 self.zoneNumberMasterMotion = False
-                self.firstRecvOfMasterMotionData = self._getTimeFunction()
+                self.firstRecvOfMasterMotionData = self._getUTCTimeFunction()
                 self.zoneDataMasterMotion = data.copy()
             elif not self.zoneNumberMasterMotion:
                 log.debug("[handle_msgtypeB0]         Checking if time delay is within {0} seconds".format(self.BZero_MaxWaitTime))
-                interval = self._getTimeFunction() - self.firstRecvOfMasterMotionData
+                interval = self._getUTCTimeFunction() - self.firstRecvOfMasterMotionData
                 td = timedelta(seconds=self.BZero_MaxWaitTime)  #
                 if interval <= td and len(data) == len(self.zoneDataMasterMotion):
                     # less than or equal to 5 seconds since the last valid trigger message, and the data messages are the same length
@@ -3940,6 +3950,7 @@ class PacketHandling(ProtocolBase):
                                     if not self.pmSensorDev_t[z].triggered:
                                         log.debug("[handle_msgtypeB0]             Triggered Motion Detection")
                                         self.pmSensorDev_t[z].triggertime = self._getTimeFunction()
+                                        self.pmSensorDev_t[z].utctriggertime = self._getUTCTimeFunction()
                                         self.pmSensorDev_t[z].triggered = True
                                         #self.pmSensorDev_t[z].pushChange()
                                         pushChange = True
@@ -4031,7 +4042,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
         self.transport = None
 
     def isSirenActive(self) -> bool:
-        return self.pmSirenActive is not None
+        return self.pmSirenActive
 
     def getPanelStatusCode(self) -> PyPanelStatus:
         return self.PanelStatusCode

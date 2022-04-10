@@ -11,12 +11,12 @@ This is a *custom integration* for [Home Assistant](https://www.home-assistant.i
 
 ## Introduction
 This is a custom integration to allow the control of a Visonic alarm system. Visonic produce a series of Alarm Systems and this integration is compatible with the following models:
-- PowerMax: PowerMax+ (plus), PowerMax Express, PowerMax Pro , PowerMax Pro Plus and PowerMax Complete
-- PowerMaster: PowerMaster-10, PowerMaster-30 and PowerMaster-33
+- PowerMax+ (plus), PowerMax Express, PowerMax Pro , PowerMax Pro Plus and PowerMax Complete
+- PowerMaster-10, PowerMaster-30 and PowerMaster-33
 
 This Home Assistant Integration allows you to:
 - Control the alarm panel to arm and disarm,
-- Bypass individual sensors,
+- Bypass/Arm individual sensors,
 - Use the various sensors as devices and entities,
 - Use the X10 devices.
 
