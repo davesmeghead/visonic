@@ -21,6 +21,7 @@
 #    PanelType=1 : PowerMax+ , Model=47   Powermaster False
 #    PanelType=2 : PowerMax Pro , Model=22   Powermaster False
 #    PanelType=4 : PowerMax Pro Part , Model=17   Powermaster False
+#    PanelType=4 : PowerMax Pro Part , Model=62   Powermaster False
 #    PanelType=4 : PowerMax Pro Part , Model=71   Powermaster False
 #    PanelType=4 : PowerMax Pro Part , Model=86   Powermaster False
 #    PanelType=5 : PowerMax Complete Part , Model=18   Powermaster False
@@ -58,7 +59,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.14.0"
+PLUGIN_VERSION = "1.0.14.1"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -104,11 +105,36 @@ POWERLINK_RETRY_DELAY = 180
 # Number of seconds between trying to achieve powerlink (must have achieved download first) and giving up. Better to be half way between retry delays
 POWERLINK_TIMEOUT = 4.5 * POWERLINK_RETRY_DELAY
 
-# The number of seconds that if we have not received any data packets from the panel at all then suspend this plugin and report to HA
+# The number of seconds that if we have not received any data packets from the panel at all (from the start) then suspend this plugin and report to HA
+#    This is only used when no data at all has been received from the panel ... ever
 NO_RECEIVE_DATA_TIMEOUT = 30
 
 # The number of seconds between receiving data from the panel and then no communication (the panel has stopped sending data for this period of time) then suspend this plugin and report to HA
-LAST_RECEIVE_DATA_TIMEOUT = 600  # 10 minutes
+#    This is used when this integration has received data and then stopped receiving data
+LAST_RECEIVE_DATA_TIMEOUT = 240  # 4 minutes
+
+# Message/Packet Constants to make the code easier to read
+PACKET_HEADER = 0x0D
+PACKET_FOOTER = 0x0A
+PACKET_MAX_SIZE = 0xB0
+
+# Event Type Constants
+EVENT_TYPE_SYSTEM_RESET = 0x60
+EVENT_TYPE_FORCE_ARM = 0x59
+EVENT_TYPE_DISARM = 0x55
+EVENT_TYPE_SENSOR_TAMPER = 0x06
+EVENT_TYPE_PANEL_TAMPER = 0x07
+EVENT_TYPE_TAMPER_ALARM_A = 0x08
+EVENT_TYPE_TAMPER_ALARM_B = 0x09
+EVENT_TYPE_ALARM_CANCEL = 0x1B
+EVENT_TYPE_FIRE_RESTORE = 0x21
+EVENT_TYPE_FLOOD_ALERT_RESTORE = 0x4A
+EVENT_TYPE_GAS_TROUBLE_RESTORE = 0x4E
+EVENT_TYPE_DELAY_RESTORE = 0x13
+EVENT_TYPE_CONFIRM_ALARM = 0x0E
+
+
+
 
 # Messages left to work out
 #      Panel sent 0d 22 fd 0a 01 16 15 00 0d 00 00 00 9c 0a    No idea what this means
@@ -248,7 +274,7 @@ pmBlockDownload_t = {
 #    When isvariablelength is True:
 #             the length is the fixed number of bytes in the message.  Add this to the variable part when it is received to get the total packet length.
 #             varlenbytepos is the byte position of the variable length of the message.
-#    When length is 0 then we stop processing the message on the first 0x0A. This is only used for the short messages (4 or 5 bytes long) like ack, stop, denied and timeout
+#    When length is 0 then we stop processing the message on the first PACKET_FOOTER. This is only used for the short messages (4 or 5 bytes long) like ack, stop, denied and timeout
 PanelCallBack = collections.namedtuple("PanelCallBack", 'length ackneeded isvariablelength varlenbytepos flexiblelength' )
 pmReceiveMsg_t = {
    0x00 : PanelCallBack(  0,  True, False, -1, 0 ),   # Dummy message used in the algorithm when the message type is unknown. The -1 is used to indicate an unknown message in the algorithm
@@ -887,6 +913,8 @@ pmZoneSensorMaxGeneric_t = {
 
 ZoneSensorType = collections.namedtuple("ZoneSensorType", 'name func' )
 pmZoneSensorMax_t = {
+   0x08 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # Fabio72
+   0x09 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # Fabio72
    0x1A : ZoneSensorType("MCW-K980", PySensorType.MOTION ),        # Botap
    0x75 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # thermostat (Visonic part number 0-3592-B, NEXT K985 DDMCW)
    0x7A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # fguerzoni
@@ -898,6 +926,7 @@ pmZoneSensorMax_t = {
    0xE4 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me
    0xE5 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # g4seb, fguerzoni
    0xF3 : ZoneSensorType("MCW-K980", PySensorType.MOTION ),        # Botap
+   0xF9 : ZoneSensorType("MCT-100", PySensorType.MAGNET ),         # Fabio72
    0xFF : ZoneSensorType("Wired", PySensorType.WIRED )
 }
 
@@ -1250,7 +1279,7 @@ class ProtocolBase(asyncio.Protocol):
         self.pmIncomingPduLen = 0             # The length of the incoming message
         self.pmCrcErrorCount = 0              # The CRC Error Count for Received Messages
         self.pmCurrentPDU = pmReceiveMsg_t[0] # The current receiving message type
-        self.pmFlexibleLength = 0             # How many bytes less then the proper message size do we start checking for 0x0A and a valid CRC 
+        self.pmFlexibleLength = 0             # How many bytes less then the proper message size do we start checking for PACKET_FOOTER and a valid CRC 
 
         ########################################################################
         # Variables that are only used in this class and not subclasses
@@ -1436,6 +1465,7 @@ class ProtocolBase(asyncio.Protocol):
         self.suspendAllOperations = True
 
         self.PanelMode = PyPanelMode.PROBLEM
+        self.PanelStatusCode = PyPanelStatus.UNKNOWN
 
         if exc is not None:
             # log.exception("ERROR Connection Lost : disconnected due to exception  <{0}>".format(exc))
@@ -1693,6 +1723,8 @@ class ProtocolBase(asyncio.Protocol):
                             self._triggerEnroll(False)
                         elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
                             log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
+                            self.PanelMode = PyPanelMode.PROBLEM
+                            self.PanelReady = False
                             self.pmExpectedResponse = []
                             self.expectedResponseTimeout = 0
                         elif powerlink_counter >= POWERLINK_TIMEOUT:
@@ -1735,6 +1767,8 @@ class ProtocolBase(asyncio.Protocol):
 
                 elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
                     log.debug("[Controller] ****************************** Response Timer Expired ********************************")
+                    self.PanelMode = PyPanelMode.PROBLEM
+                    self.PanelReady = False
                     self._triggerRestoreStatus()     # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
 
                 # Is it time to send an I'm Alive message to the panel
@@ -1758,7 +1792,7 @@ class ProtocolBase(asyncio.Protocol):
                         else:
                             # When in powerlink mode and the panel is PowerMax, get the bypass status to make sure the sensor states get updated
                             # This is to make sure that if the user changes the setting on the panel itself, this updates the sensor state here
-                            self._addMessageToSendList("MSG_BYPASSTAT")
+                            self._sendCommand("MSG_BYPASSTAT")
                     elif not self.pmPowerlinkMode:
                         # When not in powerlink mode, send I'm Alive to the panel so it knows we're still here
                         self._sendCommand("MSG_ALIVE")
@@ -1778,18 +1812,24 @@ class ProtocolBase(asyncio.Protocol):
                             )
                             self.suspendAllOperations = True
                             self.PanelMode = PyPanelMode.PROBLEM
-                            self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
+                            self.PanelStatusCode = PyPanelStatus.UNKNOWN
+                            datadict = {}
+                            datadict["state"] = "NeverConnected"                            
+                            self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL, datadict)  # Plugin suspended itself
                     else:  # Data has been received from the panel but check when it was last received
                         # calc time difference between now and when data was last received
                         interval = self._getUTCTimeFunction() - self.lastRecvOfPanelData
                         # log.debug("Checking last receive time {0}".format(interval))
                         if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
                             log.error(
-                                "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(LAST_RECEIVE_DATA_TIMEOUT) + " seconds)"
+                                "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + " seconds)"
                             )
                             self.suspendAllOperations = True
                             self.PanelMode = PyPanelMode.PROBLEM
-                            self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
+                            self.PanelStatusCode = PyPanelStatus.UNKNOWN
+                            datadict = {}
+                            datadict["state"] = "DisConnected"  
+                            self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL, datadict)  # Plugin suspended itself
 
     # Process any received bytes (in data as a bytearray)
     def data_received(self, data):
@@ -1832,13 +1872,13 @@ class ProtocolBase(asyncio.Protocol):
             pdu_len = 0                                                # Reset the incoming data to 0 length
             self._resetMessageData()
 
-        # If this is the start of a new message, then check to ensure it is a 0x0D (message preamble)
+        # If this is the start of a new message, then check to ensure it is a PACKET_HEADER (message preamble)
         if pdu_len == 0:
             self._resetMessageData()
-            if data == 0x0D:  # preamble
+            if data == PACKET_HEADER:  # preamble
                 self.ReceiveData.append(data)
                 #log.debug("[data receiver] Starting PDU " + self._toString(self.ReceiveData))
-            # else we're trying to resync and walking through the bytes waiting for an 0x0D preamble byte
+            # else we're trying to resync and walking through the bytes waiting for a PACKET_HEADER preamble byte
         elif pdu_len == 1:
             #log.debug("[data receiver] Received message Type %d", data)
             if data != 0x00 and data in pmReceiveMsg_t:                # Is it a message type that we know about
@@ -1850,17 +1890,17 @@ class ProtocolBase(asyncio.Protocol):
                 log.debug("[data receiver] Received message type {0} so not processing it".format(hex(data).upper()))
                 self._resetMessageData()
             else:
-                # build an unknown PDU. As the length is not known, leave self.pmIncomingPduLen set to 0 so we just look for 0x0A as the end of the PDU
+                # build an unknown PDU. As the length is not known, leave self.pmIncomingPduLen set to 0 so we just look for PACKET_FOOTER as the end of the PDU
                 self.pmCurrentPDU = pmReceiveMsg_t[0]                  # Set to unknown message structure to get settings, varlenbytepos is -1
                 self.pmIncomingPduLen = 0                              # self.pmIncomingPduLen should already be set to 0 but just to make sure !!!
                 log.warning("[data receiver] Warning : Construction of incoming packet unknown - Message Type {0}".format(hex(data).upper()))
                 self.ReceiveData.append(data)                          # Add on the message type to the buffer
 
-        elif self.pmFlexibleLength > 0 and data == 0x0A and pdu_len + 1 < self.pmIncomingPduLen and (self.pmIncomingPduLen - pdu_len) < self.pmFlexibleLength:
+        elif self.pmFlexibleLength > 0 and data == PACKET_FOOTER and pdu_len + 1 < self.pmIncomingPduLen and (self.pmIncomingPduLen - pdu_len) < self.pmFlexibleLength:
             # Only do this when:
             #       Looking for "flexible" messages 
             #              At the time of writing this, only the 0x3F EPROM Download PDU does this with some PowerMaster panels
-            #       Have got the 0x0A message terminator
+            #       Have got the PACKET_FOOTER message terminator
             #       We have not yet received all bytes we expect to get
             #       We are within 5 bytes of the expected message length, self.pmIncomingPduLen - pdu_len is the old length as we already have another byte in data
             #              At the time of writing this, the 0x3F was always only up to 3 bytes short of the expected length and it would pass the CRC checks
@@ -1874,8 +1914,8 @@ class ProtocolBase(asyncio.Protocol):
                 self._processReceivedMessage(ackneeded=self.pmCurrentPDU.ackneeded, data=self.ReceiveData)
                 self._resetMessageData()
 
-        elif (self.pmIncomingPduLen == 0 and data == 0x0A) or (pdu_len + 1 == self.pmIncomingPduLen): # postamble (the +1 is to include the current data byte)
-            # (waiting for 0x0A and got it) OR (actual length == calculated expected length)
+        elif (self.pmIncomingPduLen == 0 and data == PACKET_FOOTER) or (pdu_len + 1 == self.pmIncomingPduLen): # postamble (the +1 is to include the current data byte)
+            # (waiting for PACKET_FOOTER and got it) OR (actual length == calculated expected length)
             self.ReceiveData.append(data)  # add byte to the message buffer
             # log.debug("[data receiver] Building PDU: Checking it " + self._toString(self.ReceiveData))
             msgType = self.ReceiveData[1]
@@ -1891,7 +1931,7 @@ class ProtocolBase(asyncio.Protocol):
             else:
                 # CRC check failed
                 a = self._calculateCRC(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
-                if len(self.ReceiveData) > 0xB0:
+                if len(self.ReceiveData) > PACKET_MAX_SIZE:
                     # If the length exceeds the max PDU size from the panel then stop and resync
                     log.warning("[data receiver] PDU with CRC error Message = {0}   checksum calcs {1}".format(self._toString(self.ReceiveData), hex(a).upper()))
                     self._processCRCFailure()
@@ -1910,7 +1950,7 @@ class ProtocolBase(asyncio.Protocol):
                         self._processCRCFailure()
                         self._resetMessageData()
                     else:  # if msgType != 0xF1:        # ignore CRC errors on F1 message
-                        # When self.pmIncomingPduLen == 0 then the message is unknown, the length is not known and we're waiting for an 0x0A where the checksum is correct, so carry on
+                        # When self.pmIncomingPduLen == 0 then the message is unknown, the length is not known and we're waiting for a PACKET_FOOTER where the checksum is correct, so carry on
                         log.debug("[data receiver] Building PDU: Length is {0} bytes (apparently PDU not complete)  {1}  checksum calcs {2}".format(len(self.ReceiveData), self._toString(self.ReceiveData), hex(a).upper()) )
                 else:
                     # When here then the message is a known message type of the correct length but has failed it's validation
@@ -2091,7 +2131,7 @@ class ProtocolBase(asyncio.Protocol):
                             # log.debug("[sendPdu]        Inserting at {0}".format(s+i))
 
             # log.debug('[sendPdu] input data: %s', self._toString(packet))
-            # First add header (0x0D), then the packet, then crc and footer (0x0A)
+            # First add header (PACKET_HEADER), then the packet, then crc and footer (PACKET_FOOTER)
             sData = b"\x0D"
             sData += data
             sData += self._calculateCRC(data)
@@ -2153,7 +2193,6 @@ class ProtocolBase(asyncio.Protocol):
         #    It only fails when it is called from a loop other than the MainLoop from HA
 
         # This is a "fix" for HA 2021-7-1 onwards
-
         # When this function works is is because it has the current asyncio Main loop
         # So the external calls to arm/disarm, bypass/arm and get the event log are now handled by _addMessageToSendList as they may be from a different loop
         try:
@@ -2335,6 +2374,8 @@ class PacketHandling(ProtocolBase):
 
         self.pmBypassOff = False         # Do we allow the user to bypass the sensors, this is read from the EPROM data
         self.pmPanicAlarmSilent = False  # Is Panic Alarm set to silent panic set in the panel. This is read from the EPROM data
+
+        self.pmForceArmSetInPanel = False          # If the Panel is using "Force Arm" then sensors may be automatically armed and bypassed by the panel when it is armed and disarmed
 
         self.lastPacket = None
         self.lastPacketCounter = 0
@@ -3378,7 +3419,7 @@ class PacketHandling(ProtocolBase):
                     self.pmX10Dev_t[i].state = bool(status)
                     # Check to see if the state has changed
                     if (oldstate and not self.pmX10Dev_t[i].state) or (not oldstate and self.pmX10Dev_t[i].state):
-                        log.debug("[handle_msgtypeA5]      X10 device {0} changed to {1}".format(i, status))
+                        log.debug("[handle_msgtypeA5]      X10 device {0} changed to {2} ({1})".format(i, status, self.pmX10Dev_t[i].state))
                         #self.pmX10Dev_t[i].pushChange()
 
             slog = pmDetailedArmMode_t[sysStatus]
@@ -3640,6 +3681,11 @@ class PacketHandling(ProtocolBase):
             if self.PanelType is not None:
                 zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
 
+            # If there are multiple messages in the sameA7 message then alarmStatus represents the last "not None" valid message i.e. in pmPanelAlarmType_t
+            alarmStatus = None
+
+            # 03 00 01 03 08 0e 01 13
+            # 03 00 2f 55 2f 1b 00 1c
             for i in range(0, msgCnt):
                 eventZone = int(data[2 + (2 * i)])
                 eventType = int(data[3 + (2 * i)])
@@ -3670,11 +3716,11 @@ class PacketHandling(ProtocolBase):
                 log.debug("[handle_msgtypeA7]         self.SirenTriggerList = {0}".format(self.SirenTriggerList))
 
                 siren = False
-                alarmStatus = None
                 if eventType in pmPanelAlarmType_t:
                     alarmStatus = pmPanelAlarmType_t[eventType]
                     log.debug("[handle_msgtypeA7]         Checking if {0} is in the siren trigger list {1}".format(alarmStatus.lower(), self.SirenTriggerList))
                     if alarmStatus.lower() in self.SirenTriggerList:
+                        # If any of the A7 messages are in the SirenTriggerList then assume the Siren is triggered
                         log.debug("[handle_msgtypeA7]             And it is, setting siren to True")
                         siren = True
 
@@ -3704,13 +3750,13 @@ class PacketHandling(ProtocolBase):
                 #---------------------------------------------------------------------------------------
                 # Update tamper and siren status
                 # 0x06 is "Tamper", 0x07 is "Control Panel Tamper", 0x08 is "Tamper Alarm", 0x09 is "Tamper Alarm"
-                tamper = eventType == 0x06 or eventType == 0x07 or eventType == 0x08 or eventType == 0x09
+                tamper = eventType == EVENT_TYPE_SENSOR_TAMPER or eventType == EVENT_TYPE_PANEL_TAMPER or eventType == EVENT_TYPE_TAMPER_ALARM_A or eventType == EVENT_TYPE_TAMPER_ALARM_B
 
                 # 0x1B is "Cancel Alarm", 0x21 is "Fire Restore", 0x4E is "Flood Alert Restore", 0x4A is "Gas Trouble Restore"
-                cancel = eventType == 0x1B or eventType == 0x21 or eventType == 0x4A or eventType == 0x4E
+                cancel = eventType == EVENT_TYPE_ALARM_CANCEL or eventType == EVENT_TYPE_FIRE_RESTORE or eventType == EVENT_TYPE_FLOOD_ALERT_RESTORE or eventType == EVENT_TYPE_GAS_TROUBLE_RESTORE
 
                 # 0x13 is "Delay Restore", 0x0E is "Confirm Alarm"
-                ignore = eventType == 0x13 or eventType == 0x0E
+                ignore = eventType == EVENT_TYPE_DELAY_RESTORE or eventType == EVENT_TYPE_CONFIRM_ALARM
 
                 if tamper:
                     pmTamperActive = True
@@ -3739,10 +3785,15 @@ class PacketHandling(ProtocolBase):
                 log.debug("[handle_msgtypeA7]           self.pmSirenActive={0}   siren={1}   eventType={2}   self.pmPanicAlarmSilent={3}   tamper={4}".format(self.pmSirenActive, siren, hex(eventType), self.pmPanicAlarmSilent, tamper) )
 
                 #---------------------------------------------------------------------------------------
-                if eventType == 0x60: # system restart
+                if eventType == EVENT_TYPE_SYSTEM_RESET: # system restart
                     datadict['Reset'] = True
                     log.warning("[handle_msgtypeA7]          Panel has been reset. Don't do anything and the comms might reconnect and magically continue")
                     self._sendResponseEvent ( PyCondition.PANEL_RESET , datadict )   # push changes through to the host, the panel itself has been reset
+
+                if eventType == EVENT_TYPE_FORCE_ARM or (self.pmForceArmSetInPanel and eventType == EVENT_TYPE_DISARM): # Force Arm OR (ForceArm has been set and Disarm)
+                    self.pmForceArmSetInPanel = True                                 # When the panel uses ForceArm then sensors may be automatically armed and bypassed by the panel
+                    log.debug("[handle_msgtypeA7]          Panel has been Armed using Force Arm, sensors may have been bypassed by the panel, asking panel for an update")
+                    self._sendCommand("MSG_BYPASSTAT")
 
             if pmTamperActive:
                 log.debug("[handle_msgtypeA7] ******************** Tamper Triggered *******************")

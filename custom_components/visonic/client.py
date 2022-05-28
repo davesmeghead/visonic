@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.7.0.2"
+CLIENT_VERSION = "0.7.0.3"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -519,7 +519,7 @@ class VisonicClient:
         elif tmp == PyCondition.WATCHDOG_TIMEOUT_RETRYING:
             self.sendHANotification(AvailableNotifications.PANEL_OPERATION, "Communication Timeout - Watchdog Timeout, restoring panel connection" )
         elif tmp == PyCondition.NO_DATA_FROM_PANEL:
-            self.sendHANotification(AvailableNotifications.CONNECTION_PROBLEM, "Integration Suspended - Failed to connect to your Visonic Alarm. We have not received any data from the panel" )
+            self.sendHANotification(AvailableNotifications.CONNECTION_PROBLEM, "Integration Suspended - No data from the panel" )
         elif tmp == PyCondition.COMMAND_REJECTED:
             self.sendHANotification(AvailableNotifications.ALWAYS, "Operation Rejected By Panel (tell the Integration Author and upload a debug log file if you're able to)" )
 
@@ -954,10 +954,11 @@ class VisonicClient:
         """Are we connected to the Alarm Panel."""
         # If we are starting up then assume we need a valid code
         #  This is the opposite of code_format as we want to prevent operation during startup
-        # Are we just starting up
+        # Are we just starting up or has there been a problem  and we are disconnected?
         armcode = self.getPanelStatusCode()
-        if armcode is None or armcode == PyPanelStatus.UNKNOWN:
-            _LOGGER.debug("isPanelConnected: code format none as armcode is none (panel starting up?)")
+        panelmode = self.getPanelMode()
+        if armcode is None or armcode == PyPanelStatus.UNKNOWN or panelmode == PyPanelMode.UNKNOWN:
+            _LOGGER.debug("isPanelConnected: code format none as armcode is none (panel starting up or is there a problem?)")
             return False
         return True
 
