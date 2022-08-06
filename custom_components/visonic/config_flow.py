@@ -8,22 +8,15 @@ from .const import (
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_X10,
     CONF_SIREN_SOUNDING,
+    CONF_PANEL_NUMBER,
 )
 
 from homeassistant import config_entries, data_entry_flow
 from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT
 from homeassistant.core import callback
 
-from .const import DOMAIN, DOMAINCLIENT, VISONIC_UNIQUE_NAME, CONF_ALARM_NOTIFICATIONS
-from .create_schema import (
-    create_schema_device,
-    create_schema_ethernet,
-    create_schema_parameters1,
-    create_schema_parameters2,
-    create_schema_parameters3,
-    create_schema_parameters4,
-    create_schema_usb,
-)
+from .const import DOMAIN, DOMAINCLIENT, CONF_ALARM_NOTIFICATIONS
+from .create_schema import VisonicSchema
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,13 +39,30 @@ _LOGGER = logging.getLogger(__name__)
 class MyHandlers(data_entry_flow.FlowHandler):
     """My generic handler for config flow ConfigFlow and OptionsFlow."""
 
-    def __init__(self):
+    def __init__(self, config_entry = None):
         """Initialize the config flow."""
         # Do not call the parents init function
         # _LOGGER.debug("MyHandlers init")
+        self.myschema = VisonicSchema()
         self.powermaster = False
         self.config = {}
+        if config_entry is not None:
+            # convert python map to dictionary and set defaults for the options flow handler
+            c = self.combineSettings(config_entry)
+            self.myschema.set_default_options(options = c)
 
+    def combineSettings(self, entry):
+        """Combine the old settings from data and the new from options."""
+        conf = {}
+        # the entry.data dictionary contains all the old data used on creation and is a complete set
+        for k in entry.data:
+            conf[k] = entry.data[k]
+        # the entry.config dictionary contains the latest/updated values but may not be a complete set
+        #     overwrite data with options i.e. overwrite the original settings on creation with the edited settings to get the latest
+        for k in entry.options:
+            conf[k] = entry.options[k]
+        return conf
+        
     def toList(self, lst, cfg):
         """Convert to a list."""
         if cfg in lst:
@@ -71,19 +81,19 @@ class MyHandlers(data_entry_flow.FlowHandler):
         ds = None
 
         if step == "device":
-            ds = create_schema_device()
+            ds = self.myschema.create_schema_device()
         elif step == "ethernet":
-            ds = create_schema_ethernet()
+            ds = self.myschema.create_schema_ethernet()
         elif step == "usb":
-            ds = create_schema_usb()
+            ds = self.myschema.create_schema_usb()
         elif step == "parameters1":
-            ds = create_schema_parameters1()
+            ds = self.myschema.create_schema_parameters1()
         elif step == "parameters2":
-            ds = create_schema_parameters2()
+            ds = self.myschema.create_schema_parameters2()
         elif step == "parameters3":
-            ds = create_schema_parameters3()
+            ds = self.myschema.create_schema_parameters3()
         elif step == "parameters4":
-            ds = create_schema_parameters4()
+            ds = self.myschema.create_schema_parameters4()
         else:
             return self.async_abort(reason="device_error")
 
@@ -134,7 +144,8 @@ class MyHandlers(data_entry_flow.FlowHandler):
 
     async def validate_input(self, data: dict):
         """Validate the input."""
-        # To be implemented
+        # Validation to be implemented
+        # return a temporary title to use
         return {"title": "Alarm Panel"}
 
     async def processcomplete(self):
@@ -210,7 +221,8 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         """Handle the input processing of the config flow."""
         _LOGGER.debug("async_step_device %s", user_input)
         #self.dumpMyState()
-        if user_input is not None and CONF_DEVICE_TYPE in user_input:
+        if user_input is not None and CONF_DEVICE_TYPE in user_input and CONF_PANEL_NUMBER in user_input:
+            self.config[CONF_PANEL_NUMBER] = max(0, int(user_input[CONF_PANEL_NUMBER]))
             self.config[CONF_DEVICE_TYPE] = user_input[CONF_DEVICE_TYPE].lower()
             if self.config[CONF_DEVICE_TYPE] == "ethernet":
                 return await self._show_form(step="ethernet")
@@ -236,12 +248,11 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         """Handle a user config flow."""
         # determine if a panel connection has already been made and stop a second connection
         _LOGGER.debug("Visonic async_step_user")
-        if self._async_current_entries():
-            return self.async_abort(reason="already_configured")
-
+        #if self._async_current_entries():
+            #return self.async_abort(reason="already_configured")
         #self.dumpMyState()
 
-        # is this a raw configuration (not called from importint yaml)
+        # is this a raw configuration (not called from importing yaml)
         if not user_input:
             _LOGGER.debug("Visonic in async_step_user - trigger user input")
             return await self._show_form(step="device")
@@ -249,7 +260,7 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         # importing a yaml config setup
         info = await self.validate_input(user_input)
         if info is not None:
-            await self.async_set_unique_id(VISONIC_UNIQUE_NAME)
+            #await self.async_set_unique_id(VISONIC_UNIQUE_NAME)
             self._abort_if_unique_id_configured()
             return self.async_create_entry(title=info["title"], data=user_input)
         return self.async_abort(reason="device_error")
@@ -299,7 +310,7 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
 
     def __init__(self, config_entry):
         """Initialize options flow."""
-        MyHandlers.__init__(self)
+        MyHandlers.__init__(self, config_entry)
         config_entries.OptionsFlow.__init__(self)
         self.config = dict(config_entry.options)
         self.entry_id = config_entry.entry_id
@@ -310,7 +321,7 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
         """Manage the options."""
         # Get the client
         if self.hass is not None:
-            client = self.hass.data[DOMAIN][self.entry_id][DOMAINCLIENT]
+            client = self.hass.data[DOMAIN][DOMAINCLIENT][self.entry_id]
             if client is not None:
                 # From the client, is it a PowerMaster panel (this assumes that the EPROM has been downloaded, or at least the 0x3C data)"
                 self.powermaster = client.isPowerMaster()

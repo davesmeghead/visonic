@@ -12,8 +12,8 @@ from .client import VisonicClient
 from .const import (
     DOMAIN,
     DOMAINCLIENT,
-    VISONIC_UNIQUE_NAME,
-    VISONIC_UPDATE_STATE_DISPATCHER,
+    PANEL_ATTRIBUTE_NAME,
+    DEVICE_ATTRIBUTE_NAME,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Visonic Alarm Binary Sensors."""
     if DOMAIN in hass.data:
-        client = hass.data[DOMAIN][entry.entry_id][DOMAINCLIENT]
+        client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
         devices = [
             VisonicSwitch(client, device) for device in hass.data[DOMAIN]["switch"]
         ]
@@ -41,20 +41,25 @@ class VisonicSwitch(SwitchEntity):
         self._client = client
         self.visonic_device = visonic_device
         self._x10id = self.visonic_device.getDeviceID()
-        self._name = "Visonic " + self.visonic_device.getName()
-        # Append device id to prevent name clashes in HA.
-        self._visonic_id = slugify(self._name)
 
+        self._panel = client.getPanelID()
+        if self._panel > 0:
+            self._name = "visonic_p" + str(self._panel) + "_" + self.visonic_device.getName().lower()
+        else:
+            self._name = "visonic_" + self.visonic_device.getName().lower()
+        
         # VISONIC_ID_FORMAT.format( slugify(self._name), visonic_device.getDeviceID())
-        # self._entity_id = ENTITY_ID_FORMAT.format(self._visonic_id)
+        # self._entity_id = ENTITY_ID_FORMAT.format(slugify(self._name))
         self._current_value = self.visonic_device.isOn()
+        self._dispatcher = client.getDispatcher()
+
 
     async def async_added_to_hass(self):
         """Register callbacks."""
         # Register for dispatcher calls to update the state
         self.async_on_remove(
             async_dispatcher_connect(
-                self.hass, VISONIC_UPDATE_STATE_DISPATCHER, self.onChange
+                self.hass, self._dispatcher, self.onChange
             )
         )
         # self.visonic_device.install_change_handler(self.onChange)
@@ -81,7 +86,7 @@ class VisonicSwitch(SwitchEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        return self._visonic_id
+        return slugify(self._name)
 
     @property
     def name(self):
@@ -115,11 +120,13 @@ class VisonicSwitch(SwitchEntity):
                 "identifiers": {(DOMAIN, self._name)},
                 "name": f"Visonic X10 ({self.visonic_device.getName()})",
                 "model": self.visonic_device.getType(),
-                "via_device": (DOMAIN, VISONIC_UNIQUE_NAME),
+                #"via_device": (DOMAIN, self._uniqueName),
                 # "sw_version": self._api.information.version_string,
             }
-        return { "manufacturer": "Visonic", 
-                 "via_device": (DOMAIN, VISONIC_UNIQUE_NAME) }
+        return { 
+                 "manufacturer": "Visonic", 
+                 #"via_device": (DOMAIN, self._uniqueName),
+            }
 
     # "off"  "on"  "dim"  "brighten"
     def turnmeonandoff(self, state : PyX10Command):
@@ -131,9 +138,10 @@ class VisonicSwitch(SwitchEntity):
         """Return the state attributes of the device."""
         attr = {}
 
-        attr["Location"] = self.visonic_device.getLocation()
-        attr["Name"] = self.visonic_device.getName()
-        attr["Type"] = self.visonic_device.getType()
-        attr["Visonic Device"] = self.visonic_device.getDeviceID()
+        attr["location"] = self.visonic_device.getLocation()
+        attr["name"] = self.visonic_device.getName()
+        attr["type"] = self.visonic_device.getType()
+        attr[DEVICE_ATTRIBUTE_NAME] = self.visonic_device.getDeviceID()
+        attr[PANEL_ATTRIBUTE_NAME] = self._panel
         #        attr["State"] = "on" if self.is_on() else "off"
         return attr

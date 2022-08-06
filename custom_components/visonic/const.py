@@ -2,10 +2,10 @@
 from enum import Enum
 
 DOMAIN = "visonic"
-PLATFORMS = ["alarm_control_panel", "binary_sensor", "switch"]
+ALARM_PANEL_ENTITY = "alarm_control_panel"
+PLATFORMS = [ALARM_PANEL_ENTITY, "binary_sensor", "switch"]
 
 VISONIC_UNIQUE_NAME = "Visonic Alarm"
-ALARM_PANEL_ENTITY = "alarm_control_panel.visonic_alarm"
 
 # Constants for storing data in hass[DOMAIN]
 DOMAINCLIENT = f"{DOMAIN}_client"
@@ -16,8 +16,8 @@ DOMAINCLIENTTASK = f"{DOMAIN}_client_task"
 NOTIFICATION_ID = f"{DOMAIN}_notification"
 NOTIFICATION_TITLE = "Visonic Alarm Panel"
 
-# undo listener
-UNDO_VISONIC_UPDATE_LISTENER = f"{DOMAIN}_undo_update_listener"
+# update listener
+VISONIC_UPDATE_LISTENER = f"{DOMAIN}_update_listener"
 
 # Dispatcher name when the underlying pyvisonic library has got a panel, X10 or sensor change
 VISONIC_UPDATE_STATE_DISPATCHER = f"{DOMAIN}_update_state_dispatcher"
@@ -26,6 +26,15 @@ VISONIC_UPDATE_STATE_DISPATCHER = f"{DOMAIN}_update_state_dispatcher"
 ALARM_PANEL_CHANGE_EVENT = f"{DOMAIN}_alarm_panel_state_update"
 ALARM_PANEL_LOG_FILE_COMPLETE = f"{DOMAIN}_alarm_panel_event_log_complete"
 ALARM_PANEL_LOG_FILE_ENTRY = f"{DOMAIN}_alarm_panel_event_log_entry"
+
+# The HA Services.  These strings match the content of the services.yaml file
+ALARM_PANEL_COMMAND = "alarm_panel_command"
+ALARM_PANEL_EVENTLOG = "alarm_panel_eventlog"
+ALARM_PANEL_RECONNECT = "alarm_panel_reconnect"
+ALARM_SENSOR_BYPASS = "alarm_sensor_bypass"
+
+PANEL_ATTRIBUTE_NAME = "panel"
+DEVICE_ATTRIBUTE_NAME = "visonic device"
 
 # Default connection details (connection can be one of Ethernet, USB, RS232)
 DEFAULT_DEVICE_HOST = "127.0.0.1"
@@ -49,6 +58,7 @@ ATTR_BYPASS = "bypass"
 CONF_ALARM_NOTIFICATIONS = "panel_state_notifications"
 
 # settings that are used for creation
+CONF_PANEL_NUMBER = "panel_number"
 CONF_DEVICE_TYPE = "type"
 CONF_DEVICE_BAUD = "baud"
 CONF_HOST = "host"

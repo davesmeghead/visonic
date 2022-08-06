@@ -7,11 +7,14 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.util import slugify
+from homeassistant.const import (
+    ATTR_ARMED,
+)
 
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 from .pconst import PySensorDevice, PySensorType, PyCommandStatus
-from .const import DOMAIN, DOMAINCLIENT, VISONIC_UPDATE_STATE_DISPATCHER, AvailableNotifications
+from .const import DOMAIN, DOMAINCLIENT, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, AvailableNotifications
 
 from .client import VisonicClient
 
@@ -31,7 +34,7 @@ async def async_setup_entry(
 
     if DOMAIN in hass.data:
         _LOGGER.debug("   In select async_setup_entry")
-        client = hass.data[DOMAIN][entry.entry_id][DOMAINCLIENT]
+        client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
         sensors = [
             VisonicSelect(hass, client, device) for device in hass.data[DOMAIN]["select"]
         ]
@@ -50,18 +53,22 @@ class VisonicSelect(SelectEntity):
         self.hass = hass
         self._client = client
         self._visonic_device = visonic_device
-        self._name = "visonic_" + self._visonic_device.getDeviceName().lower()
-        self._visonic_id = slugify(self._name)
+        self._panel = client.getPanelID()
+        if self._panel > 0:
+            self._name = "visonic_p" + str(self._panel) + "_" + visonic_device.getDeviceName().lower()
+        else:
+            self._name = "visonic_" + visonic_device.getDeviceName().lower()
         self._is_available = self._visonic_device.isEnrolled()
         self._is_armed = not self._visonic_device.isBypass()
         self._pending_state_is_armed = None
+        self._dispatcher = client.getDispatcher()
 
     async def async_added_to_hass(self):
         """Register callbacks."""
         # Register for dispatcher calls to update the state
         self.async_on_remove(
             async_dispatcher_connect(
-                self.hass, VISONIC_UPDATE_STATE_DISPATCHER, self.onChange
+                self.hass, self._dispatcher, self.onChange
             )
         )
 
@@ -74,7 +81,7 @@ class VisonicSelect(SelectEntity):
 
     def onChange(self, event_id: int, datadictionary: dict):
         """Call on any change to the sensor."""
-        #_LOGGER.debug("Select Sensor onchange %s", str(self._visonic_id))
+        #_LOGGER.debug("Select Sensor onchange %s", str(self._name))
         # Update the current value based on the device state
         if self._visonic_device is not None:
             self._is_available = self._visonic_device.isEnrolled()
@@ -112,7 +119,7 @@ class VisonicSelect(SelectEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        return self._visonic_id
+        return slugify(self._name)
 
     @property
     def name(self):
@@ -132,7 +139,7 @@ class VisonicSelect(SelectEntity):
         """Change the visonic sensor armed state"""
         if self._pending_state_is_armed is not None:
             _LOGGER.debug("Currently Pending {0} so ignoring request to select option".format(self.unique_id))
-            client.sendHANotification(AvailableNotifications.ALWAYS, "Sensor Bypass: Change in arm/bypass already in progress, please try again")
+            self._client.sendHANotification(AvailableNotifications.ALWAYS, "Sensor Bypass: Change in arm/bypass already in progress, please try again")
         elif option in self.options:
             #_LOGGER.debug("Sending Option {0} to {1}".format(option, self.unique_id))
             result = self._client.sendBypass(self._visonic_device.getDeviceID(), option == BYPASS, "") # pin code to "" to use default if set
@@ -150,7 +157,16 @@ class VisonicSelect(SelectEntity):
                     message = "Sensor Bypass: Invalid PIN"
                 elif result == PyCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
                     message = "Sensor Bypass: EPROM Download is in progress, please try again after this is complete"
-                client.sendHANotification(AvailableNotifications.ALWAYS, message)
+                self._client.sendHANotification(AvailableNotifications.ALWAYS, message)
         else:
             raise ValueError(f"Can't set the armed state to {option}. Allowed states are: {self.options}")
         self.schedule_update_ha_state(True)
+
+    @property
+    def extra_state_attributes(self):
+        """Return the state attributes of the device."""
+        attr = {}
+        #attr["name"] = self._visonic_device.getDeviceName()
+        attr[PANEL_ATTRIBUTE_NAME] = self._panel
+        attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()
+        return attr

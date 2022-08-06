@@ -43,6 +43,7 @@ import time
 import copy
 import math
 import socket
+import datetime
 
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -59,7 +60,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.14.1"
+PLUGIN_VERSION = "1.0.15.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -655,8 +656,8 @@ pmPanelTroubleType_t = {
 
 pmPanelType_t = {
    0 : "PowerMax", 1 : "PowerMax+", 2 : "PowerMax Pro", 3 : "PowerMax Complete", 4 : "PowerMax Pro Part",
-   5  : "PowerMax Complete Part", 6 : "PowerMax Express", 7 : "PowerMaster10",   8 : "PowerMaster30",
-   10 : "PowerMaster33", 15 : "PowerMaster33"
+   5  : "PowerMax Complete Part", 6 : "PowerMax Express", 7 : "PowerMaster 10",   8 : "PowerMaster 30",
+   10 : "PowerMaster 33", 15 : "PowerMaster 33"
 }
 
 # Config for each panel type (0-16).  8 is a PowerMaster 30, 10 is a PowerMaster 33, 15 is a PowerMaster 33 later model.  Don't know what 9, 11, 12, 13 or 14 is.
@@ -916,10 +917,12 @@ pmZoneSensorMax_t = {
    0x08 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # Fabio72
    0x09 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # Fabio72
    0x1A : ZoneSensorType("MCW-K980", PySensorType.MOTION ),        # Botap
+   0x74 : ZoneSensorType("Next+ K9-85", PySensorType.MOTION ),     # christopheVia
    0x75 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # thermostat (Visonic part number 0-3592-B, NEXT K985 DDMCW)
    0x7A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # fguerzoni
    0x95 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, fguerzoni
    0x96 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, g4seb
+   0x97 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # christopheVia
    0xC0 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # g4seb
    0xD3 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me
    0xD5 : ZoneSensorType("Next K9", PySensorType.MOTION ),         # fguerzoni
@@ -1110,7 +1113,6 @@ class SensorDevice(PySensorDevice):
         #attr["device model"] = self.getSensorModel()
         attr["device tamper"] = "Yes" if self.tamper else "No"
         attr["zone open"] = "Yes" if self.status else "No"
-        attr["visonic device"] = self.id
 
         # Not added
         #    self.partition = kwargs.get('partition', None)  # set   partition set (could be in more than one partition)
@@ -1644,6 +1646,7 @@ class ProtocolBase(asyncio.Protocol):
                 self._sendCommand("MSG_EXIT")
         
             else:
+                #  We set the time at the end of download and then check it periodically
                 if self.pmPowerlinkMode and self.AutoSyncTime:
                     settime_counter = settime_counter + 1
                     if settime_counter == 14400:      # every 4 hours (approx)
@@ -3202,14 +3205,38 @@ class PacketHandling(ProtocolBase):
                         self.pmPowerlinkModePending = True
             else:
                 log.debug("[handle_msgtype3F]                no last command")
+
+            if self.AutoSyncTime:  # should we sync time between the HA and the Alarm Panel
+                t = self._getTimeFunction()
+                if t.year > 2020:
+                    log.debug("[handle_msgtype3F]    Local time is {0}".format(t))
+                    year = t.year - 2000
+                    values = [t.second, t.minute, t.hour, t.day, t.month, year]
+                    timePdu = bytearray(values)
+                    log.debug("[handle_msgtype3F]        Setting Time " + self._toString(timePdu))
+                    self._sendCommand("MSG_SETTIME", options=[3, timePdu])
+                else:
+                    log.debug("[handle_msgtype3F] Please correct your local time.")
+
             self._sendCommand("MSG_EXIT")  # Exit download mode
             # We received a download exit message, restart timer
             self._reset_watchdog_timeout()
             self._processEPROMSettings()
+            self._sendResponseEvent(PyCondition.DOWNLOAD_SUCCESS)   # download completed successfully
+
+    def _makeInt(self, data) -> int:
+        if len(data) == 4:
+            val = data[0]
+            val = val + (0x100 * data[1])
+            val = val + (0x10000 * data[2])
+            val = val + (0x1000000 * data[3])
+            return int(val)
+        return 0
 
     def handle_msgtypeA0(self, data):
         """ MsgType=A0 - Event Log """
         log.debug("[handle_MsgTypeA0] Packet = {0}".format(self._toString(data)))
+        # From my Powermaster30  [handle_MsgTypeA0] Packet = 5f 02 01 64 58 5c 58 d3 41 51 43
 
         eventNum = data[1]
         # Check for the first entry, it only contains the number of events
@@ -3231,6 +3258,17 @@ class PacketHandling(ProtocolBase):
             if self.PowerMaster is not None:
                 if self.PowerMaster:
                     zoneStr = pmLogPowerMasterUser_t[self.pmLang][iEventZone] or "UNKNOWN"
+                    # extract the time as "epoch time" and convert to normal time
+                    hs = self._makeInt(data[3:7])
+                    # hs = data[3] + (data[4] * 256) + (data[5] * 65536) + (data[6] * 16777216)
+                    pmtime = datetime.fromtimestamp(hs)
+                    #log.debug("[handle_msgtypeA0]   Powermaster time {0} as hex {1} from epoch is {2}".format(hs, hex(hs), pmtime))
+                    iSec = pmtime.second
+                    iMin = pmtime.minute
+                    iHour = pmtime.hour
+                    iDay = pmtime.day
+                    iMonth = pmtime.month
+                    iYear = pmtime.year
                 else:
                     iEventZone = int(iEventZone & 0x7F)
                     zoneStr = pmLogPowerMaxUser_t[self.pmLang][iEventZone] or "UNKNOWN"
@@ -3246,7 +3284,7 @@ class PacketHandling(ProtocolBase):
                 for i in range(1, 4):
                     part = (iSec % (2 * i) >= i) and i or part
                 self.pmEventLogDictionary[idx].partition = (part == 0) and "Panel" or part
-                self.pmEventLogDictionary[idx].time = "{0:0>2}:{1:0>2}".format(iHour, iMin)
+                self.pmEventLogDictionary[idx].time = "{0:0>2}:{1:0>2}:{2:0>2}".format(iHour, iMin, iSec)
             else:
                 # This alarm panel only has a single partition so it must either be panel or partition 1
                 self.pmEventLogDictionary[idx].partition = (iEventZone == 0) and "Panel" or "1"
@@ -3297,22 +3335,10 @@ class PacketHandling(ProtocolBase):
     #    c) the system is armed home (mode = 5) and the zone is not interior(-follow) (6,12)
     #         armed = ((zoneType > 0) and (sensor['bypass'] ~= true) and ((alwaysOn[zoneType] ~= nil) or (mode == 0x5) or ((mode == 0x4) and (zoneType % 6 ~= 0)))) and "1" or "0"
 
-    def _makeInt(self, data) -> int:
-        if len(data) == 4:
-            val = data[0]
-            val = val + (0x100 * data[1])
-            val = val + (0x10000 * data[2])
-            val = val + (0x1000000 * data[3])
-            return int(val)
-        return 0
-
     # captured examples of A5 data
     #     0d a5 00 04 00 61 03 05 00 05 00 00 43 a4 0a
     def handle_msgtypeA5(self, data) -> bool:  # Status Message
-
-        #zoneCnt = 0  # this means it wont work in case we're in standard mode and the panel type is not set
-        #if self.PanelType is not None:
-        #    zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
+        """ MsgType=A3 - Zone Data Update """
 
         # msgTot = data[0]
         eventType = data[1]
@@ -3331,7 +3357,6 @@ class PacketHandling(ProtocolBase):
                     if i in self.pmSensorDev_t:
                         self.pmSensorDev_t[i].ztrip = val & (1 << i) != 0
                         pushChange = True
-                        #self.pmSensorDev_t[i].pushChange()
 
             val = self._makeInt(data[6:10])
             if val != self.zonetamper_old:
@@ -3341,7 +3366,6 @@ class PacketHandling(ProtocolBase):
                     if i in self.pmSensorDev_t:
                         self.pmSensorDev_t[i].ztamper = val & (1 << i) != 0
                         pushChange = True
-                        #self.pmSensorDev_t[i].pushChange()
 
         elif self.sensorsCreated and eventType == 0x02:  # Status message - Zone Open Status
             # if in standard mode then use this A5 status message to reset the watchdog timer
@@ -3362,7 +3386,6 @@ class PacketHandling(ProtocolBase):
                             self.pmSensorDev_t[i].triggertime = self._getTimeFunction()
                             self.pmSensorDev_t[i].utctriggertime = self._getUTCTimeFunction()
                         pushChange = True
-                        #self.pmSensorDev_t[i].pushChange()
 
             val = self._makeInt(data[6:10])
             if val != self.lowbatt_old:
@@ -3372,7 +3395,6 @@ class PacketHandling(ProtocolBase):
                     if i in self.pmSensorDev_t:
                         self.pmSensorDev_t[i].lowbatt = val & (1 << i) != 0
                         pushChange = True
-                        #self.pmSensorDev_t[i].pushChange()
 
         elif self.sensorsCreated and eventType == 0x03:  # Tamper Event
             val = self._makeInt(data[2:6])
@@ -3392,9 +3414,10 @@ class PacketHandling(ProtocolBase):
                     if i in self.pmSensorDev_t:
                         self.pmSensorDev_t[i].tamper = val & (1 << i) != 0
                         pushChange = True
-                        #self.pmSensorDev_t[i].pushChange()
 
         elif eventType == 0x04:  # Zone event
+            # Every zone event causes the need to push for a change
+            # pushChange = True  # Commented out as we shouldn't need to push a change for evert little A5 message .... or do we :)
             if not self.pmPowerlinkMode:
                 log.debug("[handle_msgtypeA5]      Got A5 04 message, resetting watchdog")
                 self._reset_watchdog_timeout()
@@ -3420,7 +3443,7 @@ class PacketHandling(ProtocolBase):
                     # Check to see if the state has changed
                     if (oldstate and not self.pmX10Dev_t[i].state) or (not oldstate and self.pmX10Dev_t[i].state):
                         log.debug("[handle_msgtypeA5]      X10 device {0} changed to {2} ({1})".format(i, status, self.pmX10Dev_t[i].state))
-                        #self.pmX10Dev_t[i].pushChange()
+                        pushChange = True
 
             slog = pmDetailedArmMode_t[sysStatus]
             sarm_detail = "Unknown"
@@ -3514,6 +3537,7 @@ class PacketHandling(ProtocolBase):
                 self.pmSirenActive = False
 
             if sysFlags & 0x20 != 0:  # Zone Event
+                pushChange = True
                 sEventLog = pmEventType_t[self.pmLang][eventType]
                 log.debug("[handle_msgtypeA5]      Zone Event")
                 log.debug("[handle_msgtypeA5]            Zone: {0}    Type: {1}, {2}".format(eventZone, eventType, sEventLog))
@@ -3569,8 +3593,6 @@ class PacketHandling(ProtocolBase):
 
                     self._sendResponseEvent(PyCondition.ZONE_UPDATE, datadict)  # push zone changes through to the host to get it to update
 
-            pushChange = True
-            
             #   0x03 : "", 0x04 : "", 0x05 : "", 0x0A : "", 0x0B : "", 0x13 : "", 0x14 : "", 0x15 : ""
             # armModeNum = 1 if pmArmed_t[sysStatus] != None else 0
             # armMode = "Armed" if armModeNum == 1 else "Disarmed"
@@ -3826,21 +3848,15 @@ class PacketHandling(ProtocolBase):
             dt = datetime(2000 + data[7], data[6], data[5], data[4], data[3], data[2])
             log.debug("[handle_msgtypeAB]    Panel time is {0}".format(dt))
 
-            if self.AutoSyncTime:  # should we sync time between the HA and the Alarm Panel
-                t = self._getTimeFunction()
-                if t.year > 2020:
-                    duration = dt - t                              # Get Time Difference, timedelta
-                    duration_in_s = abs(duration.total_seconds())  # Convert to seconds (and make it a positive value)
-                    log.debug("[handle_msgtypeAB]    Local time is {0}      time difference {1} seconds".format(t, duration_in_s))
-                    
-                    if duration_in_s > 20:                         # More than 20 seconds difference
-                        year = t.year - 2000
-                        values = [t.second, t.minute, t.hour, t.day, t.month, year]
-                        timePdu = bytearray(values)
-                        log.debug("[handle_msgtypeAB]        Setting Time " + self._toString(timePdu))
-                        self._sendCommand("MSG_SETTIME", options=[3, timePdu])
-                else:
-                    log.debug("[handle_msgtypeAB] Please correct your local time.")
+            # There is no point in setting the time here as we need to be in DOWNLOAD mode with the panel
+            # So compare the times and log a difference
+            t = self._getTimeFunction()
+            if t.year > 2020:
+                duration = dt - t                              # Get Time Difference, timedelta
+                duration_in_s = abs(duration.total_seconds())  # Convert to seconds (and make it a positive value)
+                log.debug("[handle_msgtypeAB]    Local time is {0}      time difference {1} seconds".format(t, duration_in_s))
+            else:
+                log.debug("[handle_msgtypeAB]    Please correct your local time.")
 
         elif subType == 3:  # keepalive message
             # Example 0D AB 03 00 1E 00 31 2E 31 35 00 00 43 2A 0A
@@ -3855,6 +3871,8 @@ class PacketHandling(ProtocolBase):
                 self._triggerRestoreStatus()
                 self._dumpSensorsToLogFile()
 
+                # There is no point in setting the time here as we need to be in DOWNLOAD mode with the panel
+                #  We set the time at the end of download and then check it periodically
                 # Get the time from the panel
                 if self.AutoSyncTime:
                     self._sendCommand("MSG_GETTIME")

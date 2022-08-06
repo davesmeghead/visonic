@@ -1,11 +1,18 @@
 alarm_panel_eventlog:
+  name: Retrieve Event Log
   description: Retrieve the Alarm Panel Event Log.
   fields:
     code:
+      name: User Code
       description: An optional code to send to the panel.
       example: "1234"
-
+    panel:
+      name: Panel Id
+      description: An optional panel number, use 0 for single panel in use
+      example: "0"
+    
 alarm_panel_command:
+  name: Send Command
   description: Send a command to the Alarm Panel.
   fields:
     command:
@@ -14,14 +21,22 @@ alarm_panel_command:
     code:
       description: An optional code to send to the panel.
       example: "1234"
+    panel:
+      name: Panel Id
+      description: An optional panel number, defaults to 0 for when a single panel is in use
+      example: "0"
 
 alarm_panel_reconnect:
+  name: Panel Reconnection
   description: Reconnect to the Alarm Panel following a previous problem.
-
-alarm_panel_download:
-  description: Instigate an EPROM Download from the Alarm Panel
+  fields:
+    panel:
+      name: Panel Id
+      description: An optional panel number, use 0 for single panel in use
+      example: "0"
 
 alarm_sensor_bypass:
+  name: Sensor Bypass
   description: Bypass a visonic sensor.
   fields:
     entity_id:
@@ -33,3 +48,7 @@ alarm_sensor_bypass:
     code:
       description: An optional code to send to the panel.
       example: "1234"
+    panel:
+      name: Panel Id
+      description: An optional panel number, use 0 for single panel in use
+      example: "0"

@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.7.0.3"
+CLIENT_VERSION = "0.8.0.0"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -24,6 +24,7 @@ from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_CODE,
+    ATTR_ENTITY_ID,
     CONF_HOST,
     CONF_PATH,
     CONF_PORT,
@@ -31,16 +32,21 @@ from homeassistant.const import (
     CONF_PASSWORD,
     EVENT_HOMEASSISTANT_STOP,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import Unauthorized, UnknownUser
+from homeassistant.core import HomeAssistant, valid_entity_id
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import dispatcher_send
+from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUser
 
 from .const import (
     ALARM_PANEL_CHANGE_EVENT,
     ALARM_PANEL_ENTITY,
     ALARM_PANEL_LOG_FILE_COMPLETE,
     ALARM_PANEL_LOG_FILE_ENTRY,
+    ALARM_PANEL_COMMAND,
+    ALARM_PANEL_EVENTLOG,
+    ALARM_PANEL_RECONNECT,
+    ATTR_BYPASS,
+    VISONIC_UNIQUE_NAME,
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_X10,
     CONF_ENABLE_REMOTE_ARM,
@@ -76,6 +82,8 @@ from .const import (
     NOTIFICATION_TITLE,
     VISONIC_UPDATE_STATE_DISPATCHER,
     CONF_ALARM_NOTIFICATIONS,
+    PANEL_ATTRIBUTE_NAME,
+    DEVICE_ATTRIBUTE_NAME,
     AvailableNotifications,
     PIN_REGEX,
 )
@@ -108,7 +116,7 @@ class VisonicClient:
 
     _LOGGER.debug("Initialising Client - Version {0}".format(CLIENT_VERSION))
 
-    def __init__(self, hass: HomeAssistant, cf: dict, entry: ConfigEntry):
+    def __init__(self, hass: HomeAssistant, panelident: int, cf: dict, entry: ConfigEntry):
         """Initialize the Visonic Client."""
         self.hass = hass
         self.entry = entry
@@ -120,7 +128,9 @@ class VisonicClient:
         self.select_task = None
         self.switch_task = None
 
-        _LOGGER.debug("init self.config = %s  %s", PyConfiguration.DownloadCode, self.config)
+        _LOGGER.debug("init panel %s   self.config = %s  %s", str(panelident), PyConfiguration.DownloadCode, self.config)
+        
+        self.panelident = panelident
 
         # Process the exclude sensor list
         self.exclude_sensor_list = self.config.get(CONF_EXCLUDE_SENSOR)
@@ -165,6 +175,20 @@ class VisonicClient:
             self.exclude_sensor_list,
             self.exclude_x10_list,
         )
+
+    def getEntryID(self):
+        return self.entry.entry_id
+
+    def getPanelID(self):
+        return self.panelident
+
+    def getDispatcher(self):
+        return VISONIC_UPDATE_STATE_DISPATCHER + "_p" + str(self.getPanelID())
+
+    def getAlarmPanelUniqueIdent(self):
+        if self.getPanelID() > 0:
+            return VISONIC_UNIQUE_NAME + "_p" + str(self.getPanelID())
+        return VISONIC_UNIQUE_NAME
 
     def sendHANotification(self, condition : AvailableNotifications, message: str):
         notification_config = self.config.get(CONF_ALARM_NOTIFICATIONS, [] )
@@ -266,10 +290,11 @@ class VisonicClient:
         if (
             self.toBool(self.config.get(CONF_LOG_EVENT))
             and event_log_entry.current <= total
-        ):
+        ):        
             self.hass.bus.fire(
                 ALARM_PANEL_LOG_FILE_ENTRY,
                 {
+                    PANEL_ATTRIBUTE_NAME: self.getPanelID(),
                     "current": current,
                     "total": total,
                     "date": event_log_entry.date,
@@ -279,6 +304,7 @@ class VisonicClient:
                     "event": event_log_entry.event,
                 },
             )
+            
         _LOGGER.debug("Panel Event - fired Single Item event")
         # Write out to an xml file
         if event_log_entry.current == 1:
@@ -409,7 +435,7 @@ class VisonicClient:
                     _LOGGER.debug("Panel Event - Firing Completion Event")
                     self.hass.bus.fire(
                         ALARM_PANEL_LOG_FILE_COMPLETE,
-                        {"total": total, "available": event_log_entry.total},
+                        {PANEL_ATTRIBUTE_NAME: self.getPanelID(), "total": total, "available": event_log_entry.total},
                     )
                 _LOGGER.debug("Panel Event - Complete")
 
@@ -432,6 +458,13 @@ class VisonicClient:
             else:
                 _LOGGER.debug("      X10 %s already in the list", dev.getDeviceID())
 
+    def setupAlarmPanel(self):
+        self.hass.async_create_task(
+            self.hass.config_entries.async_forward_entry_setup(
+                self.entry, "alarm_control_panel"
+            )
+        )
+
     def new_sensor_callback(self, sensor: PySensorDevice):
         """Process a new sensor."""
         # Check to ensure variables are set correctly
@@ -440,11 +473,8 @@ class VisonicClient:
             return
         if not self.createdAlarmPanel:
             self.createdAlarmPanel = True
-            self.hass.async_create_task(
-                self.hass.config_entries.async_forward_entry_setup(
-                    self.entry, "alarm_control_panel"
-                )
-            )
+            self.setupAlarmPanel()
+            
         if sensor is None:
             _LOGGER.warning("Visonic attempt to add sensor when sensor is undefined")
             return
@@ -466,6 +496,10 @@ class VisonicClient:
             else:
                 _LOGGER.debug("       Sensor %s in exclusion list", sensor.getDeviceID())
 
+    def fireHAEvent(self, ev: dict):
+        ev[PANEL_ATTRIBUTE_NAME] = self.getPanelID()
+        self.hass.bus.fire(ALARM_PANEL_CHANGE_EVENT, ev)
+
     def generate_ha_bus_event(self, event_id: IntEnum, datadictionary: dict):
         """Generate HA Bus Event."""
         # Check to ensure variables are set correctly
@@ -477,29 +511,45 @@ class VisonicClient:
             return
         if not self.createdAlarmPanel:
             self.createdAlarmPanel = True
-            self.hass.async_create_task(
-                self.hass.config_entries.async_forward_entry_setup(
-                    self.entry, "alarm_control_panel"
-                )
-            )
-        # The event_id is in the range 0 to 15 inclusive
+            self.setupAlarmPanel()
+
+        # The event_id is in the range 0 to 16 inclusive
         #   When it is set to 0, any of the possible changes have been made in the sensors/X10 devices
         #   So use any value of event_id to fire an HA event to get the sensors to update themselves
         dispatcher_send(
-            self.hass, VISONIC_UPDATE_STATE_DISPATCHER, event_id, datadictionary
+            self.hass, self.getDispatcher(), event_id, datadictionary
         )
 
         # Send an event on the event bus for conditions 1 to 14.  Ignore 0 as this is used for any sensor change.
         #  0 is just used for the dispatcher above so the frontend is updated, no HA event is fired
         #  15 is something other than the pin code has been rejected by the panel (see 5 above)
+        #  16 is download success
         tmp = int(event_id)
-        if 1 <= tmp <= 14: # do not send 0 or 15 as an HA event
+
+        if event_id == PyCondition.DOWNLOAD_SUCCESS:        # download success        
+            # Update the friendly name of the control flow
+            d = self.getPanelStatus()
+            _LOGGER.debug("     DOWNLOAD_SUCCESS. Current Data dict = {0}".format(d))
+            
+            if 'Panel Model' in d and 'Panel Type' in d and 'Model Type' in d and 'Panel Serial' in d:
+                pm = str(d['Panel Model'])
+                #pt = str(d['Panel Type'])
+                #mt = str(d['Model Type'])
+                ps = str(d['Panel Serial'])
+                #s = "Panel " + str(self.getPanelID()) + " (" + pm + ", " + pt + ", " + mt + ", " + ps + ")"
+                #s = "Panel " + str(self.getPanelID()) + " (" + pm + ", " + ps + ")"
+                s = "Panel " + str(self.getPanelID()) + " (" + pm + ")"
+            
+                # update the title
+                self.hass.config_entries.async_update_entry(self.entry, title=s)
+
+        if 1 <= tmp <= 14: # do not send 0 or 15 or 16 as an HA event
             tmpdict = {}
             if datadictionary is not None:
                 tmpdict = datadictionary.copy()
             tmpdict["condition"] = tmp
-            _LOGGER.debug("Visonic update event %s %s", tmp, tmpdict)
-            self.hass.bus.fire(ALARM_PANEL_CHANGE_EVENT, tmpdict)
+            _LOGGER.debug("Visonic update event panel=%d  event=%s %s", self.getPanelID(), tmp, tmpdict)
+            self.fireHAEvent( tmpdict )
 
         if event_id == PyCondition.PANEL_UPDATE_ALARM_ACTIVE: 
             self.sendHANotification(AvailableNotifications.SIREN, "Siren is Sounding, Alarm has been Activated" )
@@ -519,7 +569,7 @@ class VisonicClient:
         elif tmp == PyCondition.WATCHDOG_TIMEOUT_RETRYING:
             self.sendHANotification(AvailableNotifications.PANEL_OPERATION, "Communication Timeout - Watchdog Timeout, restoring panel connection" )
         elif tmp == PyCondition.NO_DATA_FROM_PANEL:
-            self.sendHANotification(AvailableNotifications.CONNECTION_PROBLEM, "Integration Suspended - No data from the panel" )
+            self.sendHANotification(AvailableNotifications.CONNECTION_PROBLEM, "Connection Problem - No data from the panel" )
         elif tmp == PyCondition.COMMAND_REJECTED:
             self.sendHANotification(AvailableNotifications.ALWAYS, "Operation Rejected By Panel (tell the Integration Author and upload a debug log file if you're able to)" )
 
@@ -566,6 +616,24 @@ class VisonicClient:
             ),
         }
 
+    async def checkUserPermission(self, call, perm, entity):
+        user = await self.hass.auth.async_get_user(call.context.user_id)
+
+        if user is None:
+            raise UnknownUser(
+                context=call.context,
+                entity_id=entity,
+                permission=perm,
+            )
+
+        # _LOGGER.debug("user={0}".format(user))
+        if not user.permissions.check_entity(entity, perm):
+            raise Unauthorized(
+                context=call.context,
+                entity_id=entity,
+                permission=perm,
+            )
+    
     def updateConfig(self, conf: dict = None):
         """Update the dictionary full of configuration data."""
         if conf is not None:
@@ -597,22 +665,14 @@ class VisonicClient:
         #            _LOGGER.debug("   Removed existing HA Entity Switch ID: %s", x)
         #            self.hass.add_job(self.hass.states.async_remove(x))
 
-        # Empty out the lists
-        self.hass.data[DOMAIN]["binary_sensor"] = list()
-        self.hass.data[DOMAIN]["select"] = list()
-        self.hass.data[DOMAIN]["switch"] = list()
-        self.hass.data[DOMAIN]["alarm_control_panel"] = list()
-
         # set up config parameters in the visonic library
-        self.hass.data[DOMAIN][DOMAINDATA][
-            "Exception Count"
-        ] = self.panel_exception_counter
+        self.hass.data[DOMAIN][DOMAINDATA][self.getEntryID()]["Exception Count"] = self.panel_exception_counter
 
         _LOGGER.debug("connect_to_alarm self.config = %s", self.config)
 
         # Get Visonic specific configuration.
         device_type = self.config.get(CONF_DEVICE_TYPE)
-
+        
         _LOGGER.debug("Visonic Connection Device Type is %s %s", device_type, self.getConfigData())
 
         # update config parameters (local in hass[DOMAIN] mainly)
@@ -744,7 +804,7 @@ class VisonicClient:
         self.visonicTask = None
         self.visonicProtocol = None
 
-        # _LOGGER.debug("........... attempting connection")
+        _LOGGER.debug("........... attempting connection")
 
         if await self.connect_to_alarm():
             # if not alarm_entity_exists:
@@ -752,22 +812,11 @@ class VisonicClient:
 
     async def service_panel_reconnect(self, call):
         """Service call to re-connect the connection."""
+        if not self.isPanelConnected():
+            raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
+
         if call.context.user_id:
-            user = await self.hass.auth.async_get_user(call.context.user_id)
-
-            if user is None:
-                raise UnknownUser(
-                    context=call.context,
-                    entity_id=ALARM_PANEL_ENTITY,
-                    permission=POLICY_CONTROL,
-                )
-
-            if not user.permissions.check_entity(ALARM_PANEL_ENTITY, POLICY_CONTROL):
-                raise Unauthorized(
-                    context=call.context,
-                    entity_id=ALARM_PANEL_ENTITY,
-                    permission=POLICY_CONTROL,
-                )
+            await self.checkUserPermission(call, POLICY_CONTROL, ALARM_PANEL_ENTITY + "." + self.getAlarmPanelUniqueIdent())
 
         _LOGGER.debug("User has requested visonic panel reconnection")
         await self.service_panel_stop()
@@ -796,7 +845,7 @@ class VisonicClient:
 
         # General update trigger
         #    0 is a disconnect and (hopefully) reconnect from an exception (probably comms related)
-        self.hass.bus.fire(ALARM_PANEL_CHANGE_EVENT, {"condition": 0})
+        self.fireHAEvent( {"condition": 0} )
 
         self.panel_exception_counter = self.panel_exception_counter + 1
         asyncio.ensure_future(self.disconnect_callback_async(), loop=self.hass.loop)
@@ -995,22 +1044,11 @@ class VisonicClient:
     async def service_panel_eventlog(self, call):
         """Service call to retrieve the event log from the panel. This currently just gets dumped in the HA log file."""
         _LOGGER.debug("alarm control panel received event log request")
+        if not self.isPanelConnected():
+            raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
+
         if call.context.user_id:
-            user = await self.hass.auth.async_get_user(call.context.user_id)
-
-            if user is None:
-                raise UnknownUser(
-                    context=call.context,
-                    entity_id=ALARM_PANEL_ENTITY,
-                    permission=POLICY_READ,
-                )
-
-            if not user.permissions.check_entity(ALARM_PANEL_ENTITY, POLICY_READ):
-                raise Unauthorized(
-                    context=call.context,
-                    entity_id=ALARM_PANEL_ENTITY,
-                    permission=POLICY_READ,
-                )
+            await self.checkUserPermission(call, POLICY_READ, ALARM_PANEL_ENTITY + "." + self.getAlarmPanelUniqueIdent())
 
         _LOGGER.debug("alarm control panel received event log request - user approved")
         #if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
@@ -1041,26 +1079,88 @@ class VisonicClient:
                 call.data,
             )
 
+    # Service alarm_control_panel.alarm_sensor_bypass
+    # {"entity_id": "binary_sensor.visonic_z01", "bypass":"True", "code":"1234" }
+    def sensor_bypass(self, eid : str, bypass : bool, code : str):
+        """Bypass individual sensors."""
+        # This function concerns itself with bypassing a sensor and the visonic panel interaction
+
+        armcode = self.getPanelStatusCode()
+        if armcode is None or armcode == PyPanelStatus.UNKNOWN:
+            self.createWarningMessage(AvailableNotifications.CONNECTION_PROBLEM, "Attempt to bypass sensor, check panel connection")
+        else:
+            if armcode == PyPanelStatus.DISARMED:
+                # If currently Disarmed
+                mybpstate = self.hass.states.get(eid)
+                if mybpstate is not None:
+                    if DEVICE_ATTRIBUTE_NAME in mybpstate.attributes and PANEL_ATTRIBUTE_NAME in mybpstate.attributes:
+                        devid = mybpstate.attributes[DEVICE_ATTRIBUTE_NAME]
+                        #_LOGGER.debug("Attempt to bypass sensor mybpstate.attributes = {0}".format(mybpstate.attributes))
+                        panel = mybpstate.attributes[PANEL_ATTRIBUTE_NAME]
+                        if panel == self.getPanelID():
+                            if devid >= 1 and devid <= 64:
+                                if bypass:
+                                    _LOGGER.debug("Attempt to bypass sensor device id = %s", str(devid))
+                                else:
+                                    _LOGGER.debug("Attempt to restore (arm) sensor device id = %s", str(devid))
+                                self.sendBypass(devid, bypass, code)
+                            else:
+                                self.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, incorrect device {str(devid)} for entity {eid}")
+                        else:
+                            self.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, device {str(devid)} but entity {eid} not connected to this panel")
+                    else:
+                        self.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, incorrect entity {eid}")
+                else:
+                    self.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, unknown device state for entity {eid}")
+            else:
+                self.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Visonic Alarm Panel: Attempt to bypass sensor for panel {self.getPanelID()}, panel needs to be in the disarmed state")
+
+    async def service_sensor_bypass(self, call):
+        """Service call to bypass a sensor in the panel."""
+        _LOGGER.debug("alarm control panel received sensor bypass request")
+        if not self.isPanelConnected():
+            raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
+
+        # if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
+        if isinstance(call.data, dict):
+            # _LOGGER.debug("  Sensor_bypass = %s", str(type(call.data)))
+            # self.dump_dict(call.data)
+            if ATTR_ENTITY_ID in call.data:
+                eid = str(call.data[ATTR_ENTITY_ID])
+                if not eid.startswith("binary_sensor."):
+                    eid = "binary_sensor." + eid
+                if valid_entity_id(eid):
+                    if call.context.user_id:
+                        await self.checkUserPermission(call, POLICY_CONTROL, call.data[ATTR_ENTITY_ID])
+                    
+                    bypass = False
+                    if ATTR_BYPASS in call.data:
+                        bypass = call.data[ATTR_BYPASS]
+
+                    code = ""
+                    if ATTR_CODE in call.data:
+                        code = call.data[ATTR_CODE]
+                        # If the code is defined then it must be a 4 digit string
+                        if len(code) > 0 and not re.search(PIN_REGEX, code):
+                            code = "0000"
+
+                    self.sensor_bypass(eid, bypass, code)
+                else:
+                    self.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, invalid entity {eid}")
+            else:
+                self.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
+        else:
+            self.createWarningMessage(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
+
+
     async def service_panel_command(self, call):
-        """Service call to send a commandto the panel."""
+        """Service call to send a command to the panel."""
         _LOGGER.debug("alarm control panel received command request")
+        if not self.isPanelConnected():
+            raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
+
         if call.context.user_id:
-            user = await self.hass.auth.async_get_user(call.context.user_id)
-
-            if user is None:
-                raise UnknownUser(
-                    context=call.context,
-                    entity_id=ALARM_PANEL_ENTITY,
-                    permission=POLICY_CONTROL,
-                )
-
-            # _LOGGER.debug("user={0}".format(user))
-            if not user.permissions.check_entity(ALARM_PANEL_ENTITY, POLICY_CONTROL):
-                raise Unauthorized(
-                    context=call.context,
-                    entity_id=ALARM_PANEL_ENTITY,
-                    permission=POLICY_CONTROL,
-                )
+            await self.checkUserPermission(call, POLICY_CONTROL, ALARM_PANEL_ENTITY + "." + self.getAlarmPanelUniqueIdent())
 
         _LOGGER.debug("alarm control panel received command request - user approved")
         #if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
@@ -1086,22 +1186,6 @@ class VisonicClient:
             # Establish a callback to stop the component when the stop event occurs
             self.hass.bus.async_listen_once(
                 EVENT_HOMEASSISTANT_STOP, self.stop_subscription
-            )
-
-            self.hass.services.async_register(
-                DOMAIN, "alarm_panel_reconnect", self.service_panel_reconnect
-            )
-            self.hass.services.async_register(
-                DOMAIN,
-                "alarm_panel_eventlog",
-                self.service_panel_eventlog,
-                schema=ALARM_SERVICE_EVENTLOG,
-            )
-            self.hass.services.async_register(
-                DOMAIN,
-                "alarm_panel_command",
-                self.service_panel_command,
-                schema=ALARM_SERVICE_COMMAND,
             )
             await self.service_panel_start()
 

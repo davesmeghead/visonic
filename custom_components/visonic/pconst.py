@@ -94,6 +94,7 @@ class PyCondition(IntEnum):
     WATCHDOG_TIMEOUT_RETRYING = 9
     NO_DATA_FROM_PANEL = 10
     COMMAND_REJECTED = 15
+    DOWNLOAD_SUCCESS = 16
 
 class PySensorType(IntEnum):
     UNKNOWN = -1

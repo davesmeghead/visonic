@@ -12,10 +12,11 @@
         },
         "step": {
             "device": {
-                "description": "Enter your device type, Ethernet or USB",
+                "description": "Enter your Device Type and Panel Number",
                 "title": "Connection",
                 "data": {
-                    "type": "Ethernet or USB"
+                    "type": "Ethernet or USB",
+                    "panel_number": "Panel Number (set to 0 for automatic)"
                 }
             },
             "ethernet": {

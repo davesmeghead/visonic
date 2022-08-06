@@ -77,7 +77,7 @@ string_type="string"
 int_type = "int"
 bool_type = "bool"
 list_type = "list"
-myconfigtypes = [string_type, string_type, int_type, string_type, int_type, string_type, bool_type, bool_type, bool_type, string_type, bool_type, bool_type, bool_type, int_type, string_type, bool_type, bool_type, list_type, bool_type, int_type, int_type]
+myconfigtypes = [string_type, string_type, int_type, string_type, int_type, string_type, bool_type, bool_type, bool_type, string_type, bool_type, list_type, bool_type, int_type, string_type, bool_type, bool_type, list_type, bool_type, int_type, int_type]
 
 class VisonicClient:
 
