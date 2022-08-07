@@ -16,7 +16,7 @@
                 "title": "Connection",
                 "data": {
                     "type": "Ethernet or USB",
-                    "panel_number": "Panel Number (set to 0 for automatic)"
+                    "panel_number": "Panel Number (set to 0 for automatic numbering)"
                 }
             },
             "ethernet": {
@@ -44,7 +44,7 @@
                     "download_code": "Download Code",
                     "force_standard": "Force Standard Mode",
                     "force_autoenroll": "Auto Enroll Supported (Unticked for PowerMax+)",
-                    "sync_time": "Synchronise Time with the Alarm Panel",
+                    "sync_time": "Synchronise Time to the Alarm Panel",
                     "language": "Language (EN, NL, FR)"
                 }
             },
@@ -52,7 +52,7 @@
                 "description": "",
                 "title": "Alarm Panel Settings",
                 "data": {
-                    "arm_without_usercode": "Arm without User Code",
+                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "override_code": "Override User Code",
                     "siren_sounding": "List of triggers for the siren (comma separated)",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
@@ -69,11 +69,11 @@
                 "description": "",
                 "title": "Log File",
                 "data": {
+                    "panellog_complete_event": "Generate an HA Event on Completion",
                     "panellog_logentry_event": "Generate an HA Event for each Log entry",
                     "panellog_csv_add_title_row": "Add a Title Row to the generated CSV file",
-                    "panellog_xml_filename": "The XML Filename (and path)",
-                    "panellog_csv_filename": "The CSV Filename (and path)",
-                    "panellog_complete_event": "Generate an HA Event on Completion",
+                    "panellog_xml_filename": "The XML Filename (and path), default is /visonic_log_file.xml",
+                    "panellog_csv_filename": "The CSV Filename (and path), default is /visonic_log_file.csv",
                     "panellog_reverse_order": "Reverse the output order",
                     "panellog_max_entries": "Only output the most recent X log entries"
                 }
@@ -104,12 +104,12 @@
                 "description": "",
                 "title": "Alarm Panel Settings",
                 "data": {
-                    "arm_without_usercode": "Arm without User Code",
+                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "override_code": "Override User Code",
                     "siren_sounding": "List of triggers for the siren (comma separated)",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off": "Motion off delay time (seconds)",
-                    "force_numeric_keypad": "Force use of a Numeric Keypad",
+                    "force_numeric_keypad": "Force use of a Numeric Keypad (Disarm)",
                     "arm_away_instant": "Arm Away Instant every time",
                     "arm_home_instant": "Arm Home Instant every time",
                     "allow_remote_arm": "Allow Panel Arm from Home Assistant",
@@ -121,11 +121,11 @@
                 "description": "",
                 "title": "Log File",
                 "data": {
+                    "panellog_complete_event": "Generate an HA Event on Completion",
                     "panellog_logentry_event": "Generate an HA Event for each Log entry",
                     "panellog_csv_add_title_row": "Add a Title Row to the generated CSV file",
-                    "panellog_xml_filename": "The XML Filename (and path)",
-                    "panellog_csv_filename": "The CSV Filename (and path)",
-                    "panellog_complete_event": "Generate an HA Event on Completion",
+                    "panellog_xml_filename": "The XML Filename (and path), default is /visonic_log_file.xml",
+                    "panellog_csv_filename": "The CSV Filename (and path), default is /visonic_log_file.csv",
                     "panellog_reverse_order": "Reverse the output order",
                     "panellog_max_entries": "Only output the most recent X log entries"
                 }

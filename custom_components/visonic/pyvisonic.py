@@ -31,6 +31,7 @@
 #    PanelType=7 : PowerMaster10 , Model=153   Powermaster True
 #    PanelType=8 : PowerMaster30 , Model=6   Powermaster True
 #    PanelType=8 : PowerMaster30 , Model=53   Powermaster True
+#    PanelType=8 : PowerMaster30 , Model=63   Powermaster True   #  This is my test panel, all 0x3F  Message data is formatted correctly
 #    PanelType=10: PowerMaster33 , Model=71   Powermaster True   #  Under investigation. Problem with 0x3F Message data (EPROM) being less than requested
 #    PanelType=15: PowerMaster33 , Model=146   Powermaster True  #  Under investigation.
 #################################################################
@@ -60,7 +61,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.15.0"
+PLUGIN_VERSION = "1.0.15.1"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -3416,8 +3417,8 @@ class PacketHandling(ProtocolBase):
                         pushChange = True
 
         elif eventType == 0x04:  # Zone event
-            # Every zone event causes the need to push for a change
-            # pushChange = True  # Commented out as we shouldn't need to push a change for evert little A5 message .... or do we :)
+            # Assume that every zone event causes the need to push a change to the sensors etc
+            pushChange = True
             if not self.pmPowerlinkMode:
                 log.debug("[handle_msgtypeA5]      Got A5 04 message, resetting watchdog")
                 self._reset_watchdog_timeout()
@@ -3443,7 +3444,6 @@ class PacketHandling(ProtocolBase):
                     # Check to see if the state has changed
                     if (oldstate and not self.pmX10Dev_t[i].state) or (not oldstate and self.pmX10Dev_t[i].state):
                         log.debug("[handle_msgtypeA5]      X10 device {0} changed to {2} ({1})".format(i, status, self.pmX10Dev_t[i].state))
-                        pushChange = True
 
             slog = pmDetailedArmMode_t[sysStatus]
             sarm_detail = "Unknown"
@@ -3530,14 +3530,17 @@ class PacketHandling(ProtocolBase):
                     datadict["Mode"] = []
                     datadict["Name"] = []
                     self._sendResponseEvent(PyCondition.PANEL_UPDATE_ALARM_ACTIVE, datadict)  # Alarm Event
+                    # As we have just pushed a change through there's no need to do it again
+                    pushChange = False
 
             # Clear any alarm event if the panel alarm has been triggered before (while armed) but now that the panel is disarmed (in all modes)
             if self.pmSirenActive and sarm == "Disarmed":
                 log.debug("[handle_msgtypeA5] ******************** Alarm Not Sounding (Disarmed) ****************")
                 self.pmSirenActive = False
+                # Put it back to True just in case the previous "if" set it to False
+                pushChange = True
 
             if sysFlags & 0x20 != 0:  # Zone Event
-                pushChange = True
                 sEventLog = pmEventType_t[self.pmLang][eventType]
                 log.debug("[handle_msgtypeA5]      Zone Event")
                 log.debug("[handle_msgtypeA5]            Zone: {0}    Type: {1}, {2}".format(eventZone, eventType, sEventLog))
@@ -3574,7 +3577,6 @@ class PacketHandling(ProtocolBase):
                     #    self.pmSensorDev_t[key].status = False
                     elif eventType == 13:  # Low Battery
                         self.pmSensorDev_t[key].lowbatt = True
-                        #self.pmSensorDev_t[key].pushChange()
                     # elif eventType == 14: # AC Failure
                     # elif eventType == 15: # Fire Alarm
                     # elif eventType == 16: # Emergency
@@ -3590,8 +3592,11 @@ class PacketHandling(ProtocolBase):
                     datadict["Zone"] = eventZone
                     datadict["Event"] = eventType
                     datadict["Description"] = sEventLog
-
-                    self._sendResponseEvent(PyCondition.ZONE_UPDATE, datadict)  # push zone changes through to the host to get it to update
+                    
+                    # push zone changes through to the host to get it to update
+                    self._sendResponseEvent(PyCondition.ZONE_UPDATE, datadict)  
+                    # As we have just pushed a change through there's no need to do it again (and this is the last thing in "04")
+                    pushChange = False
 
             #   0x03 : "", 0x04 : "", 0x05 : "", 0x0A : "", 0x0B : "", 0x13 : "", 0x14 : "", 0x15 : ""
             # armModeNum = 1 if pmArmed_t[sysStatus] != None else 0
@@ -3629,7 +3634,6 @@ class PacketHandling(ProtocolBase):
                         self.pmSensorDev_t[i].enrolled = False
 
                 self.sensorsCreated = True               
-                #self._sendResponseEvent(visonic_devices)
 
             val = self._makeInt(data[6:10])
             if self.sensorsCreated and val != self.bypass_old:
@@ -3639,7 +3643,6 @@ class PacketHandling(ProtocolBase):
                     if i in self.pmSensorDev_t:
                         self.pmSensorDev_t[i].bypass = val & (1 << i) != 0
                         pushChange = True
-                        #self.pmSensorDev_t[i].pushChange()
 
             self._dumpSensorsToLogFile()
         # else:

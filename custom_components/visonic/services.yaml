@@ -4,11 +4,11 @@ alarm_panel_eventlog:
   fields:
     code:
       name: User Code
-      description: An optional code to send to the panel.
+      description: An optional alarm user code (depending on your settings) to send to the panel.
       example: "1234"
     panel:
-      name: Panel Id
-      description: An optional panel number, use 0 for single panel in use
+      name: Panel Identifier
+      description: An optional panel number, defaults to 0 if not set.
       example: "0"
     
 alarm_panel_command:
@@ -16,14 +16,25 @@ alarm_panel_command:
   description: Send a command to the Alarm Panel.
   fields:
     command:
-      description: "The command to send to the panel"
+      name: Panel Command
+      required: true
+      description: The command to send to the panel ('arm_away', 'arm_away_instant', 'arm_home', 'arm_home_instant', 'disarm').
       example: 'disarm'
+      selector:
+        select:
+          options:
+            - "disarm"
+            - "arm_home"
+            - "arm_home_instant"
+            - "arm_away"
+            - "arm_away_instant"
     code:
-      description: An optional code to send to the panel.
+      name: User Code
+      description: An optional alarm user code (depending on your settings) to send to the panel.
       example: "1234"
     panel:
-      name: Panel Id
-      description: An optional panel number, defaults to 0 for when a single panel is in use
+      name: Panel Identifier
+      description: An optional panel number, defaults to 0 if not set.
       example: "0"
 
 alarm_panel_reconnect:
@@ -31,24 +42,33 @@ alarm_panel_reconnect:
   description: Reconnect to the Alarm Panel following a previous problem.
   fields:
     panel:
-      name: Panel Id
-      description: An optional panel number, use 0 for single panel in use
+      name: Panel Identifier
+      description: An optional panel number, defaults to 0 if not set.
       example: "0"
 
 alarm_sensor_bypass:
   name: Sensor Bypass
-  description: Bypass a visonic sensor.
+  description: Bypass and Re-Arm a Visonic Sensor.
   fields:
     entity_id:
-      description: Name of the visonic sensor to bypass. This is case sensitive.
+      name: Visonic Sensor
+      required: true
+      description: Name of the visonic sensor to bypass. This is case sensitive and a mandatory setting. The "binary_sensor." text is optional.
       example: 'binary_sensor.visonic_z02'
     bypass:
-      description: An optional bypass ("True") or stop the bypass and re-arm ("False"), defaults to False
-      example: "False"
+      name: Bypass Command
+      description: An optional bypass ("True", "On", "Yes", "Enable") or re-arm ("False", "Off", "No", "Disable"), defaults to "Off" if not set.
+      example: "Off"
+      selector:
+        select:
+          options:
+            - "On"
+            - "Off"
     code:
-      description: An optional code to send to the panel.
+      name: User Code
+      description: An optional alarm user code (depending on your settings) to send to the panel.
       example: "1234"
     panel:
-      name: Panel Id
-      description: An optional panel number, use 0 for single panel in use
+      name: Panel Identifier
+      description: An optional panel number, defaults to 0 if not set.
       example: "0"

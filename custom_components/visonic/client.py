@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.8.0.0"
+CLIENT_VERSION = "0.8.0.1"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -183,11 +183,12 @@ class VisonicClient:
         return self.panelident
 
     def getDispatcher(self):
+        # This just needs to be unique within HA so use the domain name and panel number
         return VISONIC_UPDATE_STATE_DISPATCHER + "_p" + str(self.getPanelID())
 
     def getAlarmPanelUniqueIdent(self):
         if self.getPanelID() > 0:
-            return VISONIC_UNIQUE_NAME + "_p" + str(self.getPanelID())
+            return VISONIC_UNIQUE_NAME + " Panel " + str(self.getPanelID())
         return VISONIC_UNIQUE_NAME
 
     def sendHANotification(self, condition : AvailableNotifications, message: str):
@@ -1097,7 +1098,7 @@ class VisonicClient:
                         devid = mybpstate.attributes[DEVICE_ATTRIBUTE_NAME]
                         #_LOGGER.debug("Attempt to bypass sensor mybpstate.attributes = {0}".format(mybpstate.attributes))
                         panel = mybpstate.attributes[PANEL_ATTRIBUTE_NAME]
-                        if panel == self.getPanelID():
+                        if panel == self.getPanelID(): # This should be done in _init_ but check again to make sure as its a critical operation
                             if devid >= 1 and devid <= 64:
                                 if bypass:
                                     _LOGGER.debug("Attempt to bypass sensor device id = %s", str(devid))
@@ -1133,7 +1134,7 @@ class VisonicClient:
                     if call.context.user_id:
                         await self.checkUserPermission(call, POLICY_CONTROL, call.data[ATTR_ENTITY_ID])
                     
-                    bypass = False
+                    bypass: boolean = False
                     if ATTR_BYPASS in call.data:
                         bypass = call.data[ATTR_BYPASS]
 

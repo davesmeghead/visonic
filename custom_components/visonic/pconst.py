@@ -81,7 +81,7 @@ class PyCommandStatus(IntEnum):
     FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED = 7
     FAIL_PANEL_NO_CONNECTION = 8
 
-class PyCondition(IntEnum):
+class PyCondition(IntEnum):   # Note that PanelCondition in client.py uses numbers 11 to 14.  Only 1 to 14 are output to HA as events.
     PUSH_CHANGE = 0
     ZONE_UPDATE = 1
     PANEL_UPDATE = 2
