@@ -10,6 +10,7 @@ from typing import Any
 from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT, CONF_USERNAME, CONF_PASSWORD
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util.yaml.objects import NodeListClass
+from homeassistant.helpers import selector
 
 from .const import (
     CONF_EXCLUDE_SENSOR,
@@ -164,11 +165,13 @@ class VisonicSchema:
     def create_parameters2(self, options: dict):
         """Create parameter set 2."""
         # Panel settings - can be modified/edited
+        # _LOGGER.debug(f'Create 2 {options.get(CONF_OVERRIDE_CODE, "")}')
+        tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
         return {
             vol.Optional(
                 CONF_MOTION_OFF_DELAY,
                 default=self.create_default(options, CONF_MOTION_OFF_DELAY, 120),
-            ): int,
+            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
             vol.Optional(
                 CONF_SIREN_SOUNDING,
                 default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
@@ -178,8 +181,8 @@ class VisonicSchema:
                 default=self.create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
             ): cv.multi_select(AvailableNotificationConfig),
             vol.Optional(
-                CONF_OVERRIDE_CODE, default=self.create_default(options, CONF_OVERRIDE_CODE, "")
-            ): str,
+                CONF_OVERRIDE_CODE, default = (0 if tmp == "" else int(tmp))
+            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=9999, mode=selector.NumberSelectorMode.BOX)), #vol.All (cv.string, cv.matches_regex("(^[0-9]{4}$|^$)")), #("(^[0-9][0-9][0-9][0-9]$|^$)")
             vol.Optional(
                 CONF_ARM_CODE_AUTO,
                 default=self.create_default(options, CONF_ARM_CODE_AUTO, False),

@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.8.0.1"
+CLIENT_VERSION = "0.8.1.0"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -128,7 +128,7 @@ class VisonicClient:
         self.select_task = None
         self.switch_task = None
 
-        _LOGGER.debug("init panel %s   self.config = %s  %s", str(panelident), PyConfiguration.DownloadCode, self.config)
+        #_LOGGER.debug("init panel %s   self.config = %s  %s", str(panelident), PyConfiguration.DownloadCode, self.config)
         
         self.panelident = panelident
 
@@ -530,7 +530,7 @@ class VisonicClient:
         if event_id == PyCondition.DOWNLOAD_SUCCESS:        # download success        
             # Update the friendly name of the control flow
             d = self.getPanelStatus()
-            _LOGGER.debug("     DOWNLOAD_SUCCESS. Current Data dict = {0}".format(d))
+            #_LOGGER.debug("     DOWNLOAD_SUCCESS. Current Data dict = {0}".format(d))
             
             if 'Panel Model' in d and 'Panel Type' in d and 'Model Type' in d and 'Panel Serial' in d:
                 pm = str(d['Panel Model'])
@@ -648,28 +648,10 @@ class VisonicClient:
         if self.SystemStarted:
             return False
 
-        # remove any existing visonic related sensors (so we don't get entity id already exists exceptions on a restart)
-        # sensor_list = self.hass.states.async_entity_ids("binary_sensor")
-        # if sensor_list is not None:
-        #    for x in sensor_list:
-        #        _LOGGER.debug("Checking HA Entity Sensor ID: %s", x)
-        #        if x.lower().startswith("binary_sensor.visonic_z"):
-        #            _LOGGER.debug("   Removed existing HA Entity Sensor ID: %s", x)
-        #            self.hass.add_job(self.hass.states.async_remove(x))
-
-        # remove any existing visonic related switches (so we don't get entity id already exists exceptions on a restart)
-        # switch_list = self.hass.states.async_entity_ids("switch")
-        # if switch_list is not None:
-        #    for x in switch_list:
-        #        _LOGGER.debug("Checking HA Entity Switch ID: %s", x)
-        #        if x.lower().startswith("switch.visonic_x"):
-        #            _LOGGER.debug("   Removed existing HA Entity Switch ID: %s", x)
-        #            self.hass.add_job(self.hass.states.async_remove(x))
-
         # set up config parameters in the visonic library
         self.hass.data[DOMAIN][DOMAINDATA][self.getEntryID()]["Exception Count"] = self.panel_exception_counter
 
-        _LOGGER.debug("connect_to_alarm self.config = %s", self.config)
+        #_LOGGER.debug("connect_to_alarm self.config = %s", self.config)
 
         # Get Visonic specific configuration.
         device_type = self.config.get(CONF_DEVICE_TYPE)
@@ -859,22 +841,64 @@ class VisonicClient:
             psc = self.getPanelStatusCode()
             panelmode = self.getPanelMode()
             #_LOGGER.debug("Getting Pin")
-            if self.isArmWithoutCode() and psc == PyPanelStatus.DISARMED and self.hasValidOverrideCode():
+            
+            # Avoid the panel codes that we're not interested in, if these are set then we have no business doing any of the functions
+            #    After this we can simply use DISARMED and not DISARMED for all the armed states
+            if psc == PyPanelStatus.UNKNOWN or psc == PyPanelStatus.SPECIAL or psc == PyPanelStatus.DOWNLOADING:
+                return False, None   # Return invalid as panel not in correct state to do anything
+            
+            override_code = self.config.get(CONF_OVERRIDE_CODE, "")
+            
+            if panelmode == PyPanelMode.STANDARD:
+                if psc == PyPanelStatus.DISARMED:
+                    if self.isArmWithoutCode():  # 
+                        #_LOGGER.debug("Here B")
+                        return True, "0000"        # If the panel can arm without a usercode then we can use 0000 as the usercode
+                    elif self.hasValidOverrideCode():
+                        return True, override_code
+                    return False, None             # use keypad so invalidate the return, there should be a valid 4 pin code
+                else:
+                    if self.hasValidOverrideCode() and not forcedKeypad:
+                        return True, override_code
+                    return False, None             # use keypad so invalidate the return, there should be a valid 4 pin code
+            elif panelmode == PyPanelMode.POWERLINK or panelmode == PyPanelMode.STANDARD_PLUS:  # 
+                if psc == PyPanelStatus.DISARMED and self.isArmWithoutCode() and forcedKeypad:
+                    return True, override_code if self.hasValidOverrideCode() else None   # Override code or usercode
+                if forcedKeypad:
+                    return False, None   # use keypad so invalidate the return, there should be a valid 4 pin code
+                if self.hasValidOverrideCode():
+                    return True, override_code
+                return True, None    # Usercode
+            else:
+                # If the panel mode is STARTING, DOWNLOADING etc
+                _LOGGER.warning("Warning: Valid 4 digit PIN not found")
+                return False, None # Return invalid as panel not in correct state to do anything
+        return True, pin
+
+    # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
+    def pmGetPinOldVersion(self, pin: str, forcedKeypad: bool):
+        """Get pin code."""
+        #_LOGGER.debug("Getting Pin Start")
+        if pin is None or pin == "" or len(pin) != 4:
+            psc = self.getPanelStatusCode()
+            panelmode = self.getPanelMode()
+            #_LOGGER.debug("Getting Pin")
+            if self.isArmWithoutCode() and psc == PyPanelStatus.DISARMED and self.hasValidOverrideCode():  # Pwr/+ 3
                 # Panel currently disarmed, arm without user code, override is set and valid
                 #_LOGGER.debug("Here A")
                 return True, self.config.get(CONF_OVERRIDE_CODE, "")
-            elif self.isArmWithoutCode() and psc == PyPanelStatus.DISARMED:
+            elif panelmode == PyPanelMode.STANDARD and psc == PyPanelStatus.DISARMED and self.isArmWithoutCode() and not self.hasValidOverrideCode():  # Pwr/+ 7
                 # Panel currently disarmed, arm without user code, so use any code
                 #_LOGGER.debug("Here B")
                 return True, "0000"
             elif forcedKeypad:
                 # this is used to catch the condition that the keypad is used but an invalid
                 #     number of digits has been entered
-                #_LOGGER.debug("Here D")
+                #_LOGGER.debug("Here C")
                 return False, None
             elif self.hasValidOverrideCode():
                 # The override is set and valid
-                #_LOGGER.debug("Here C")
+                #_LOGGER.debug("Here D")
                 return True, self.config.get(CONF_OVERRIDE_CODE, "")
             elif panelmode == PyPanelMode.POWERLINK or panelmode == PyPanelMode.STANDARD_PLUS:
                 # Powerlink or StdPlus and so we downloaded the pin codes
@@ -942,10 +966,10 @@ class VisonicClient:
 
                 isValidPL, pin = self.pmGetPin(pin = pcode, forcedKeypad = self.isForceKeypad())
 
-                if not isValidPL and self.isArmWithoutCode() and command != PyPanelCommand.DISARM:
-                    # if we dont have pin codes and we can arm without a code and we're arming and arming is allowed
-                    isValidPL = True
-                    pin = "0000"
+                #if not isValidPL and self.isArmWithoutCode() and command != PyPanelCommand.DISARM:
+                #    # if we dont have pin codes and we can arm without a code and we're arming and arming is allowed
+                #    isValidPL = True
+                #    pin = "0000"
 
                 if isValidPL:
                     if (command == PyPanelCommand.DISARM and self.isRemoteDisarm()) or (
@@ -1013,6 +1037,11 @@ class VisonicClient:
         return True
 
     def isCodeRequired(self) -> bool:
+        """Determine if a user code is required given the panel mode and user settings."""
+        isValidPL, pin = self.pmGetPin(pin = None, forcedKeypad = self.isForceKeypad())
+        return not isValidPL;
+
+    def isCodeRequiredBackup(self) -> bool:
         """Determine if a user code is required given the panel mode and user settings."""
         # try powerlink or standard plus mode first, then it already has the user codes
         panelmode = self.getPanelMode()

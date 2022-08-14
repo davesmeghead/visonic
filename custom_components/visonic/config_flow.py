@@ -15,7 +15,7 @@ from homeassistant import config_entries, data_entry_flow
 from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT
 from homeassistant.core import callback
 
-from .const import DOMAIN, DOMAINCLIENT, CONF_ALARM_NOTIFICATIONS
+from .const import DOMAIN, DOMAINCLIENT, CONF_ALARM_NOTIFICATIONS, CONF_OVERRIDE_CODE
 from .create_schema import VisonicSchema
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
 
     async def _show_form(
         self, step: str = "device", placeholders=None, errors=None
-    ) -> None:
+    ):
         """Show the form to the user."""
         # _LOGGER.debug("show_form %s %s %s", step, placeholders, errors)
 
@@ -120,6 +120,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
         """Config flow step 2."""
         if user_input is not None:
             self.config.update(user_input)
+        # _LOGGER.debug(f"async_step_parameters2 {user_input}")
         return await self._show_form(step="parameters3")
 
     async def async_step_parameters3(self, user_input=None):
@@ -145,6 +146,25 @@ class MyHandlers(data_entry_flow.FlowHandler):
     async def validate_input(self, data: dict):
         """Validate the input."""
         # Validation to be implemented
+        #tmpOCode = data.get(CONF_OVERRIDE_CODE, "")
+        #_LOGGER.debug(f'validate_input type={type(tmpOCode)}  value={tmpOCode}')
+
+        # Convert the override code from a float to a string, if set to 0 then empty the string
+        tmp : str = str(int(data[CONF_OVERRIDE_CODE]))
+        if len(tmp) == 0 or len(tmp) > 4 or (len(tmp) == 1 and tmp == "0"):
+            tmp = ""
+        elif len(tmp) == 1:
+            tmp = "000" + tmp
+        elif len(tmp) == 2:
+            tmp = "00" + tmp
+        elif len(tmp) == 3:
+            tmp = "0" + tmp
+        
+        data[CONF_OVERRIDE_CODE] = tmp        
+        
+        #tmpOCode = data.get(CONF_OVERRIDE_CODE, "")
+        #_LOGGER.debug(f'validate_input type={type(tmpOCode)}  value={tmpOCode}')
+
         # return a temporary title to use
         return {"title": "Alarm Panel"}
 
@@ -152,6 +172,8 @@ class MyHandlers(data_entry_flow.FlowHandler):
         """Config flow process complete."""
         try:
             info = await self.validate_input(self.config)
+            # tmpOCode = self.config.get(CONF_OVERRIDE_CODE, "")
+            # _LOGGER.debug(f'processcomplete type={type(tmpOCode)}  value={tmpOCode}')
             if info is not None:
                 # convert comma separated string to a list
                 if CONF_SIREN_SOUNDING in self.config:
@@ -247,7 +269,7 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
     async def async_step_user(self, user_input=None):
         """Handle a user config flow."""
         # determine if a panel connection has already been made and stop a second connection
-        _LOGGER.debug("Visonic async_step_user")
+        # _LOGGER.debug("Visonic async_step_user")
         #if self._async_current_entries():
             #return self.async_abort(reason="already_configured")
         #self.dumpMyState()
@@ -256,6 +278,8 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         if not user_input:
             _LOGGER.debug("Visonic in async_step_user - trigger user input")
             return await self._show_form(step="device")
+
+        _LOGGER.debug("Visonic async_step_user - importing a yaml config setup")
 
         # importing a yaml config setup
         info = await self.validate_input(user_input)

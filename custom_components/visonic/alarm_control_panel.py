@@ -135,14 +135,14 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
                     return {
                         "manufacturer": "Visonic",
                         "identifiers": {(DOMAIN, self._myname)},
-                        "name": f"Visonic Alarm Panel (Partition {self._partition_id})",
+                        "name": f"Visonic Alarm Panel {self._panel} (Partition {self._partition_id})",
                         "model": pm,
                         # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
                     }
         return {
             "manufacturer": "Visonic",
             "identifiers": {(DOMAIN, self._myname)},
-            "name": f"Visonic Alarm Panel (Partition {self._partition_id})",
+            "name": f"Visonic Alarm Panel {self._panel} (Partition {self._partition_id})",
             "model": None,
             # "model": "Alarm Panel",
             # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
