@@ -25,6 +25,7 @@ class PyPanelMode(IntEnum):
     STANDARD_PLUS = 4
     POWERLINK = 5
     DOWNLOAD = 6
+    STOPPED = 7
 
 class PyPanelStatus(IntEnum):
     UNKNOWN = -1

@@ -9,9 +9,11 @@ from homeassistant.auth.permissions.const import POLICY_CONTROL
 from .pconst import PyPanelCommand, PyPanelStatus
 import homeassistant.components.alarm_control_panel as alarm
 from homeassistant.components.alarm_control_panel.const import (
-    SUPPORT_ALARM_ARM_AWAY,
-    SUPPORT_ALARM_ARM_HOME,
-    SUPPORT_ALARM_ARM_NIGHT,
+    #SUPPORT_ALARM_ARM_AWAY,
+    #SUPPORT_ALARM_ARM_HOME,
+    #SUPPORT_ALARM_ARM_NIGHT,
+    AlarmControlPanelEntityFeature,
+    CodeFormat,
 )
 from homeassistant.config_entries import ConfigEntry
 
@@ -169,9 +171,9 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
                 # _LOGGER.debug("alarm armcode is %s", str(armcode))
                 if armcode == PyPanelStatus.DISARMED or armcode == PyPanelStatus.SPECIAL or armcode == PyPanelStatus.DOWNLOADING:
                     self._mystate = STATE_ALARM_DISARMED
-                elif armcode == PyPanelStatus.ARMING_HOME or armcode == PyPanelStatus.ENTRY_DELAY:
+                elif armcode == PyPanelStatus.ENTRY_DELAY:
                     self._mystate = STATE_ALARM_PENDING
-                elif armcode == PyPanelStatus.ARMING_AWAY:
+                elif armcode == PyPanelStatus.ARMING_HOME or armcode == PyPanelStatus.ARMING_AWAY:
                     self._mystate = STATE_ALARM_ARMING
                 elif armcode == PyPanelStatus.ARMED_HOME:
                     self._mystate = STATE_ALARM_ARMED_HOME
@@ -209,7 +211,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     @property
     def supported_features(self) -> int:
         """Return the list of supported features."""
-        return SUPPORT_ALARM_ARM_HOME | SUPPORT_ALARM_ARM_AWAY | SUPPORT_ALARM_ARM_NIGHT
+        return AlarmControlPanelEntityFeature.ARM_HOME | AlarmControlPanelEntityFeature.ARM_AWAY | AlarmControlPanelEntityFeature.ARM_NIGHT
 
     # DO NOT OVERRIDE state_attributes AS IT IS USED IN THE LOVELACE FRONTEND TO DETERMINE code_format
     @property
@@ -218,7 +220,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         # Do not show the code panel if the integration is just starting up and 
         #    connecting to the panel
         if self.isPanelConnected():
-            return alarm.FORMAT_NUMBER if self._client.isCodeRequired() else None
+            return CodeFormat.NUMBER if self._client.isCodeRequired() else None
         return None    
 
     def alarm_disarm(self, code=None):

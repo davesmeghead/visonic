@@ -61,7 +61,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.15.1"
+PLUGIN_VERSION = "1.0.16.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -167,6 +167,8 @@ pmSendMsg = {
    "MSG_RESTORE"     : VisonicCommand(bytearray.fromhex('AB 06 00 00 00 00 00 00 00 00 00 43'), [0xA5]                  ,  True, False,  True, 0.0, "Restore PowerMax/Master Connection" ),  # It can take multiple of these to put the panel back in to powerlink
    "MSG_ENROLL"      : VisonicCommand(bytearray.fromhex('AB 0A 00 00 99 99 00 00 00 00 00 43'), None                    ,  True, False,  True, 0.0, "Auto-Enroll of the PowerMax/Master" ),  # should get a reply of [0xAB] but its not guaranteed
    "MSG_INIT"        : VisonicCommand(bytearray.fromhex('AB 0A 00 01 00 00 00 00 00 00 00 43'), None                    ,  True, False,  True, 8.0, "Initializing PowerMax/Master PowerLink Connection" ),
+   "MSG_ALIVE2"      : VisonicCommand(bytearray.fromhex('AB 0E 00 17 1E 00 03 03 01 04 00 43'), None                    ,  True, False,  True, 0.0, "I think this is an alive message to the panel" ),
+#   "MSG_ALIVE3"      : VisonicCommand(bytearray.fromhex('AB 0E 00 17 1E 07 02 02 00 00 00 43'), None                    ,  True, False,  True, 0.0, "I think this is an alive message to the panel" ),
    "MSG_X10NAMES"    : VisonicCommand(bytearray.fromhex('AC 00 00 00 00 00 00 00 00 00 00 43'), [0xAC]                  , False, False,  True, 0.0, "Requesting X10 Names" ),
    # Command codes (powerlink) do not have the 0x43 on the end and are only 11 values                                            
    "MSG_DOWNLOAD"    : VisonicCommand(bytearray.fromhex('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C]                  , False,  True, False, 0.0, "Start Download Mode" ),  # This gets either an acknowledge OR an Access Denied response
@@ -181,14 +183,21 @@ pmSendMsg = {
    # Acknowledges                                                                                                                
    "MSG_ACK"         : VisonicCommand(bytearray.fromhex('02')                                 , None                    , False, False,  True, 0.0, "Ack" ),
    "MSG_ACKLONG"     : VisonicCommand(bytearray.fromhex('02 43')                              , None                    , False, False,  True, 0.0, "Ack Long" ),
-   # PowerMaster specific                                                                                                        
-   "MSG_POWERMASTER" : VisonicCommand(bytearray.fromhex('B0 01 00 00 00 00 00 00 00 00 43')   , [0xB0]                  , False, False,  True, 0.0, "Powermaster Command" )
+   # PowerMaster specific
+#   "MSG_PM_4"        : VisonicCommand(bytearray.fromhex('B0 01 00 00 00 00 00 00 00 00 00 43'), [0xB0]                  , False, False,  True, 0.0, "Powermaster Command 5" ),
+#   "MSG_PM_Zero_0"   : VisonicCommand(bytearray.fromhex('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 00 00 00 00 00 00 00 00 99 43'), [0xB0], False, False,  True, 0.0, "Powermaster Command Zero 0" ), # counter at 21
+#   "MSG_PM_Zero_1"   : VisonicCommand(bytearray.fromhex('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 01 00 00 00 00 00 00 00 99 43'), [0xB0], False, False,  True, 0.0, "Powermaster Command Zero 1" ), # counter at 21
+#   "MSG_PM_Zero_2"   : VisonicCommand(bytearray.fromhex('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 02 00 00 00 00 00 00 00 99 43'), [0xB0], False, False,  True, 0.0, "Powermaster Command Zero 2" ), # counter at 21
+#   "MSG_PM_One_STeen": VisonicCommand(bytearray.fromhex('B0 01 17 0C 01 FF 08 FF 06 0B 13 1C 30 32 34 99 43'),                   [0xB0], False, False,  True, 0.0, "Powermaster Command One Seventeen" ), # counter at 15
+#   "MSG_PM_3"        : VisonicCommand(bytearray.fromhex('B0 01 17 08 01 FF 08 FF 02 18 4B 99 43'),                               [0xB0], False, False,  True, 0.0, "Powermaster Command 4" ), # counter at 11
+   "MSG_PM_1"        : VisonicCommand(bytearray.fromhex('B0 01 00 00 00 00 00 00 00 00 99 43'), [0xB0]                  , False, False,  True, 0.0, "Powermaster Command 1" )       # counter at 10
 }
 
 pmSendMsgB0_t = {
-   "ZONE_STAT1" : bytearray.fromhex('04 06 02 FF 08 03 00 00'),
-   "ZONE_STAT2" : bytearray.fromhex('07 06 02 FF 08 03 00 00'),
-   "ZONE_STAT3" : bytearray.fromhex('18 06 02 FF 08 03 00 00')
+#   "ZONE_STAT04" : bytearray.fromhex('04 06 02 FF 08 03 00 00'),
+#   "ZONE_STAT2" : bytearray.fromhex('07 06 02 FF 08 03 00 00'),
+#   "ZONE_STAT3" : bytearray.fromhex('18 06 02 FF 08 03 00 00'),
+   "ZONE_STAT24" : bytearray.fromhex('24 06 02 FF 08 03 00 00')
    #"ZONE_NAME"  : bytearray.fromhex('21 02 05 00'),   # not used in Vera Lua Script
    #"ZONE_TYPE"  : bytearray.fromhex('2D 02 05 00')    # not used in Vera Lua Script
 }
@@ -1210,6 +1219,8 @@ class ProtocolBase(asyncio.Protocol):
         # Global Variables that define the overall panel status
         ########################################################################
         self.PanelMode = PyPanelMode.STARTING
+        self.PanelProblemCount = 0
+        self.LastPanelProblemTime = None
         self.WatchdogTimeout = 0
         self.WatchdogTimeoutPastDay = 0
         self.DownloadTimeout = 0
@@ -1467,7 +1478,7 @@ class ProtocolBase(asyncio.Protocol):
 
         self.suspendAllOperations = True
 
-        self.PanelMode = PyPanelMode.PROBLEM
+        self.PanelMode = PyPanelMode.STOPPED
         self.PanelStatusCode = PyPanelStatus.UNKNOWN
 
         if exc is not None:
@@ -1544,7 +1555,7 @@ class ProtocolBase(asyncio.Protocol):
             self._sendCommand("MSG_INIT")
         # Wait for the Exit and Stop (and Init) to be sent. Make sure nothing is left to send.
         while not self.suspendAllOperations and len(self.SendList) > 0:
-            log.debug("[ResetPanel]       Waiting")
+            log.debug("[_sendInitCommand]       Waiting")
             self._sendCommand(None)  # check send queue
 
     def _gotoStandardMode(self):
@@ -1727,7 +1738,12 @@ class ProtocolBase(asyncio.Protocol):
                             self._triggerEnroll(False)
                         elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
                             log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
-                            self.PanelMode = PyPanelMode.PROBLEM
+                            if self.PanelMode != PyPanelMode.PROBLEM:
+                                # If it does come here multiple times then only count once
+                                self.PanelProblemCount = self.PanelProblemCount + 1
+                                self.LastPanelProblemTime = self._getTimeFunction() # local time as its for the user
+                                self.PanelMode = PyPanelMode.PROBLEM
+                                # Remember that PowerlinkMode is False here anyway
                             self.PanelReady = False
                             self.pmExpectedResponse = []
                             self.expectedResponseTimeout = 0
@@ -1771,7 +1787,13 @@ class ProtocolBase(asyncio.Protocol):
 
                 elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
                     log.debug("[Controller] ****************************** Response Timer Expired ********************************")
-                    self.PanelMode = PyPanelMode.PROBLEM
+                    if self.PanelMode != PyPanelMode.PROBLEM:
+                        # If it does come here multiple times then only count once
+                        self.PanelProblemCount = self.PanelProblemCount + 1
+                        self.LastPanelProblemTime = self._getTimeFunction()   # local time as its for the user
+                        self.PanelMode = PyPanelMode.PROBLEM
+                        # Drop out of Powerlink mode if there are problems with the panel connection (it is no longer reliable)
+                        self.pmPowerlinkMode = False
                     self.PanelReady = False
                     self._triggerRestoreStatus()     # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
 
@@ -1797,8 +1819,13 @@ class ProtocolBase(asyncio.Protocol):
                             # When in powerlink mode and the panel is PowerMax, get the bypass status to make sure the sensor states get updated
                             # This is to make sure that if the user changes the setting on the panel itself, this updates the sensor state here
                             self._sendCommand("MSG_BYPASSTAT")
+                    elif self.pmPowerlinkMode:
+                        # When in powerlink mode, send I'm Alive to the panel so it knows we're still here
+                        # EXPERIMENTAL 29/8/2022.  The Powerlink 3.1 module sends this
+                        log.debug("[Controller]   Sending new I'm alive message")
+                        self._sendCommand("MSG_ALIVE2")
                     elif not self.pmPowerlinkMode:
-                        # When not in powerlink mode, send I'm Alive to the panel so it knows we're still here
+                        # When not in powerlink mode, send "old" I'm Alive to the panel so it knows we're still here
                         self._sendCommand("MSG_ALIVE")
                 else:
                     # Every 1.0 seconds, try to flush the send queue
@@ -1814,12 +1841,7 @@ class ProtocolBase(asyncio.Protocol):
                             log.error(
                                 "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)"
                             )
-                            self.suspendAllOperations = True
-                            self.PanelMode = PyPanelMode.PROBLEM
-                            self.PanelStatusCode = PyPanelStatus.UNKNOWN
-                            datadict = {}
-                            datadict["state"] = "NeverConnected"                            
-                            self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL, datadict)  # Plugin suspended itself
+                            self.StopAndSuspend("NeverConnected")
                     else:  # Data has been received from the panel but check when it was last received
                         # calc time difference between now and when data was last received
                         interval = self._getUTCTimeFunction() - self.lastRecvOfPanelData
@@ -1828,12 +1850,15 @@ class ProtocolBase(asyncio.Protocol):
                             log.error(
                                 "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + " seconds)"
                             )
-                            self.suspendAllOperations = True
-                            self.PanelMode = PyPanelMode.PROBLEM
-                            self.PanelStatusCode = PyPanelStatus.UNKNOWN
-                            datadict = {}
-                            datadict["state"] = "DisConnected"  
-                            self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL, datadict)  # Plugin suspended itself
+                            self.StopAndSuspend("DisConnected")
+
+    def StopAndSuspend(self, t : str):
+        self.suspendAllOperations = True
+        self.PanelMode = PyPanelMode.STOPPED
+        self.PanelStatusCode = PyPanelStatus.UNKNOWN
+        datadict = {}
+        datadict["state"] = t
+        self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL, datadict)  # Plugin suspended itself
 
     # Process any received bytes (in data as a bytearray)
     def data_received(self, data):
@@ -2066,17 +2091,17 @@ class ProtocolBase(asyncio.Protocol):
         if packet[-1:] != b"\x0A":
             return False
 
-        if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] + 1:
-            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {0} and {1}".format(packet[-2:-1][0], self._calculateCRC(packet[1:-2])[0]))
-            return True
-
-        if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] - 1:
-            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {0} and {1}".format(packet[-2:-1][0], self._calculateCRC(packet[1:-2])[0]))
-            return True
-
         # Check the CRC
         if packet[-2:-1] == self._calculateCRC(packet[1:-2]):
             # log.debug("[_validatePDU] VALID PACKET!")
+            return True
+
+        if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] + 1:
+            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {0} and {1}".format(self._toString(packet), self._calculateCRC(packet[1:-2])[0]))
+            return True
+
+        if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] - 1:
+            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {0} and {1}".format(self._toString(packet), self._calculateCRC(packet[1:-2])[0]))
             return True
 
         log.debug("[_validatePDU] Not valid packet, CRC failed, may be ongoing and not final 0A")
@@ -2384,6 +2409,10 @@ class PacketHandling(ProtocolBase):
         self.lastPacket = None
         self.lastPacketCounter = 0
         self.sensorsCreated = False  # Have the sensors benn created. Either from an A5 message or the EPROM data
+
+        # EXPERIMENTAL 29/8/2022
+        # The PowerMaster "B0" Messages have a counter, start it from 1 and see what happens
+        self.beeZeroCounter = 1
 
         asyncio.create_task(self._resetTriggeredStateTimer(), name="Turn Sensor Off After Timeout") #, loop=self.loop)
 
@@ -2956,6 +2985,19 @@ class PacketHandling(ProtocolBase):
             self._performDisconnect("Same Packet for {0} times in a row".format(SAME_PACKET_ERROR))
         # else:
         #    log.debug("[_processReceivedPacket] Parsing complete valid packet: %s", self._toString(packet))
+
+        if self.PanelMode == PyPanelMode.PROBLEM:
+            # A PROBLEM indicates that there has been a response timeout (either normal or trying to get to powerlink)
+            # However, we have clearly received a packet so put the panel mode back to Standard or StandardPlus and wait for a powerlink response from the panel
+            if self.pmDownloadComplete and not self.ForceStandardMode and self.pmGotUserCode:
+                log.debug("[_processReceivedPacket] Had a response timeout PROBLEM but received a data packet and entering Standard Plus Mode")
+                self.PanelMode = PyPanelMode.STANDARD_PLUS
+                # We are back in to STANDARD_PLUS so set this and wait for a powerlink alive message from the panel
+                #    This is the only way to recover powerlink as there should be no need to re-enroll
+                self.pmPowerlinkModePending = True
+            else:
+                log.debug("[_processReceivedPacket] Had a response timeout PROBLEM but received a data packet and entering Standard Mode")
+                self.PanelMode = PyPanelMode.STANDARD
 
         pushChange = False
 
@@ -3866,6 +3908,9 @@ class PacketHandling(ProtocolBase):
             log.debug("[handle_msgtypeAB] ***************************** Got PowerLink Keep-Alive ****************************")
             # It is possible to receive this between enrolling (when the panel accepts the enroll successfully) and the EPROM download
             #     I suggest we simply ignore it
+
+            self._sendCommand("MSG_ALIVE2")       # EXPERIMENTAL 29/8/2022.  The Powerlink module sends this when it gets an i'm alive from the panel.
+
             if self.pmPowerlinkModePending:
                 log.debug("[handle_msgtypeAB]         Got alive message while Powerlink mode pending, going to full powerlink and calling Restore")
                 self.pmPowerlinkMode = True
@@ -3875,7 +3920,7 @@ class PacketHandling(ProtocolBase):
                 self._dumpSensorsToLogFile()
 
                 # There is no point in setting the time here as we need to be in DOWNLOAD mode with the panel
-                #  We set the time at the end of download and then check it periodically
+                #  We set the time at the end of download
                 # Get the time from the panel
                 if self.AutoSyncTime:
                     self._sendCommand("MSG_GETTIME")
@@ -3929,6 +3974,19 @@ class PacketHandling(ProtocolBase):
         """ MsgType=AC - ??? """
         log.debug("[handle_msgtypeAC]  data {0}".format(self._toString(data)))
 
+    def sendB0Command(self, cmd, ctrpos=0, opt = None):
+        # self.beeZeroCounter
+        BeeZeroCtr = bytearray()
+        # set the counter
+        BeeZeroCtr.append(self.beeZeroCounter)
+        if opt is None and ctrpos > 1:
+            self._sendCommand(cmd, options=[ctrpos, BeeZeroCtr])
+        elif opt is not None and ctrpos == 1:
+            self._sendCommand(cmd, options=[2, pmSendMsgB0_t[opt], 10, BeeZeroCtr])
+        else:
+            log.debug("[sendB0Command] Invalid combination to send = {0} {1} {2}".format(cmd, ctrpos, opt))
+        self.beeZeroCounter = (self.beeZeroCounter + 1) % 256
+
     # Only Powermasters send this message
     def handle_msgtypeB0(self, data) -> bool:  # PowerMaster Message
         """ MsgType=B0 - Panel PowerMaster Message """
@@ -3959,22 +4017,6 @@ class PacketHandling(ProtocolBase):
             log.debug("[handle_msgtypeB0]              Invalid Length, not processing")
             # Do not process this B0 message as it seems to be incorrect
             return False
-
-        if self.BZero_Enable and msgType == 0x03 and subType == 0x39:
-            # Movement detected (probably)
-            #  Received PowerMaster10 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 24 0b 43
-            
-            # From the same panel:
-            #  Received PowerMaster33 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 59 b8 43
-            #  Received PowerMaster33 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 59 ba 43  # PM33 this maybe after a siren is cancelled (disarmed)
-            #  Received PowerMaster33 message 3/57 (len = 8)    full data = 03 39 08 ff 08 ff 03 18 24 4b cc 43
-            #  Received PowerMaster33 message 3/57 (len = 6)    full data = 03 39 06 ff 08 ff 01 59 dd 43
-            
-            #  Received PowerMaster30 message 3/57 (len = 8)    full data = 03 39 08 ff 08 ff 03 18 24 4b 90 43
-            log.debug("[handle_msgtypeB0]      Sending special {0} Commands to the panel".format(self.PanelModel or "UNKNOWN"))
-            self._sendCommand("MSG_POWERMASTER", options=[2, pmSendMsgB0_t["ZONE_STAT1"]])  # This asks the panel to send 03 04 messages
-            # self._sendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT2"]])    # This asks the panel to send 03 07 messages
-            # self._sendCommand("MSG_POWERMASTER", options = [2, pmSendMsgB0_t["ZONE_STAT3"]])    # This asks the panel to send 03 18 messages
 
         if self.BZero_Enable and msgType == 0x03 and subType == 0x04:
             log.debug("[handle_msgtypeB0]         Received {0} message, continue".format(self.PanelModel or "UNKNOWN"))
@@ -4030,14 +4072,9 @@ class PacketHandling(ProtocolBase):
                             #    s = data[7 + z]
                             #    log.debug("[handle_msgtypeB0]           Zone {0}  is not a motion stype   State = {1}".format(z, s))
 
-        if msgType == 0x03 and subType == 0x18:
-            # Open/Close information (probably)
-            zoneLen = data[6] # The length of the zone data (64 for PM30, 30 for PM10)
-            log.debug("[handle_msgtypeB0]       Received {0} message, open/close information (probably), zone length = {1}".format(self.PanelModel or "UNKNOWN", zoneLen))
-            for z in range(0, zoneLen):
-                if z in self.pmSensorDev_t:
-                    s = data[7 + z]
-                    log.debug("[handle_msgtypeB0]           Zone {0}  State {1}".format(z, s))
+        if msgType == 0x03 and subType == 0x06:
+            if msgLen == 2:
+                log.debug("[handle_msgtypeB0] Received Single Byte as Data {0}  B0 0x03 0x06 counter".format(data[3], data[4]))
 
         if msgType == 0x03 and subType == 0x07:
             #  Received PowerMaster10 message 3/7 (len = 35)    full data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 <24 * 00> 0d 43
@@ -4049,6 +4086,61 @@ class PacketHandling(ProtocolBase):
                 if z in self.pmSensorDev_t:
                     s = data[7 + z]
                     log.debug("[handle_msgtypeB0]           Zone {0}  State {1}".format(z, s))
+
+        if msgType == 0x03 and subType == 0x18:
+            # Open/Close information (probably)
+
+            # The length of the zone data (64 for PM30, 30 for PM10)
+            #     set to 8 on my panel (29/8/2022) but there are 8 valid bytes after it and it looks like the first changes between 0 and 1 when I open/close the magnet
+            zoneLen = data[6]
+            log.debug("[handle_msgtypeB0]       Received {0} message, open/close information (probably), zone length = {1}".format(self.PanelModel or "UNKNOWN", zoneLen))
+
+            log.debug("[handle_msgtypeB0]          Decode method 1")
+            for z in range(0, zoneLen):
+                if z in self.pmSensorDev_t:
+                    s = data[7 + z]
+                    log.debug("[handle_msgtypeB0]                  Zone {0}  State {1}".format(z, s))
+
+            log.debug("[handle_msgtypeB0]          Decode method 2")
+            val = self._makeInt(data[7:11])  # bytes 7,8,9,10
+            for i in range(0, 32):
+                if i in self.pmSensorDev_t:
+                    trig = val & (1 << i) != 0
+                    log.debug("[handle_msgtypeB0]                  Zone {0}  State {1}".format(i, trig))
+
+            val = self._makeInt(data[11:15])  # bytes 11,12,13,14
+            for i in range(32, 64):
+                if i in self.pmSensorDev_t:
+                    trig = val & (1 << (i-32)) != 0
+                    log.debug("[handle_msgtypeB0]                  Zone {0}  State {1}".format(i, trig))
+
+        if msgType == 0x03 and subType == 0x24:
+            iSec = data[15]
+            iMin = data[16]
+            iHour = data[17]
+            iDay = data[18]
+            iMonth = data[19]
+            iYear = data[20]
+
+            messagedate = "{0:0>2}/{1:0>2}/{2}   {3:0>2}:{4:0>2}:{5:0>2}".format(iDay, iMonth, iYear, iHour, iMin, iSec)
+            log.debug("[handle_msgtypeB0]       Received {0} message, 03 24 information  date={1}".format(self.PanelModel or "UNKNOWN", messagedate))
+            log.debug("[handle_msgtypeB0]                    data (hex) 23={0}  24={1}  25={2}  26={3}".format(hex(data[23]).upper(), hex(data[24]).upper(), hex(data[25]).upper(), hex(data[26]).upper()))
+
+            # I think that data[25] is the panel state,
+            #      Bit 0 seems to be "panel ready" 0=not ready
+
+        if self.BZero_Enable and msgType == 0x03 and subType == 0x39:
+            # Panel state change ??????
+            self._sendCommand("MSG_PM_1", opt="ZONE_STAT24")  # This asks the panel to send 03 04 messages
+
+        if (msgType == 0x02 or msgType == 0x03) and subType == 0x4B:
+            msgCtr = data[3]
+            if msgCtr != 0xFF:
+                log.debug("[handle_msgtypeB0]       Received {0} message, msg ctr = {1}".format(self.PanelModel or "UNKNOWN", msgCtr+1))
+                for b in range(0, msgCtr+1):
+                    o = 7 + (b * 5)
+                    log.debug("[handle_msgtypeB0]  Command={0}  data (hex) = {1} {2} {3} {4} {5}".format(msgType, hex(data[o]).upper(), hex(data[o+1]).upper(), hex(data[o+2]).upper(), hex(data[o+3]).upper(), hex(data[o+4]).upper()))
+
         return pushChange
 
     # =======================================================================================================
@@ -4109,8 +4201,10 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
     def shutdownOperation(self):
         if not self.suspendAllOperations:
             self.suspendAllOperations = True
-            if self.transport is not None:
-                self.transport.close()
+            self.PanelMode = PyPanelMode.STOPPED
+            self.PanelStatusCode = PyPanelStatus.UNKNOWN
+        if self.transport is not None:
+            self.transport.close()
         self.transport = None
 
     def isSirenActive(self) -> bool:
@@ -4163,6 +4257,8 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
             "Watchdog Timeout (Past 24 Hours)": self.WatchdogTimeoutPastDay,
             "Download Timeout": self.DownloadTimeout,
             "Download Retries": self.pmDownloadRetryCount,
+            "Panel Problem Count": self.PanelProblemCount,
+            "Panel Problem Time": self.LastPanelProblemTime if self.LastPanelProblemTime else "",
             "Panel Last Event": self.PanelLastEvent,
             "Panel Last Event Data": self.PanelLastEventData,
             "Panel Alarm Status": self.PanelAlarmStatus,

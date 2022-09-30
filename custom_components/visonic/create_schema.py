@@ -180,8 +180,9 @@ class VisonicSchema:
                 CONF_ALARM_NOTIFICATIONS,
                 default=self.create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
             ): cv.multi_select(AvailableNotificationConfig),
+            # https://developers.home-assistant.io/docs/data_entry_flow_index/#show-form
             vol.Optional(
-                CONF_OVERRIDE_CODE, default = (0 if tmp == "" else int(tmp))
+                CONF_OVERRIDE_CODE, default = 0, description={"suggested_value": (0 if tmp == "" else int(tmp))}
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=9999, mode=selector.NumberSelectorMode.BOX)), #vol.All (cv.string, cv.matches_regex("(^[0-9]{4}$|^$)")), #("(^[0-9][0-9][0-9][0-9]$|^$)")
             vol.Optional(
                 CONF_ARM_CODE_AUTO,

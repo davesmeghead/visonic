@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.8.1.0"
+CLIENT_VERSION = "0.8.2.0"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -870,7 +870,7 @@ class VisonicClient:
                     return True, override_code
                 return True, None    # Usercode
             else:
-                # If the panel mode is STARTING, DOWNLOADING etc
+                # If the panel mode is UNKNOWN, STARTING, DOWNLOAD, PROBLEM.
                 _LOGGER.warning("Warning: Valid 4 digit PIN not found")
                 return False, None # Return invalid as panel not in correct state to do anything
         return True, pin
@@ -914,6 +914,7 @@ class VisonicClient:
         return True, pin
 
     # pmGetPinSimple: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
+    #   This is used from the bypass command and the get event log command
     def pmGetPinSimple(self, pin: str):
         """Get pin code."""
         #_LOGGER.debug("Getting Pin Start")
