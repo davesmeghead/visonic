@@ -61,7 +61,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.16.0"
+PLUGIN_VERSION = "1.0.17.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -134,8 +134,6 @@ EVENT_TYPE_FLOOD_ALERT_RESTORE = 0x4A
 EVENT_TYPE_GAS_TROUBLE_RESTORE = 0x4E
 EVENT_TYPE_DELAY_RESTORE = 0x13
 EVENT_TYPE_CONFIRM_ALARM = 0x0E
-
-
 
 
 # Messages left to work out
@@ -961,8 +959,10 @@ pmZoneSensorMaster_t = {
    0x18 : ZoneSensorType("GSD-442 PG2", PySensorType.SMOKE ),
    0x19 : ZoneSensorType("FLD-550 PG2", PySensorType.FLOOD ),
    0x1A : ZoneSensorType("TMD-560 PG2", PySensorType.TEMPERATURE ),
+   0x1E : ZoneSensorType("SMD-429 PG2", PySensorType.SMOKE ),
    0x29 : ZoneSensorType("MC-302V PG2", PySensorType.MAGNET),
    0x2A : ZoneSensorType("MC-302 PG2", PySensorType.MAGNET),
+   0x2C : ZoneSensorType("MC-303V PG2", PySensorType.MAGNET),
    0x2D : ZoneSensorType("MC-302V PG2", PySensorType.MAGNET),
    0x35 : ZoneSensorType("SD-304 PG2", PySensorType.SHOCK),
    0xFE : ZoneSensorType("Wired", PySensorType.WIRED )
@@ -2115,10 +2115,15 @@ class ProtocolBase(asyncio.Protocol):
         checksum = 0
         for char in msg[0 : len(msg)]:
             checksum += char
-        checksum = 0xFF - (checksum % 0xFF)
-        if checksum == 0xFF:
-            checksum = 0x00
-        #            log.debug("[_calculateCRC] Checksum was 0xFF, forsing to 0x00")
+        #checksum = 0xFF - (checksum % 0xFF)
+        #if checksum == 0xFF:
+        #    checksum = 0x00
+        # 29/8/2022: Commented out the above 3 lines and added the following 3.  I think that the checksum should never be zero.
+        #      This works for both my panels and always validates exactly (never using the +1 or -1 code in _validatePDU)
+        #      It also matches the checksums that the Powerlink 3.1 module generates.
+        checksum = 256 - (checksum % 255)
+        if checksum == 256:
+            checksum = 1
         # log.debug("[_calculateCRC] Calculating for: %s     calculated CRC is: %s", self._toString(msg), self._toString(bytearray([checksum])))
         return bytearray([checksum])
 
@@ -3175,10 +3180,10 @@ class PacketHandling(ProtocolBase):
         self.PowerMaster = (self.PanelType >= 7)
         self.PanelModel = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
 
+        log.debug("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, self.PanelModel, self.PowerMaster))
+
         self.pmGotPanelDetails = True
         self.pmInitSupportedByPanel = (self.PanelType >= 4)
-
-        log.debug("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, self.PanelModel, self.PowerMaster))
 
         # We got a first response, now we can Download the panel EPROM settings
         interval = self._getUTCTimeFunction() - self.lastSendOfDownloadEprom
@@ -4091,17 +4096,10 @@ class PacketHandling(ProtocolBase):
             # Open/Close information (probably)
 
             # The length of the zone data (64 for PM30, 30 for PM10)
-            #     set to 8 on my panel (29/8/2022) but there are 8 valid bytes after it and it looks like the first changes between 0 and 1 when I open/close the magnet
+            #     set to 8 on my panel (29/8/2022)
             zoneLen = data[6]
             log.debug("[handle_msgtypeB0]       Received {0} message, open/close information (probably), zone length = {1}".format(self.PanelModel or "UNKNOWN", zoneLen))
 
-            log.debug("[handle_msgtypeB0]          Decode method 1")
-            for z in range(0, zoneLen):
-                if z in self.pmSensorDev_t:
-                    s = data[7 + z]
-                    log.debug("[handle_msgtypeB0]                  Zone {0}  State {1}".format(z, s))
-
-            log.debug("[handle_msgtypeB0]          Decode method 2")
             val = self._makeInt(data[7:11])  # bytes 7,8,9,10
             for i in range(0, 32):
                 if i in self.pmSensorDev_t:
