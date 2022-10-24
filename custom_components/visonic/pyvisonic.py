@@ -61,7 +61,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.17.1"
+PLUGIN_VERSION = "1.0.17.2"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -3974,17 +3974,18 @@ class PacketHandling(ProtocolBase):
         log.debug("[handle_msgtypeAC]  data {0}".format(self._toString(data)))
 
     def sendB0Command(self, cmd, ctrpos=0, opt = None):
-        # self.beeZeroCounter
-        BeeZeroCtr = bytearray()
-        # set the counter
-        BeeZeroCtr.append(self.beeZeroCounter)
-        if opt is None and ctrpos > 1:
-            self._sendCommand(cmd, options=[ctrpos, BeeZeroCtr])
-        elif opt is not None and ctrpos == 1:
-            self._sendCommand(cmd, options=[2, pmSendMsgB0_t[opt], 10, BeeZeroCtr])
+        if ctrpos > 0:
+            # self.beeZeroCounter
+            BeeZeroCtr = bytearray()
+            # set the counter
+            BeeZeroCtr.append(self.beeZeroCounter)
+            if opt is None:
+                self._sendCommand(cmd, options=[ctrpos, BeeZeroCtr])
+            else:
+                self._sendCommand(cmd, options=[2, pmSendMsgB0_t[opt], ctrpos, BeeZeroCtr])
+            self.beeZeroCounter = (self.beeZeroCounter + 1) % 256
         else:
-            log.debug("[sendB0Command] Invalid combination to send = {0} {1} {2}".format(cmd, ctrpos, opt))
-        self.beeZeroCounter = (self.beeZeroCounter + 1) % 256
+            log.debug("[sendB0Command] Invalid counter position to send = {0} {1} {2}".format(cmd, ctrpos, opt))
 
     # Only Powermasters send this message
     def handle_msgtypeB0(self, data) -> bool:  # PowerMaster Message
@@ -4123,7 +4124,7 @@ class PacketHandling(ProtocolBase):
 
         if self.BZero_Enable and msgType == 0x03 and subType == 0x39:
             # Panel state change ??????
-            self._sendCommand("MSG_PM_1", opt="ZONE_STAT24")  # This asks the panel to send 03 04 messages
+            self.sendB0Command(cmd="MSG_PM_1", ctrpos=10, opt="ZONE_STAT24")  # This asks the panel to send 03 04 messages
 
         if (msgType == 0x02 or msgType == 0x03) and subType == 0x4B:
             msgCtr = data[3]
