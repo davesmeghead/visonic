@@ -61,7 +61,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.17.0"
+PLUGIN_VERSION = "1.0.17.1"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -2115,15 +2115,9 @@ class ProtocolBase(asyncio.Protocol):
         checksum = 0
         for char in msg[0 : len(msg)]:
             checksum += char
-        #checksum = 0xFF - (checksum % 0xFF)
-        #if checksum == 0xFF:
-        #    checksum = 0x00
-        # 29/8/2022: Commented out the above 3 lines and added the following 3.  I think that the checksum should never be zero.
-        #      This works for both my panels and always validates exactly (never using the +1 or -1 code in _validatePDU)
-        #      It also matches the checksums that the Powerlink 3.1 module generates.
-        checksum = 256 - (checksum % 255)
-        if checksum == 256:
-            checksum = 1
+        checksum = 0xFF - (checksum % 0xFF)
+        if checksum == 0xFF:
+            checksum = 0x00
         # log.debug("[_calculateCRC] Calculating for: %s     calculated CRC is: %s", self._toString(msg), self._toString(bytearray([checksum])))
         return bytearray([checksum])
 
