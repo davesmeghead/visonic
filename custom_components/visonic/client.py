@@ -7,7 +7,7 @@ from time import sleep
 from typing import Union, Any
 import re
 
-CLIENT_VERSION = "0.8.2.4"
+CLIENT_VERSION = "0.8.3.0"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -869,48 +869,12 @@ class VisonicClient:
                 if self.hasValidOverrideCode():
                     return True, override_code
                 return True, None    # Usercode
+            elif panelmode == PyPanelMode.DOWNLOAD or panelmode == PyPanelMode.STARTING:  # No need to output to log file when starting or downloading EEPROM as this is normal operation
+                return False, None # Return invalid as panel downloading EEPROM
             else:
-                # If the panel mode is UNKNOWN, STARTING, DOWNLOAD, PROBLEM.
-                _LOGGER.warning("Warning: Valid 4 digit PIN not found")
+                # If the panel mode is UNKNOWN, PROBLEM.
+                _LOGGER.warning("Warning: Valid 4 digit PIN not found, panelmode is {0}".format(panelmode))
                 return False, None # Return invalid as panel not in correct state to do anything
-        return True, pin
-
-    # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
-    def pmGetPinOldVersion(self, pin: str, forcedKeypad: bool):
-        """Get pin code."""
-        #_LOGGER.debug("Getting Pin Start")
-        if pin is None or pin == "" or len(pin) != 4:
-            psc = self.getPanelStatusCode()
-            panelmode = self.getPanelMode()
-            #_LOGGER.debug("Getting Pin")
-            if self.isArmWithoutCode() and psc == PyPanelStatus.DISARMED and self.hasValidOverrideCode():  # Pwr/+ 3
-                # Panel currently disarmed, arm without user code, override is set and valid
-                #_LOGGER.debug("Here A")
-                return True, self.config.get(CONF_OVERRIDE_CODE, "")
-            elif panelmode == PyPanelMode.STANDARD and psc == PyPanelStatus.DISARMED and self.isArmWithoutCode() and not self.hasValidOverrideCode():  # Pwr/+ 7
-                # Panel currently disarmed, arm without user code, so use any code
-                #_LOGGER.debug("Here B")
-                return True, "0000"
-            elif forcedKeypad:
-                # this is used to catch the condition that the keypad is used but an invalid
-                #     number of digits has been entered
-                #_LOGGER.debug("Here C")
-                return False, None
-            elif self.hasValidOverrideCode():
-                # The override is set and valid
-                #_LOGGER.debug("Here D")
-                return True, self.config.get(CONF_OVERRIDE_CODE, "")
-            elif panelmode == PyPanelMode.POWERLINK or panelmode == PyPanelMode.STANDARD_PLUS:
-                # Powerlink or StdPlus and so we downloaded the pin codes
-                #_LOGGER.debug("Here E")
-                return True, None
-            elif self.isArmWithoutCode():
-                # Here to prevent the warning to the log file
-                #_LOGGER.debug("Here F")
-                return False, None
-            else:
-                _LOGGER.warning("Warning: Valid 4 digit PIN not found")
-                return False, None
         return True, pin
 
     # pmGetPinSimple: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
@@ -927,7 +891,7 @@ class VisonicClient:
                 # Powerlink or StdPlus and so we downloaded the pin codes
                 return True, None
             else:
-                _LOGGER.warning("Warning: [pmGetPinSimple] Valid 4 digit PIN not found")
+                _LOGGER.warning("Warning: [pmGetPinSimple] Valid 4 digit PIN not found, panelmode is {0}".format(panelmode))
                 return False, None
         return True, pin
 

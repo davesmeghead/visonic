@@ -1,12 +1,12 @@
 {
   "domain": "visonic",
   "name": "Visonic Intruder Alarm",
-  "version": "0.8.2.4",
+  "version": "0.8.3.0",
   "config_flow": true,
   "documentation": "https://github.com/davesmeghead/visonic/wiki",
   "issue_tracker": "https://github.com/davesmeghead/visonic/issues",
   "dependencies": [],
   "codeowners": ["@davesmeghead"],
-  "requirements": ["pyserial_asyncio==0.4"],
+  "requirements": ["pyserial_asyncio==0.6"],
   "iot_class": "local_push"
 }

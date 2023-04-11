@@ -15,6 +15,7 @@ from .pconst import PyPanelCommand
 from homeassistant.const import (
     ATTR_CODE,
     ATTR_ENTITY_ID,
+    SERVICE_RELOAD,
 )
 
 from .client import VisonicClient
@@ -178,6 +179,19 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         else:
             sendHANotification(f"Service Panel sensor bypass failed - Panel not found")
     
+    async def _handle_reload(service):
+        """Handle reload service call."""
+        _LOGGER.info("Service %s.reload called: reloading integration", DOMAIN)
+
+        current_entries = hass.config_entries.async_entries(DOMAIN)
+
+        reload_tasks = [
+            hass.config_entries.async_reload(entry.entry_id)
+            for entry in current_entries
+        ]
+
+        await asyncio.gather(*reload_tasks)
+
     global clientctr
     _LOGGER.info("Starting Visonic Component")
     hass.data[DOMAIN] = {}
@@ -216,6 +230,11 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         ALARM_SENSOR_BYPASS,
         service_sensor_bypass,
         schema=ALARM_SCHEMA_BYPASS,
+    )
+    hass.helpers.service.async_register_admin_service(
+        DOMAIN,
+        SERVICE_RELOAD,
+        _handle_reload,
     )
     return True
 
@@ -287,9 +306,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Unload visonic entry."""
     # _LOGGER.debug("************* terminate connection here **************")
 
-    client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-    clientTask = hass.data[DOMAIN][DOMAINCLIENTTASK][entry.entry_id]
-    updateListener = hass.data[DOMAIN][VISONIC_UPDATE_LISTENER][entry.entry_id]
+    eid = entry.entry_id
+
+    client = hass.data[DOMAIN][DOMAINCLIENT][eid]
+    clientTask = hass.data[DOMAIN][DOMAINCLIENTTASK][eid]
+    updateListener = hass.data[DOMAIN][VISONIC_UPDATE_LISTENER][eid]
 
     # stop the comms to/from the panel
     await client.service_comms_stop()
@@ -305,11 +326,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     if clientTask is not None:
         clientTask.cancel()
 
-    # hass.data[DOMAIN][entry.entry_id] = {}
-    del hass.data[DOMAIN][DOMAINDATA][entry.entry_id]
-    del hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-    del hass.data[DOMAIN][DOMAINCLIENTTASK][entry.entry_id]
-    del hass.data[DOMAIN][VISONIC_UPDATE_LISTENER][entry.entry_id]
+    # hass.data[DOMAIN][eid] = {}
+    del hass.data[DOMAIN][DOMAINDATA][eid]
+    del hass.data[DOMAIN][DOMAINCLIENT][eid]
+    del hass.data[DOMAIN][DOMAINCLIENTTASK][eid]
+    del hass.data[DOMAIN][VISONIC_UPDATE_LISTENER][eid]
 
     _LOGGER.debug("************* terminate connection success **************")
     return True

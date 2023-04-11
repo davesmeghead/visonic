@@ -1,2 +1,2 @@
 aconsole==0.0.8
-pyserial_asyncio==0.4
+pyserial_asyncio==0.6

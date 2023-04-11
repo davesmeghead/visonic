@@ -33,6 +33,7 @@ from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUs
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers import entity_platform, service
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import VisonicClient
 from .const import (
@@ -49,7 +50,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the alarm control panel."""
     # _LOGGER.debug("alarm control panel async_setup_entry called")
