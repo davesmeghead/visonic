@@ -1,7 +1,7 @@
 """Create a connection to a Visonic PowerMax or PowerMaster Alarm System."""
 
 import logging
-
+import asyncio
 import requests.exceptions
 import voluptuous as vol
 
