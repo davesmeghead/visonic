@@ -839,9 +839,9 @@ class VisonicClient:
             self.visonicProtocol = None
             if await self.connect_to_alarm():
                 self.logstate_debug("........... connection made")
-                self.fireHAEvent( {"condition": 0, "action" = ActionList[0], "state": "connected", "attempt": attemptCounter + 1} )
+                self.fireHAEvent( {"condition": 0, "action": ActionList[0], "state": "connected", "attempt": attemptCounter + 1} )
                 return
-            self.fireHAEvent( {"condition": 0, "action" = ActionList[0], "state": "failedattempt", "attempt": attemptCounter + 1} )
+            self.fireHAEvent( {"condition": 0, "action": ActionList[0], "state": "failedattempt", "attempt": attemptCounter + 1} )
             attemptCounter = attemptCounter + 1
             force = False
             if attemptCounter < totalAttempts:
@@ -891,7 +891,7 @@ class VisonicClient:
 
         # General update trigger
         #    0 is a disconnect, state="disconnected" means initial disconnection and (hopefully) reconnect from an exception (probably comms related)
-        self.fireHAEvent( {"condition": 0, "action" = ActionList[0], "state": "disconnected", "reason": reason} )
+        self.fireHAEvent( {"condition": 0, "action": ActionList[0], "state": "disconnected", "reason": reason} )
 
         self.panel_exception_counter = self.panel_exception_counter + 1
         asyncio.ensure_future(self.disconnect_callback_async(), loop=self.hass.loop)
