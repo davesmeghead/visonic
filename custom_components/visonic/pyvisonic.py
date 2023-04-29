@@ -61,7 +61,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.17.4"
+PLUGIN_VERSION = "1.0.18.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -1037,6 +1037,7 @@ class SensorDevice(PySensorDevice):
         strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
         strn = strn + (" dname=None" if self.dname == None else " dname={0:<4}".format(self.dname[:4]))
         strn = strn + (" stype={0:<8}".format(stypestr))
+
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" model=None" if self.model == None else " model={0:<8}".format(self.model[:14]))
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" sid=None"       if self.sid == None else       " sid={0:<3}".format(self.sid, type(self.sid)))
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" ztype=None"     if self.ztype == None else     " ztype={0:<2}".format(self.ztype, type(self.ztype)))
@@ -1052,6 +1053,10 @@ class SensorDevice(PySensorDevice):
         strn = strn + (" tamper=None" if self.tamper == None else " tamper={0:<2}".format(self.tamper))
         strn = strn + (" enrolled=None" if self.enrolled == None else " enrolled={0:<2}".format(self.enrolled))
         strn = strn + (" triggered=None" if self.triggered == None else " triggered={0:<2}".format(self.triggered))
+
+        if self.motiondelaytime is not None and (self.stype == PySensorType.MOTION or self.stype == PySensorType.CAMERA):
+            strn = strn + (" delay={0:<7}".format("Not Set" if self.motiondelaytime == 0xFFFF else str(self.motiondelaytime)))
+
         return strn
 
     def __eq__(self, other):
@@ -1161,7 +1166,7 @@ class X10Device(PySwitchDevice):
         strn = ""
         strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
         strn = strn + (" name=None" if self.name == None else " name={0:<4}".format(self.name))
-        strn = strn + (" type=None" if self.type == None else " type={0:<8}".format(self.type))
+        strn = strn + (" type=None" if self.type == None else " type={0:<15}".format(self.type))
         strn = strn + (" location=None" if self.location == None else " location={0:<14}".format(self.location))
         strn = strn + (" enabled=None" if self.enabled == None else " enabled={0:<2}".format(self.enabled))
         strn = strn + (" state=None" if self.state == None else " state={0:<2}".format(self.state))
@@ -1489,7 +1494,7 @@ class ProtocolBase(asyncio.Protocol):
 
     # when the connection has problems then call the disconnect_callback when available,
     #     otherwise try to reinitialise the connection from here
-    def _performDisconnect(self, exc=None):
+    def _performDisconnect(self, reason : string, exc=None):
         """Log when connection is closed, if needed call callback."""
         if self.suspendAllOperations:
             # log.debug('[Disconnection] Suspended. Sorry but all operations have been suspended, please recreate connection')
@@ -1531,15 +1536,16 @@ class ProtocolBase(asyncio.Protocol):
         sleep(5.0)  # a bit of time for the watchdog timers and keep alive loops to self terminate
         if self.disconnect_callback:
             log.error("                        Calling Exception handler.")
-            self.disconnect_callback(exc)
+            self.disconnect_callback(reason, exc)
         else:
             log.error("                        No Exception handler to call, terminating Component......")
 
     # This is called by the asyncio parent when the connection is lost
     def connection_lost(self, exc):
         """Log when connection is closed, if needed call callback."""
-        log.error("ERROR Connection Lost : disconnected because the Ethernet/USB connection was externally terminated.")
-        self._performDisconnect(exc)
+        if not self.suspendAllOperations:
+            log.error("ERROR Connection Lost : disconnected because the Ethernet/USB connection was externally terminated.")
+        self._performDisconnect(reason="termination", exc)
 
     def _sendResponseEvent(self, ev, dict={}):
         if self.event_callback is not None:
@@ -1860,7 +1866,7 @@ class ProtocolBase(asyncio.Protocol):
                             log.error(
                                 "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)"
                             )
-                            self.StopAndSuspend("NeverConnected")
+                            self.StopAndSuspend("neverconnected")
                     else:  # Data has been received from the panel but check when it was last received
                         # calc time difference between now and when data was last received
                         interval = self._getUTCTimeFunction() - self.lastRecvOfPanelData
@@ -1869,7 +1875,7 @@ class ProtocolBase(asyncio.Protocol):
                             log.error(
                                 "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + " seconds)"
                             )
-                            self.StopAndSuspend("DisConnected")
+                            self.StopAndSuspend("disconnected")
 
     def StopAndSuspend(self, t : str):
         self.suspendAllOperations = True
@@ -2037,7 +2043,7 @@ class ProtocolBase(asyncio.Protocol):
                 self.pmCrcErrorCount = 0
                 interval = self._getUTCTimeFunction() - self.pmFirstCRCErrorTime
                 if interval <= timedelta(seconds=CRC_ERROR_PERIOD):
-                    self._performDisconnect("CRC errors")
+                    self._performDisconnect(reason="crcerror", exc="CRC errors")
                 self.pmFirstCRCErrorTime = self._getUTCTimeFunction()
 
     def _processReceivedMessage(self, ackneeded, data):
@@ -2112,6 +2118,11 @@ class ProtocolBase(asyncio.Protocol):
 
         # Check the CRC
         if packet[-2:-1] == self._calculateCRC(packet[1:-2]):
+            # log.debug("[_validatePDU] VALID PACKET!")
+            return True
+
+        # Check the CRC
+        if packet[-2:-1] == self._calculateCRCAlt(packet[1:-2]):
             # log.debug("[_validatePDU] VALID PACKET!")
             return True
 
@@ -2899,19 +2910,19 @@ class PacketHandling(ProtocolBase):
                     if x10Enabled:
                         deviceStr = "{0},{1}".format(deviceStr, x10DeviceName)
 
-                    if i in self.pmX10Dev_t:
-                        self.pmX10Dev_t[i].name = x10DeviceName
-                        self.pmX10Dev_t[i].enabled = x10Enabled
-                        self.pmX10Dev_t[i].type = x10Type
-                        self.pmX10Dev_t[i].location = x10Location
-                        self.pmX10Dev_t[i].id = i
-                    else:
-                        self.pmX10Dev_t[i] = X10Device(name=x10DeviceName, type=x10Type, location=x10Location, id=i, enabled=x10Enabled)
-                        if self.new_switch_callback is not None:
-                            self.new_switch_callback(self.pmX10Dev_t[i])
-                        #visonic_devices["switch"].append(self.pmX10Dev_t[i])
+                        if i in self.pmX10Dev_t:
+                            self.pmX10Dev_t[i].name = x10DeviceName
+                            self.pmX10Dev_t[i].enabled = x10Enabled
+                            self.pmX10Dev_t[i].type = x10Type
+                            self.pmX10Dev_t[i].location = x10Location
+                            self.pmX10Dev_t[i].id = i
+                        else:
+                            self.pmX10Dev_t[i] = X10Device(name=x10DeviceName, type=x10Type, location=x10Location, id=i, enabled=x10Enabled)
+                            if self.new_switch_callback is not None:
+                                self.new_switch_callback(self.pmX10Dev_t[i])
+                            #visonic_devices["switch"].append(self.pmX10Dev_t[i])
 
-                    # log.debug("[Process Settings] X10 device {0} {1}".format(i, deviceStr))
+                        # log.debug("[Process Settings] X10 device {0} {1}".format(i, deviceStr))
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 if not self.PowerMaster:
@@ -3007,7 +3018,7 @@ class PacketHandling(ProtocolBase):
         if self.lastPacketCounter == SAME_PACKET_ERROR:
             log.debug("[_processReceivedPacket] Had the same packet for " + str(SAME_PACKET_ERROR) + " times in a row : %s", self._toString(packet))
             # _performDisconnect
-            self._performDisconnect("Same Packet for {0} times in a row".format(SAME_PACKET_ERROR))
+            self._performDisconnect(reason="samepacketerror", exc="Same Packet for {0} times in a row".format(SAME_PACKET_ERROR))
         # else:
         #    log.debug("[_processReceivedPacket] Parsing complete valid packet: %s", self._toString(packet))
 
@@ -4173,14 +4184,34 @@ class PacketHandling(ProtocolBase):
     # =======================================================================================================
 
     def _dumpSensorsToLogFile(self):
-        log.debug("=============================================== Display Status ===============================================")
+        log.debug("================================================== Display Status ==================================================")
         for key, sensor in self.pmSensorDev_t.items():
             log.debug("     key {0:<2} Sensor {1}".format(key, sensor))
         log.debug("   Model {: <18}     PowerMaster {: <18}     LastEvent {: <18}     Ready   {: <13}".format(self.PanelModel,
                                         'Yes' if self.PowerMaster else 'No', self.PanelLastEvent, 'Yes' if self.PanelReady else 'No'))
         log.debug("   Mode  {: <18}     Status      {: <18}     Armed     {: <18}     Trouble {: <13}     AlarmStatus {: <12}".format(self.PanelMode.name.replace("_", " ").title(), self.PanelStatusText,
                                         'Yes' if self.PanelArmed else 'No', self.PanelTroubleStatus, self.PanelAlarmStatus))
-        log.debug("==============================================================================================================")
+        log.debug("====================================================================================================================")
+
+    def dumpSensorsToStringList(self) -> list:
+        retval = list()
+        for key, sensor in self.pmSensorDev_t.items():
+            retval.append("key {0:<2} Sensor {1}".format(key, sensor))
+        return retval
+
+    def dumpSwitchesToStringList(self) -> list:
+        retval = list()
+        for key, switch in self.pmX10Dev_t.items():
+            retval.append("key {0:<2} Switch {1}".format(key, switch))
+        return retval
+
+    def dumpStateToStringList(self) -> list:
+        retval = list()
+        retval.append("Model {: <18}     PowerMaster {: <18}     LastEvent {: <18}     Ready   {: <13}".format(self.PanelModel,
+                                        'Yes' if self.PowerMaster else 'No', self.PanelLastEvent, 'Yes' if self.PanelReady else 'No'))
+        retval.append("Mode  {: <18}     Status      {: <18}     Armed     {: <18}     Trouble {: <13}     AlarmStatus {: <12}".format(self.PanelMode.name.replace("_", " ").title(), self.PanelStatusText,
+                                        'Yes' if self.PanelArmed else 'No', self.PanelTroubleStatus, self.PanelAlarmStatus))
+        return retval
 
     def _createPin(self, pin : str):
         # Pin is None when either we can perform the action without a code OR we're in Powerlink/StandardPlus and have the pin code to use
@@ -4274,7 +4305,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
                 datadict["ZoneTamper"].append(entname)
         return datadict
 
-    def getPanelStatus(self) -> dict:
+    def getPanelStatus(self, full : bool) -> dict:
         # log.debug("In visonic getpanelstatus")
         d = {
             "Panel Mode": self.getPanelMode().name.replace("_", " ").title(),
@@ -4305,7 +4336,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
             "Model Type": self.ModelType,
         }
 
-        if len(self.PanelStatus) > 0:
+        if full and len(self.PanelStatus) > 0:
             return {**d, **self.PanelStatus}
         return d
 

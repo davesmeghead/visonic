@@ -366,7 +366,7 @@ class VisonicClient:
     def getPanelStatus(self) -> dict:
         """ Get the panel status. """
         if self.visonicProtocol is not None:
-            return self.visonicProtocol.getPanelStatus()
+            return self.visonicProtocol.getPanelStatus(True)
         return {}
         
     def isSystemStarted(self) -> bool:
@@ -552,7 +552,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         prompt = prompt1
                         processedInput = True
                     elif command == 'm':
-                        s = client.getPanelStatus()
+                        s = client.getPanelStatus(True)
                         pstate = s["Panel Status"]
                         pready = s["Panel Ready"]
                         parmed = s["Panel Armed"]

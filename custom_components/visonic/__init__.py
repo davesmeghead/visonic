@@ -179,9 +179,9 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         else:
             sendHANotification(f"Service Panel sensor bypass failed - Panel not found")
     
-    async def _handle_reload(service):
+    async def handle_reload(service):
         """Handle reload service call."""
-        _LOGGER.info("Service %s.reload called: reloading integration", DOMAIN)
+        _LOGGER.info("Domain {0} Service {1} reload called: reloading integration".format(DOMAIN, service))
 
         current_entries = hass.config_entries.async_entries(DOMAIN)
 
@@ -234,7 +234,7 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
     hass.helpers.service.async_register_admin_service(
         DOMAIN,
         SERVICE_RELOAD,
-        _handle_reload,
+        handle_reload,
     )
     return True
 
@@ -304,7 +304,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 # This function is called to terminate a client connection to the alarm panel
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Unload visonic entry."""
-    # _LOGGER.debug("************* terminate connection here **************")
+    _LOGGER.debug("************* terminate connection here **************")
 
     eid = entry.entry_id
 
@@ -312,13 +312,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     clientTask = hass.data[DOMAIN][DOMAINCLIENTTASK][eid]
     updateListener = hass.data[DOMAIN][VISONIC_UPDATE_LISTENER][eid]
 
-    # stop the comms to/from the panel
-    await client.service_comms_stop()
     # stop all activity in the client
     await client.service_panel_stop()
-
-    # Wait for all the platforms to unload.  Does this get called within core or do I need to doit?
-    # all(await asyncio.gather(*[hass.config_entries.async_forward_entry_unload(entry, component) for component in PLATFORMS]))
 
     #if updateListener is not None:
     #    updateListener()
@@ -326,7 +321,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     if clientTask is not None:
         clientTask.cancel()
 
-    # hass.data[DOMAIN][eid] = {}
     del hass.data[DOMAIN][DOMAINDATA][eid]
     del hass.data[DOMAIN][DOMAINCLIENT][eid]
     del hass.data[DOMAIN][DOMAINCLIENTTASK][eid]

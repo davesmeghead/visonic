@@ -130,7 +130,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     def device_info(self):
         """Return information about the device."""
         if self._client is not None:
-            ps = self._client.getPanelStatus()
+            ps = self._client.getPanelStatus(True)
             if "Panel Model" in ps:
                 pm = ps["Panel Model"]
                 #_LOGGER.debug("Model is = {0}  type {1}".format(pm, type(pm)))
@@ -183,7 +183,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
 
             # Currently may only contain self.hass.data[DOMAIN][DOMAINDATA]["Exception Count"]
             data = self.hass.data[DOMAIN][DOMAINDATA][self._client.getEntryID()]
-            stat = self._client.getPanelStatus()
+            stat = self._client.getPanelStatus(True)
 
             if data is not None and stat is not None:
                 self._device_state_attributes = {**stat, **data}

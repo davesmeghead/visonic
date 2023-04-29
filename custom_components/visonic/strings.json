@@ -48,15 +48,23 @@
                     "language": "Language (EN, NL, FR)"
                 }
             },
-            "parameters2": {
+            "parameters2A": {
                 "description": "",
                 "title": "Alarm Panel Settings",
                 "data": {
-                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "override_code": "Override User Code (Set to 0 for not used)",
                     "siren_sounding": "List of triggers for the siren (comma separated)",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off": "Motion off delay time (seconds)",
+                    "retry_connection_count": "Try this number of times to attempt the connection",
+                    "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
+                }
+            },
+            "parameters2B": {
+                "description": "",
+                "title": "Alarm Panel Settings",
+                "data": {
+                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "force_numeric_keypad": "Force use of a Numeric Keypad",
                     "arm_away_instant": "Arm Away Instant every time",
                     "arm_home_instant": "Arm Home Instant every time",
@@ -100,15 +108,23 @@
             "unknown": "Unexpected error"
         },
         "step": {
-            "parameters2": {
+            "parameters2A": {
                 "description": "",
                 "title": "Alarm Panel Settings",
                 "data": {
-                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "override_code": "Override User Code (Set to 0 for not used)",
                     "siren_sounding": "List of triggers for the siren (comma separated)",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off": "Motion off delay time (seconds)",
+                    "retry_connection_count": "Try this number of times to attempt the connection",
+                    "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
+                }
+            },
+            "parameters2B": {
+                "description": "",
+                "title": "Alarm Panel Settings",
+                "data": {
+                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "force_numeric_keypad": "Force use of a Numeric Keypad",
                     "arm_away_instant": "Arm Away Instant every time",
                     "arm_home_instant": "Arm Home Instant every time",

@@ -44,6 +44,8 @@ from .const import (
     CONF_LOG_REVERSE,
     CONF_LOG_XML_FN,
     CONF_ALARM_NOTIFICATIONS,
+    CONF_RETRY_CONNECTION_COUNT,
+    CONF_RETRY_CONNECTION_DELAY,
     DEFAULT_DEVICE_BAUD,
     DEFAULT_DEVICE_HOST,
     DEFAULT_DEVICE_PORT,
@@ -95,7 +97,8 @@ class VisonicSchema:
             **self.CONFIG_SCHEMA_ETHERNET,
             **self.CONFIG_SCHEMA_USB,
             **self.create_parameters1(self.options),
-            **self.create_parameters2(self.options),
+            **self.create_parameters2A(self.options),
+            **self.create_parameters2B(self.options),
             **self.create_parameters3(self.options),
             **self.create_parameters4(self.options),
         }
@@ -162,10 +165,12 @@ class VisonicSchema:
             ): bool,
         }
 
-    def create_parameters2(self, options: dict):
-        """Create parameter set 2."""
+
+
+    def create_parameters2A(self, options: dict):
+        """Create parameter set 2A."""
         # Panel settings - can be modified/edited
-        # _LOGGER.debug(f'Create 2 {options.get(CONF_OVERRIDE_CODE, "")}')
+        # _LOGGER.debug(f'Create 2A {options.get(CONF_OVERRIDE_CODE, "")}')
         tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
         return {
             vol.Optional(
@@ -184,6 +189,23 @@ class VisonicSchema:
             vol.Optional(
                 CONF_OVERRIDE_CODE, default = 0, description={"suggested_value": (0 if tmp == "" else int(tmp))}
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=9999, mode=selector.NumberSelectorMode.BOX)), #vol.All (cv.string, cv.matches_regex("(^[0-9]{4}$|^$)")), #("(^[0-9][0-9][0-9][0-9]$|^$)")
+            vol.Optional(
+                CONF_RETRY_CONNECTION_COUNT,
+                default=self.create_default(options, CONF_RETRY_CONNECTION_COUNT, 1),
+            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=1000, mode=selector.NumberSelectorMode.BOX)),
+            vol.Optional(
+                CONF_RETRY_CONNECTION_DELAY,
+                default=self.create_default(options, CONF_RETRY_CONNECTION_DELAY, 90),
+            ): selector.NumberSelector(selector.NumberSelectorConfig(min=5, max=1000, mode=selector.NumberSelectorMode.BOX)),
+        }
+
+
+    def create_parameters2B(self, options: dict):
+        """Create parameter set 2B."""
+        # Panel settings - can be modified/edited
+        # _LOGGER.debug(f'Create 2B {options.get(CONF_OVERRIDE_CODE, "")}')
+        tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
+        return {
             vol.Optional(
                 CONF_ARM_CODE_AUTO,
                 default=self.create_default(options, CONF_ARM_CODE_AUTO, False),
@@ -212,6 +234,7 @@ class VisonicSchema:
                 default=self.create_default(options, CONF_ENABLE_SENSOR_BYPASS, False),
             ): bool,
         }
+
 
     def create_parameters3(self, options: dict):
         """Create parameter set 3."""
@@ -283,9 +306,14 @@ class VisonicSchema:
         return vol.Schema(self.create_parameters1(self.options))
 
 
-    def create_schema_parameters2(self):
+    def create_schema_parameters2A(self):
         """Create schema parameters 2."""
-        return vol.Schema(self.create_parameters2(self.options))
+        return vol.Schema(self.create_parameters2A(self.options))
+
+
+    def create_schema_parameters2B(self):
+        """Create schema parameters 2."""
+        return vol.Schema(self.create_parameters2B(self.options))
 
 
     def create_schema_parameters3(self):

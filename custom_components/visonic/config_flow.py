@@ -88,8 +88,10 @@ class MyHandlers(data_entry_flow.FlowHandler):
             ds = self.myschema.create_schema_usb()
         elif step == "parameters1":
             ds = self.myschema.create_schema_parameters1()
-        elif step == "parameters2":
-            ds = self.myschema.create_schema_parameters2()
+        elif step == "parameters2A":
+            ds = self.myschema.create_schema_parameters2A()
+        elif step == "parameters2B":
+            ds = self.myschema.create_schema_parameters2B()
         elif step == "parameters3":
             ds = self.myschema.create_schema_parameters3()
         elif step == "parameters4":
@@ -114,13 +116,20 @@ class MyHandlers(data_entry_flow.FlowHandler):
         """Config flow step 1."""
         if user_input is not None:
             self.config.update(user_input)
-        return await self._show_form(step="parameters2")
+        return await self._show_form(step="parameters2A")
 
-    async def async_step_parameters2(self, user_input=None):
+    async def async_step_parameters2A(self, user_input=None):
         """Config flow step 2."""
         if user_input is not None:
             self.config.update(user_input)
-        # _LOGGER.debug(f"async_step_parameters2 {user_input}")
+        # _LOGGER.debug(f"async_step_parameters2A {user_input}")
+        return await self._show_form(step="parameters2B")
+
+    async def async_step_parameters2B(self, user_input=None):
+        """Config flow step 2."""
+        if user_input is not None:
+            self.config.update(user_input)
+        # _LOGGER.debug(f"async_step_parameters2B {user_input}")
         return await self._show_form(step="parameters3")
 
     async def async_step_parameters3(self, user_input=None):
@@ -350,4 +359,4 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
                 # From the client, is it a PowerMaster panel (this assumes that the EPROM has been downloaded, or at least the 0x3C data)"
                 self.powermaster = client.isPowerMaster()
         _LOGGER.debug("Edit config option settings, powermaster = %s", self.powermaster)
-        return await self._show_form(step="parameters2")
+        return await self._show_form(step="parameters2A")

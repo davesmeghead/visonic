@@ -261,7 +261,7 @@ class PyPanelInterface(ABC):
 
     # A dictionary that is used to add to the attribute list of the Alarm Control Panel
     @abstractmethod
-    def getPanelStatus(self) -> dict:
+    def getPanelStatus(self, full : bool) -> dict:
         """ Get a dictionary representing the panel status. """
         return {}
 

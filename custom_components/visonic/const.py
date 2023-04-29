@@ -83,6 +83,9 @@ CONF_INSTANT_ARM_AWAY = "arm_away_instant"
 CONF_INSTANT_ARM_HOME = "arm_home_instant"
 CONF_MOTION_OFF_DELAY = "motion_off"
 CONF_SIREN_SOUNDING = "siren_sounding"
+CONF_RETRY_CONNECTION_COUNT = "retry_connection_count"
+CONF_RETRY_CONNECTION_DELAY = "retry_connection_delay"
+
 
 # Temporary B0 Config Items
 CONF_B0_ENABLE_MOTION_PROCESSING = "b0_enable_motion_processing"
