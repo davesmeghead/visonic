@@ -61,7 +61,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.18.0"
+PLUGIN_VERSION = "1.0.19.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -1494,7 +1494,7 @@ class ProtocolBase(asyncio.Protocol):
 
     # when the connection has problems then call the disconnect_callback when available,
     #     otherwise try to reinitialise the connection from here
-    def _performDisconnect(self, reason : string, exc=None):
+    def _performDisconnect(self, reason : str, exc=None):
         """Log when connection is closed, if needed call callback."""
         if self.suspendAllOperations:
             # log.debug('[Disconnection] Suspended. Sorry but all operations have been suspended, please recreate connection')
@@ -1545,7 +1545,7 @@ class ProtocolBase(asyncio.Protocol):
         """Log when connection is closed, if needed call callback."""
         if not self.suspendAllOperations:
             log.error("ERROR Connection Lost : disconnected because the Ethernet/USB connection was externally terminated.")
-        self._performDisconnect(reason="termination", exc)
+        self._performDisconnect(reason="termination", exc=exc)
 
     def _sendResponseEvent(self, ev, dict={}):
         if self.event_callback is not None:

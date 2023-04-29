@@ -9,7 +9,7 @@ import re
 import datetime
 from datetime import datetime, timedelta
 
-CLIENT_VERSION = "0.8.4.0"
+CLIENT_VERSION = "0.8.4.1"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -882,7 +882,7 @@ class VisonicClient:
         self.logstate_debug("Shutting down subscriptions")
         asyncio.ensure_future(self.service_panel_stop(), loop=self.hass.loop)
 
-    def disconnect_callback(self, reason : string, excep = None):
+    def disconnect_callback(self, reason : str, excep = None):
         """Disconnection Callback for connection disruption to the panel."""
         if excep is None:
             self.logstate_debug("PyVisonic has caused an exception, reason=%s, no exception information is available", reason)
