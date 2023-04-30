@@ -9,7 +9,7 @@ import re
 import datetime
 from datetime import datetime, timedelta
 
-CLIENT_VERSION = "0.8.4.1"
+CLIENT_VERSION = "0.8.4.2"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -57,6 +57,8 @@ from .const import (
     CONF_ARM_CODE_AUTO,
     CONF_OVERRIDE_CODE,
     CONF_FORCE_KEYPAD,
+    CONF_ARM_HOME_ENABLED,
+    CONF_ARM_NIGHT_ENABLED,
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
     CONF_AUTO_SYNC_TIME,
@@ -266,6 +268,12 @@ class VisonicClient:
     def isForceKeypad(self) -> bool:
         """Force Keypad"""
         return self.toBool(self.config.get(CONF_FORCE_KEYPAD, False))
+
+    def isArmHome(self):
+        return self.toBool(self.config.get(CONF_ARM_HOME_ENABLED, True))
+
+    def isArmNight(self):
+        return self.toBool(self.config.get(CONF_ARM_NIGHT_ENABLED, True))
 
     def isArmWithoutCode(self) -> bool:
         """Is Arm Without Use Code"""
@@ -850,7 +858,7 @@ class VisonicClient:
 
         self.createWarningMessage(
             AvailableNotifications.CONNECTION_PROBLEM,
-            "Failed to connect into Visonic Alarm. Check Your Network and the Configuration Settings."
+            f"Failed to connect into Visonic Alarm Panel {self.getPanelID()}. Check Your Network and the Configuration Settings."
         )
 
         #self.logstate_debug("Giving up on trying to connect, sorry")

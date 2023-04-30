@@ -21,6 +21,8 @@ from .const import (
     CONF_ARM_CODE_AUTO,
     CONF_OVERRIDE_CODE,
     CONF_FORCE_KEYPAD,
+    CONF_ARM_HOME_ENABLED,
+    CONF_ARM_NIGHT_ENABLED,
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
     CONF_AUTO_SYNC_TIME,
@@ -97,10 +99,10 @@ class VisonicSchema:
             **self.CONFIG_SCHEMA_ETHERNET,
             **self.CONFIG_SCHEMA_USB,
             **self.create_parameters1(self.options),
-            **self.create_parameters2A(self.options),
-            **self.create_parameters2B(self.options),
+            **self.create_parameters2(self.options),
             **self.create_parameters3(self.options),
             **self.create_parameters4(self.options),
+            **self.create_parameters5(self.options),
         }
 
         for key in initialise:
@@ -167,8 +169,8 @@ class VisonicSchema:
 
 
 
-    def create_parameters2A(self, options: dict):
-        """Create parameter set 2A."""
+    def create_parameters2(self, options: dict):
+        """Create parameter set 2."""
         # Panel settings - can be modified/edited
         # _LOGGER.debug(f'Create 2A {options.get(CONF_OVERRIDE_CODE, "")}')
         tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
@@ -200,8 +202,8 @@ class VisonicSchema:
         }
 
 
-    def create_parameters2B(self, options: dict):
-        """Create parameter set 2B."""
+    def create_parameters3(self, options: dict):
+        """Create parameter set 3."""
         # Panel settings - can be modified/edited
         # _LOGGER.debug(f'Create 2B {options.get(CONF_OVERRIDE_CODE, "")}')
         tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
@@ -212,6 +214,14 @@ class VisonicSchema:
             ): bool,
             vol.Optional(
                 CONF_FORCE_KEYPAD, default=self.create_default(options, CONF_FORCE_KEYPAD, False)
+            ): bool,
+            vol.Optional(
+                CONF_ARM_HOME_ENABLED,
+                default=self.create_default(options, CONF_ARM_HOME_ENABLED, True),
+            ): bool,
+            vol.Optional(
+                CONF_ARM_NIGHT_ENABLED,
+                default=self.create_default(options, CONF_ARM_NIGHT_ENABLED, True),
             ): bool,
             vol.Optional(
                 CONF_INSTANT_ARM_AWAY,
@@ -236,8 +246,8 @@ class VisonicSchema:
         }
 
 
-    def create_parameters3(self, options: dict):
-        """Create parameter set 3."""
+    def create_parameters4(self, options: dict):
+        """Create parameter set 4."""
         # Log file parameters
         return {
             vol.Optional(
@@ -268,8 +278,8 @@ class VisonicSchema:
         }
 
 
-    def create_parameters4(self, options: dict):
-        """Create parameter set 4."""
+    def create_parameters5(self, options: dict):
+        """Create parameter set 5."""
         # B0 related parameters (PowerMaster only)
         return {
             vol.Optional(
@@ -306,14 +316,9 @@ class VisonicSchema:
         return vol.Schema(self.create_parameters1(self.options))
 
 
-    def create_schema_parameters2A(self):
+    def create_schema_parameters2(self):
         """Create schema parameters 2."""
-        return vol.Schema(self.create_parameters2A(self.options))
-
-
-    def create_schema_parameters2B(self):
-        """Create schema parameters 2."""
-        return vol.Schema(self.create_parameters2B(self.options))
+        return vol.Schema(self.create_parameters2(self.options))
 
 
     def create_schema_parameters3(self):
@@ -324,6 +329,11 @@ class VisonicSchema:
     def create_schema_parameters4(self):
         """Create schema parameters 4."""
         return vol.Schema(self.create_parameters4(self.options))
+
+
+    def create_schema_parameters5(self):
+        """Create schema parameters 5."""
+        return vol.Schema(self.create_parameters5(self.options))
 
     def set_default_options(self, options: dict):
         """Set schema defaults."""

@@ -27,14 +27,16 @@ _LOGGER = logging.getLogger(__name__)
 #     - User then enters either ethernet or usb parameters
 #     - Parameters1
 #     - Parameters2
-#     - Parameters3
+#     - parameters3
+#     - parameters4
 #
 #  Modify/Edit sequence (using VisonicOptionsFlowHandler)
 #     - Parameters2
-#     - Parameters3
+#     - parameters3
+#     - parameters4
 #     If we achieve Standard Plus or Powerlink with the panel then self.powermaster will be set to False or True, depending on the panel type
 #     - if self.powermaster
-#     -     Parameters4
+#     -     parameters5
 
 class MyHandlers(data_entry_flow.FlowHandler):
     """My generic handler for config flow ConfigFlow and OptionsFlow."""
@@ -88,14 +90,14 @@ class MyHandlers(data_entry_flow.FlowHandler):
             ds = self.myschema.create_schema_usb()
         elif step == "parameters1":
             ds = self.myschema.create_schema_parameters1()
-        elif step == "parameters2A":
-            ds = self.myschema.create_schema_parameters2A()
-        elif step == "parameters2B":
-            ds = self.myschema.create_schema_parameters2B()
+        elif step == "parameters2":
+            ds = self.myschema.create_schema_parameters2()
         elif step == "parameters3":
             ds = self.myschema.create_schema_parameters3()
         elif step == "parameters4":
             ds = self.myschema.create_schema_parameters4()
+        elif step == "parameters5":
+            ds = self.myschema.create_schema_parameters5()
         else:
             return self.async_abort(reason="device_error")
 
@@ -116,37 +118,37 @@ class MyHandlers(data_entry_flow.FlowHandler):
         """Config flow step 1."""
         if user_input is not None:
             self.config.update(user_input)
-        return await self._show_form(step="parameters2A")
+        return await self._show_form(step="parameters2")
 
-    async def async_step_parameters2A(self, user_input=None):
+    async def async_step_parameters2(self, user_input=None):
         """Config flow step 2."""
         if user_input is not None:
             self.config.update(user_input)
-        # _LOGGER.debug(f"async_step_parameters2A {user_input}")
-        return await self._show_form(step="parameters2B")
-
-    async def async_step_parameters2B(self, user_input=None):
-        """Config flow step 2."""
-        if user_input is not None:
-            self.config.update(user_input)
-        # _LOGGER.debug(f"async_step_parameters2B {user_input}")
+        # _LOGGER.debug(f"async_step_parameters2 {user_input}")
         return await self._show_form(step="parameters3")
 
     async def async_step_parameters3(self, user_input=None):
+        """Config flow step 2."""
+        if user_input is not None:
+            self.config.update(user_input)
+        # _LOGGER.debug(f"async_step_parameters3 {user_input}")
+        return await self._show_form(step="parameters4")
+
+    async def async_step_parameters4(self, user_input=None):
         """Config flow step 3."""
         if user_input is not None:
             self.config.update(user_input)
 
-        # _LOGGER.debug("async_step_parameters3 %s", self.config)
+        # _LOGGER.debug("async_step_parameters4 %s", self.config)
 
         if self.powermaster:
             _LOGGER.debug("Detected a powermaster so asking about B0 parameters")
-            return await self._show_form(step="parameters4")
+            return await self._show_form(step="parameters5")
 
         _LOGGER.debug("Detected a powermax so not asking about B0 parameters")
         return await self.processcomplete()
 
-    async def async_step_parameters4(self, user_input=None):
+    async def async_step_parameters5(self, user_input=None):
         """Config flow step 4."""
         # add parameters to config
         self.config.update(user_input)
@@ -359,4 +361,4 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
                 # From the client, is it a PowerMaster panel (this assumes that the EPROM has been downloaded, or at least the 0x3C data)"
                 self.powermaster = client.isPowerMaster()
         _LOGGER.debug("Edit config option settings, powermaster = %s", self.powermaster)
-        return await self._show_form(step="parameters2A")
+        return await self._show_form(step="parameters2")

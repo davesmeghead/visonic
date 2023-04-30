@@ -212,7 +212,15 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     @property
     def supported_features(self) -> int:
         """Return the list of supported features."""
-        return AlarmControlPanelEntityFeature.ARM_HOME | AlarmControlPanelEntityFeature.ARM_AWAY | AlarmControlPanelEntityFeature.ARM_NIGHT
+        #_LOGGER.debug("[AlarmcontrolPanel] Getting Supported Features {0} {1}".format(self._client.isArmHome(), self._client.isArmNight()))
+        retval = AlarmControlPanelEntityFeature.ARM_AWAY
+        if self._client.isArmNight():
+            _LOGGER.debug("[AlarmcontrolPanel] Adding Night")
+            retval = retval | AlarmControlPanelEntityFeature.ARM_NIGHT
+        if self._client.isArmHome():
+            _LOGGER.debug("[AlarmcontrolPanel] Adding Home")
+            retval = retval | AlarmControlPanelEntityFeature.ARM_HOME
+        return retval
 
     # DO NOT OVERRIDE state_attributes AS IT IS USED IN THE LOVELACE FRONTEND TO DETERMINE code_format
     @property
@@ -234,14 +242,16 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         """Send arm night command (Same as arm home)."""
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
-        self._client.sendCommand("Arm Night", PyPanelCommand.ARM_HOME_INSTANT, code)
+        if self._client.isArmNight():
+            self._client.sendCommand("Arm Night", PyPanelCommand.ARM_HOME_INSTANT, code)
 
     def alarm_arm_home(self, code=None):
         """Send arm home command."""
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
-        command = PyPanelCommand.ARM_HOME_INSTANT if self._client.isArmHomeInstant() else PyPanelCommand.ARM_HOME
-        self._client.sendCommand("Arm Home", command, code)
+        if self._client.isArmHome():
+            command = PyPanelCommand.ARM_HOME_INSTANT if self._client.isArmHomeInstant() else PyPanelCommand.ARM_HOME
+            self._client.sendCommand("Arm Home", command, code)
 
     def alarm_arm_away(self, code=None):
         """Send arm away command."""
