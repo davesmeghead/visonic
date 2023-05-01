@@ -215,14 +215,15 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         #_LOGGER.debug("[AlarmcontrolPanel] Getting Supported Features {0} {1}".format(self._client.isArmHome(), self._client.isArmNight()))
         retval = AlarmControlPanelEntityFeature.ARM_AWAY
         if self._client.isArmNight():
-            _LOGGER.debug("[AlarmcontrolPanel] Adding Night")
+            #_LOGGER.debug("[AlarmcontrolPanel] Adding Night")
             retval = retval | AlarmControlPanelEntityFeature.ARM_NIGHT
         if self._client.isArmHome():
-            _LOGGER.debug("[AlarmcontrolPanel] Adding Home")
+            #_LOGGER.debug("[AlarmcontrolPanel] Adding Home")
             retval = retval | AlarmControlPanelEntityFeature.ARM_HOME
         return retval
 
     # DO NOT OVERRIDE state_attributes AS IT IS USED IN THE LOVELACE FRONTEND TO DETERMINE code_format
+    
     @property
     def code_format(self):
         """Regex for code format or None if no code is required."""
