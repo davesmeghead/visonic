@@ -61,7 +61,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.19.0"
+PLUGIN_VERSION = "1.0.20.0"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -934,24 +934,34 @@ pmZoneSensorMaxGeneric_t = {
 
 ZoneSensorType = collections.namedtuple("ZoneSensorType", 'name func' )
 pmZoneSensorMax_t = {
+   0x6D : ZoneSensorType("MCX-601 Wireless Repeater", PySensorType.IGNORED ),       # Joao-Sousa   ********************* Wireless Repeater so exclude it **************
    0x08 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # Fabio72
    0x09 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # Fabio72
    0x1A : ZoneSensorType("MCW-K980", PySensorType.MOTION ),        # Botap
+   0x6A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # Joao-Sousa
    0x74 : ZoneSensorType("Next+ K9-85", PySensorType.MOTION ),     # christopheVia
    0x75 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # thermostat (Visonic part number 0-3592-B, NEXT K985 DDMCW)
    0x76 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # open1999
-   0x7A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # fguerzoni
+   0x7A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # fguerzoni, Joao-Sousa
+   0x86 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # Joao-Sousa
+   0x8A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # Joao-Sousa
    0x95 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, fguerzoni
    0x96 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, g4seb
    0x97 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # christopheVia
+   0x9A : ZoneSensorType("MCT-425", PySensorType.SMOKE ),          # Joao-Sousa
+   0xA3 : ZoneSensorType("Disc MCW", PySensorType.MOTION ),        # Joao-Sousa
+   0xB3 : ZoneSensorType("Clip MCW", PySensorType.MOTION ),        # Joao-Sousa
    0xC0 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # g4seb
-   0xD3 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me
+   0xC3 : ZoneSensorType("Clip MCW", PySensorType.MOTION ),        # Joao-Sousa
+   0xC4 : ZoneSensorType("Clip MCW", PySensorType.MOTION ),        # Joao-Sousa
+   0xD3 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me, Joao-Sousa
    0xD5 : ZoneSensorType("Next K9", PySensorType.MOTION ),         # fguerzoni
    0xE4 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me
    0xE5 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # g4seb, fguerzoni
-   0xF3 : ZoneSensorType("MCW-K980", PySensorType.MOTION ),        # Botap
+   0xF3 : ZoneSensorType("MCW-K980", PySensorType.MOTION ),        # Botap, Joao-Sousa
    0xF5 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # open1999
    0xF9 : ZoneSensorType("MCT-100", PySensorType.MAGNET ),         # Fabio72
+   0xFA : ZoneSensorType("MCT-427", PySensorType.SMOKE ),          # Joao-Sousa
    0xFF : ZoneSensorType("Wired", PySensorType.WIRED )
 }
 
@@ -1035,13 +1045,13 @@ class SensorDevice(PySensorDevice):
             stypestr = "Unknown"
         strn = ""
         strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
-        strn = strn + (" dname=None" if self.dname == None else " dname={0:<4}".format(self.dname[:4]))
-        strn = strn + (" stype={0:<8}".format(stypestr))
+        strn = strn + (" Zone=None" if self.dname == None else " Zone={0:<4}".format(self.dname[:4]))
+        strn = strn + (" Type={0:<8}".format(stypestr))
 
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" model=None" if self.model == None else " model={0:<8}".format(self.model[:14]))
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" sid=None"       if self.sid == None else       " sid={0:<3}".format(self.sid, type(self.sid)))
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" ztype=None"     if self.ztype == None else     " ztype={0:<2}".format(self.ztype, type(self.ztype)))
-        strn = strn + (" zname=None" if self.zname == None else " zname={0:<14}".format(self.zname[:14]))
+        strn = strn + (" Loc=None          " if self.zname == None else " Loc={0:<14}".format(self.zname[:14]))
         strn = strn + (" ztypeName=None" if self.ztypeName == None else " ztypeName={0:<10}".format(self.ztypeName[:10]))
         strn = strn + (" ztamper=None" if self.ztamper == None else " ztamper={0:<2}".format(self.ztamper))
         strn = strn + (" ztrip=None" if self.ztrip == None else " ztrip={0:<2}".format(self.ztrip))
@@ -1500,10 +1510,7 @@ class ProtocolBase(asyncio.Protocol):
             # log.debug('[Disconnection] Suspended. Sorry but all operations have been suspended, please recreate connection')
             return
 
-        self.suspendAllOperations = True
-
-        self.PanelMode = PyPanelMode.STOPPED
-        self.PanelStatusCode = PyPanelStatus.UNKNOWN
+        self.shutdownOperation()
 
         if exc is not None:
             # log.exception("ERROR Connection Lost : disconnected due to exception  <{0}>".format(exc))
@@ -1878,9 +1885,7 @@ class ProtocolBase(asyncio.Protocol):
                             self.StopAndSuspend("disconnected")
 
     def StopAndSuspend(self, t : str):
-        self.suspendAllOperations = True
-        self.PanelMode = PyPanelMode.STOPPED
-        self.PanelStatusCode = PyPanelStatus.UNKNOWN
+        #self.shutdownOperation() # This is called from the client to stop comms
         datadict = {}
         datadict["state"] = t
         self._sendResponseEvent(PyCondition.NO_DATA_FROM_PANEL, datadict)  # Plugin suspended itself
@@ -2638,6 +2643,8 @@ class PacketHandling(ProtocolBase):
         motionZoneStr = ""
         # List of smoke sensors
         smokeZoneStr = ""
+        # List of ignored sensors
+        ignoredZoneStr = ""
         # List of other sensors
         otherZoneStr = ""
         deviceStr = ""
@@ -2827,54 +2834,60 @@ class PacketHandling(ProtocolBase):
                                         log.debug("[Process Settings] PowerMaster Sensor " + str(i) + " has no motion delay set (Sensor will only be useful when the panel is armed)")
                                     
                                 else:
-                                    log.debug("[Process Settings] Found unknown sensor type " + str(visonicSensorRef))
+                                    log.debug("[Process Settings] Found unknown sensor type " + hex(visonicSensorRef))
 
-                            zoneType = zoneInfo & 0x0F
-                            zoneChime = (zoneInfo >> 4) & 0x03
-
-                            part = []
-                            if partitionCnt > 1 and partition is not None:
-                                for j in range(0, partitionCnt):
-                                    if (partition[0x11 + i] & (1 << j)) > 0:
-                                        # log.debug("[Process Settings]     Adding to partition list - ref {0}  Z{1:0>2}   Partition {2}".format(i, i+1, j+1))
-                                        part.append(j + 1)
+                            
+                            if sensorType == PySensorType.IGNORED:
+                                log.debug("[Process Settings]      Zone={0:0>2} :  VisonicSensorRef={1}   zoneInfo={2}    IGNORED {3}".format(i, hex(visonicSensorRef), hex(zoneInfo).upper(), sensorModel))
+                                ignoredZoneStr = "{0},Z{1:0>2}".format(ignoredZoneStr, i + 1)
                             else:
-                                part = [1]
+                                zoneType = zoneInfo & 0x0F
+                                zoneChime = (zoneInfo >> 4) & 0x03
 
-                            log.debug("[Process Settings]      i={0} :    VisonicSensorRef={1}   zoneInfo={2}   ZTypeName={3}   Chime={4}   SensorType={5}   zoneName={6}".format(
-                                   i, hex(visonicSensorRef), hex(zoneInfo), pmZoneType_t["EN"][zoneType], pmZoneChime_t["EN"][zoneChime], sensorType, zoneName))
-
-                            if i in self.pmSensorDev_t:
-                                # If we get EPROM data, assume it is all correct and override any existing settings (as they were assumptions)
-                                self.pmSensorDev_t[i].stype = sensorType
-                                self.pmSensorDev_t[i].sid = visonicSensorRef
-                                self.pmSensorDev_t[i].model = sensorModel
-                                self.pmSensorDev_t[i].ztype = zoneType
-                                self.pmSensorDev_t[i].ztypeName = pmZoneType_t[self.pmLang][zoneType]
-                                self.pmSensorDev_t[i].zname = zoneName
-                                self.pmSensorDev_t[i].zchime = pmZoneChime_t[self.pmLang][zoneChime]
-                                self.pmSensorDev_t[i].dname = "Z{0:0>2}".format(i + 1)
-                                self.pmSensorDev_t[i].partition = part
-                                self.pmSensorDev_t[i].id = i + 1
-                                self.pmSensorDev_t[i].enrolled = True
-                                self.pmSensorDev_t[i].motiondelaytime = motiondelaytime
-                            else:
-                                self.pmSensorDev_t[i] = SensorDevice(stype = sensorType, sid = visonicSensorRef, model = sensorModel, ztype = zoneType,
-                                             ztypeName = pmZoneType_t[self.pmLang][zoneType], zname = zoneName, zchime = pmZoneChime_t[self.pmLang][zoneChime],
-                                             dname="Z{0:0>2}".format(i+1), partition = part, id=i+1, enrolled = True, motiondelaytime = motiondelaytime)
-                                #visonic_devices['sensor'].append(self.pmSensorDev_t[i])
-                                if self.new_sensor_callback is not None:
-                                    self.new_sensor_callback(self.pmSensorDev_t[i])
-
-                            if i in self.pmSensorDev_t:
-                                if sensorType == PySensorType.MAGNET or sensorType == PySensorType.WIRED:
-                                    doorZoneStr = "{0},Z{1:0>2}".format(doorZoneStr, i + 1)
-                                elif sensorType == PySensorType.MOTION or sensorType == PySensorType.CAMERA:
-                                    motionZoneStr = "{0},Z{1:0>2}".format(motionZoneStr, i + 1)
-                                elif sensorType == PySensorType.SMOKE or sensorType == PySensorType.GAS:
-                                    smokeZoneStr = "{0},Z{1:0>2}".format(smokeZoneStr, i + 1)
+                                part = []
+                                if partitionCnt > 1 and partition is not None:
+                                    for j in range(0, partitionCnt):
+                                        if (partition[0x11 + i] & (1 << j)) > 0:
+                                            # log.debug("[Process Settings]     Adding to partition list - ref {0}  Z{1:0>2}   Partition {2}".format(i, i+1, j+1))
+                                            part.append(j + 1)
                                 else:
-                                    otherZoneStr = "{0},Z{1:0>2}".format(otherZoneStr, i + 1)
+                                    part = [1]
+
+                                log.debug("[Process Settings]      Z{0:0>2} :  VisonicSensorRef={1:0>2}   zoneInfo={2:0>2}   ZTypeName={3}   Chime={4}   SensorType={5}   zoneName={6}".format(
+                                       i+1, hex(visonicSensorRef).upper(), hex(zoneInfo).upper(), pmZoneType_t["EN"][zoneType], pmZoneChime_t["EN"][zoneChime], sensorType, zoneName))
+
+                                if i in self.pmSensorDev_t:
+                                    # If we get EPROM data, assume it is all correct and override any existing settings (as they were assumptions)
+                                    self.pmSensorDev_t[i].stype = sensorType
+                                    self.pmSensorDev_t[i].sid = visonicSensorRef
+                                    self.pmSensorDev_t[i].model = sensorModel
+                                    self.pmSensorDev_t[i].ztype = zoneType
+                                    self.pmSensorDev_t[i].ztypeName = pmZoneType_t[self.pmLang][zoneType]
+                                    self.pmSensorDev_t[i].zname = zoneName
+                                    self.pmSensorDev_t[i].zchime = pmZoneChime_t[self.pmLang][zoneChime]
+                                    self.pmSensorDev_t[i].dname = "Z{0:0>2}".format(i + 1)
+                                    self.pmSensorDev_t[i].partition = part
+                                    self.pmSensorDev_t[i].id = i + 1
+                                    self.pmSensorDev_t[i].enrolled = True
+                                    self.pmSensorDev_t[i].motiondelaytime = motiondelaytime
+                                else:
+                                    self.pmSensorDev_t[i] = SensorDevice(stype = sensorType, sid = visonicSensorRef, model = sensorModel, ztype = zoneType,
+                                                 ztypeName = pmZoneType_t[self.pmLang][zoneType], zname = zoneName, zchime = pmZoneChime_t[self.pmLang][zoneChime],
+                                                 dname="Z{0:0>2}".format(i+1), partition = part, id=i+1, enrolled = True, motiondelaytime = motiondelaytime)
+                                    #visonic_devices['sensor'].append(self.pmSensorDev_t[i])
+                                    if self.new_sensor_callback is not None:
+                                        self.new_sensor_callback(self.pmSensorDev_t[i])
+
+                                if i in self.pmSensorDev_t:
+                                    if sensorType == PySensorType.MAGNET or sensorType == PySensorType.WIRED:
+                                        doorZoneStr = "{0},Z{1:0>2}".format(doorZoneStr, i + 1)
+                                    elif sensorType == PySensorType.MOTION or sensorType == PySensorType.CAMERA:
+                                        motionZoneStr = "{0},Z{1:0>2}".format(motionZoneStr, i + 1)
+                                    elif sensorType == PySensorType.SMOKE or sensorType == PySensorType.GAS:
+                                        smokeZoneStr = "{0},Z{1:0>2}".format(smokeZoneStr, i + 1)
+                                    else:
+                                        otherZoneStr = "{0},Z{1:0>2}".format(otherZoneStr, i + 1)
+                            
                         else:
                             # log.debug("[Process Settings]       Removing sensor {0} as it is not enrolled".format(i+1))
                             if i in self.pmSensorDev_t:
@@ -2969,6 +2982,7 @@ class PacketHandling(ProtocolBase):
                 motionZones = motionZoneStr[1:]
                 smokeZones = smokeZoneStr[1:]
                 devices = deviceStr[1:]
+                ignoredZones = ignoredZoneStr[1:]
                 otherZones = otherZoneStr[1:]
 
                 log.debug("[Process Settings] Adding zone devices")
@@ -2976,6 +2990,7 @@ class PacketHandling(ProtocolBase):
                 self.PanelStatus["Door Zones"] = doorZones
                 self.PanelStatus["Motion Zones"] = motionZones
                 self.PanelStatus["Smoke Zones"] = smokeZones
+                self.PanelStatus["Ignored Zones"] = ignoredZones
                 self.PanelStatus["Other Zones"] = otherZones
                 self.PanelStatus["Devices"] = devices
 
@@ -4237,9 +4252,7 @@ class VisonicProtocol(PacketHandling, PyPanelInterface):
         #log.debug("VisonicProtocol 1")
         if client is not None:
             log.debug("[VisonicProtocol]  client is not None, calling setPyVisonic " + str(type(client)))
-            #finished3, unfinished3 = loop.run_until_complete(self.testy(client))
             t = asyncio.create_task(client.setPyVisonic(self) , name="clearout")
-            #loop.run_until_complete(client.setPyVisonic(self))
             asyncio.gather(t)
         else:
             log.debug("[VisonicProtocol]  client is None")
@@ -4474,18 +4487,18 @@ class dummyclient:
     async def setPyVisonic(self, pyvis):
         """ Set the pyvisonic connection. This is called from the library. """
         try:
-            #log.debug("[setPyVisonic] Set pyvisonic class in dummy client " + str(self.barrier))
+            log.debug("[setPyVisonic] in " + str(pyvis))
             self.visprotocol = pyvis
             await self.barrier.wait()
-            #log.debug("[setPyVisonic] Returning from setPyVisonic " + str(self.barrier))
+            log.debug("[setPyVisonic] out " + str(self.visprotocol))
         except (Exception, asyncio.exceptions.CancelledError):
             traceback.print_exc()
 
     async def getPyVisonic(self) -> VisonicProtocol:
         try:
-            #log.debug("[getPyVisonic] in getPyVisonic")
+            log.debug("[getPyVisonic] in")
             await self.barrier.wait()
-            #log.debug("[getPyVisonic] out getPyVisonic " + str(self.visprotocol))
+            log.debug("[getPyVisonic] out " + str(self.visprotocol))
         except (Exception, asyncio.exceptions.CancelledError):
             traceback.print_exc()
         return self.visprotocol
@@ -4497,18 +4510,6 @@ class dummyclient:
     # ============================= These functions are to be used to configure and setup the connection to the panel ===================================
     # ===================================================================================================================================================
     # ===================================================================================================================================================
-
-
-def wait_for_connection(dc : dummyclient) -> VisonicProtocol:
-    # Wait for the Protocol Handler to start and get going. Do it once without sending anything to the log file.
-    if dc.getPyVisonic() is None:
-        time.sleep(0.2)
-    count = 4
-    while dc.getPyVisonic() is None and count > 0:
-        #log.debug("Waiting for Protocol Handler to Start")
-        time.sleep(0.5)
-        count = count - 1
-    return dc.getPyVisonic()
 
 # Create a connection using asyncio using an ip and port
 async def async_create_tcp_visonic_connection(address, port, protocolvp=VisonicProtocol, panelConfig=None, loop=None):
@@ -4635,7 +4636,7 @@ def create_tcp_visonic_connection(
         # create the connection to the panel as an asyncio protocol handler and then set it up in a task
         conn = loop.create_connection(protocol, sock=sock)
         visonicTask = loop.create_task(conn)
-        return visonicTask, wait_for_connection(dc)
+        return visonicTask, dc.getPyVisonic()
 
     except socket.error as _:
         err = _
@@ -4670,7 +4671,7 @@ def create_usb_visonic_connection(
         # create the connection to the panel as an asyncio protocol handler and then set it up in a task
         conn = create_serial_connection(loop, protocol, path, baud)
         visonicTask = loop.create_task(conn)
-        return visonicTask, wait_for_connection(dc)
+        return visonicTask, dc.getPyVisonic()
     except:
         log.debug("Setting USB Options Exception")
     return None, None

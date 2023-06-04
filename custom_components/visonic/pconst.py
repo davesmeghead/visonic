@@ -98,6 +98,7 @@ class PyCondition(IntEnum):   # Note that PanelCondition in client.py uses numbe
     DOWNLOAD_SUCCESS = 16
 
 class PySensorType(IntEnum):
+    IGNORED = -2
     UNKNOWN = -1
     MOTION = 0
     MAGNET = 1

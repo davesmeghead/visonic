@@ -74,8 +74,6 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
     return True
 
-clientctr = 0
-
 CONF_PANEL = PANEL_ATTRIBUTE_NAME  # this must match the field name in services.yaml
 CONF_COMMAND = "command"
 
@@ -109,6 +107,8 @@ ALARM_SCHEMA_BYPASS = vol.Schema(
         vol.Optional(CONF_PANEL, default=0): cv.positive_int,
     }
 )
+
+configured_panel_list = []
 
 async def async_setup(hass: HomeAssistant, base_config: dict):
     """Set up the visonic component."""
@@ -192,7 +192,6 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
 
         await asyncio.gather(*reload_tasks)
 
-    global clientctr
     _LOGGER.info("Starting Visonic Component")
     hass.data[DOMAIN] = {}
     hass.data[DOMAIN][DOMAINDATA] = {}
@@ -204,7 +203,6 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
     hass.data[DOMAIN]["select"] = list()
     hass.data[DOMAIN]["switch"] = list()
     hass.data[DOMAIN]["alarm_control_panel"] = list()
-    clientctr = 0
     
     # Install the 4 handlers for the HA service calls
     hass.services.async_register(
@@ -244,50 +242,50 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
 #    - the original control flow if it existed
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up visonic from a config entry."""
-    global clientctr
+    global configured_panel_list
 
-    _LOGGER.debug("************* create connection here **************")
+    _LOGGER.debug("[Visonic Setup] ************* create connection here **************")
 
     # remove all old settings for this component, previous versions of this integration
     hass.data[DOMAIN][entry.entry_id] = {}
-    
-    _LOGGER.info("Starting Visonic with entry id={0} configured panels={1}".format(entry.entry_id, configured_hosts(hass)))
+
+    _LOGGER.info("[Visonic Setup] Starting Visonic with entry id={0} configured panels={1}".format(entry.entry_id, configured_hosts(hass)))
     
     # combine and convert python settings map to dictionary
     conf = await combineSettings(entry)
 
-    panelident = "panelident"
-    
-    if panelident not in conf and CONF_PANEL_NUMBER in conf:
-        if int(conf[CONF_PANEL_NUMBER]) > 0:
-            conf[panelident] = int(conf[CONF_PANEL_NUMBER])
-            _LOGGER.debug("CONF_PANEL_NUMBER in conf {0}".format(conf[CONF_PANEL_NUMBER]))
-            #del conf[CONF_PANEL_NUMBER]  
-    
-    if panelident not in conf:
-        _LOGGER.debug("Panel Ident not set up")
-        if configured_hosts(hass) == 1:
-            _LOGGER.debug("Only a single panel and not set up yet")
-        conf[panelident] = clientctr
-        clientctr = clientctr + 1
-    else:
-        clientctr = max(clientctr, conf[panelident] + 1)
+    panel_id = 0
 
-    _LOGGER.debug("Panel Ident set up: panelident = {0}   next auto panelident = {1}".format(conf[panelident], clientctr))
+    if CONF_PANEL_NUMBER in conf:
+        panel_id = int(conf[CONF_PANEL_NUMBER])
+        _LOGGER.debug("[Visonic Setup] Panel Config has panel number {0}".format(panel_id))
+    else: 
+        _LOGGER.warning("[Visonic Setup] CONF_PANEL_NUMBER not in configuration, defaulting to panel 0 (before uniqueness check)")
+
+    # Check for unique panel ids or HA gets really confused and we end up make a big mess in the config files.
+    if panel_id in configured_panel_list:
+        _LOGGER.warning("[Visonic Setup] Panel Number {0} is not Unique, you already have a Panel with this Number".format(panel_id))
+        return False
+
+    configured_panel_list.append(panel_id)
+
+    # When here, panel_id should be unique in the panels configured so far.
+
+    _LOGGER.debug("[Visonic Setup] Panel Ident {0}".format(panel_id))
     
     # push the merged data back in to HA and update the title
-    hass.config_entries.async_update_entry(entry, title=f"Panel {conf[panelident]}", options=conf)
+    hass.config_entries.async_update_entry(entry, title=f"Panel {panel_id}", options=conf)
 
     # create client and connect to the panel
     try:
         # create the client ready to connect to the panel
-        client = VisonicClient(hass, conf[panelident], conf, entry)
+        client = VisonicClient(hass, panel_id, conf, entry)
         # Save the client ref
         hass.data[DOMAIN][DOMAINDATA][entry.entry_id] = {}
         # connect to the panel        
         clientTask = hass.async_create_task(client.connect())
 
-        _LOGGER.debug("Setting client ID for entry id {0}".format(entry.entry_id))
+        _LOGGER.debug("[Visonic Setup] Setting client ID for entry id {0}".format(entry.entry_id))
         # save the client and its task
         hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id] = client
         hass.data[DOMAIN][DOMAINCLIENTTASK][entry.entry_id] = clientTask

@@ -9,7 +9,7 @@ import re
 import datetime
 from datetime import datetime, timedelta
 
-CLIENT_VERSION = "0.8.4.3"
+CLIENT_VERSION = "0.8.5.0"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
@@ -624,6 +624,7 @@ class VisonicClient:
             self.sendHANotification(AvailableNotifications.PANEL_OPERATION, "Communication Timeout - Watchdog Timeout, restoring panel connection" )
         elif tmp == PyCondition.NO_DATA_FROM_PANEL:
             self.sendHANotification(AvailableNotifications.CONNECTION_PROBLEM, "Connection Problem - No data from the panel" )
+            asyncio.ensure_future(self.service_panel_stop(), loop=self.hass.loop)
         elif tmp == PyCondition.COMMAND_REJECTED:
             self.sendHANotification(AvailableNotifications.ALWAYS, "Operation Rejected By Panel (tell the Integration Author and upload a debug log file if you're able to)" )
 
