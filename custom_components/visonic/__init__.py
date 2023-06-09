@@ -260,7 +260,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         panel_id = int(conf[CONF_PANEL_NUMBER])
         _LOGGER.debug("[Visonic Setup] Panel Config has panel number {0}".format(panel_id))
     else: 
-        _LOGGER.warning("[Visonic Setup] CONF_PANEL_NUMBER not in configuration, defaulting to panel 0 (before uniqueness check)")
+        _LOGGER.debug("[Visonic Setup] CONF_PANEL_NUMBER not in configuration, defaulting to panel 0 (before uniqueness check)")
 
     # Check for unique panel ids or HA gets really confused and we end up make a big mess in the config files.
     if panel_id in configured_panel_list:
