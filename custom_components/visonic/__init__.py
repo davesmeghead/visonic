@@ -310,6 +310,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     clientTask = hass.data[DOMAIN][DOMAINCLIENTTASK][eid]
     updateListener = hass.data[DOMAIN][VISONIC_UPDATE_LISTENER][eid]
 
+    panelid = client.getPanelID()
+
     # stop all activity in the client
     await client.service_panel_stop()
 
@@ -323,6 +325,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     del hass.data[DOMAIN][DOMAINCLIENT][eid]
     del hass.data[DOMAIN][DOMAINCLIENTTASK][eid]
     del hass.data[DOMAIN][VISONIC_UPDATE_LISTENER][eid]
+    
+    if panelid in configured_panel_list:
+        configured_panel_list.remove(panelid)
+    else:
+        _LOGGER.debug("************* panel ident {0} not in the panel list **************".format(panelid))
 
     _LOGGER.debug("************* terminate connection success **************")
     return True

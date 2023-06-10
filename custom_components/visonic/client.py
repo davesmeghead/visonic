@@ -9,7 +9,7 @@ import re
 import datetime
 from datetime import datetime, timedelta
 
-CLIENT_VERSION = "0.8.5.1"
+CLIENT_VERSION = "0.8.5.2"
 
 from jinja2 import Environment, FileSystemLoader
 from .pyvisonic import (
