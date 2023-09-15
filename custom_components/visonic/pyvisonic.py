@@ -61,7 +61,7 @@ try:
 except:
     from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PyPanelInterface, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
 
-PLUGIN_VERSION = "1.0.20.0"
+PLUGIN_VERSION = "1.0.20.1"
 
 # Some constants to help readability of the code
 ACK_MESSAGE = 0x02
@@ -940,21 +940,23 @@ pmZoneSensorMax_t = {
    0x1A : ZoneSensorType("MCW-K980", PySensorType.MOTION ),        # Botap
    0x6A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # Joao-Sousa
    0x74 : ZoneSensorType("Next+ K9-85", PySensorType.MOTION ),     # christopheVia
-   0x75 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # thermostat (Visonic part number 0-3592-B, NEXT K985 DDMCW)
+   0x75 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # 15/9/23 rogerthn2019 (Powermax Pro) and others have this sensor so removed the previous setting
+#   0x75 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # thermostat (Visonic part number 0-3592-B, NEXT K985 DDMCW)
    0x76 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # open1999
    0x7A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # fguerzoni, Joao-Sousa
    0x86 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # Joao-Sousa
    0x8A : ZoneSensorType("MCT-550", PySensorType.FLOOD ),          # Joao-Sousa
    0x95 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, fguerzoni
-   0x96 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, g4seb
+   0x96 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # me, g4seb, rogerthn2019
    0x97 : ZoneSensorType("MCT-302", PySensorType.MAGNET ),         # christopheVia
-   0x9A : ZoneSensorType("MCT-425", PySensorType.SMOKE ),          # Joao-Sousa
+   0x9A : ZoneSensorType("MCT-425", PySensorType.SMOKE ),          # Joao-Sousa, rogerthn2019
    0xA3 : ZoneSensorType("Disc MCW", PySensorType.MOTION ),        # Joao-Sousa
    0xB3 : ZoneSensorType("Clip MCW", PySensorType.MOTION ),        # Joao-Sousa
    0xC0 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # g4seb
    0xC3 : ZoneSensorType("Clip MCW", PySensorType.MOTION ),        # Joao-Sousa
    0xC4 : ZoneSensorType("Clip MCW", PySensorType.MOTION ),        # Joao-Sousa
    0xD3 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me, Joao-Sousa
+   0xD4 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # rogerthn2019
    0xD5 : ZoneSensorType("Next K9", PySensorType.MOTION ),         # fguerzoni
    0xE4 : ZoneSensorType("Next MCW", PySensorType.MOTION ),        # me
    0xE5 : ZoneSensorType("Next K9-85", PySensorType.MOTION ),      # g4seb, fguerzoni
