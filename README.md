@@ -5,6 +5,11 @@
 [buymeacoffee]: https://www.buymeacoffee.com/davesmeghead
 [buymeacoffee-shield]: https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png
 
+[![hacs][hacs-badge]][hacs-url]
+[![release][release-badge]][release-url]
+![downloads][downloads-badge]
+![build][build-badge]
+
 # Visonic Alarm Panel for Home Assistant
 
 This is a *custom integration* for [Home Assistant](https://www.home-assistant.io/).
