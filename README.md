@@ -1,6 +1,7 @@
 [![](https://img.shields.io/github/release/davesmeghead/visonic/all.svg?style=for-the-badge)](https://github.com/davesmeghead/visonic/releases)
 [![](https://img.shields.io/badge/MAINTAINER-%40Davesmeghead-green?style=for-the-badge)](https://github.com/Davesmeghead)
 [![Buy me a coffee][buymeacoffee-shield]][buymeacoffee]
+[![downloads]][downloads-badge]
 
 [buymeacoffee]: https://www.buymeacoffee.com/davesmeghead
 [buymeacoffee-shield]: https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png
