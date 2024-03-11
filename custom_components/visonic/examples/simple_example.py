@@ -13,7 +13,7 @@ import argparse
 from time import sleep
 from collections import defaultdict
 
-from pconst import PyConfiguration, PyPanelMode, PyPanelCommand, PyPanelStatus, PyCommandStatus, PyX10Command, PyCondition, PySensorDevice, PyLogPanelEvent, PySensorType, PySwitchDevice
+from pyconst import AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlCommandStatus, AlX10Command, AlCondition, AlSensorDevice, AlLogPanelEvent, AlSensorType, AlSwitchDevice
 
 CONF_DEVICE_TYPE = "type"
 CONF_DEVICE_BAUD = "baud"
@@ -55,37 +55,37 @@ def toBool(val) -> bool:
     elif type(val) == str:
         v = val.lower()
         return not (v == "no" or v == "false" or v == "0")
-    print("Visonic unable to decode boolean value %s    type is %s", val, type(val))
+    print(f"Visonic unable to decode boolean value {val}    type is {type(val)}")
     return False
 
 
-def getConfigData() -> dict:
+def getConfigData() -> PanelConfig:
     """ Create a dictionary full of the configuration data. """
     return {
-        PyConfiguration.DownloadCode: myconfig.get(CONF_DOWNLOAD_CODE, ""),
-        PyConfiguration.ForceStandard: toBool(
+        AlConfiguration.DownloadCode: myconfig.get(CONF_DOWNLOAD_CODE, ""),
+        AlConfiguration.ForceStandard: toBool(
             myconfig.get(CONF_FORCE_STANDARD, False)
         ),
-        PyConfiguration.ForceAutoEnroll: toBool(
+        AlConfiguration.AutoEnroll: toBool(
             myconfig.get(CONF_FORCE_AUTOENROLL, True)
         ),
-        PyConfiguration.AutoSyncTime: toBool(
+        AlConfiguration.AutoSyncTime: toBool(
             myconfig.get(CONF_AUTO_SYNC_TIME, True)
         ),
-        PyConfiguration.PluginLanguage: myconfig.get(CONF_LANGUAGE, "EN"),
-        PyConfiguration.MotionOffDelay: myconfig.get(CONF_MOTION_OFF_DELAY, 120),
-        PyConfiguration.SirenTriggerList: myconfig.get(
+        AlConfiguration.PluginLanguage: myconfig.get(CONF_LANGUAGE, "EN"),
+        AlConfiguration.MotionOffDelay: myconfig.get(CONF_MOTION_OFF_DELAY, 120),
+        AlConfiguration.SirenTriggerList: myconfig.get(
             CONF_SIREN_SOUNDING, ["Intruder"]
         ),
-        PyConfiguration.B0_Enable: toBool(
-            myconfig.get(CONF_B0_ENABLE_MOTION_PROCESSING, False)
-        ),
-        PyConfiguration.B0_Min_Interval_Time: myconfig.get(
-            CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 5
-        ),
-        PyConfiguration.B0_Max_Wait_Time: myconfig.get(
-            CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 30
-        ),
+#        AlConfiguration.B0_Enable: toBool(
+#            myconfig.get(CONF_B0_ENABLE_MOTION_PROCESSING, False)
+#        ),
+#        AlConfiguration.B0_Min_Interval_Time: myconfig.get(
+#            CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 5
+#        ),
+#        AlConfiguration.B0_Max_Wait_Time: myconfig.get(
+#            CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 30
+#        ),
     }
 
 def callback_handler(visonic_devices, dict={}):
@@ -103,10 +103,10 @@ def callback_handler(visonic_devices, dict={}):
     else:
         _LOGGER.debug("Visonic attempt to add device with type {0}  device is {1}".format(type(visonic_devices), visonic_devices))
 
-def new_switch_callback(dev: PySwitchDevice): 
+def onNewSwitch(dev: AlSwitchDevice): 
     """Process a new x10."""
     # Check to ensure variables are set correctly
-    #print("new_switch_callback")
+    #print("onNewSwitch")
     if dev is None:
         print("Visonic attempt to add X10 switch when sensor is undefined")
         return
@@ -117,9 +117,9 @@ def new_switch_callback(dev: PySwitchDevice):
         else:
             print("X10 ", str(dev))
 
-def new_sensor_callback(sensor: PySensorDevice):
+def onNewSensor(sensor: AlSensorDevice):
     """Process a new sensor."""
-    #print("new_sensor_callback")
+    #print("onNewSensor")
     if sensor is None:
         print("Visonic attempt to add sensor when sensor is undefined")
         return
@@ -128,25 +128,22 @@ def new_sensor_callback(sensor: PySensorDevice):
     else:
         print("Sensor ", str(sensor))
 
-def generate_ha_bus_event(event_id, datadictionary):
+def onPanelChangeHandler(event_id):
     """ This is a callback function, called from the visonic library. """
-    #print("generate_ha_bus_event ", type(visonic_devices))
-    if type(event_id) == PyCondition:
+    #print("onPanelChangeHandler ", type(visonic_devices))
+    if type(event_id) == AlCondition:
         # event 
-        if event_id != PyCondition.PUSH_CHANGE:
-            tmpdict = {}
-            if datadictionary is not None:
-                tmpdict = datadictionary.copy()
-            console.print("Visonic update event condition ", str(event_id), str(tmpdict))
+        if event_id != AlCondition.PUSH_CHANGE:
+            console.print("Visonic update event condition ", str(event_id))
     else:
-        print("Visonic attempt to add device with type %s  device is %s", type(event_id), visonic_devices)
+        print(f"Visonic attempt to add device with type {type(event_id)}  device is {visonic_devices}")
 
-def __disconnect_callback(excep):
+def onDisconnect(excep):
     """ Callback when the connection to the panel is disrupted """
     if excep is None:
-        print("PyVisonic has caused an exception, no exception information is available")
+        print("AlVisonic has caused an exception, no exception information is available")
     else:
-        print("PyVisonic has caused an exception %s", str(excep))
+        print("AlVisonic has caused an exception %s", str(excep))
 
 def process_log(event_log_entry):
     print("process_log ", event_log_entry)
@@ -160,13 +157,13 @@ async def startitall(testloop):
     elif len(args.usb) > 0:
         visonicTask, visonicProtocol = await pyvisonic.async_create_usb_visonic_connection(path="//./" + args.usb, loop=testloop, panelConfig=getConfigData())
     if visonicTask is not None and visonicProtocol is not None:
-        # , event_callback=callback_handler
-        visonicProtocol.setCallbackHandlers(
-                event_callback=generate_ha_bus_event,
-                panel_event_log_callback=process_log,       
-                disconnect_callback=__disconnect_callback,  
-                new_sensor_callback = new_sensor_callback,
-                new_switch_callback = new_switch_callback)
+        #visonicProtocol.onPanelError(self.onPanelChangeHandler)
+        visonicProtocol.onPanelChange(self.onPanelChangeHandler)
+        # visonicProtocol.onPanelEvent(self.onPanelChangeHandler)
+        visonicProtocol.onPanelLog(self.process_log)
+        visonicProtocol.onDisconnect(self.onDisconnect)
+        visonicProtocol.onNewSensor(self.onNewSensor)
+        visonicProtocol.onNewSwitch(self.onNewSwitch)
         
         while True:
             print("You can do stuff here with visonicProtocol, Mode=", visonicProtocol.getPanelMode())

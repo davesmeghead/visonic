@@ -2,8 +2,6 @@
 
 import logging
 
-#from .pconst import (
-#)
 import voluptuous as vol
 from typing import Any
 
@@ -11,6 +9,16 @@ from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT, CO
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util.yaml.objects import NodeListClass
 from homeassistant.helpers import selector
+from homeassistant.const import CONF_NAME, CONF_SOURCE, UnitOfTime
+
+from homeassistant.helpers.selector import (
+    ObjectSelector,
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+    validate_selector,
+)
 
 from .const import (
     CONF_EXCLUDE_SENSOR,
@@ -26,6 +34,7 @@ from .const import (
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
     CONF_AUTO_SYNC_TIME,
+    CONF_EEPROM_ATTRIBUTES,
     CONF_B0_ENABLE_MOTION_PROCESSING,
     CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,
     CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
@@ -51,23 +60,42 @@ from .const import (
     DEFAULT_DEVICE_BAUD,
     DEFAULT_DEVICE_HOST,
     DEFAULT_DEVICE_PORT,
+    DEFAULT_DEVICE_TOPIC,
     DEFAULT_DEVICE_USB,
     AvailableNotifications,
     AvailableNotificationConfig,
 )
 
+TIME_UNITS = [
+    UnitOfTime.SECONDS,
+    UnitOfTime.MINUTES,
+    UnitOfTime.HOURS,
+    UnitOfTime.DAYS,
+]
+
 _LOGGER = logging.getLogger(__name__)
 
-available_siren_values = {
-    "intruder": "Intruder",
-    "tamper": "Tamper",
-    "fire": "Fire",
-    "emergency": "Emergency",
-    "gas": "Gas",
-    "flood": "Flood",
-    "x10": "X10",
-    "panic": "Panic",
-}
+available_siren_values = [
+    "intruder",
+    "tamper",
+    "fire",
+    "emergency",
+    "gas",
+    "flood",
+    "x10",
+    "panic"
+]
+
+#available_siren_values = {
+#    "intruder": "Intruder",
+#    "tamper": "Tamper",
+#    "fire": "Fire",
+#    "emergency": "Emergency",
+#    "gas": "Gas",
+#    "flood": "Flood",
+#    "x10": "X10",
+#    "panic": "Panic",
+#}
 
 #VISONIC_ID_LIST_SCHEMA = vol.Schema([int])
 #VISONIC_STRING_LIST_SCHEMA = vol.Schema([str])
@@ -102,22 +130,17 @@ class VisonicSchema:
             **self.create_parameters2(self.options),
             **self.create_parameters3(self.options),
             **self.create_parameters4(self.options),
-            **self.create_parameters5(self.options),
+            #**self.create_parameters5(self.options),
         }
-
         for key in initialise:
             d = key.default()
             self.options[key] = d
-
 
     def create_default(self, options: dict, key: str, default: Any):
         """Create a default value for the parameter using the previous value that the user entered."""
         if options is not None and key in options:
             # if type(options[key]) is not type(default):
             # # create_default types are different for = siren_sounding <class 'list'> <class 'set'> ['intruder', 'panic', 'gas'] {'intruder'}
-            # _LOGGER.debug(
-            #    "create_default types are different for = %s %s %s %s %s", key, type(options[key]), options[key], type(default), default
-            # )
             if isinstance(options[key], list) or isinstance(options[key], NodeListClass):
                 # _LOGGER.debug("      its a list")
                 if CONF_SIREN_SOUNDING == key:
@@ -167,12 +190,10 @@ class VisonicSchema:
             ): bool,
         }
 
-
-
     def create_parameters2(self, options: dict):
         """Create parameter set 2."""
         # Panel settings - can be modified/edited
-        # _LOGGER.debug(f'Create 2A {options.get(CONF_OVERRIDE_CODE, "")}')
+        # _LOGGER.debug(f'Create 2 {options.get(CONF_OVERRIDE_CODE, "")}')
         tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
         return {
             vol.Optional(
@@ -180,9 +201,12 @@ class VisonicSchema:
                 default=self.create_default(options, CONF_MOTION_OFF_DELAY, 120),
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
             vol.Optional(
-                CONF_SIREN_SOUNDING,
-                default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
-            ): cv.multi_select(available_siren_values),
+                CONF_SIREN_SOUNDING, default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
+            ): selector.SelectSelector(selector.SelectSelectorConfig(options=available_siren_values, multiple=True, sort=True, translation_key=CONF_SIREN_SOUNDING)),
+            #vol.Optional(
+            #    CONF_SIREN_SOUNDING,
+            #    default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
+            #): cv.multi_select(available_siren_values),
             vol.Optional(
                 CONF_ALARM_NOTIFICATIONS,
                 default=self.create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
@@ -201,13 +225,15 @@ class VisonicSchema:
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=5, max=1000, mode=selector.NumberSelectorMode.BOX)),
         }
 
-
     def create_parameters3(self, options: dict):
         """Create parameter set 3."""
         # Panel settings - can be modified/edited
         # _LOGGER.debug(f'Create 2B {options.get(CONF_OVERRIDE_CODE, "")}')
-        tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
         return {
+            vol.Optional(
+                CONF_EEPROM_ATTRIBUTES,
+                default=self.create_default(options, CONF_EEPROM_ATTRIBUTES, False),
+            ): bool,
             vol.Optional(
                 CONF_ARM_CODE_AUTO,
                 default=self.create_default(options, CONF_ARM_CODE_AUTO, False),
@@ -245,7 +271,6 @@ class VisonicSchema:
             ): bool,
         }
 
-
     def create_parameters4(self, options: dict):
         """Create parameter set 4."""
         # Log file parameters
@@ -277,7 +302,6 @@ class VisonicSchema:
             ): int,
         }
 
-
     def create_parameters5(self, options: dict):
         """Create parameter set 5."""
         # B0 related parameters (PowerMaster only)
@@ -300,36 +324,29 @@ class VisonicSchema:
         """Create schema device."""
         return vol.Schema(self.CONFIG_SCHEMA_DEVICE)
 
-
     def create_schema_ethernet(self):
         """Create schema ethernet."""
         return vol.Schema(self.CONFIG_SCHEMA_ETHERNET)
-
 
     def create_schema_usb(self):
         """Create schema usb."""
         return vol.Schema(self.CONFIG_SCHEMA_USB)
 
-
     def create_schema_parameters1(self):
         """Create schema parameters 1."""
         return vol.Schema(self.create_parameters1(self.options))
-
 
     def create_schema_parameters2(self):
         """Create schema parameters 2."""
         return vol.Schema(self.create_parameters2(self.options))
 
-
     def create_schema_parameters3(self):
         """Create schema parameters 3."""
         return vol.Schema(self.create_parameters3(self.options))
 
-
     def create_schema_parameters4(self):
         """Create schema parameters 4."""
         return vol.Schema(self.create_parameters4(self.options))
-
 
     def create_schema_parameters5(self):
         """Create schema parameters 5."""

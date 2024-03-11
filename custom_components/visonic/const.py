@@ -1,11 +1,22 @@
 """Constants for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
-from enum import Enum
+from enum import Enum, IntFlag
 
 DOMAIN = "visonic"
 ALARM_PANEL_ENTITY = "alarm_control_panel"
-PLATFORMS = [ALARM_PANEL_ENTITY, "binary_sensor", "switch"]
+BINARY_SENSOR_STR = "binary_sensor"
+SWITCH_STR = "switch"
+SELECT_STR = "select"
+
+PLATFORMS = [ALARM_PANEL_ENTITY, BINARY_SENSOR_STR, SWITCH_STR, SELECT_STR]
 
 VISONIC_UNIQUE_NAME = "Visonic Alarm"
+
+#from enum import IntFlag
+class SensorEntityFeature(IntFlag):
+    """Supported features of the zone sensor entity."""
+    BYPASS_FEATURE = 1
+    ARMED_FEATURE = 2
+#visonic.SensorEntityFeature.BYPASS_FEATURE
 
 # Constants for storing data in hass[DOMAIN]
 DOMAINCLIENT = f"{DOMAIN}_client"
@@ -20,7 +31,7 @@ NOTIFICATION_TITLE = "Visonic Alarm Panel"
 VISONIC_UPDATE_LISTENER = f"{DOMAIN}_update_listener"
 
 # Dispatcher name when the underlying pyvisonic library has got a panel, X10 or sensor change
-VISONIC_UPDATE_STATE_DISPATCHER = f"{DOMAIN}_update_state_dispatcher"
+#VISONIC_UPDATE_STATE_DISPATCHER = f"{DOMAIN}_update_state_dispatcher"
 
 # The HA bus events that this integration can generate
 ALARM_PANEL_CHANGE_EVENT = f"{DOMAIN}_alarm_panel_state_update"
@@ -39,6 +50,7 @@ DEVICE_ATTRIBUTE_NAME = "visonic device"
 # Default connection details (connection can be one of Ethernet, USB, RS232)
 DEFAULT_DEVICE_HOST = "127.0.0.1"
 DEFAULT_DEVICE_PORT = "30000"
+DEFAULT_DEVICE_TOPIC = "visonic/panel"
 DEFAULT_DEVICE_USB = "/dev/ttyUSB1"
 DEFAULT_DEVICE_BAUD = "9600"
 
@@ -87,7 +99,7 @@ CONF_MOTION_OFF_DELAY = "motion_off"
 CONF_SIREN_SOUNDING = "siren_sounding"
 CONF_RETRY_CONNECTION_COUNT = "retry_connection_count"
 CONF_RETRY_CONNECTION_DELAY = "retry_connection_delay"
-
+CONF_EEPROM_ATTRIBUTES = "show_eeprom_attributes"
 
 # Temporary B0 Config Items
 CONF_B0_ENABLE_MOTION_PROCESSING = "b0_enable_motion_processing"

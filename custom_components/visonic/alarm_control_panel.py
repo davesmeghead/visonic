@@ -4,14 +4,12 @@ from datetime import timedelta
 import logging
 import re 
 import voluptuous as vol
+from enum import IntEnum
 
 from homeassistant.auth.permissions.const import POLICY_CONTROL
-from .pconst import PyPanelCommand, PyPanelStatus
+from .pyconst import AlPanelCommand, AlPanelStatus
 import homeassistant.components.alarm_control_panel as alarm
 from homeassistant.components.alarm_control_panel.const import (
-    #SUPPORT_ALARM_ARM_AWAY,
-    #SUPPORT_ALARM_ARM_HOME,
-    #SUPPORT_ALARM_ARM_NIGHT,
     AlarmControlPanelEntityFeature,
     CodeFormat,
 )
@@ -31,7 +29,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, valid_entity_id
 from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUser
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+#from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers import entity_platform, service
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -64,7 +62,7 @@ async def async_setup_entry(
         async_add_entities(devices, True)
 
     platform = entity_platform.async_get_current_platform()
-    _LOGGER.debug("alarm control panel async_setup_entry called {0}".format(platform))
+    _LOGGER.debug(f"alarm control panel async_setup_entry called {platform}")
 
 
 class VisonicAlarm(alarm.AlarmControlPanelEntity):
@@ -73,41 +71,32 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     def __init__(self, client: VisonicClient, partition_id: int):
         """Initialize a Visonic security alarm."""
         self._client = client
+        client.onChange(self.onChange)
         self._partition_id = partition_id
         self._mystate = STATE_UNKNOWN
         self._myname = client.getAlarmPanelUniqueIdent()
-        _LOGGER.debug("Initialising alarm control panel {0}".format(self._myname))
         self._device_state_attributes = {}
         self._users = {}
         self._doneUsers = False
         self._last_triggered = ""
-        self._dispatcher = client.getDispatcher()
         self._panel = client.getPanelID()
-
-    async def async_added_to_hass(self):
-        """Register callbacks."""
-        # Register for dispatcher calls to update the state
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass, self._dispatcher, self.onChange
-            )
-        )
+        _LOGGER.debug(f"Initialising alarm control panel {self._myname} panel {self._panel}")
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
         await super().async_will_remove_from_hass()
         self._client = None
-        _LOGGER.debug("alarm control panel async_will_remove_from_hass")
+        _LOGGER.debug(f"Removing alarm control panel {self._myname} panel {self._panel}")
 
     def isPanelConnected(self) -> bool:
         """Are we connected to the Alarm Panel."""
-        # If we are starting up then assume we need a valid code
+        # If we are starting up or have been removed then assume we need a valid code
         if self._client is None:
             return False
-        # Are we just starting up
         return self._client.isPanelConnected()
 
-    def onChange(self, event_id: int, datadictionary: dict):
+    # The callback handler from the client. All we need to do is schedule an update.
+    def onChange(self, event_id: IntEnum, datadictionary: dict):
         """HA Event Callback."""
         self.schedule_update_ha_state(True)
 
@@ -130,10 +119,8 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     def device_info(self):
         """Return information about the device."""
         if self._client is not None:
-            ps = self._client.getPanelStatus(True)
-            if "Panel Model" in ps:
-                pm = ps["Panel Model"]
-                #_LOGGER.debug("Model is = {0}  type {1}".format(pm, type(pm)))
+            pm = self._client.getPanelModel()
+            if pm is not None:
                 if pm.lower() != "unknown":
                     return {
                         "manufacturer": "Visonic",
@@ -167,23 +154,25 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             if self._client.isSirenActive():
                 self._mystate = STATE_ALARM_TRIGGERED
             else:
-                armcode = self._client.getPanelStatusCode()
+                armcode = self._client.getPanelStatus()
 
                 # _LOGGER.debug("alarm armcode is %s", str(armcode))
-                if armcode == PyPanelStatus.DISARMED or armcode == PyPanelStatus.SPECIAL or armcode == PyPanelStatus.DOWNLOADING:
+                if armcode == AlPanelStatus.DISARMED or armcode == AlPanelStatus.SPECIAL or armcode == AlPanelStatus.DOWNLOADING:
                     self._mystate = STATE_ALARM_DISARMED
-                elif armcode == PyPanelStatus.ENTRY_DELAY:
+                elif armcode == AlPanelStatus.ENTRY_DELAY:
                     self._mystate = STATE_ALARM_PENDING
-                elif armcode == PyPanelStatus.ARMING_HOME or armcode == PyPanelStatus.ARMING_AWAY:
+                elif armcode == AlPanelStatus.ARMING_HOME or armcode == AlPanelStatus.ARMING_AWAY:
                     self._mystate = STATE_ALARM_ARMING
-                elif armcode == PyPanelStatus.ARMED_HOME:
+                elif armcode == AlPanelStatus.ARMED_HOME:
                     self._mystate = STATE_ALARM_ARMED_HOME
-                elif armcode == PyPanelStatus.ARMED_AWAY:
+                elif armcode == AlPanelStatus.ARMED_AWAY:
                     self._mystate = STATE_ALARM_ARMED_AWAY
 
             # Currently may only contain self.hass.data[DOMAIN][DOMAINDATA]["Exception Count"]
             data = self.hass.data[DOMAIN][DOMAINDATA][self._client.getEntryID()]
-            stat = self._client.getPanelStatus(True)
+            #_LOGGER.debug("data {data}")
+            stat = self._client.getPanelStatusDict()
+            #_LOGGER.debug("stat {stat}")
 
             if data is not None and stat is not None:
                 self._device_state_attributes = {**stat, **data}
@@ -192,10 +181,11 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             elif data is not None:
                 self._device_state_attributes = data
             
-            if "Panel Last Event" in self._device_state_attributes and self._device_state_attributes["Panel Last Event"] is not None:
-                s = self._device_state_attributes["Panel Last Event"]
-                pos = s.find("/")
-                self._last_triggered = (s[pos+1:]).strip()
+            if "count" in self._device_state_attributes and "name" in self._device_state_attributes:
+                count = self._device_state_attributes["count"]
+                if count > 0:
+                    name = self._device_state_attributes["name"]                                    
+                    self._last_triggered = name[0]
 
     @property
     def state(self):
@@ -212,7 +202,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     @property
     def supported_features(self) -> int:
         """Return the list of supported features."""
-        #_LOGGER.debug("[AlarmcontrolPanel] Getting Supported Features {0} {1}".format(self._client.isArmHome(), self._client.isArmNight()))
+        #_LOGGER.debug(f"[AlarmcontrolPanel] Getting Supported Features {self._client.isArmHome()} {self._client.isArmNight()}")
         retval = AlarmControlPanelEntityFeature.ARM_AWAY
         if self._client.isArmNight():
             #_LOGGER.debug("[AlarmcontrolPanel] Adding Night")
@@ -237,34 +227,33 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         """Send disarm command."""
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
-        self._client.sendCommand("Disarm", PyPanelCommand.DISARM, code)
+        self._client.sendCommand("Disarm", AlPanelCommand.DISARM, code)
 
     def alarm_arm_night(self, code=None):
         """Send arm night command (Same as arm home)."""
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
         if self._client.isArmNight():
-            self._client.sendCommand("Arm Night", PyPanelCommand.ARM_HOME_INSTANT, code)
+            self._client.sendCommand("Arm Night", AlPanelCommand.ARM_HOME_INSTANT, code)
 
     def alarm_arm_home(self, code=None):
         """Send arm home command."""
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
         if self._client.isArmHome():
-            command = PyPanelCommand.ARM_HOME_INSTANT if self._client.isArmHomeInstant() else PyPanelCommand.ARM_HOME
+            command = AlPanelCommand.ARM_HOME_INSTANT if self._client.isArmHomeInstant() else AlPanelCommand.ARM_HOME
             self._client.sendCommand("Arm Home", command, code)
 
     def alarm_arm_away(self, code=None):
         """Send arm away command."""
         if not self.isPanelConnected():
             raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
-        command = PyPanelCommand.ARM_AWAY_INSTANT if self._client.isArmAwayInstant() else PyPanelCommand.ARM_AWAY
+        command = AlPanelCommand.ARM_AWAY_INSTANT if self._client.isArmAwayInstant() else AlPanelCommand.ARM_AWAY
         self._client.sendCommand("Arm Away", command, code)
 
     def alarm_trigger(self, code=None):
         """Send alarm trigger command."""
         raise NotImplementedError()
-
 
     def alarm_arm_custom_bypass(self, data=None):
         """Bypass Panel."""

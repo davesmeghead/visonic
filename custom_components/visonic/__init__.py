@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
-from .pconst import PyPanelCommand
+from .pyconst import AlPanelCommand
 
 from homeassistant.const import (
     ATTR_CODE,
@@ -25,6 +25,7 @@ from .const import (
     DOMAINDATA,
     VISONIC_UPDATE_LISTENER,
     DOMAINCLIENTTASK,
+    ALARM_PANEL_ENTITY,
     ALARM_PANEL_EVENTLOG,
     ALARM_PANEL_RECONNECT,
     ALARM_PANEL_COMMAND,
@@ -34,9 +35,12 @@ from .const import (
     PANEL_ATTRIBUTE_NAME,
     NOTIFICATION_ID,
     NOTIFICATION_TITLE,
+    BINARY_SENSOR_STR,
+    SWITCH_STR,
+    SELECT_STR,
 )
-#from .create_schema import create_schema, set_defaults
-from .create_schema import VisonicSchema
+
+#from .create_schema import VisonicSchema
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,10 +71,12 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         new = {**config_entry.data}
         # TODO: modify Config Entry data
 
-        config_entry.data = {**new}
-        config_entry.version = 2
+        #config_entry.data = {**new}
+        #config_entry.version = 2
+        
+        #_LOGGER.info(f"Migration to version {config_entry.version} successful")
 
-    _LOGGER.info("Migration to version %s successful", config_entry.version)
+        # return False # when any changes have been made
 
     return True
 
@@ -87,7 +93,7 @@ ALARM_SCHEMA_EVENTLOG = vol.Schema(
 
 ALARM_SCHEMA_COMMAND = vol.Schema(
     {
-        vol.Required(CONF_COMMAND) : cv.enum(PyPanelCommand),
+        vol.Required(CONF_COMMAND) : cv.enum(AlPanelCommand),
         vol.Optional(CONF_PANEL, default=0): cv.positive_int,
         vol.Optional(ATTR_CODE, default=""): cv.string,
     }
@@ -199,10 +205,10 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
     hass.data[DOMAIN][DOMAINCLIENTTASK] = {}
     hass.data[DOMAIN][VISONIC_UPDATE_LISTENER] = {}
     # Empty out the lists
-    hass.data[DOMAIN]["binary_sensor"] = list()
-    hass.data[DOMAIN]["select"] = list()
-    hass.data[DOMAIN]["switch"] = list()
-    hass.data[DOMAIN]["alarm_control_panel"] = list()
+    hass.data[DOMAIN][BINARY_SENSOR_STR] = list()
+    hass.data[DOMAIN][SELECT_STR] = list()
+    hass.data[DOMAIN][SWITCH_STR] = list()
+    hass.data[DOMAIN][ALARM_PANEL_ENTITY] = list()
     
     # Install the 4 handlers for the HA service calls
     hass.services.async_register(

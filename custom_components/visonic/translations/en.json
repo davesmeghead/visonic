@@ -1,13 +1,14 @@
 {
+    "title": "Visonic Alarm Configuration",
     "config": {
         "abort": {
             "already_configured": "Alarm Panel Connection Already Configured",
-            "device_error": "Device must be either ethernet or usb",
+            "device_error": "Device must be either Ethernet or USB",
             "settings_missing": "Import setting from yaml file but essential settings are missing",
             "editing": "Thankyou for your edits"
         },
         "error": {
-            "eth_or_usb": "Must be either Ethernet or USB",
+            "eth_or_usb": "Must be one of Ethernet or USB",
             "unknown": "Unexpected error"
         },
         "step": {
@@ -16,10 +17,10 @@
                 "title": "Connection",
                 "data": {
                     "type": "Ethernet or USB",
-                    "panel_number": "Panel Number (set to 0 for automatic numbering)"
+                    "panel_number": "Panel Number"
                 }
             },
-            "ethernet": {
+            "myethernet": {
                 "description": "Enter your Ethernet Settings",
                 "title": "Ethernet Configuration",
                 "data": {
@@ -27,7 +28,7 @@
                     "port": "Port"
                 }
             },
-            "usb": {
+            "myusb": {
                 "description": "Enter your USB Settings",
                 "title": "USB Configuration",
                 "data": {
@@ -53,7 +54,7 @@
                 "title": "Alarm Panel Settings",
                 "data": {
                     "override_code": "Override User Code (Set to 0 for not used)",
-                    "siren_sounding": "List of triggers for the siren (comma separated)",
+                    "siren_sounding": "List of triggers for the siren",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off": "Motion off delay time (seconds)",
                     "retry_connection_count": "Try this number of times to attempt the connection",
@@ -64,6 +65,7 @@
                 "description": "",
                 "title": "Alarm Panel Settings",
                 "data": {
+                    "show_eeprom_attributes": "Show the EEPROM Data in the Alarm Attributes",
                     "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "force_numeric_keypad": "Force use of a Numeric Keypad",
                     "arm_home_enabled": "Arm Home Enabled",
@@ -106,7 +108,7 @@
             "editing": "Thankyou for your edits"
         },
         "error": {
-            "eth_or_usb": "Must be either Ethernet or USB",
+            "eth_or_usb": "Must be one of Ethernet or USB",
             "unknown": "Unexpected error"
         },
         "step": {
@@ -115,7 +117,7 @@
                 "title": "Alarm Panel Settings",
                 "data": {
                     "override_code": "Override User Code (Set to 0 for not used)",
-                    "siren_sounding": "List of triggers for the siren (comma separated)",
+                    "siren_sounding": "List of triggers for the siren",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off": "Motion off delay time (seconds)",
                     "retry_connection_count": "Try this number of times to attempt the connection",
@@ -126,6 +128,7 @@
                 "description": "",
                 "title": "Alarm Panel Settings",
                 "data": {
+                    "show_eeprom_attributes": "Show the EEPROM Data in the Alarm Attributes",
                     "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "force_numeric_keypad": "Force use of a Numeric Keypad",
                     "arm_home_enabled": "Arm Home Enabled",
@@ -160,5 +163,94 @@
                 }
             }
         }
-    }    
+    },    
+    "services": {
+        "alarm_panel_eventlog": {
+            "name": "Retrieve Event Log",
+            "description": "Retrieve the Alarm Panel Event Log.",
+            "fields": {
+                "code": {
+                    "name": "User Code",
+                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
+                },
+                "panel": {
+                    "name": "Panel Identifier",
+                    "description": "An optional panel number, defaults to 0 if not set."
+                }
+            }
+        },
+        "alarm_panel_command": {
+            "name": "Send Command",
+            "description": "Send a command to the Alarm Panel.",
+            "fields": {
+                "command": {
+                    "name": "Panel Command",
+                    "description": "The command to send to the panel ('arm_away', 'arm_away_instant', 'arm_home', 'arm_home_instant', 'disarm')."
+                },
+                "code": {
+                    "name": "User Code",
+                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
+                },
+                "panel": {
+                    "name": "Panel Identifier",
+                    "description": "An optional panel number, defaults to 0 if not set."
+                }
+            }
+        },
+        "alarm_panel_reconnect": {
+            "name": "Panel Reconnection",
+            "description": "Reconnect to the Alarm Panel following a previous problem.",
+            "fields": {
+                "panel": {
+                    "name": "Panel Identifier",
+                    "description": "An optional panel number, defaults to 0 if not set."
+                }
+            }
+        },
+        "alarm_sensor_bypass": {
+            "name": "Sensor Bypass",
+            "description": "Bypass and Re-Arm a Visonic Sensor.",
+            "fields": {
+                "entity_id": {
+                    "name": "Visonic Sensor",
+                    "description": "Name of the visonic sensor to bypass. This is case sensitive and a mandatory setting. The 'binary_sensor.' text is optional."
+                },
+                "bypass": {
+                    "name": "Bypass Command",
+                    "description": "An optional bypass ('True', 'On', 'Yes', 'Enable') or re-arm ('False', 'Off', 'No', 'Disable'), defaults to 'Off' if not set."
+                },
+                "code": {
+                    "name": "User Code",
+                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
+                },
+                "panel": {
+                    "name": "Panel Identifier",
+                    "description": "An optional panel number, defaults to 0 if not set."
+                }
+            }
+        }
+    },
+    "selector": {
+        "command": {
+            "options": {
+                "disarm": "Disarm",
+                "arm_home": "Arm Home",
+                "arm_home_instant": "Arm Home Instant",
+                "arm_away": "Arm Away",
+                "arm_away_instant": "Arm Away Instant"
+            }
+        },
+        "siren_sounding": {
+            "options": {
+                "intruder": "Intruder",
+                "tamper": "Tamper",
+                "fire": "Fire",
+                "emergency": "Emergency",
+                "gas": "Gas",
+                "flood": "Flood",
+                "x10": "X10",
+                "panic": "Panic"                  
+            }
+        }
+    }
 }

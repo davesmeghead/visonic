@@ -11,10 +11,10 @@ from homeassistant.const import (
     ATTR_ARMED,
 )
 
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+#from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
-from .pconst import PySensorDevice, PySensorType, PyCommandStatus
-from .const import DOMAIN, DOMAINCLIENT, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, AvailableNotifications
+from .pyconst import AlSensorDevice, AlSensorType, AlCommandStatus, AlSensorCondition
+from .const import DOMAIN, DOMAINCLIENT, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, AvailableNotifications, SELECT_STR
 
 from .client import VisonicClient
 
@@ -36,41 +36,43 @@ async def async_setup_entry(
         _LOGGER.debug("   In select async_setup_entry")
         client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
         sensors = [
-            VisonicSelect(hass, client, device) for device in hass.data[DOMAIN]["select"]
+            VisonicSelect(hass, client, device) for device in hass.data[DOMAIN][SELECT_STR]
         ]
         # empty the list as we have copied the entries so far in to sensors
-        hass.data[DOMAIN]["select"] = list()
+        hass.data[DOMAIN][SELECT_STR] = list()
         async_add_entities(sensors, True)
 
 
 class VisonicSelect(SelectEntity):
     """Representation of a visonic arm/bypass select entity."""
 
-    def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: PySensorDevice):
+    def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSensorDevice):
         """Initialize the visonic binary sensor arm/bypass select entity."""
         SelectEntity.__init__(self)
-        #_LOGGER.debug("Creating select entity for %s",visonic_device.getDeviceName())
         self.hass = hass
         self._client = client
         self._visonic_device = visonic_device
+        self._visonic_device.onChange(self.onChange)
+        
+        dname = visonic_device.createFriendlyName()
+        pname = client.getMyString()
+        self._name = pname.lower() + dname.lower()
+
         self._panel = client.getPanelID()
-        if self._panel > 0:
-            self._name = "visonic_p" + str(self._panel) + "_" + visonic_device.getDeviceName().lower()
-        else:
-            self._name = "visonic_" + visonic_device.getDeviceName().lower()
+        
         self._is_available = self._visonic_device.isEnrolled()
         self._is_armed = not self._visonic_device.isBypass()
         self._pending_state_is_armed = None
-        self._dispatcher = client.getDispatcher()
+        #self._dispatcher = client.getDispatcher()
 
-    async def async_added_to_hass(self):
-        """Register callbacks."""
-        # Register for dispatcher calls to update the state
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass, self._dispatcher, self.onChange
-            )
-        )
+#    async def async_added_to_hass(self):
+#        """Register callbacks."""
+#        # Register for dispatcher calls to update the state
+#        self.async_on_remove(
+#            async_dispatcher_connect(
+#                self.hass, self._dispatcher, self.onChange
+#            )
+#        )
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
@@ -79,9 +81,8 @@ class VisonicSelect(SelectEntity):
         self._visonic_device = None
         _LOGGER.debug("select async_will_remove_from_hass")
 
-    def onChange(self, event_id: int, datadictionary: dict):
+    def onChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
         """Call on any change to the sensor."""
-        #_LOGGER.debug("Select Sensor onchange %s", str(self._name))
         # Update the current value based on the device state
         if self._visonic_device is not None:
             self._is_available = self._visonic_device.isEnrolled()
@@ -143,19 +144,19 @@ class VisonicSelect(SelectEntity):
         elif option in self.options:
             #_LOGGER.debug("Sending Option {0} to {1}".format(option, self.unique_id))
             result = self._client.sendBypass(self._visonic_device.getDeviceID(), option == BYPASS, "") # pin code to "" to use default if set
-            if result == PyCommandStatus.SUCCESS:
+            if result == AlCommandStatus.SUCCESS:
                 self._pending_state_is_armed = (option == ARMED)
             else:
                 # Command not sent to panel
                 _LOGGER.debug("Sensor Bypass: Command not sent to panel")
                 message = "Command not sent to panel"
-                if result == PyCommandStatus.FAIL_PANEL_CONFIG_PREVENTED:
+                if result == AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED:
                     message = "Sensor Bypass: Please check your panel settings and enable sensor bypass"
-                elif result == PyCommandStatus.FAIL_USER_CONFIG_PREVENTED:
+                elif result == AlCommandStatus.FAIL_USER_CONFIG_PREVENTED:
                     message = "Sensor Bypass: Please check your HA Configuration settings for this Integration and enable sensor bypass"
-                elif result == PyCommandStatus.FAIL_INVALID_PIN:
+                elif result == AlCommandStatus.FAIL_INVALID_CODE:
                     message = "Sensor Bypass: Invalid PIN"
-                elif result == PyCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
+                elif result == AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
                     message = "Sensor Bypass: EPROM Download is in progress, please try again after this is complete"
                 self._client.sendHANotification(AvailableNotifications.ALWAYS, message)
         else:
@@ -166,7 +167,6 @@ class VisonicSelect(SelectEntity):
     def extra_state_attributes(self):
         """Return the state attributes of the device."""
         attr = {}
-        #attr["name"] = self._visonic_device.getDeviceName()
         attr[PANEL_ATTRIBUTE_NAME] = self._panel
         attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()
         return attr

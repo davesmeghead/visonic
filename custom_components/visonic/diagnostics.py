@@ -22,7 +22,7 @@ async def async_get_config_entry_diagnostics(
     client : VisonicClient = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
     data = {}
     if client is not None:
-        visonic = { **client.getPanelStatus(False), **hass.data[DOMAIN][DOMAINDATA][entry.entry_id] }
+        visonic = { **client.getPanelStatusDict(), **hass.data[DOMAIN][DOMAINDATA][entry.entry_id] }
         data = {
             "entry": entry.as_dict(),
             "visonic": visonic,

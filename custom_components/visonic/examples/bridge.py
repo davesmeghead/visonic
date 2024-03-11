@@ -34,7 +34,7 @@ import datetime
 
 from collections import defaultdict
 from datetime import datetime
-from time import sleep
+#from time import sleep
 from datetime import timedelta
 from functools import partial
 from typing import Callable, List
@@ -82,8 +82,8 @@ class ProtocolBase(asyncio.Protocol):
         iLength = data[2]
 
         if iLength != len(data) - 3:  # 3 because -->   index & page & length
-            _LOGGER.warning("[handle_msgtype3F]        ERROR: Type=3F has an invalid length, Received: {0}, Expected: {1}".format(len(data)-3, iLength))
-            _LOGGER.warning("[handle_msgtype3F]                            " + self._toString(data))
+            _LOGGER.warning(f"[handle_msgtype3F]        ERROR: Type=3F has an invalid length, Received: {len(data)-3}, Expected: {iLength}")
+            _LOGGER.warning(f"[handle_msgtype3F]                           {self._toString(data)}")
             return
 
         for x in range(iLength):
@@ -104,9 +104,7 @@ class ProtocolBase(asyncio.Protocol):
                 # the producer emits None to indicate that it is done
                 break
             if self.deb:
-                _LOGGER.debug(
-                    "[sending to %s at %s] : %s", self.name, str(datetime.now()), self._toString(item),
-                )
+                _LOGGER.debug(f"[sending to {self.name} at {str(datetime.now())}] : {self._toString(item)}")
             self.transport.write(item)
 
     # This is called from the loop handler when the connection to the transport is made
@@ -129,11 +127,11 @@ class ProtocolBase(asyncio.Protocol):
             return False
 
         if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] + 1:
-            _LOGGER.debug("[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {0} and {1}".format(packet[-2:-1][0], self._calculateCRC(packet[1:-2])[0]))
+            _LOGGER.debug(f"[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {packet[-2:-1][0]} and {self._calculateCRC(packet[1:-2])[0]}")
             return True
 
         if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] - 1:
-            _LOGGER.debug("[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {0} and {1}".format(packet[-2:-1][0], self._calculateCRC(packet[1:-2])[0]))
+            _LOGGER.debug(f"[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {packet[-2:-1][0]} and {self._calculateCRC(packet[1:-2])[0]}")
             return True
 
         # Check the CRC
@@ -155,8 +153,6 @@ class ProtocolBase(asyncio.Protocol):
         checksum = 0xFF - (checksum % 0xFF)
         if checksum == 0xFF:
             checksum = 0x00
-        #            _LOGGER.debug("[_calculateCRC] Checksum was 0xFF, forsing to 0x00")
-        # _LOGGER.debug("[_calculateCRC] Calculating for: %s     calculated CRC is: %s", self._toString(msg), self._toString(bytearray([checksum])))
         return bytearray([checksum])
     def _resetMessageData(self):
         # clear our buffer again so we can receive a new packet.
@@ -194,9 +190,7 @@ class ProtocolBase(asyncio.Protocol):
     def data_received(self, data):
         """Add incoming data to ReceiveData."""
         if self.deb:
-            _LOGGER.debug(
-                "[received from %s at %s] : %s", self.name, str(datetime.now()), self._toString(data),
-            )
+            _LOGGER.debug(f"[received from {self.name} at {str(datetime.now())}] : {self._toString(data)}")
             for x in range(len(data)):
                 self.processByte(data[x])
                     

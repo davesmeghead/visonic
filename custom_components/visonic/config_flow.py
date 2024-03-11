@@ -34,9 +34,6 @@ _LOGGER = logging.getLogger(__name__)
 #     - Parameters2
 #     - parameters3
 #     - parameters4
-#     If we achieve Standard Plus or Powerlink with the panel then self.powermaster will be set to False or True, depending on the panel type
-#     - if self.powermaster
-#     -     parameters5
 
 class MyHandlers(data_entry_flow.FlowHandler):
     """My generic handler for config flow ConfigFlow and OptionsFlow."""
@@ -44,10 +41,11 @@ class MyHandlers(data_entry_flow.FlowHandler):
     def __init__(self, config_entry = None):
         """Initialize the config flow."""
         # Do not call the parents init function
-        # _LOGGER.debug("MyHandlers init")
+        _LOGGER.debug("MyHandlers init")
         self.myschema = VisonicSchema()
-        self.powermaster = False
         self.config = {}
+        self.step_sequence = []
+        self.current_pos = -1
         if config_entry is not None:
             # convert python map to dictionary and set defaults for the options flow handler
             c = self.combineSettings(config_entry)
@@ -74,19 +72,17 @@ class MyHandlers(data_entry_flow.FlowHandler):
             else:
                 self.config[cfg] = lst[cfg]
 
-    async def _show_form(
-        self, step: str = "device", placeholders=None, errors=None
-    ):
+    async def _show_form(self, step: str = "device", placeholders=None, errors=None):
         """Show the form to the user."""
-        # _LOGGER.debug("show_form %s %s %s", step, placeholders, errors)
+        _LOGGER.debug(f"show_form start {step} {placeholders} {errors}")
 
         ds = None
 
         if step == "device":
             ds = self.myschema.create_schema_device()
-        elif step == "ethernet":
+        elif step == "myethernet":
             ds = self.myschema.create_schema_ethernet()
-        elif step == "usb":
+        elif step == "myusb":
             ds = self.myschema.create_schema_usb()
         elif step == "parameters1":
             ds = self.myschema.create_schema_parameters1()
@@ -106,7 +102,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
             _LOGGER.debug("show_form ds is None, step is %s", step)
             return self.async_abort(reason="device_error")
 
-        # _LOGGER.debug("show_form ds = %s", (ds)
+        _LOGGER.debug(f"doing show_form step = {step}   ds = {ds}")
         return self.async_show_form(
             step_id=step,
             data_schema=ds,
@@ -114,45 +110,38 @@ class MyHandlers(data_entry_flow.FlowHandler):
             description_placeholders=placeholders if placeholders else {},
         )
 
-    async def async_step_parameters1(self, user_input=None):
-        """Config flow step 1."""
+    async def gotonext(self, user_input=None):
         if user_input is not None:
             self.config.update(user_input)
-        return await self._show_form(step="parameters2")
+        self.current_pos = self.current_pos + 1
+        if self.current_pos == len(self.step_sequence):
+            return await self.processcomplete()
+        return await self._show_form(step="parameters"+str(self.step_sequence[self.current_pos]))
+
+    async def async_step_parameters1(self, user_input=None):
+        """Config flow step 1."""
+        _LOGGER.debug(f"show_form step is 1 - {self.current_pos}")
+        return await self.gotonext(user_input)
 
     async def async_step_parameters2(self, user_input=None):
         """Config flow step 2."""
-        if user_input is not None:
-            self.config.update(user_input)
-        # _LOGGER.debug(f"async_step_parameters2 {user_input}")
-        return await self._show_form(step="parameters3")
+        _LOGGER.debug(f"show_form step is 2 - {self.current_pos}")
+        return await self.gotonext(user_input)
 
     async def async_step_parameters3(self, user_input=None):
-        """Config flow step 2."""
-        if user_input is not None:
-            self.config.update(user_input)
-        # _LOGGER.debug(f"async_step_parameters3 {user_input}")
-        return await self._show_form(step="parameters4")
+        """Config flow step 3."""
+        _LOGGER.debug(f"show_form step is 3 - {self.current_pos}")
+        return await self.gotonext(user_input)
 
     async def async_step_parameters4(self, user_input=None):
-        """Config flow step 3."""
-        if user_input is not None:
-            self.config.update(user_input)
-
-        # _LOGGER.debug("async_step_parameters4 %s", self.config)
-
-        if self.powermaster:
-            _LOGGER.debug("Detected a powermaster so asking about B0 parameters")
-            return await self._show_form(step="parameters5")
-
-        _LOGGER.debug("Detected a powermax so not asking about B0 parameters")
-        return await self.processcomplete()
-
-    async def async_step_parameters5(self, user_input=None):
         """Config flow step 4."""
-        # add parameters to config
-        self.config.update(user_input)
-        return await self.processcomplete()
+        _LOGGER.debug(f"show_form step is 4 - {self.current_pos}")
+        return await self.gotonext(user_input)
+
+#    async def async_step_parameters5(self, user_input=None):
+#        """Config flow step 5."""
+#        _LOGGER.debug(f"show_form step is 5 - {self.current_pos}")
+#        return await self.gotonext(user_input)
 
     async def validate_input(self, data: dict):
         """Validate the input."""
@@ -258,24 +247,26 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
             self.config[CONF_PANEL_NUMBER] = max(0, int(user_input[CONF_PANEL_NUMBER]))
             self.config[CONF_DEVICE_TYPE] = user_input[CONF_DEVICE_TYPE].lower()
             if self.config[CONF_DEVICE_TYPE] == "ethernet":
-                return await self._show_form(step="ethernet")
+                return await self._show_form(step="myethernet")
             elif self.config[CONF_DEVICE_TYPE] == "usb":
-                return await self._show_form(step="usb")
+                return await self._show_form(step="myusb")
         errors = {}
         errors["base"] = "eth_or_usb"
         return await self._show_form(step="device", errors=errors)
 
     # ask for the ethernet settings
-    async def async_step_ethernet(self, user_input=None):
+    async def async_step_myethernet(self, user_input=None):
         """Handle the input processing of the config flow."""
-        self.config.update(user_input)
-        return await self._show_form(step="parameters1")
+        self.current_pos = -1
+        self.step_sequence = [1,2,3,4]
+        return await self.gotonext(user_input)
 
     # ask for the usb settings
-    async def async_step_usb(self, user_input=None):
+    async def async_step_myusb(self, user_input=None):
         """Handle the input processing of the config flow."""
-        self.config.update(user_input)
-        return await self._show_form(step="parameters1")
+        self.current_pos = -1
+        self.step_sequence = [1,2,3,4]
+        return await self.gotonext(user_input)
 
     async def async_step_user(self, user_input=None):
         """Handle a user config flow."""
@@ -349,16 +340,26 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
         config_entries.OptionsFlow.__init__(self)
         self.config = dict(config_entry.options)
         self.entry_id = config_entry.entry_id
-        _LOGGER.debug("init %s %s", self.entry_id, self.config)
+        _LOGGER.debug("init {self.entry_id} {self.config}")
 
     # when editing an existing config, start from parameters2 as the previous settings are not editable after the connection has been made
     async def async_step_init(self, user_input=None):
         """Manage the options."""
-        # Get the client
-        if self.hass is not None:
-            client = self.hass.data[DOMAIN][DOMAINCLIENT][self.entry_id]
-            if client is not None:
-                # From the client, is it a PowerMaster panel (this assumes that the EPROM has been downloaded, or at least the 0x3C data)"
-                self.powermaster = client.isPowerMaster()
-        _LOGGER.debug("Edit config option settings, powermaster = %s", self.powermaster)
-        return await self._show_form(step="parameters2")
+        
+        _LOGGER.debug(f"Edit config option settings, data = {user_input}")
+
+        if self.config is not None and CONF_DEVICE_TYPE in self.config:
+            t = self.config[CONF_DEVICE_TYPE].lower()
+            _LOGGER.debug(f"type = {type(t)}   t = {t}")
+            if t == "ethernet" or t == "usb":
+                self.current_pos = -1
+                self.step_sequence = [2,3,4]
+                return await self.gotonext(user_input)
+            else:
+                _LOGGER.debug(f"Edit config option settings type = {t}, aborting")
+        
+        return self.async_abort(reason="device_error")
+
+        
+
+
