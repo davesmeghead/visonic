@@ -1,13 +1,18 @@
 """Constants for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 from enum import Enum, IntFlag
 
+# The domain for the integration
 DOMAIN = "visonic"
+
+# The platforms in the integration
 ALARM_PANEL_ENTITY = "alarm_control_panel"
 BINARY_SENSOR_STR = "binary_sensor"
+IMAGE_SENSOR_STR = "image"
+MONITOR_SENSOR_STR = "sensor"
 SWITCH_STR = "switch"
 SELECT_STR = "select"
 
-PLATFORMS = [ALARM_PANEL_ENTITY, BINARY_SENSOR_STR, SWITCH_STR, SELECT_STR]
+#PLATFORMS = [ALARM_PANEL_ENTITY, BINARY_SENSOR_STR, IMAGE_SENSOR_STR, SWITCH_STR, SELECT_STR]
 
 VISONIC_UNIQUE_NAME = "Visonic Alarm"
 
@@ -16,7 +21,6 @@ class SensorEntityFeature(IntFlag):
     """Supported features of the zone sensor entity."""
     BYPASS_FEATURE = 1
     ARMED_FEATURE = 2
-#visonic.SensorEntityFeature.BYPASS_FEATURE
 
 # Constants for storing data in hass[DOMAIN]
 DOMAINCLIENT = f"{DOMAIN}_client"
@@ -30,9 +34,6 @@ NOTIFICATION_TITLE = "Visonic Alarm Panel"
 # update listener
 VISONIC_UPDATE_LISTENER = f"{DOMAIN}_update_listener"
 
-# Dispatcher name when the underlying pyvisonic library has got a panel, X10 or sensor change
-#VISONIC_UPDATE_STATE_DISPATCHER = f"{DOMAIN}_update_state_dispatcher"
-
 # The HA bus events that this integration can generate
 ALARM_PANEL_CHANGE_EVENT = f"{DOMAIN}_alarm_panel_state_update"
 ALARM_PANEL_LOG_FILE_COMPLETE = f"{DOMAIN}_alarm_panel_event_log_complete"
@@ -43,6 +44,7 @@ ALARM_PANEL_COMMAND = "alarm_panel_command"
 ALARM_PANEL_EVENTLOG = "alarm_panel_eventlog"
 ALARM_PANEL_RECONNECT = "alarm_panel_reconnect"
 ALARM_SENSOR_BYPASS = "alarm_sensor_bypass"
+ALARM_SENSOR_IMAGE = "alarm_sensor_image"
 
 PANEL_ATTRIBUTE_NAME = "panel"
 DEVICE_ATTRIBUTE_NAME = "visonic device"
@@ -82,7 +84,8 @@ CONF_DOWNLOAD_CODE = "download_code"
 CONF_FORCE_AUTOENROLL = "force_autoenroll"
 CONF_AUTO_SYNC_TIME = "sync_time"
 CONF_LANGUAGE = "language"
-CONF_FORCE_STANDARD = "force_standard"
+CONF_EMULATION_MODE = "emulation_mode"
+CONF_COMMAND = "command"
 
 # settings than can be modified
 CONF_ENABLE_REMOTE_ARM = "allow_remote_arm"
@@ -101,11 +104,6 @@ CONF_RETRY_CONNECTION_COUNT = "retry_connection_count"
 CONF_RETRY_CONNECTION_DELAY = "retry_connection_delay"
 CONF_EEPROM_ATTRIBUTES = "show_eeprom_attributes"
 
-# Temporary B0 Config Items
-CONF_B0_ENABLE_MOTION_PROCESSING = "b0_enable_motion_processing"
-CONF_B0_MIN_TIME_BETWEEN_TRIGGERS = "b0_min_time_between_triggers"
-CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT = "b0_max_time_for_trigger_event"
-
 PIN_REGEX = "^[0-9]{4}$"
 
 class AvailableNotifications(str, Enum):
@@ -117,6 +115,7 @@ class AvailableNotifications(str, Enum):
     PANEL_OPERATION = 'paneloperation'
     CONNECTION_PROBLEM = 'connectionproblem'
     BYPASS_PROBLEM = 'bypassproblem'
+    IMAGE_PROBLEM = 'imageproblem'
     EVENTLOG_PROBLEM = 'eventlogproblem'
     COMMAND_NOT_SENT = 'commandnotsent'
 
@@ -129,6 +128,14 @@ AvailableNotificationConfig = {
     AvailableNotifications.CONNECTION_PROBLEM : "Connection Problems",
     AvailableNotifications.BYPASS_PROBLEM : "Sensor Bypass Problems",
     AvailableNotifications.EVENTLOG_PROBLEM : "Event Log Problems",
+    AvailableNotifications.IMAGE_PROBLEM : "Image Retrieval Problems",
     AvailableNotifications.COMMAND_NOT_SENT : "Command Not Sent To Panel"
 }
+
+available_emulation_modes = [
+    "Powerlink Emulation",
+    "Force Standard Mode",
+    "Minimal Interaction (data only sent to obtain panel state)",
+    "Passive Monitor (no data sent to Alarm Panel)"
+]
 

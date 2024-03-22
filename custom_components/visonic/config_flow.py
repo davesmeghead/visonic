@@ -9,31 +9,31 @@ from .const import (
     CONF_EXCLUDE_X10,
     CONF_SIREN_SOUNDING,
     CONF_PANEL_NUMBER,
+    CONF_EMULATION_MODE,
+    available_emulation_modes,
+    DOMAIN, 
+    DOMAINCLIENT, 
+    CONF_ALARM_NOTIFICATIONS, 
+    CONF_OVERRIDE_CODE
 )
 
 from homeassistant import config_entries, data_entry_flow
 from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT
 from homeassistant.core import callback
 
-from .const import DOMAIN, DOMAINCLIENT, CONF_ALARM_NOTIFICATIONS, CONF_OVERRIDE_CODE
 from .create_schema import VisonicSchema
 
 _LOGGER = logging.getLogger(__name__)
 
-# Common class handlers for the creation and editing the control flows
-#
-#  Creation sequence (using VisonicConfigFlow)
-#     - Connection type ("device") so user picks ethernet or usb from a drop down list
-#     - User then enters either ethernet or usb parameters
-#     - Parameters1
-#     - Parameters2
-#     - parameters3
-#     - parameters4
-#
-#  Modify/Edit sequence (using VisonicOptionsFlowHandler)
-#     - Parameters2
-#     - parameters3
-#     - parameters4
+def create_parameters_sequence(s : str) -> list:
+    step_sequence = []
+    if s == available_emulation_modes[0]:
+        step_sequence = [2,10,11,12]       
+    elif s == available_emulation_modes[1]:
+        step_sequence = [10,11] 
+    elif s == available_emulation_modes[2] or s == available_emulation_modes[3]:
+        step_sequence = [10] 
+    return step_sequence
 
 class MyHandlers(data_entry_flow.FlowHandler):
     """My generic handler for config flow ConfigFlow and OptionsFlow."""
@@ -88,12 +88,12 @@ class MyHandlers(data_entry_flow.FlowHandler):
             ds = self.myschema.create_schema_parameters1()
         elif step == "parameters2":
             ds = self.myschema.create_schema_parameters2()
-        elif step == "parameters3":
-            ds = self.myschema.create_schema_parameters3()
-        elif step == "parameters4":
-            ds = self.myschema.create_schema_parameters4()
-        elif step == "parameters5":
-            ds = self.myschema.create_schema_parameters5()
+        elif step == "parameters10":
+            ds = self.myschema.create_schema_parameters10()
+        elif step == "parameters11":
+            ds = self.myschema.create_schema_parameters11()
+        elif step == "parameters12":
+            ds = self.myschema.create_schema_parameters12()
         else:
             return self.async_abort(reason="device_error")
 
@@ -118,30 +118,25 @@ class MyHandlers(data_entry_flow.FlowHandler):
             return await self.processcomplete()
         return await self._show_form(step="parameters"+str(self.step_sequence[self.current_pos]))
 
-    async def async_step_parameters1(self, user_input=None):
-        """Config flow step 1."""
-        _LOGGER.debug(f"show_form step is 1 - {self.current_pos}")
-        return await self.gotonext(user_input)
-
     async def async_step_parameters2(self, user_input=None):
         """Config flow step 2."""
-        _LOGGER.debug(f"show_form step is 2 - {self.current_pos}")
+        #_LOGGER.debug(f"show_form step is 2 - {self.current_pos}")
         return await self.gotonext(user_input)
 
-    async def async_step_parameters3(self, user_input=None):
-        """Config flow step 3."""
-        _LOGGER.debug(f"show_form step is 3 - {self.current_pos}")
+    async def async_step_parameters10(self, user_input=None):
+        """Config flow step 10."""
+        #_LOGGER.debug(f"show_form step is 10 - {self.current_pos}")
         return await self.gotonext(user_input)
 
-    async def async_step_parameters4(self, user_input=None):
-        """Config flow step 4."""
-        _LOGGER.debug(f"show_form step is 4 - {self.current_pos}")
+    async def async_step_parameters11(self, user_input=None):
+        """Config flow step 11."""
+        #_LOGGER.debug(f"show_form step is 11 - {self.current_pos}")
         return await self.gotonext(user_input)
 
-#    async def async_step_parameters5(self, user_input=None):
-#        """Config flow step 5."""
-#        _LOGGER.debug(f"show_form step is 5 - {self.current_pos}")
-#        return await self.gotonext(user_input)
+    async def async_step_parameters12(self, user_input=None):
+        """Config flow step 12."""
+        #_LOGGER.debug(f"show_form step is 12 - {self.current_pos}")
+        return await self.gotonext(user_input)
 
     async def validate_input(self, data: dict):
         """Validate the input."""
@@ -149,18 +144,19 @@ class MyHandlers(data_entry_flow.FlowHandler):
         #tmpOCode = data.get(CONF_OVERRIDE_CODE, "")
         #_LOGGER.debug(f'validate_input type={type(tmpOCode)}  value={tmpOCode}')
 
-        # Convert the override code from a float to a string, if set to 0 then empty the string
-        tmp : str = str(int(data[CONF_OVERRIDE_CODE]))
-        if len(tmp) == 0 or len(tmp) > 4 or (len(tmp) == 1 and tmp == "0"):
-            tmp = ""
-        elif len(tmp) == 1:
-            tmp = "000" + tmp
-        elif len(tmp) == 2:
-            tmp = "00" + tmp
-        elif len(tmp) == 3:
-            tmp = "0" + tmp
-        
-        data[CONF_OVERRIDE_CODE] = tmp        
+        # Convert the override code from a float to a string, if set to 0 then empty the string    
+        if CONF_OVERRIDE_CODE in data:
+            tmp : str = str(int(data[CONF_OVERRIDE_CODE]))
+            if len(tmp) == 0 or len(tmp) > 4 or (len(tmp) == 1 and tmp == "0"):
+                tmp = ""
+            elif len(tmp) == 1:
+                tmp = "000" + tmp
+            elif len(tmp) == 2:
+                tmp = "00" + tmp
+            elif len(tmp) == 3:
+                tmp = "0" + tmp
+            
+            data[CONF_OVERRIDE_CODE] = tmp        
         
         #tmpOCode = data.get(CONF_OVERRIDE_CODE, "")
         #_LOGGER.debug(f'validate_input type={type(tmpOCode)}  value={tmpOCode}')
@@ -171,9 +167,10 @@ class MyHandlers(data_entry_flow.FlowHandler):
     async def processcomplete(self):
         """Config flow process complete."""
         try:
+            #_LOGGER.debug('processcomplete')
             info = await self.validate_input(self.config)
-            # tmpOCode = self.config.get(CONF_OVERRIDE_CODE, "")
-            # _LOGGER.debug(f'processcomplete type={type(tmpOCode)}  value={tmpOCode}')
+            #tmpOCode = self.config.get(CONF_OVERRIDE_CODE, "")
+            #_LOGGER.debug(f'processcomplete type={type(tmpOCode)}  value={tmpOCode}')
             if info is not None:
                 # convert comma separated string to a list
                 if CONF_SIREN_SOUNDING in self.config:
@@ -207,7 +204,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
 class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
     """Handle a Visonic flow."""
 
-    VERSION = 1
+    VERSION = 2
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
     def __init__(self):
@@ -257,16 +254,33 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
     # ask for the ethernet settings
     async def async_step_myethernet(self, user_input=None):
         """Handle the input processing of the config flow."""
-        self.current_pos = -1
-        self.step_sequence = [1,2,3,4]
-        return await self.gotonext(user_input)
+        self.config.update(user_input)
+        return await self._show_form(step="parameters1")
 
     # ask for the usb settings
     async def async_step_myusb(self, user_input=None):
         """Handle the input processing of the config flow."""
+        self.config.update(user_input)
+        return await self._show_form(step="parameters1")
+
+    async def async_step_parameters1(self, user_input=None):
+        """Config flow step 1."""
+        _LOGGER.debug(f"async_step_parameters1,  step is 1 - {self.current_pos}")
+        self.config.update(user_input)
+        
         self.current_pos = -1
-        self.step_sequence = [1,2,3,4]
+
+        if CONF_EMULATION_MODE in user_input:
+            self.step_sequence = create_parameters_sequence(user_input[CONF_EMULATION_MODE])
+            if len(self.step_sequence) == 0:
+                _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE set to {user_input[CONF_EMULATION_MODE]} **********************************")
+                return self.async_abort(reason="emulation_mode_error")
+        else:
+            _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE not in user_input **********************************")
+            return self.async_abort(reason="emulation_mode_error")
+        _LOGGER.debug(f"async_step_parameters1 {user_input}")
         return await self.gotonext(user_input)
+
 
     async def async_step_user(self, user_input=None):
         """Handle a user config flow."""
@@ -340,9 +354,9 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
         config_entries.OptionsFlow.__init__(self)
         self.config = dict(config_entry.options)
         self.entry_id = config_entry.entry_id
-        _LOGGER.debug("init {self.entry_id} {self.config}")
+        #_LOGGER.debug(f"init {self.entry_id} {self.config}")
 
-    # when editing an existing config, start from parameters2 as the previous settings are not editable after the connection has been made
+    # when editing an existing config, start from parameters10 as the previous settings are not editable after the connection has been made
     async def async_step_init(self, user_input=None):
         """Manage the options."""
         
@@ -352,9 +366,24 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
             t = self.config[CONF_DEVICE_TYPE].lower()
             _LOGGER.debug(f"type = {type(t)}   t = {t}")
             if t == "ethernet" or t == "usb":
+
                 self.current_pos = -1
-                self.step_sequence = [2,3,4]
+
+                if CONF_EMULATION_MODE in self.config:
+                    self.step_sequence = create_parameters_sequence(self.config[CONF_EMULATION_MODE])
+                    if 2 in self.step_sequence:
+                        self.step_sequence.remove(2) # remove the init parameters and only include modifyable
+                    if len(self.step_sequence) == 0:
+                        _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE set to {self.config[CONF_EMULATION_MODE]} **********************************")
+                        return await self.async_abort(reason="emulation_mode_error")
+                else:
+                    _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE not in self.config **********************************")
+                    return await self.async_abort(reason="emulation_mode_error")
                 return await self.gotonext(user_input)
+
+                #self.current_pos = -1
+                #self.step_sequence = [2,3,4]
+                #return await self.gotonext(user_input)
             else:
                 _LOGGER.debug(f"Edit config option settings type = {t}, aborting")
         

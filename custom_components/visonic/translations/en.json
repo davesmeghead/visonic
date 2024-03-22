@@ -4,11 +4,13 @@
         "abort": {
             "already_configured": "Alarm Panel Connection Already Configured",
             "device_error": "Device must be either Ethernet or USB",
+            "emulation_mode_error": "Incorrect Emulation Mode Setting",
             "settings_missing": "Import setting from yaml file but essential settings are missing",
             "editing": "Thankyou for your edits"
         },
         "error": {
             "eth_or_usb": "Must be one of Ethernet or USB",
+            "emulation_mode_error": "Incorrect Emulation Mode Setting",
             "unknown": "Unexpected error"
         },
         "step": {
@@ -42,18 +44,24 @@
                 "data": {
                     "exclude_x10": "X10 Devices to Exclude (comma separated)",
                     "exclude_sensor": "Sensor List to Exclude (comma separated)",
-                    "download_code": "Download Code",
-                    "force_standard": "Force Standard Mode",
-                    "force_autoenroll": "Auto Enroll Supported (Unticked for PowerMax+)",
-                    "sync_time": "Synchronise Time to the Alarm Panel",
+                    "emulation_mode": "Emulation Mode",
                     "language": "Language (EN, NL, FR)"
                 }
             },
             "parameters2": {
                 "description": "",
+                "title": "Alarm Panel Powerlink Settings",
+                "data": {
+                    "download_code": "Download Code",
+                    "force_autoenroll": "Auto Enroll Supported (Unticked for PowerMax+)",
+                    "show_eeprom_attributes": "Show the EEPROM Data in the Alarm Attributes",
+                    "sync_time": "Synchronise Time to the Alarm Panel"
+                }
+            },
+            "parameters10": {
+                "description": "",
                 "title": "Alarm Panel Settings",
                 "data": {
-                    "override_code": "Override User Code (Set to 0 for not used)",
                     "siren_sounding": "List of triggers for the siren",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off": "Motion off delay time (seconds)",
@@ -61,11 +69,11 @@
                     "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
                 }
             },
-            "parameters3": {
+            "parameters11": {
                 "description": "",
-                "title": "Alarm Panel Settings",
+                "title": "Alarm Panel Arm/Disarm Settings",
                 "data": {
-                    "show_eeprom_attributes": "Show the EEPROM Data in the Alarm Attributes",
+                    "override_code": "Override User Code (Set to 0 for not used)",
                     "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "force_numeric_keypad": "Force use of a Numeric Keypad",
                     "arm_home_enabled": "Arm Home Enabled",
@@ -77,9 +85,9 @@
                     "allow_sensor_bypass": "Allow each sensor to be bypassed"
                 }
             },
-            "parameters4": {
+            "parameters12": {
                 "description": "",
-                "title": "Log File",
+                "title": "Alarm Panel Log File Settings",
                 "data": {
                     "panellog_complete_event": "Generate an HA Event on Completion",
                     "panellog_logentry_event": "Generate an HA Event for each Log entry",
@@ -90,8 +98,8 @@
                     "panellog_max_entries": "Only output the most recent X log entries"
                 }
             },
-            "parameters5": {
-                "description": "PowerMaster users only",
+            "parameters20": {
+                "description": "Alarm Panel PowerMaster users only",
                 "title": "B0 Processing",
                 "data": {
                     "b0_enable_motion_processing": "Enable B0 message processing (PowerMaster Panels only)",
@@ -104,19 +112,20 @@
     "options": {
         "abort": {
             "already_configured": "Alarm Panel Connection Already Configured",
+            "emulation_mode_error": "Incorrect Emulation Mode Setting",
             "device_error": "Device must be either Ethernet or USB",
             "editing": "Thankyou for your edits"
         },
         "error": {
             "eth_or_usb": "Must be one of Ethernet or USB",
+            "emulation_mode_error": "Incorrect Emulation Mode Setting",
             "unknown": "Unexpected error"
         },
         "step": {
-            "parameters2": {
+            "parameters10": {
                 "description": "",
                 "title": "Alarm Panel Settings",
                 "data": {
-                    "override_code": "Override User Code (Set to 0 for not used)",
                     "siren_sounding": "List of triggers for the siren",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off": "Motion off delay time (seconds)",
@@ -124,11 +133,11 @@
                     "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
                 }
             },
-            "parameters3": {
+            "parameters11": {
                 "description": "",
-                "title": "Alarm Panel Settings",
+                "title": "Alarm Panel Arm/Disarm Settings",
                 "data": {
-                    "show_eeprom_attributes": "Show the EEPROM Data in the Alarm Attributes",
+                    "override_code": "Override User Code (Set to 0 for not used)",
                     "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "force_numeric_keypad": "Force use of a Numeric Keypad",
                     "arm_home_enabled": "Arm Home Enabled",
@@ -140,9 +149,9 @@
                     "allow_sensor_bypass": "Allow each sensor to be bypassed"
                 }
             },
-            "parameters4": {
+            "parameters12": {
                 "description": "",
-                "title": "Log File",
+                "title": "Alarm Panel Log File Settings",
                 "data": {
                     "panellog_complete_event": "Generate an HA Event on Completion",
                     "panellog_logentry_event": "Generate an HA Event for each Log entry",
@@ -153,8 +162,8 @@
                     "panellog_max_entries": "Only output the most recent X log entries"
                 }
             },
-            "parameters5": {
-                "description": "PowerMaster users only",
+            "parameters20": {
+                "description": "Alarm Panel PowerMaster users only",
                 "title": "B0 Processing",
                 "data": {
                     "b0_enable_motion_processing": "Enable B0 message processing (PowerMaster Panels only)",
@@ -169,13 +178,13 @@
             "name": "Retrieve Event Log",
             "description": "Retrieve the Alarm Panel Event Log.",
             "fields": {
+                "entity_id": {
+                    "name": "Visonic Panel",
+                    "description": "Name of the visonic panel."
+                },
                 "code": {
                     "name": "User Code",
                     "description": "An optional alarm user code (depending on your settings) to send to the panel."
-                },
-                "panel": {
-                    "name": "Panel Identifier",
-                    "description": "An optional panel number, defaults to 0 if not set."
                 }
             }
         },
@@ -183,17 +192,17 @@
             "name": "Send Command",
             "description": "Send a command to the Alarm Panel.",
             "fields": {
+                "entity_id": {
+                    "name": "Visonic Panel",
+                    "description": "Name of the visonic panel."
+                },
                 "command": {
                     "name": "Panel Command",
-                    "description": "The command to send to the panel ('arm_away', 'arm_away_instant', 'arm_home', 'arm_home_instant', 'disarm')."
+                    "description": "The command to send to the panel ('Arm Away', 'Arm Away Instant', 'Arm Home', 'Arm Home Instant', 'Disarm', 'Trigger', 'Mute', 'Emergency', 'Panic', 'Fire')."
                 },
                 "code": {
                     "name": "User Code",
                     "description": "An optional alarm user code (depending on your settings) to send to the panel."
-                },
-                "panel": {
-                    "name": "Panel Identifier",
-                    "description": "An optional panel number, defaults to 0 if not set."
                 }
             }
         },
@@ -201,9 +210,19 @@
             "name": "Panel Reconnection",
             "description": "Reconnect to the Alarm Panel following a previous problem.",
             "fields": {
-                "panel": {
-                    "name": "Panel Identifier",
-                    "description": "An optional panel number, defaults to 0 if not set."
+                "entity_id": {
+                    "name": "Visonic Panel",
+                    "description": "Name of the visonic panel."
+                }
+            }
+        },
+        "alarm_sensor_image": {
+            "name": "Retrieve Image from Sensor",
+            "description": "Retrieve Image from Sensor, this only works if the Sensor is a Camera PIR.",
+            "fields": {
+                "entity_id": {
+                    "name": "Visonic Sensor (Image)",
+                    "description": "Name of the visonic sensor."
                 }
             }
         },
@@ -222,10 +241,6 @@
                 "code": {
                     "name": "User Code",
                     "description": "An optional alarm user code (depending on your settings) to send to the panel."
-                },
-                "panel": {
-                    "name": "Panel Identifier",
-                    "description": "An optional panel number, defaults to 0 if not set."
                 }
             }
         }

@@ -7,7 +7,6 @@ import voluptuous as vol
 from enum import IntEnum
 
 from homeassistant.auth.permissions.const import POLICY_CONTROL
-from .pyconst import AlPanelCommand, AlPanelStatus
 import homeassistant.components.alarm_control_panel as alarm
 from homeassistant.components.alarm_control_panel.const import (
     AlarmControlPanelEntityFeature,
@@ -34,6 +33,7 @@ from homeassistant.helpers import entity_platform, service
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import VisonicClient
+from .pyconst import AlPanelCommand, AlPanelStatus
 from .const import (
     DOMAIN,
     DOMAINCLIENT,
@@ -55,11 +55,12 @@ async def async_setup_entry(
     if DOMAIN in hass.data:
         # Get the client
         client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        # Create the alarm controlpanel
-        va = VisonicAlarm(client, 1)
-        # Add it to HA
-        devices = [va]
-        async_add_entities(devices, True)
+        if not client.isDisableAllCommands():
+            # Create the alarm controlpanel (partition id = 1)
+            va = VisonicAlarm(client, 1)
+            # Add it to HA
+            devices = [va]
+            async_add_entities(devices, True)
 
     platform = entity_platform.async_get_current_platform()
     _LOGGER.debug(f"alarm control panel async_setup_entry called {platform}")
@@ -202,6 +203,8 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     @property
     def supported_features(self) -> int:
         """Return the list of supported features."""
+        if self._client.isDisableAllCommands():
+            return 0
         #_LOGGER.debug(f"[AlarmcontrolPanel] Getting Supported Features {self._client.isArmHome()} {self._client.isArmNight()}")
         retval = AlarmControlPanelEntityFeature.ARM_AWAY
         if self._client.isArmNight():
@@ -210,6 +213,9 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         if self._client.isArmHome():
             #_LOGGER.debug("[AlarmcontrolPanel] Adding Home")
             retval = retval | AlarmControlPanelEntityFeature.ARM_HOME
+        if self._client.isPowerMaster():
+            #_LOGGER.debug("[AlarmcontrolPanel] Adding Trigger")
+            retval = retval | AlarmControlPanelEntityFeature.TRIGGER
         return retval
 
     # DO NOT OVERRIDE state_attributes AS IT IS USED IN THE LOVELACE FRONTEND TO DETERMINE code_format
@@ -219,6 +225,8 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         """Regex for code format or None if no code is required."""
         # Do not show the code panel if the integration is just starting up and 
         #    connecting to the panel
+        if self._client.isDisableAllCommands():
+            return None
         if self.isPanelConnected():
             return CodeFormat.NUMBER if self._client.isCodeRequired() else None
         return None    
@@ -253,7 +261,11 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
 
     def alarm_trigger(self, code=None):
         """Send alarm trigger command."""
-        raise NotImplementedError()
+        if not self.isPanelConnected():
+            raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
+        if self._client.isPowerMaster():
+            self._client.sendCommand("Trigger Siren", AlPanelCommand.TRIGGER , code)
+            #self._client.sendCommand("Arm Away", command, code)
 
     def alarm_arm_custom_bypass(self, data=None):
         """Bypass Panel."""

@@ -4,17 +4,6 @@
 ########################################################
 
 #  python bridge.py -address 192.168.X.X -port YYYYY -usb COM1 *>> outty2.txt
-#
-# Get History from panel:     0d 3e 06 80 d2 07 b0 00 00 01 01 0a a4 0a
-# Get Event Log from panel:   0d 3e df 04 28 03 b0 0b 1c 05 13 00 c2 0a
-# Panel Definitions           0d 3e 00 01 10 00 b0 1e 08 01 02 04 d2 0a
-# Zone Definitions            0d 3e 11 03 1e 00 b0 01 01 01 01 01 d9 0a
-# Pin Codes                   0d 3e fa 01 10 00 b0 00 00 00 00 00 05 0a   and
-#                             0d 3e 51 03 08 00 b0 01 01 01 01 01 af 0a
-# Site Information            0d 3e 0a 02 08 00 b0 14 56 50 00 00 42 0a   and
-#                             0d 3e 00 03 01 00 b0 01 01 01 01 01 08 0a
-# Screen Saver                0d 3e 00 17 4b 00 b0 00 00 00 00 00 ae 0a
-# RF Diagnostics              0d 3e da 09 1c 00 b0 00 00 00 00 00 11 0a
 
 import struct
 import re

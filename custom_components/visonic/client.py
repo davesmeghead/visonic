@@ -3,12 +3,9 @@ import asyncio
 from collections import defaultdict
 import logging
 import traceback
-#from time import sleep
 from typing import Callable, List, Union, Any
 import re
-import datetime
 import socket
-#from functools import partial
 from datetime import datetime, timedelta
 from jinja2 import Environment, FileSystemLoader
 from .pyconst import AlEnum, AlTransport, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlSensorDevice, AlLogPanelEvent, AlSensorType, AlSwitchDevice
@@ -19,6 +16,7 @@ from requests import ConnectTimeout, HTTPError
 import voluptuous as vol
 
 from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
+from homeassistant.helpers import entity_platform
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_CODE,
@@ -32,10 +30,10 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, valid_entity_id
 from homeassistant.helpers import config_validation as cv
-#from homeassistant.helpers.dispatcher import dispatcher_send
 from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUser
 
 from .const import (
+    available_emulation_modes,
     ALARM_PANEL_CHANGE_EVENT,
     ALARM_PANEL_ENTITY,
     ALARM_PANEL_LOG_FILE_COMPLETE,
@@ -59,14 +57,11 @@ from .const import (
     CONF_INSTANT_ARM_HOME,
     CONF_AUTO_SYNC_TIME,
     CONF_EEPROM_ATTRIBUTES,
-    CONF_B0_ENABLE_MOTION_PROCESSING,
-    CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,
-    CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
     CONF_DEVICE_BAUD,
     CONF_DEVICE_TYPE,
     CONF_DOWNLOAD_CODE,
     CONF_FORCE_AUTOENROLL,
-    CONF_FORCE_STANDARD,
+    CONF_EMULATION_MODE,
     CONF_LANGUAGE,
     CONF_MOTION_OFF_DELAY,
     CONF_SIREN_SOUNDING,
@@ -79,6 +74,7 @@ from .const import (
     CONF_LOG_XML_FN,
     CONF_RETRY_CONNECTION_COUNT,
     CONF_RETRY_CONNECTION_DELAY,
+    CONF_COMMAND,
     DOMAIN,
     DOMAINDATA,
     NOTIFICATION_ID,
@@ -90,6 +86,8 @@ from .const import (
     AvailableNotifications,
     PIN_REGEX,
     BINARY_SENSOR_STR,
+    IMAGE_SENSOR_STR,
+    MONITOR_SENSOR_STR,
     SWITCH_STR,
     SELECT_STR,
 )
@@ -100,26 +98,11 @@ class PanelCondition(IntEnum):
     CHECK_EVENT_LOG_COMMAND = 13
     CHECK_X10_COMMAND = 14
 
-CLIENT_VERSION = "0.8.6.0"
+CLIENT_VERSION = "0.9.1.0"
 
 MAX_CLIENT_LOG_ENTRIES = 100
 
 _LOGGER = logging.getLogger(__name__)
-
-# the schemas for the HA service calls
-ALARM_SERVICE_EVENTLOG = vol.Schema(
-    {
-        vol.Optional(ATTR_CODE, default=""): cv.string,
-    }
-)
-
-CONF_COMMAND = "command"
-ALARM_SERVICE_COMMAND = vol.Schema(
-    {
-        vol.Required(CONF_COMMAND) : cv.enum(AlPanelCommand),
-        vol.Optional(ATTR_CODE, default=""): cv.string,
-    }
-)
 
 ActionList = (
    "connection", "zoneupdate", "panelupdate", "sirenactive", "panelreset", "pinrejected", "paneltamper", "timeoutdownload", 
@@ -181,6 +164,8 @@ class VisonicClient:
 
         self.sensor_list = list()
         self.x10_list = list()
+        
+        self.DisableAllCommands = False
 
         self.strlog = []
         self.logstate_debug(f"init panel {str(panelident)}  language {str(self.hass.config.language)}   self.config = {self.config}")
@@ -293,13 +278,13 @@ class VisonicClient:
         return False
 
     def isPanelReady(self) -> bool:
-        """Is it a PowerMaster panel"""
+        """Is panel ready"""
         if self.visonicProtocol is not None:
             return self.visonicProtocol.isPanelReady()
         return False
 
     def isPanelTrouble(self) -> bool:
-        """Is it a PowerMaster panel"""
+        """Is panel trouble"""
         if self.visonicProtocol is not None:
             return self.visonicProtocol.isPanelTrouble()
         return False
@@ -308,6 +293,14 @@ class VisonicClient:
         """Force Keypad"""
         return self.toBool(self.config.get(CONF_FORCE_KEYPAD, False))
 
+    def isDisableAllCommands(self):
+        return self.DisableAllCommands
+
+    def isPowerMaster(self) -> bool:
+        if self.visonicProtocol is not None:
+            if self.visonicProtocol.isPowerMaster():
+                return True
+        return False
 
     def isArmHome(self):
         return self.toBool(self.config.get(CONF_ARM_HOME_ENABLED, True))
@@ -385,7 +378,13 @@ class VisonicClient:
     def process_panel_event_log(self, event_log_entry: AlLogPanelEvent):
         """Process a sequence of panel log events."""
         reverse = self.toBool(self.config.get(CONF_LOG_REVERSE))
-        total = min(event_log_entry.total, self.config.get(CONF_LOG_MAX_ENTRIES))
+        total = 0
+        if event_log_entry.total is not None and self.config.get(CONF_LOG_MAX_ENTRIES) is not None:
+            total = min(event_log_entry.total, self.config.get(CONF_LOG_MAX_ENTRIES))
+        elif event_log_entry.total is not None:
+            total = event_log_entry.total
+        elif self.config.get(CONF_LOG_MAX_ENTRIES) is not None:
+            total = self.config.get(CONF_LOG_MAX_ENTRIES)
         current = event_log_entry.current  # only used for output and not for logic
         if reverse:
             current = total + 1 - event_log_entry.current
@@ -554,24 +553,26 @@ class VisonicClient:
         self.logstate_debug("VS: X10 Switch list %s", dev)
         if dev.isEnabled() and dev.getDeviceID() not in self.exclude_x10_list:
             dev.onChange(self.onSwitchChange)
-            if dev not in self.hass.data[DOMAIN][SWITCH_STR]:
-                self.hass.data[DOMAIN][SWITCH_STR].append(dev)
+            if dev not in self.hass.data[DOMAIN][self.entry.entry_id][SWITCH_STR]:
+                self.hass.data[DOMAIN][self.entry.entry_id][SWITCH_STR].append(dev)
                 self.x10_list.append(dev)
                 if self.switch_task is None or self.switch_task.done():
                      self.switch_task = self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, SWITCH_STR))
-                self.logstate_debug(f"Visonic: {len(self.hass.data[DOMAIN][SWITCH_STR])} switches")
+                #self.logstate_debug(f"Visonic: {len(self.hass.data[DOMAIN][self.entry.entry_id][SWITCH_STR])} switches")
             else:
                 self.logstate_debug(f"X10 Device {dev.getDeviceID()} already in the list")
 
     def setupAlarmPanel(self):
-        self.hass.async_create_task(
-            self.hass.config_entries.async_forward_entry_setup(
-                self.entry, ALARM_PANEL_ENTITY
-            )
-        )
+        if self.DisableAllCommands:
+            self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, MONITOR_SENSOR_STR))
+        else:
+            self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, ALARM_PANEL_ENTITY))
 
     def onNewSensor(self, sensor: AlSensorDevice):
         """Process a new sensor."""
+        from .binary_sensor import VisonicBinarySensor
+        from .select import VisonicSelect
+        
         # Check to ensure variables are set correctly
         if self.hass is None:
             self.logstate_warning("Visonic attempt to add sensor when hass is undefined")
@@ -585,22 +586,46 @@ class VisonicClient:
             return
         if sensor.getDeviceID() is None:
             self.logstate_warning("Sensor callback but Sensor Device ID is None")
-        else:
-            if sensor.getDeviceID() not in self.exclude_sensor_list:
-                sensor.onChange(self.onSensorChange)
-                if sensor not in self.hass.data[DOMAIN][BINARY_SENSOR_STR]:
-                    self.sensor_list.append(sensor)
-                    self.hass.data[DOMAIN][BINARY_SENSOR_STR].append(sensor)
+            return
+        if sensor.getDeviceID() not in self.exclude_sensor_list:
+            sensor.onChange(self.onSensorChange)
+            if sensor not in self.sensor_list:
+                self.sensor_list.append(sensor)
+                #self.logstate_warning(f"Adding Sensor to list {sensor}")
+
+                platform_bin_sen = None
+                platform_select = None
+                
+                platforms = entity_platform.async_get_platforms(self.hass, "visonic")
+                for p in platforms:
+                    if p.config_entry.entry_id == self.entry.entry_id:
+                        #_LOGGER.debug(f"onNewSensor platform is {p}")
+                        if p.domain == BINARY_SENSOR_STR:
+                            platform_bin_sen = p
+                        if p.domain == SELECT_STR:
+                            platform_select = p
+                
+                #if self.sensor_task is not None and self.sensor_task.done():
+                if platform_bin_sen is not None and platform_select is not None:
+                    # We have already called for the config to set up the first set of sensors so these are manually added on discovery
+                    self.hass.async_create_task(platform_bin_sen.async_add_entities([ VisonicBinarySensor(self.hass, self, sensor, self.entry) ], False))
+                    if not self.DisableAllCommands: # If all commands are disabled then the use is not able to call the service to retrieve an image
+                        self.hass.async_create_task(platform_select.async_add_entities([ VisonicSelect(self.hass, self, sensor) ], False))
+                    
+                else:
+                    # This triggers the platform config to be setup with the initial set of sensors
+                    self.hass.data[DOMAIN][self.entry.entry_id][BINARY_SENSOR_STR].append(sensor)
+                    self.hass.data[DOMAIN][self.entry.entry_id][SELECT_STR].append(sensor)
+         
                     if self.sensor_task is None or self.sensor_task.done():
                         self.sensor_task = self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, BINARY_SENSOR_STR))
-                if sensor not in self.hass.data[DOMAIN][SELECT_STR]:
-                    self.hass.data[DOMAIN][SELECT_STR].append(sensor)
                     if self.select_task is None or self.select_task.done():
-                        self.select_task = self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, SELECT_STR))
-                else:
-                    self.logstate_debug(f"Sensor {sensor.getDeviceID()} already in the list")
+                        if not self.DisableAllCommands:
+                            self.select_task = self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, SELECT_STR))
             else:
-                self.logstate_debug(f"Sensor {sensor.getDeviceID()} in exclusion list")
+                self.logstate_debug(f"Sensor {sensor.getDeviceID()} already in the lists")
+        else:
+            self.logstate_debug(f"Sensor {sensor.getDeviceID()} in exclusion list")
 
     def fireHAEvent(self, ev: dict):
         ev[PANEL_ATTRIBUTE_NAME] = self.getPanelID()
@@ -714,11 +739,30 @@ class VisonicClient:
 
     def getConfigData(self) -> PanelConfig:
         """Create a dictionary full of the configuration data."""
+
+        v = self.config.get(CONF_EMULATION_MODE, available_emulation_modes[0])        
+        self.ForceStandardMode = v == available_emulation_modes[1]
+        self.DisableAllCommands = v == available_emulation_modes[2]
+        self.CompleteReadOnly = v == available_emulation_modes[3]
+
+        if self.CompleteReadOnly:
+            self.DisableAllCommands = True
+        if self.DisableAllCommands:
+            self.ForceStandardMode = True
+        # By the time we get here there are 4 combinations of self.CompleteReadOnly, self.DisableAllCommands and self.ForceStandardMode
+        #     All 3 are False --> Try to get to Powerlink 
+        #     self.ForceStandardMode is True --> Force Standard Mode, the panel can still be armed and disarmed
+        #     self.ForceStandardMode and self.DisableAllCommands are True --> The integration interacts with the panel but commands such as arm/disarm/log/bypass are not allowed
+        #     All 3 are True  --> Full readonly, no data sent to the panel
+        # The 2 if statements above ensure these are the only supported combinations.
+
+        self.logstate_debug(f"Emulation Mode {self.config.get(CONF_EMULATION_MODE)}   so setting    ForceStandard to {self.ForceStandardMode}     DisableAllCommands to {self.DisableAllCommands}     CompleteReadOnly to {self.CompleteReadOnly}")
+
         return {
             AlConfiguration.DownloadCode: self.config.get(CONF_DOWNLOAD_CODE, ""),
-            AlConfiguration.ForceStandard: self.toBool(
-                self.config.get(CONF_FORCE_STANDARD, False)
-            ),
+            AlConfiguration.ForceStandard: self.ForceStandardMode,
+            AlConfiguration.DisableAllCommands: self.DisableAllCommands,
+            AlConfiguration.CompleteReadOnly: self.CompleteReadOnly,
             AlConfiguration.AutoEnroll: self.toBool(
                 self.config.get(CONF_FORCE_AUTOENROLL, True)
             ),
@@ -732,15 +776,6 @@ class VisonicClient:
             ),
             AlConfiguration.EEPROMAttributes: self.toBool(
                 self.config.get(CONF_EEPROM_ATTRIBUTES, False)
-            ),
-            AlConfiguration.B0_Enable: self.toBool(
-                self.config.get(CONF_B0_ENABLE_MOTION_PROCESSING, False)
-            ),
-            AlConfiguration.B0_Min_Interval_Time: self.config.get(
-                CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 5
-            ),
-            AlConfiguration.B0_Max_Wait_Time: self.config.get(
-                CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 30
             ),
         }
 
@@ -939,8 +974,10 @@ class VisonicClient:
         if len(self.sensor_list) > 0:
             self.logstate_debug("Unloading Sensors")
             # unload the select and sensors
-            await self.hass.config_entries.async_forward_entry_unload(self.entry, SELECT_STR)
+            if not self.DisableAllCommands:
+                await self.hass.config_entries.async_forward_entry_unload(self.entry, SELECT_STR)
             await self.hass.config_entries.async_forward_entry_unload(self.entry, BINARY_SENSOR_STR)
+            #await self.hass.config_entries.async_forward_entry_unload(self.entry, IMAGE_SENSOR_STR)
         else:
             self.logstate_debug("No Sensors to Unload")
         
@@ -954,9 +991,14 @@ class VisonicClient:
         self.sensor_list = list()
         self.x10_list = list()
         
-        self.logstate_debug("Unloading Alarm Control Panel")
-        # unload the alarm panel
-        await self.hass.config_entries.async_forward_entry_unload(self.entry, ALARM_PANEL_ENTITY)
+        if self.DisableAllCommands:
+            self.logstate_debug("Unloading Alarm Panel Sensor")
+            # unload the alarm panel
+            await self.hass.config_entries.async_forward_entry_unload(self.entry, MONITOR_SENSOR_STR)
+        else:
+            self.logstate_debug("Unloading Alarm Control Panel")
+            # unload the alarm panel
+            await self.hass.config_entries.async_forward_entry_unload(self.entry, ALARM_PANEL_ENTITY)
 
         # cancel the task from within HA
         if self.visonicTask is not None:
@@ -1168,61 +1210,87 @@ class VisonicClient:
             self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, message + " " + self.messageDict[reason])
 
     def sendCommand(self, message : str, command : AlPanelCommand, code : str):
-        codeRequired = self.isCodeRequired()
-        if (codeRequired and code is not None) or not codeRequired:
-            pcode = self.decode_code(code) if codeRequired or (code is not None and len(code) > 0) else ""
-            vp = self.visonicProtocol
-            if vp is not None:
-                self.logstate_debug("Send command to Visonic Alarm Panel: %s", command)
+        if not self.DisableAllCommands:
+            codeRequired = self.isCodeRequired()
+            if (codeRequired and code is not None) or not codeRequired:
+                pcode = self.decode_code(code) if codeRequired or (code is not None and len(code) > 0) else ""
+                vp = self.visonicProtocol
+                if vp is not None:
+                    isValidPL, code = self.pmGetPin(code = pcode, forcedKeypad = self.isForceKeypad())
 
-                isValidPL, code = self.pmGetPin(code = pcode, forcedKeypad = self.isForceKeypad())
+                    if command == AlPanelCommand.DISARM or command == AlPanelCommand.ARM_HOME or command == AlPanelCommand.ARM_AWAY or command == AlPanelCommand.ARM_HOME_INSTANT or command == AlPanelCommand.ARM_AWAY_INSTANT:
 
-                #if not isValidPL and self.isArmWithoutCode() and command != AlPanelCommand.DISARM:
-                #    # if we dont have code codes and we can arm without a code and we're arming and arming is allowed
-                #    isValidPL = True
-                #    code = "0000"
+                        self.logstate_debug("Send command to Visonic Alarm Panel: %s", command)
 
-                if isValidPL:
-                    if (command == AlPanelCommand.DISARM and self.isRemoteDisarm()) or (
-                        command != AlPanelCommand.DISARM and self.isRemoteArm()):
-                        retval = vp.requestArm(command, code)
-                        self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request Arm/Disarm")
+                        if isValidPL:
+                            if (command == AlPanelCommand.DISARM and self.isRemoteDisarm()) or (
+                                command != AlPanelCommand.DISARM and self.isRemoteArm()):
+                                retval = vp.requestPanelCommand(command, code)
+                                self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request Arm/Disarm")
+                            else:
+                                self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_USER_CONFIG_PREVENTED , command.name, "Request Arm/Disarm")
+                        else:
+                            self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, command.name, "Request Arm/Disarm")
+
+                    elif vp.isPowerMaster() and (command == AlPanelCommand.MUTE or command == AlPanelCommand.TRIGGER or command == AlPanelCommand.FIRE or command == AlPanelCommand.EMERGENCY or command == AlPanelCommand.PANIC):
+                        if isValidPL:
+                            self.logstate_debug("Send command to Visonic Alarm Panel: %s", command)
+                            retval = vp.requestPanelCommand(command, code)
+                            self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request PowerMaster Panel Command")
+                        else:
+                            self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, command.name, "Request PowerMaster Panel Command")
                     else:
-                        self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_USER_CONFIG_PREVENTED , command.name, "Request Arm/Disarm")
+                        self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, not sent to panel")
                 else:
-                    self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, command.name, "Request Arm/Disarm")
+                    self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, not sent to panel")
             else:
-                self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, not sent to panel")
+                self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, an alarm code is required")
         else:
-            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, an alarm code is required")
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
     def sendBypass(self, devid: int, bypass: bool, code: str) -> AlCommandStatus:
         """Send the bypass command to the panel."""
-        vp = self.visonicProtocol
-        if vp is not None:
-            if self.toBool(self.config.get(CONF_ENABLE_SENSOR_BYPASS, False)):
-                dpin = self.decode_code(code)
-                isValidPL, code = self.pmGetPinSimple(code = dpin)
-                if isValidPL:
-                    # The device id in the range 1 to N
-                    retval = vp.setSensorBypassState(devid, bypass, code)
-                    #retval = AlCommandStatus.FAIL_INVALID_CODE
+        if not self.DisableAllCommands:
+            vp = self.visonicProtocol
+            if vp is not None:
+                if self.toBool(self.config.get(CONF_ENABLE_SENSOR_BYPASS, False)):
+                    dpin = self.decode_code(code)
+                    isValidPL, code = self.pmGetPinSimple(code = dpin)
+                    if isValidPL:
+                        # The device id in the range 1 to N
+                        retval = vp.setSensorBypassState(devid, bypass, code)
+                        #retval = AlCommandStatus.FAIL_INVALID_CODE
+                    else:
+                        retval = AlCommandStatus.FAIL_INVALID_CODE
                 else:
-                    retval = AlCommandStatus.FAIL_INVALID_CODE
+                    retval = AlCommandStatus.FAIL_USER_CONFIG_PREVENTED
             else:
-                retval = AlCommandStatus.FAIL_USER_CONFIG_PREVENTED
-        else:
-            retval = AlCommandStatus.FAIL_PANEL_NO_CONNECTION
+                retval = AlCommandStatus.FAIL_PANEL_NO_CONNECTION
 
-        self.generateBusEventReason(PanelCondition.CHECK_BYPASS_COMMAND, retval, "Bypass", "Sensor Arm State")
-        return retval
+            self.generateBusEventReason(PanelCondition.CHECK_BYPASS_COMMAND, retval, "Bypass", "Sensor Arm State")
+            return retval
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+        return AlCommandStatus.FAIL_USER_CONFIG_PREVENTED
 
     def setX10(self, ident: int, state: AlX10Command):
         """Send an X10 command to the panel."""
-        # ident in range 0 to 15, state can be one of "off", "on", "dim", "brighten"
-        if self.visonicProtocol is not None:
-            retval = self.visonicProtocol.setX10(ident, state)
-            self.generateBusEventReason(PanelCondition.CHECK_X10_COMMAND, retval, "X10", "Send X10 Command")
+        if not self.DisableAllCommands:
+            # ident in range 0 to 15, state can be one of "off", "on", "dim", "brighten"
+            if self.visonicProtocol is not None:
+                retval = self.visonicProtocol.setX10(ident, state)
+                self.generateBusEventReason(PanelCondition.CHECK_X10_COMMAND, retval, "X10", "Send X10 Command")
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+
+    #def getJPG(self, ident: int, count : int):
+    #    """Send a request to get the jpg images from a camera """
+    #    if not self.DisableAllCommands:
+    #        # ident in range 1 to 64
+    #        if self.visonicProtocol is not None:
+    #            retval = self.visonicProtocol.getJPG(ident, count)
+    #    else:
+    #        self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
     def decode_code(self, data) -> str:
         """Decode the alarm code."""
@@ -1285,143 +1353,214 @@ class VisonicClient:
 
     async def service_panel_eventlog(self, call):
         """Service call to retrieve the event log from the panel. This currently just gets dumped in the HA log file."""
-        self.logstate_info("Received event log request")
-        if not self.isPanelConnected():
-            raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
+        if not self.DisableAllCommands:
+            self.logstate_info("Received event log request")
+            if not self.isPanelConnected():
+                raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
 
-        if call.context.user_id:
-            await self.checkUserPermission(call, POLICY_READ, ALARM_PANEL_ENTITY + "." + self.getAlarmPanelUniqueIdent())
+            if call.context.user_id:
+                await self.checkUserPermission(call, POLICY_READ, ALARM_PANEL_ENTITY + "." + self.getAlarmPanelUniqueIdent())
 
-        self.logstate_debug("Received event log request - user approved")
-        #if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
-        if isinstance(call.data, dict):
-            if self.visonicProtocol is not None:
-                code = None
-                if ATTR_CODE in call.data:
-                    code = call.data[ATTR_CODE]
-                    # If the code is defined then it must be a 4 digit string
-                    if len(code) > 0 and not re.search(PIN_REGEX, code):
-                        code = "0000"
-                        
-                pcode = self.decode_code(code)
-                isValidPL, code = self.pmGetPinSimple(code = pcode)
-                if isValidPL:
-                    self.logstate_debug("Sending event log request to panel")
-                    retval = self.visonicProtocol.getEventLog(code)
-                    self.generateBusEventReason(PanelCondition.CHECK_EVENT_LOG_COMMAND, retval, "EventLog", "Event Log Request")
-                else:
-                    self.generateBusEventReason(PanelCondition.CHECK_EVENT_LOG_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, "EventLog", "Event Log Request")
-            else:
-                self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending Event Log Request Command, not sent to panel")
-        else:
-            self.logstate_warning(f"Not making event log request {type(call.data)} {call.data}")
-
-    # Service alarm_control_panel.alarm_sensor_bypass
-    # {"entity_id": "binary_sensor.visonic_z01", "bypass":"True", "code":"1234" }
-    def sensor_bypass(self, eid : str, bypass : bool, code : str):
-        """Bypass individual sensors."""
-        # This function concerns itself with bypassing a sensor and the visonic panel interaction
-
-        armcode = self.getPanelStatus()
-        if armcode is None or armcode == AlPanelStatus.UNKNOWN:
-            self.createNotification(AvailableNotifications.CONNECTION_PROBLEM, "Attempt to bypass sensor, check panel connection")
-        else:
-            if armcode == AlPanelStatus.DISARMED:
-                # If currently Disarmed
-                mybpstate = self.hass.states.get(eid)
-                if mybpstate is not None:
-                    if DEVICE_ATTRIBUTE_NAME in mybpstate.attributes and PANEL_ATTRIBUTE_NAME in mybpstate.attributes:
-                        devid = mybpstate.attributes[DEVICE_ATTRIBUTE_NAME]
-                        #self.logstate_debug("Attempt to bypass sensor mybpstate.attributes = {0}".format(mybpstate.attributes))
-                        panel = mybpstate.attributes[PANEL_ATTRIBUTE_NAME]
-                        if panel == self.getPanelID(): # This should be done in _init_ but check again to make sure as its a critical operation
-                            if devid >= 1 and devid <= 64:
-                                if bypass:
-                                    self.logstate_debug("Attempt to bypass sensor device id = %s", str(devid))
-                                else:
-                                    self.logstate_debug("Attempt to restore (arm) sensor device id = %s", str(devid))
-                                self.sendBypass(devid, bypass, code)
-                            else:
-                                self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, incorrect device {str(devid)} for entity {eid}")
-                        else:
-                            self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, device {str(devid)} but entity {eid} not connected to this panel")
-                    else:
-                        self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, incorrect entity {eid}")
-                else:
-                    self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, unknown device state for entity {eid}")
-            else:
-                self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Visonic Alarm Panel: Attempt to bypass sensor for panel {self.getPanelID()}, panel needs to be in the disarmed state")
-
-    def dump_dict(self, d):
-        for key in d:
-            self.logstate_debug(f"  {key} = {d[key]}")
-
-
-    async def service_sensor_bypass(self, call):
-        """Service call to bypass a sensor in the panel."""
-        self.logstate_debug("Received sensor bypass request")
-        if not self.isPanelConnected():
-            raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
-
-        # if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
-        if isinstance(call.data, dict):
-            self.logstate_debug("  Sensor_bypass = %s", str(type(call.data)))
-            self.dump_dict(call.data)
-            if ATTR_ENTITY_ID in call.data:
-                eid = str(call.data[ATTR_ENTITY_ID])
-                if not eid.startswith(BINARY_SENSOR_STR + "."):
-                    eid = BINARY_SENSOR_STR + "." + eid
-                if valid_entity_id(eid):
-                    if call.context.user_id:
-                        await self.checkUserPermission(call, POLICY_CONTROL, call.data[ATTR_ENTITY_ID])
-                    
-                    bypass: boolean = False
-                    if ATTR_BYPASS in call.data:
-                        bypass = call.data[ATTR_BYPASS]
-
+            self.logstate_debug("Received event log request - user approved")
+            #if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
+            if isinstance(call.data, dict):
+                if self.visonicProtocol is not None:
                     code = None
                     if ATTR_CODE in call.data:
                         code = call.data[ATTR_CODE]
                         # If the code is defined then it must be a 4 digit string
                         if len(code) > 0 and not re.search(PIN_REGEX, code):
                             code = "0000"
-
-                    self.sensor_bypass(eid, bypass, code)
+                            
+                    pcode = self.decode_code(code)
+                    isValidPL, code = self.pmGetPinSimple(code = pcode)
+                    if isValidPL:
+                        self.logstate_debug("Sending event log request to panel")
+                        retval = self.visonicProtocol.getEventLog(code)
+                        self.generateBusEventReason(PanelCondition.CHECK_EVENT_LOG_COMMAND, retval, "EventLog", "Event Log Request")
+                    else:
+                        self.generateBusEventReason(PanelCondition.CHECK_EVENT_LOG_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, "EventLog", "Event Log Request")
                 else:
-                    self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, invalid entity {eid}")
+                    self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending Event Log Request Command, not sent to panel")
+            else:
+                self.logstate_warning(f"Not making event log request {type(call.data)} {call.data}")
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+
+    # Service alarm_control_panel.alarm_sensor_bypass
+    # {"entity_id": "binary_sensor.visonic_z01", "bypass":"True", "code":"1234" }
+    def sensor_bypass(self, eid : str, bypass : bool, code : str):
+        """Bypass individual sensors."""
+        if not self.DisableAllCommands:
+            # This function concerns itself with bypassing a sensor and the visonic panel interaction
+
+            armcode = self.getPanelStatus()
+            if armcode is None or armcode == AlPanelStatus.UNKNOWN:
+                self.createNotification(AvailableNotifications.CONNECTION_PROBLEM, "Attempt to bypass sensor, check panel connection")
+            else:
+                if armcode == AlPanelStatus.DISARMED:
+                    # If currently Disarmed
+                    mybpstate = self.hass.states.get(eid)
+                    if mybpstate is not None:
+                        if DEVICE_ATTRIBUTE_NAME in mybpstate.attributes and PANEL_ATTRIBUTE_NAME in mybpstate.attributes:
+                            devid = mybpstate.attributes[DEVICE_ATTRIBUTE_NAME]
+                            #self.logstate_debug("Attempt to bypass sensor mybpstate.attributes = {0}".format(mybpstate.attributes))
+                            panel = mybpstate.attributes[PANEL_ATTRIBUTE_NAME]
+                            if panel == self.getPanelID(): # This should be done in _init_ but check again to make sure as its a critical operation
+                                if devid >= 1 and devid <= 64:
+                                    if bypass:
+                                        self.logstate_debug("Attempt to bypass sensor device id = %s", str(devid))
+                                    else:
+                                        self.logstate_debug("Attempt to restore (arm) sensor device id = %s", str(devid))
+                                    self.sendBypass(devid, bypass, code)
+                                else:
+                                    self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, incorrect device {str(devid)} for entity {eid}")
+                            else:
+                                self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, device {str(devid)} but entity {eid} not connected to this panel")
+                        else:
+                            self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, incorrect entity {eid}")
+                    else:
+                        self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, unknown device state for entity {eid}")
+                else:
+                    self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Visonic Alarm Panel: Attempt to bypass sensor for panel {self.getPanelID()}, panel needs to be in the disarmed state")
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+
+    # Service alarm_control_panel.alarm_sensor_bypass
+    # {"entity_id": "binary_sensor.visonic_z01", "bypass":"True", "code":"1234" }
+    def sensor_update_image(self, eid : str):
+        """Bypass individual sensors."""
+        self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Command to get image is Disabled")
+        #if not self.DisableAllCommands:
+        #    # This function concerns itself with bypassing a sensor and the visonic panel interaction
+        #    mybpstate = self.hass.states.get(eid)
+        #    if mybpstate is not None:
+        #        if DEVICE_ATTRIBUTE_NAME in mybpstate.attributes and PANEL_ATTRIBUTE_NAME in mybpstate.attributes:
+        #            devid = mybpstate.attributes[DEVICE_ATTRIBUTE_NAME]
+        #            #self.logstate_debug("Attempt to bypass sensor mybpstate.attributes = {0}".format(mybpstate.attributes))
+        #            panel = mybpstate.attributes[PANEL_ATTRIBUTE_NAME]
+        #            if panel == self.getPanelID(): # This should be done in _init_ but check again to make sure as its a critical operation
+        #                if devid >= 1 and devid <= 64:
+        #                    self.getJPG(devid, 4)  # The 4 is the number of images to retrieve but it doesnt work
+        #                else:
+        #                    self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, incorrect device {str(devid)} for entity {eid}")
+        #            else:
+        #                self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, device {str(devid)} but entity {eid} not connected to this panel")
+        #        else:
+        #            self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, incorrect entity {eid}")
+        #    else:
+        #        self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, unknown device state for entity {eid}")
+        #else:
+        #    self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+
+
+    def dump_dict(self, d):
+        for key in d:
+            self.logstate_debug(f"  {key} = {d[key]}")
+
+    async def service_sensor_image(self, call):
+        """Service call to bypass a sensor in the panel."""
+        self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Command to get image is Disabled")
+#        if not self.DisableAllCommands:
+#            self.logstate_debug("Received sensor image update request")
+#            if not self.isPanelConnected():
+#                raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
+#
+#            # if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
+#            if isinstance(call.data, dict):
+#                self.logstate_debug("  Sensor_image = %s", str(type(call.data)))
+#                self.dump_dict(call.data)
+#                if ATTR_ENTITY_ID in call.data:
+#                    eid = str(call.data[ATTR_ENTITY_ID])
+#                    if not eid.startswith(IMAGE_SENSOR_STR + "."):
+#                        eid = IMAGE_SENSOR_STR + "." + eid
+#                    if valid_entity_id(eid):
+#                        if call.context.user_id:
+#                            await self.checkUserPermission(call, POLICY_CONTROL, call.data[ATTR_ENTITY_ID])
+#                        
+#                        self.sensor_update_image(eid)
+#                    else:
+#                        self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, invalid entity {eid}")
+#                else:
+#                    self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
+#            else:
+#                self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
+#        else:
+#            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+
+
+    async def service_sensor_bypass(self, call):
+        """Service call to bypass a sensor in the panel."""
+        if not self.DisableAllCommands:
+            self.logstate_debug("Received sensor bypass request")
+            if not self.isPanelConnected():
+                raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
+
+            # if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
+            if isinstance(call.data, dict):
+                self.logstate_debug("  Sensor_bypass = %s", str(type(call.data)))
+                self.dump_dict(call.data)
+                if ATTR_ENTITY_ID in call.data:
+                    eid = str(call.data[ATTR_ENTITY_ID])
+                    if not eid.startswith(BINARY_SENSOR_STR + "."):
+                        eid = BINARY_SENSOR_STR + "." + eid
+                    if valid_entity_id(eid):
+                        if call.context.user_id:
+                            await self.checkUserPermission(call, POLICY_CONTROL, call.data[ATTR_ENTITY_ID])
+                        
+                        bypass: boolean = False
+                        if ATTR_BYPASS in call.data:
+                            bypass = call.data[ATTR_BYPASS]
+
+                        code = None
+                        if ATTR_CODE in call.data:
+                            code = call.data[ATTR_CODE]
+                            # If the code is defined then it must be a 4 digit string
+                            if len(code) > 0 and not re.search(PIN_REGEX, code):
+                                code = "0000"
+
+                        self.sensor_bypass(eid, bypass, code)
+                    else:
+                        self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, invalid entity {eid}")
+                else:
+                    self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
             else:
                 self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
         else:
-            self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
 
     async def service_panel_command(self, call):
         """Service call to send a command to the panel."""
-        self.logstate_info("Received command request")
-        if not self.isPanelConnected():
-            raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
+        if not self.DisableAllCommands:
+            self.logstate_info("Received command request")
+            if not self.isPanelConnected():
+                raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
 
-        if call.context.user_id:
-            await self.checkUserPermission(call, POLICY_CONTROL, ALARM_PANEL_ENTITY + "." + self.getAlarmPanelUniqueIdent())
+            if call.context.user_id:
+                await self.checkUserPermission(call, POLICY_CONTROL, ALARM_PANEL_ENTITY + "." + self.getAlarmPanelUniqueIdent())
 
-        self.logstate_debug("Received command request - user approved")
-        #if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
-        if isinstance(call.data, dict):
-            command = call.data[CONF_COMMAND]
-            self.logstate_debug(f"   Command {command}")
-            code = None
-            if ATTR_CODE in call.data:
-                code = call.data[ATTR_CODE]
-                # If the code is defined then it must be a 4 digit string
-                if len(code) > 0 and not re.search(PIN_REGEX, code):
-                    code = "0000"
-            try:
-                self.sendCommand("Alarm Service Call " + str(command), command, code)
-            except Exception as ex:
-                self.logstate_warning("Not making command request {0} {1}  Exception {2}".format(type(call.data), call.data, ex) )
-                #self.logstate_debug(ex)
+            self.logstate_debug("Received command request - user approved")
+            #if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
+            if isinstance(call.data, dict):
+                command = call.data[CONF_COMMAND]
+                self.logstate_debug(f"   Command {command}")
+                code = None
+                if ATTR_CODE in call.data:
+                    code = call.data[ATTR_CODE]
+                    # If the code is defined then it must be a 4 digit string
+                    if len(code) > 0 and not re.search(PIN_REGEX, code):
+                        code = "0000"
+                try:
+                    command_e = AlPanelCommand.value_of(command.upper());
+                    self.sendCommand("Alarm Service Call " + str(command_e), command_e, code)
+                except Exception as ex:
+                    self.logstate_warning("Not making command request {0} {1}  Exception {2}".format(type(call.data), call.data, ex) )
+                    #self.logstate_debug(ex)
+            else:
+                self.logstate_debug(f"Not making command request {type(call.data)} {call.data}")
         else:
-            self.logstate_debug(f"Not making command request {type(call.data)} {call.data}")
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
     async def connect(self):
         """Connect to the alarm panel using the pyvisonic library."""

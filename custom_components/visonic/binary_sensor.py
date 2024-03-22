@@ -3,7 +3,6 @@
 import logging
 from datetime import datetime
 from typing import Callable, List
-
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 
 from homeassistant.config_entries import ConfigEntry
@@ -14,48 +13,54 @@ from homeassistant.const import (
     ATTR_TRIPPED,
 )
 
-#from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity import Entity
 from homeassistant.core import HomeAssistant
 from homeassistant.util import slugify
+
 from .pyconst import AlSensorDevice, AlSensorType, AlSensorCondition
 from .client import VisonicClient
-
-from .const import DOMAIN, SensorEntityFeature, DOMAINCLIENT, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, BINARY_SENSOR_STR
+from .const import DOMAIN, SensorEntityFeature, DOMAINCLIENT, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, BINARY_SENSOR_STR, IMAGE_SENSOR_STR
 
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    async_add_entities: Callable[[List[Entity], bool], None],
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Visonic Alarm Binary Sensors."""
 
-    _LOGGER.debug("************* binary sensor async_setup_entry **************")
+    #_LOGGER.debug("************* binary sensor async_setup_entry **************")
 
     if DOMAIN in hass.data:
         #_LOGGER.debug("   In binary sensor async_setup_entry")
         client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
         sensors = [
-            VisonicSensor(client, device) for device in hass.data[DOMAIN][BINARY_SENSOR_STR]
+            VisonicBinarySensor(hass, client, device, entry) for device in hass.data[DOMAIN][entry.entry_id][BINARY_SENSOR_STR]
         ]
         # empty the list as we have copied the entries so far in to sensors
-        hass.data[DOMAIN][BINARY_SENSOR_STR] = list()
+        hass.data[DOMAIN][entry.entry_id][BINARY_SENSOR_STR] = list()
         async_add_entities(sensors, True)
 
 
 #   Each Sensor in Visonic Alarms can be Armed/Bypassed individually
-class VisonicSensor(BinarySensorEntity):
+class VisonicBinarySensor(BinarySensorEntity):
     """Representation of a Visonic Sensor."""
 
-    def __init__(self, client: VisonicClient, visonic_device: AlSensorDevice):
+    image_task_log = {}
+
+    def __init__(self, hass, client: VisonicClient, sensor: AlSensorDevice, entry: ConfigEntry):
         """Initialize the sensor."""
         #_LOGGER.debug("   In binary sensor VisonicSensor initialisation")
-        self._visonic_device = visonic_device
-        self._visonic_device.onChange(self.onChange)
+        self.hass = hass
+        self.client = client
+        self.entry = entry
 
-        self._dname = visonic_device.createFriendlyName()
+        self._visonic_device = sensor
+
+        self._dname = sensor.createFriendlyName()
         pname = client.getMyString()
         self._name = pname.lower() + self._dname.lower()
         #_LOGGER.debug("   In binary sensor VisonicSensor friendlyname : " + str(self._name))
@@ -65,17 +70,45 @@ class VisonicSensor(BinarySensorEntity):
         # Append device id to prevent name clashes in HA.
         self._current_value = (self._visonic_device.isTriggered() or self._visonic_device.isOpen())
         self._is_available = self._visonic_device.isEnrolled()
-        #self._dispatcher = client.getDispatcher()
+        
+        #self.isitacamera = False
+        #if sensor.getSensorType() == AlSensorType.CAMERA:
+        #   VisonicBinarySensor.createImageEntity(self.hass, self.entry, self.client, sensor)           
+        #else:
+        #   self.isitacamera = True
 
-#    async def async_added_to_hass(self):
-#        """Register callbacks."""
-#        # Register for dispatcher calls to update the state
-#        self.async_on_remove(
-#            async_dispatcher_connect(
-#                self.hass, self._dispatcher, self.onChange
-#            )
-#        )
+        self._visonic_device.onChange(self.onChange)
 
+    # This static method creates a new image entity for a Camera Sensor
+    # I did think about doing this in the client but it made more sense here
+    @staticmethod
+    def createImageEntity(hass: HomeAssistant, entry: ConfigEntry, client: VisonicClient, sensor: AlSensorDevice):
+        from .image import VisonicImage
+
+        platform_images = None
+        
+        platforms = entity_platform.async_get_platforms(hass, "visonic")
+        for p in platforms:
+            if p.config_entry.entry_id == entry.entry_id:
+                #_LOGGER.debug(f"createImageEntity platform is {p}")
+                if p.domain == IMAGE_SENSOR_STR:
+                    platform_images = p
+         
+        if platform_images is not None:
+            hass.async_create_task(platform_images.async_add_entities([ VisonicImage(hass, client, sensor) ], False))
+            #_LOGGER.debug(f"createImageEntity platform is {platform_images} created add entities task")
+        else:
+            hass.data[DOMAIN][entry.entry_id][IMAGE_SENSOR_STR].append(sensor)
+            #_LOGGER.debug(f"createImageEntity creating async_forward_entry_setup task {len(hass.data[DOMAIN][entry.entry_id][IMAGE_SENSOR_STR])}")
+            image_task = None
+            if entry.entry_id in VisonicBinarySensor.image_task_log:
+                image_task = VisonicBinarySensor.image_task_log[entry.entry_id]
+            #_LOGGER.debug(f"createImageEntity creating async_forward_entry_setup task {len(hass.data[DOMAIN][entry.entry_id][IMAGE_SENSOR_STR])}    {entry.entry_id}     {image_task}")
+            if image_task is None or image_task.done():
+                image_task = hass.async_create_task(hass.config_entries.async_forward_entry_setup(entry, IMAGE_SENSOR_STR))
+                VisonicBinarySensor.image_task_log[entry.entry_id] = image_task
+                #_LOGGER.debug(f"createImageEntity created async_forward_entry_setup task         {entry.entry_id}     {image_task}")
+ 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
@@ -88,8 +121,12 @@ class VisonicSensor(BinarySensorEntity):
         """Call on any change to the sensor."""
         # the sensor parameter is the same as self._visonic_device, but it's a generic callback handler that cals this function
         # Update the current value based on the device state
-        #_LOGGER.debug(f"   In binary sensor VisonicSensor onchange {self._visonic_device}")
+        #_LOGGER.debug(f"   In binary sensor VisonicSensor onchange {self._visonic_device}   self.isitacamera={self.isitacamera}")
         if self._visonic_device is not None:
+            #if self.isitacamera and sensor.getSensorType() == AlSensorType.CAMERA:
+            #    VisonicBinarySensor.createImageEntity(self.hass, self.entry, self.client, sensor) 
+            #    self.isitacamera = False
+        
             self._current_value = (self._visonic_device.isTriggered() or self._visonic_device.isOpen())
             self._is_available = self._visonic_device.isEnrolled()
             #_LOGGER.debug(f"   In binary sensor VisonicSensor onchange self._is_available = {self._is_available}    self._current_value = {self._current_value}")
@@ -129,11 +166,9 @@ class VisonicSensor(BinarySensorEntity):
                 "identifiers": {(DOMAIN, self._name)},
                 "name": f"Visonic Sensor ({self._dname})",
                 "model": self._visonic_device.getSensorModel(),
-                #"via_device": (DOMAIN, self._uniqueName),
             }
         return { 
                  "manufacturer": "Visonic", 
-                 #"via_device": (DOMAIN, self._uniqueName),
             }
 
     @property

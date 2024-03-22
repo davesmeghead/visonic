@@ -35,15 +35,12 @@ from .const import (
     CONF_INSTANT_ARM_HOME,
     CONF_AUTO_SYNC_TIME,
     CONF_EEPROM_ATTRIBUTES,
-    CONF_B0_ENABLE_MOTION_PROCESSING,
-    CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,
-    CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
     CONF_DEVICE_BAUD,
     CONF_PANEL_NUMBER,
     CONF_DEVICE_TYPE,
     CONF_DOWNLOAD_CODE,
     CONF_FORCE_AUTOENROLL,
-    CONF_FORCE_STANDARD,
+    CONF_EMULATION_MODE,
     CONF_LANGUAGE,
     CONF_MOTION_OFF_DELAY,
     CONF_SIREN_SOUNDING,
@@ -64,6 +61,7 @@ from .const import (
     DEFAULT_DEVICE_USB,
     AvailableNotifications,
     AvailableNotificationConfig,
+    available_emulation_modes,
 )
 
 TIME_UNITS = [
@@ -85,20 +83,6 @@ available_siren_values = [
     "x10",
     "panic"
 ]
-
-#available_siren_values = {
-#    "intruder": "Intruder",
-#    "tamper": "Tamper",
-#    "fire": "Fire",
-#    "emergency": "Emergency",
-#    "gas": "Gas",
-#    "flood": "Flood",
-#    "x10": "X10",
-#    "panic": "Panic",
-#}
-
-#VISONIC_ID_LIST_SCHEMA = vol.Schema([int])
-#VISONIC_STRING_LIST_SCHEMA = vol.Schema([str])
 
 class VisonicSchema:
 
@@ -128,9 +112,9 @@ class VisonicSchema:
             **self.CONFIG_SCHEMA_USB,
             **self.create_parameters1(self.options),
             **self.create_parameters2(self.options),
-            **self.create_parameters3(self.options),
-            **self.create_parameters4(self.options),
-            #**self.create_parameters5(self.options),
+            **self.create_parameters10(self.options),
+            **self.create_parameters11(self.options),
+            **self.create_parameters12(self.options),
         }
         for key in initialise:
             d = key.default()
@@ -174,12 +158,19 @@ class VisonicSchema:
                 CONF_EXCLUDE_X10, default=self.create_default(options, CONF_EXCLUDE_X10, "")
             ): str,
             vol.Optional(
+                CONF_EMULATION_MODE,
+                default=self.create_default(options, CONF_EMULATION_MODE, available_emulation_modes[0]),
+            ): vol.In(available_emulation_modes),
+        }
+
+    # These are only used on creation of the component and only for Powerlink
+    def create_parameters2(self, options: dict):
+        """Create parameter set 2."""
+        # Panel settings - can only be set on creation
+        return {
+            vol.Optional(
                 CONF_DOWNLOAD_CODE, default=self.create_default(options, CONF_DOWNLOAD_CODE, "")
             ): str,
-            vol.Optional(
-                CONF_FORCE_STANDARD,
-                default=self.create_default(options, CONF_FORCE_STANDARD, False),
-            ): bool,
             vol.Optional(
                 CONF_FORCE_AUTOENROLL,
                 default=self.create_default(options, CONF_FORCE_AUTOENROLL, False),
@@ -188,13 +179,16 @@ class VisonicSchema:
                 CONF_AUTO_SYNC_TIME,
                 default=self.create_default(options, CONF_AUTO_SYNC_TIME, True),
             ): bool,
+            vol.Optional(
+                CONF_EEPROM_ATTRIBUTES,
+                default=self.create_default(options, CONF_EEPROM_ATTRIBUTES, False),
+            ): bool,
         }
 
-    def create_parameters2(self, options: dict):
-        """Create parameter set 2."""
+    def create_parameters10(self, options: dict):
+        """Create parameter set 10."""
         # Panel settings - can be modified/edited
-        # _LOGGER.debug(f'Create 2 {options.get(CONF_OVERRIDE_CODE, "")}')
-        tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
+        # _LOGGER.debug(f'Create 10 {options.get(CONF_OVERRIDE_CODE, "")}')
         return {
             vol.Optional(
                 CONF_MOTION_OFF_DELAY,
@@ -213,9 +207,6 @@ class VisonicSchema:
             ): cv.multi_select(AvailableNotificationConfig),
             # https://developers.home-assistant.io/docs/data_entry_flow_index/#show-form
             vol.Optional(
-                CONF_OVERRIDE_CODE, default = 0, description={"suggested_value": (0 if tmp == "" else int(tmp))}
-            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=9999, mode=selector.NumberSelectorMode.BOX)), #vol.All (cv.string, cv.matches_regex("(^[0-9]{4}$|^$)")), #("(^[0-9][0-9][0-9][0-9]$|^$)")
-            vol.Optional(
                 CONF_RETRY_CONNECTION_COUNT,
                 default=self.create_default(options, CONF_RETRY_CONNECTION_COUNT, 1),
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=1000, mode=selector.NumberSelectorMode.BOX)),
@@ -225,15 +216,12 @@ class VisonicSchema:
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=5, max=1000, mode=selector.NumberSelectorMode.BOX)),
         }
 
-    def create_parameters3(self, options: dict):
-        """Create parameter set 3."""
+    def create_parameters11(self, options: dict):
+        """Create parameter set 11."""
         # Panel settings - can be modified/edited
-        # _LOGGER.debug(f'Create 2B {options.get(CONF_OVERRIDE_CODE, "")}')
+        # _LOGGER.debug(f'Create 11 {options.get(CONF_OVERRIDE_CODE, "")}')
+        tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
         return {
-            vol.Optional(
-                CONF_EEPROM_ATTRIBUTES,
-                default=self.create_default(options, CONF_EEPROM_ATTRIBUTES, False),
-            ): bool,
             vol.Optional(
                 CONF_ARM_CODE_AUTO,
                 default=self.create_default(options, CONF_ARM_CODE_AUTO, False),
@@ -269,10 +257,13 @@ class VisonicSchema:
                 CONF_ENABLE_SENSOR_BYPASS,
                 default=self.create_default(options, CONF_ENABLE_SENSOR_BYPASS, False),
             ): bool,
+            vol.Optional(
+                CONF_OVERRIDE_CODE, default = 0, description={"suggested_value": (0 if tmp == "" else int(tmp))}
+            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=9999, mode=selector.NumberSelectorMode.BOX)), #vol.All (cv.string, cv.matches_regex("(^[0-9]{4}$|^$)")), #("(^[0-9][0-9][0-9][0-9]$|^$)")
         }
 
-    def create_parameters4(self, options: dict):
-        """Create parameter set 4."""
+    def create_parameters12(self, options: dict):
+        """Create parameter set 12."""
         # Log file parameters
         return {
             vol.Optional(
@@ -302,24 +293,6 @@ class VisonicSchema:
             ): int,
         }
 
-    def create_parameters5(self, options: dict):
-        """Create parameter set 5."""
-        # B0 related parameters (PowerMaster only)
-        return {
-            vol.Optional(
-                CONF_B0_ENABLE_MOTION_PROCESSING,
-                default=self.create_default(options, CONF_B0_ENABLE_MOTION_PROCESSING, False),
-            ): bool,
-            vol.Optional(
-                CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,
-                default=self.create_default(options, CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 5),
-            ): int,
-            vol.Optional(
-                CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
-                default=self.create_default(options, CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 30),
-            ): int,
-        }
-
     def create_schema_device(self):
         """Create schema device."""
         return vol.Schema(self.CONFIG_SCHEMA_DEVICE)
@@ -340,17 +313,17 @@ class VisonicSchema:
         """Create schema parameters 2."""
         return vol.Schema(self.create_parameters2(self.options))
 
-    def create_schema_parameters3(self):
-        """Create schema parameters 3."""
-        return vol.Schema(self.create_parameters3(self.options))
+    def create_schema_parameters10(self):
+        """Create schema parameters 10."""
+        return vol.Schema(self.create_parameters10(self.options))
 
-    def create_schema_parameters4(self):
-        """Create schema parameters 4."""
-        return vol.Schema(self.create_parameters4(self.options))
+    def create_schema_parameters11(self):
+        """Create schema parameters 11."""
+        return vol.Schema(self.create_parameters11(self.options))
 
-    def create_schema_parameters5(self):
-        """Create schema parameters 5."""
-        return vol.Schema(self.create_parameters5(self.options))
+    def create_schema_parameters12(self):
+        """Create schema parameters 12."""
+        return vol.Schema(self.create_parameters12(self.options))
 
     def set_default_options(self, options: dict):
         """Set schema defaults."""

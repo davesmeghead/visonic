@@ -1,53 +1,55 @@
 alarm_panel_eventlog:
   fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: visonic
+          domain: alarm_control_panel
     code:
       example: "1234"
       default: "0000"
       selector:
         text:
-    panel:
-      example: 0
-      default: 0
-      selector:
-        number:
-          min: 0
-          max: 9
 
 alarm_panel_command:
   fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: visonic
+          domain: alarm_control_panel
     command:
       required: true
-      example: 'disarm'
+      example: 'Disarm'
       selector:
         select:
           options:
-            - "disarm"
-            - "arm_home"
-            - "arm_home_instant"
-            - "arm_away"
-            - "arm_away_instant"
+            - "Disarm"
+            - "Arm Home"
+            - "Arm Home Instant"
+            - "Arm Away"
+            - "Arm Away Instant"
+            - "Mute"
+            - "Trigger"
+            - "Fire"
+            - "Emergency"
+            - "Panic"
     code:
       example: "1234"
       default: "0000"
       selector:
         text:
-    panel:
-      example: 0
-      default: 0
-      selector:
-        number:
-          min: 0
-          max: 9
 
 alarm_panel_reconnect:
   fields:
-    panel:
-      example: 0
-      default: 0
+    entity_id:
+      required: true
       selector:
-        number:
-          min: 0
-          max: 9
+        entity:
+          integration: visonic
+          domain: alarm_control_panel
 
 alarm_sensor_bypass:
   fields:
@@ -66,16 +68,17 @@ alarm_sensor_bypass:
             - "On"
             - "Off"
     code:
-      required: true
+      required: false
       example: "1234"
       default: "0000"
       selector:
         text:
-    panel:
-      example: 0
-      default: 0
+
+alarm_sensor_image:
+  fields:
+    entity_id:
+      required: true
       selector:
-        number:
-          min: 0
-          max: 9
-  
+        entity:
+          integration: visonic
+          domain: image

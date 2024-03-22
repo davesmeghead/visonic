@@ -5,7 +5,6 @@ import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-#from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import slugify
 from .pyconst import AlX10Command, AlSwitchDevice
 from .client import VisonicClient
@@ -19,18 +18,18 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities
 ) -> None:
     """Set up the Visonic Alarm Binary Sensors."""
     if DOMAIN in hass.data:
         client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        devices = [
-            VisonicSwitch(client, device) for device in hass.data[DOMAIN][SWITCH_STR]
-        ]
-        hass.data[DOMAIN][SWITCH_STR] = list()
-        async_add_entities(devices, True)
+        if not client.isDisableAllCommands():
+            devices = [
+                VisonicSwitch(client, device) for device in hass.data[DOMAIN][entry.entry_id][SWITCH_STR]
+            ]
+            hass.data[DOMAIN][entry.entry_id][SWITCH_STR] = list()
+            async_add_entities(devices, True)
 
 
 class VisonicSwitch(SwitchEntity):
@@ -49,22 +48,7 @@ class VisonicSwitch(SwitchEntity):
         self._name = pname.lower() + self._dname.lower()
 
         self._panel = client.getPanelID()
-        
-        # VISONIC_ID_FORMAT.format( slugify(self._name), visonic_device.getDeviceID())
-        # self._entity_id = ENTITY_ID_FORMAT.format(slugify(self._name))
         self._current_value = self._visonic_device.isOn()
-        #self._dispatcher = client.getDispatcher()
-
-
-#    async def async_added_to_hass(self):
-#        """Register callbacks."""
-#        # Register for dispatcher calls to update the state
-#        self.async_on_remove(
-#            async_dispatcher_connect(
-#                self.hass, self._dispatcher, self.onChange
-#            )
-#        )
-#        # self._visonic_device.install_change_handler(self.onChange)
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
@@ -123,12 +107,10 @@ class VisonicSwitch(SwitchEntity):
                 "identifiers": {(DOMAIN, self._name)},
                 "name": f"Visonic X10 ({self._dname})",
                 "model": self._visonic_device.getType(),
-                #"via_device": (DOMAIN, self._uniqueName),
                 # "sw_version": self._api.information.version_string,
             }
         return { 
                  "manufacturer": "Visonic", 
-                 #"via_device": (DOMAIN, self._uniqueName),
             }
 
     # "off"  "on"  "dim"  "brighten"

@@ -30,17 +30,18 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Visonic Alarm Bypass/Arm Select"""
 
-    _LOGGER.debug("************* select async_setup_entry **************")
+    #_LOGGER.debug("************* select async_setup_entry **************")
 
     if DOMAIN in hass.data:
-        _LOGGER.debug("   In select async_setup_entry")
+        #_LOGGER.debug("   In select async_setup_entry")
         client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        sensors = [
-            VisonicSelect(hass, client, device) for device in hass.data[DOMAIN][SELECT_STR]
-        ]
-        # empty the list as we have copied the entries so far in to sensors
-        hass.data[DOMAIN][SELECT_STR] = list()
-        async_add_entities(sensors, True)
+        if not client.isDisableAllCommands():
+            sensors = [
+                VisonicSelect(hass, client, device) for device in hass.data[DOMAIN][entry.entry_id][SELECT_STR]
+            ]
+            # empty the list as we have copied the entries so far in to sensors
+            hass.data[DOMAIN][entry.entry_id][SELECT_STR] = list()
+            async_add_entities(sensors, True)
 
 
 class VisonicSelect(SelectEntity):
@@ -63,16 +64,6 @@ class VisonicSelect(SelectEntity):
         self._is_available = self._visonic_device.isEnrolled()
         self._is_armed = not self._visonic_device.isBypass()
         self._pending_state_is_armed = None
-        #self._dispatcher = client.getDispatcher()
-
-#    async def async_added_to_hass(self):
-#        """Register callbacks."""
-#        # Register for dispatcher calls to update the state
-#        self.async_on_remove(
-#            async_dispatcher_connect(
-#                self.hass, self._dispatcher, self.onChange
-#            )
-#        )
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
@@ -91,7 +82,7 @@ class VisonicSelect(SelectEntity):
             _LOGGER.debug("Select on change called but sensor is not defined")
 
         if self._pending_state_is_armed is not None and self._pending_state_is_armed == self._is_armed:
-            _LOGGER.debug("Change Implemented in panel")
+            #_LOGGER.debug("Change Implemented in panel")
             self._pending_state_is_armed = None
 
         # Ask HA to schedule an update

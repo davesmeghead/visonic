@@ -7,7 +7,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, valid_entity_id
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from .pyconst import AlPanelCommand
@@ -30,19 +30,61 @@ from .const import (
     ALARM_PANEL_RECONNECT,
     ALARM_PANEL_COMMAND,
     ALARM_SENSOR_BYPASS,
+    ALARM_SENSOR_IMAGE,
     ATTR_BYPASS,
     CONF_PANEL_NUMBER,
     PANEL_ATTRIBUTE_NAME,
     NOTIFICATION_ID,
     NOTIFICATION_TITLE,
     BINARY_SENSOR_STR,
+    IMAGE_SENSOR_STR,
     SWITCH_STR,
     SELECT_STR,
+    CONF_EMULATION_MODE,
+    CONF_COMMAND,
+    available_emulation_modes,
 )
 
-#from .create_schema import VisonicSchema
-
 _LOGGER = logging.getLogger(__name__)
+
+# the 5 schemas for the HA service calls
+ALARM_SCHEMA_EVENTLOG = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Optional(ATTR_CODE, default=""): cv.string,
+    }
+)
+
+ALARM_SCHEMA_COMMAND = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Required(CONF_COMMAND) : vol.In([x.lower().replace("_"," ").title() for x in list(AlPanelCommand.get_variables().keys())]),
+        vol.Optional(ATTR_CODE, default=""): cv.string,
+    }
+)
+
+ALARM_SCHEMA_RECONNECT = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+    }
+)
+
+ALARM_SCHEMA_BYPASS = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Optional(ATTR_BYPASS, default=False): cv.boolean,
+        vol.Optional(ATTR_CODE, default=""): cv.string,
+    }
+)
+
+ALARM_SCHEMA_IMAGE = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+    }
+)
+
+configured_panel_list = []
+
 
 def configured_hosts(hass):
     """Return a set of the configured hosts."""
@@ -68,53 +110,30 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
     _LOGGER.debug("Migrating from version %s", config_entry.version)
 
     if config_entry.version == 1:
-        new = {**config_entry.data}
-        # TODO: modify Config Entry data
-
-        #config_entry.data = {**new}
-        #config_entry.version = 2
+        new = config_entry.data.copy()
+        CONF_FORCE_STANDARD = "force_standard"
         
-        #_LOGGER.info(f"Migration to version {config_entry.version} successful")
+        _LOGGER.debug(f"   Migrating CONF_FORCE_STANDARD from {config_entry.data[CONF_FORCE_STANDARD]}")
+        if isinstance(config_entry.data[CONF_FORCE_STANDARD], bool):
+            _LOGGER.debug(f"   Migrating CONF_FORCE_STANDARD from {config_entry.data[CONF_FORCE_STANDARD]} and its boolean")
+            if config_entry.data[CONF_FORCE_STANDARD]:
+                _LOGGER.info(f"   Migration: Force standard set so using {available_emulation_modes[1]}")
+                new[CONF_EMULATION_MODE] = available_emulation_modes[1]
+            else:
+                _LOGGER.info(f"   Migration: Force standard not set so using {available_emulation_modes[0]}")
+                new[CONF_EMULATION_MODE] = available_emulation_modes[0]
+        
+        #del new[CONF_FORCE_STANDARD]
+        config_entry.version = 2
+        hass.config_entries.async_update_entry(config_entry, data=new, options=new)
+        #config_entry.data = {**new}
+        
+        _LOGGER.info(f"   Emulation mode set to {config_entry.data[CONF_EMULATION_MODE]}")
 
-        # return False # when any changes have been made
+        #return False # when any changes have failed
 
+    _LOGGER.info("Migration to version %s successful", config_entry.version)
     return True
-
-CONF_PANEL = PANEL_ATTRIBUTE_NAME  # this must match the field name in services.yaml
-CONF_COMMAND = "command"
-
-# the 4 schemas for the HA service calls
-ALARM_SCHEMA_EVENTLOG = vol.Schema(
-    {
-        vol.Optional(CONF_PANEL, default=0): cv.positive_int,
-        vol.Optional(ATTR_CODE, default=""): cv.string,
-    }
-)
-
-ALARM_SCHEMA_COMMAND = vol.Schema(
-    {
-        vol.Required(CONF_COMMAND) : cv.enum(AlPanelCommand),
-        vol.Optional(CONF_PANEL, default=0): cv.positive_int,
-        vol.Optional(ATTR_CODE, default=""): cv.string,
-    }
-)
-
-ALARM_SCHEMA_RECONNECT = vol.Schema(
-    {
-        vol.Optional(CONF_PANEL, default=0): cv.positive_int,
-    }
-)
-
-ALARM_SCHEMA_BYPASS = vol.Schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Optional(ATTR_BYPASS, default=False): cv.boolean,
-        vol.Optional(ATTR_CODE, default=""): cv.string,
-        vol.Optional(CONF_PANEL, default=0): cv.positive_int,
-    }
-)
-
-configured_panel_list = []
 
 async def async_setup(hass: HomeAssistant, base_config: dict):
     """Set up the visonic component."""
@@ -129,16 +148,28 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
     def getClient(call):
         """Lookup the panel number from the service call and find the client for that panel"""
         if isinstance(call.data, dict):
-            if CONF_PANEL in call.data:
-                # This should always succeed as we set 0 as the default in the Schema
-                panel = call.data[CONF_PANEL]
-                # Check each connection to get the requested panel
-                for entry in hass.config_entries.async_entries(DOMAIN):
-                    client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-                    if client is not None:
-                        if panel == client.getPanelID():
-                            return client, panel
-                return None, panel
+            _LOGGER.info(f"getClient called {call.data}")
+            # 'entity_id': 'alarm_control_panel.visonic_alarm'
+            if ATTR_ENTITY_ID in call.data:
+                eid = str(call.data[ATTR_ENTITY_ID])
+                if valid_entity_id(eid):
+                    mybpstate = hass.states.get(eid)
+                    if mybpstate is not None:
+                        if PANEL_ATTRIBUTE_NAME in mybpstate.attributes:
+                            panel = mybpstate.attributes[PANEL_ATTRIBUTE_NAME]
+                            # Check each connection to get the requested panel
+                            for entry in hass.config_entries.async_entries(DOMAIN):
+                                if entry.entry_id in hass.data[DOMAIN][DOMAINCLIENT]:
+                                    client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
+                                    if client is not None:
+                                        if panel == client.getPanelID():
+                                            #_LOGGER.info(f"getClient success, found client and panel")
+                                            return client, panel
+                                else:
+                                    _LOGGER.info(f"getClient unknown entry ID {entry.entry_id}")
+                            return None, panel
+                else:
+                    _LOGGER.info(f"getClient called invalid entity ID {eid}")
         return None, None
     
     async def service_panel_eventlog(call):
@@ -185,18 +216,29 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         else:
             sendHANotification(f"Service Panel sensor bypass failed - Panel not found")
     
-    async def handle_reload(service):
-        """Handle reload service call."""
-        _LOGGER.info("Domain {0} Service {1} reload called: reloading integration".format(DOMAIN, service))
-
-        current_entries = hass.config_entries.async_entries(DOMAIN)
-
-        reload_tasks = [
-            hass.config_entries.async_reload(entry.entry_id)
-            for entry in current_entries
-        ]
-
-        await asyncio.gather(*reload_tasks)
+    async def service_sensor_image(call):
+        """Handler for sensor image service"""
+        _LOGGER.info("Service Panel sensor image update called")
+        client, panel = getClient(call)
+        if client is not None:
+            await client.service_sensor_image(call)
+        elif panel is not None:
+            sendHANotification(f"Service sensor image update - Panel {panel} not found")
+        else:
+            sendHANotification(f"Service sensor image update failed - Panel not found")
+    
+#    async def handle_reload(service):
+#        """Handle reload service call."""
+#        _LOGGER.info("Domain {0} Service {1} reload called: reloading integration".format(DOMAIN, service))
+#
+#        current_entries = hass.config_entries.async_entries(DOMAIN)
+#
+#        reload_tasks = [
+#            hass.config_entries.async_reload(entry.entry_id)
+#            for entry in current_entries
+#        ]
+#
+#        await asyncio.gather(*reload_tasks)
 
     _LOGGER.info("Starting Visonic Component")
     hass.data[DOMAIN] = {}
@@ -204,13 +246,15 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
     hass.data[DOMAIN][DOMAINCLIENT] = {}
     hass.data[DOMAIN][DOMAINCLIENTTASK] = {}
     hass.data[DOMAIN][VISONIC_UPDATE_LISTENER] = {}
-    # Empty out the lists
+    
+    # Empty out the lists (these are no longer used in Version 2)
     hass.data[DOMAIN][BINARY_SENSOR_STR] = list()
+    hass.data[DOMAIN][IMAGE_SENSOR_STR] = list()    
     hass.data[DOMAIN][SELECT_STR] = list()
     hass.data[DOMAIN][SWITCH_STR] = list()
     hass.data[DOMAIN][ALARM_PANEL_ENTITY] = list()
     
-    # Install the 4 handlers for the HA service calls
+    # Install the 5 handlers for the HA service calls
     hass.services.async_register(
         DOMAIN,
         ALARM_PANEL_EVENTLOG,
@@ -235,11 +279,17 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         service_sensor_bypass,
         schema=ALARM_SCHEMA_BYPASS,
     )
-    hass.helpers.service.async_register_admin_service(
+    hass.services.async_register(
         DOMAIN,
-        SERVICE_RELOAD,
-        handle_reload,
+        ALARM_SENSOR_IMAGE,
+        service_sensor_image,
+        schema=ALARM_SCHEMA_IMAGE,
     )
+#    hass.helpers.service.async_register_admin_service(
+#        DOMAIN,
+#        SERVICE_RELOAD,
+#        handle_reload,
+#    )
     return True
 
 # This function is called with the flow data to create a client connection to the alarm panel
@@ -254,7 +304,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     # remove all old settings for this component, previous versions of this integration
     hass.data[DOMAIN][entry.entry_id] = {}
-
+    # Empty out the lists
+    hass.data[DOMAIN][entry.entry_id][BINARY_SENSOR_STR] = list()
+    hass.data[DOMAIN][entry.entry_id][IMAGE_SENSOR_STR] = list()    
+    hass.data[DOMAIN][entry.entry_id][SELECT_STR] = list()
+    hass.data[DOMAIN][entry.entry_id][SWITCH_STR] = list()
+    hass.data[DOMAIN][entry.entry_id][ALARM_PANEL_ENTITY] = list()
+    
     _LOGGER.info("[Visonic Setup] Starting Visonic with entry id={0} configured panels={1}".format(entry.entry_id, configured_hosts(hass)))
     
     # combine and convert python settings map to dictionary
@@ -312,6 +368,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     eid = entry.entry_id
 
+    hass.services.async_remove(DOMAIN, ALARM_PANEL_EVENTLOG)
+    hass.services.async_remove(DOMAIN, ALARM_PANEL_RECONNECT)
+    hass.services.async_remove(DOMAIN, ALARM_PANEL_COMMAND)
+    hass.services.async_remove(DOMAIN, ALARM_SENSOR_BYPASS)
+    hass.services.async_remove(DOMAIN, ALARM_SENSOR_IMAGE)
+
     client = hass.data[DOMAIN][DOMAINCLIENT][eid]
     clientTask = hass.data[DOMAIN][DOMAINCLIENTTASK][eid]
     updateListener = hass.data[DOMAIN][VISONIC_UPDATE_LISTENER][eid]
@@ -332,6 +394,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     del hass.data[DOMAIN][DOMAINCLIENTTASK][eid]
     del hass.data[DOMAIN][VISONIC_UPDATE_LISTENER][eid]
     
+    #if hass.data[DOMAIN][eid]:
+    #    hass.data[DOMAIN].pop(eid)
+    #
     if panelid in configured_panel_list:
         configured_panel_list.remove(panelid)
     else:
