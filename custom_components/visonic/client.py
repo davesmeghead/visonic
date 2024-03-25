@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from jinja2 import Environment, FileSystemLoader
 from .pyconst import AlEnum, AlTransport, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlSensorDevice, AlLogPanelEvent, AlSensorType, AlSwitchDevice
 from .pyvisonic import VisonicProtocol
+from functools import partial
 
 from enum import IntEnum
 from requests import ConnectTimeout, HTTPError
@@ -98,7 +99,7 @@ class PanelCondition(IntEnum):
     CHECK_EVENT_LOG_COMMAND = 13
     CHECK_X10_COMMAND = 14
 
-CLIENT_VERSION = "0.9.1.0"
+CLIENT_VERSION = "0.9.1.1"
 
 MAX_CLIENT_LOG_ENTRIES = 100
 
@@ -124,10 +125,15 @@ class MyTransport(AlTransport):
 #    transport needs to have 2 functions:   write(bytearray)  and  close()
 class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, client = None, *args, **kwargs):
         _LOGGER.debug("Initialising ClientVisonicProtocol A")
         super().__init__(*args, **kwargs)
         _LOGGER.debug("Initialising ClientVisonicProtocol B")
+        if client is not None:
+            _LOGGER.debug("Initialising ClientVisonicProtocol C")
+            client.tellemaboutme(self)
+            _LOGGER.debug("Initialising ClientVisonicProtocol D")
+        _LOGGER.debug("Initialising ClientVisonicProtocol E")    
 
     def data_received(self, data):
         super().vp_data_received(data)
@@ -851,26 +857,52 @@ class VisonicClient:
                 sock.close()
         return None, None
 
+    def tellemaboutme(self, thisisme):
+        self.logstate_debug(f"Here This is me {thisisme}")
+        self.vp = thisisme
 
     # Create a connection using asyncio through a linux port (usb or rs232)
     async def async_create_usb_visonic_connection(self, path, baud="9600", panelConfig : PanelConfig = None, loop=None):
         """Create Visonic manager class, returns rs232 transport coroutine."""
         from serial_asyncio import create_serial_connection
 
+        self.logstate_debug("Here AA")
         loop=loop if loop else asyncio.get_event_loop()
+
+        self.logstate_debug("Setting USB Options")
+        
+        # use default protocol if not specified
+        protocol = partial(
+            ClientVisonicProtocol,
+            client=self,
+            panelConfig=panelConfig,
+            loop=loop,
+        )
+
+        self.logstate_debug("Here BB")
 
         # setup serial connection
         path = path
         baud = int(baud)
         try:
-            vp = ClientVisonicProtocol(panelConfig=panelConfig, loop=loop)
+            self.logstate_debug(f"Here CC {path} {baud}")
+            self.vp = None
             # create the connection to the panel as an asyncio protocol handler and then set it up in a task
-            conn = create_serial_connection(loop, vp, path, baud)
-            self.logstate_debug("The coro type is " + str(type(coro)) + "   with value " + str(coro))
+            conn = create_serial_connection(loop, protocol, path, baud)
+            self.logstate_debug("The coro type is " + str(type(conn)) + "   with value " + str(conn))
             visonicTask = loop.create_task(conn)
-            return visonicTask, vp
-        except:
-            self.logstate_debug("Setting USB Options Exception")
+            self.logstate_debug("Here DD")
+            ctr = 0
+            while self.vp is None and ctr < 20:     # 20 with a sleep of 0.1 is approx 2 seconds. Wait up to 2 seconds for this to start.
+                self.logstate_debug("Here EE")
+                await asyncio.sleep(0.1)            # This should only happen once while the Protocol Handler starts up and calls tellemaboutme to set self.vp
+                ctr = ctr + 1
+            if self.vp is not None:
+                self.logstate_debug("Here FF")
+                return visonicTask, self.vp
+            self.logstate_debug("Here GG")
+        except Exception as ex:
+            self.logstate_debug(f"Setting USB Options Exception {ex}")
         return None, None
 
     async def connect_to_alarm(self) -> bool:
