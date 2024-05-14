@@ -4342,7 +4342,7 @@ class PacketHandling(ProtocolBase):
             elif msgLen == 69:
                 start = 6
             else:
-                log.debug("[handle_msgtypeB0]       Received message, this should be sensor list but its the wrong length, length = {0}".format(zoneLen))
+                log.debug("[handle_msgtypeB0]       Received message, this should be sensor list but its the wrong length, length = {0}".format(msgLen))
                 return
             
             zoneLen = data[start]
