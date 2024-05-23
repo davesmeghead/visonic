@@ -48,17 +48,14 @@ available_emulation_modes = [
 ]
 
 myconfig = { 
-    CONF_DOWNLOAD_CODE: "",
-    CONF_EMULATION_MODE: "Powerlink Emulation",
+    CONF_DOWNLOAD_CODE: "AAAA",
+    CONF_EMULATION_MODE: available_emulation_modes[0],
     CONF_FORCE_AUTOENROLL: True,
     CONF_AUTO_SYNC_TIME : True,
     CONF_LANGUAGE: "EN",
-    CONF_MOTION_OFF_DELAY: 30,
+    CONF_MOTION_OFF_DELAY: 10,
     CONF_SIREN_SOUNDING: ["Intruder"],
-    CONF_EEPROM_ATTRIBUTES: False,
-    CONF_B0_ENABLE_MOTION_PROCESSING: False,
-    CONF_B0_MIN_TIME_BETWEEN_TRIGGERS: 5,
-    CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT: 30
+    CONF_EEPROM_ATTRIBUTES: False
 }
 
 def toBool(val) -> bool:
@@ -147,18 +144,8 @@ def getConfigData() -> PanelConfig:
         ),
         AlConfiguration.EEPROMAttributes: toBool(
             myconfig.get(CONF_EEPROM_ATTRIBUTES, False)
-        ),
-        AlConfiguration.B0_Enable: toBool(
-            myconfig.get(CONF_B0_ENABLE_MOTION_PROCESSING, False)
-        ),
-        AlConfiguration.B0_Min_Interval_Time: myconfig.get(
-            CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 5
-        ),
-        AlConfiguration.B0_Max_Wait_Time: myconfig.get(
-            CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 30
-        ),
+        )
     }
-
 
 def callback_handler(visonic_devices, dict={}):
 
@@ -295,7 +282,7 @@ async def startitall(testloop):
         visonicTask, visonicProtocol = await async_create_tcp_visonic_connection(address=args.address, port=args.port, loop=testloop, panelConfig=getConfigData())
     elif len(args.usb) > 0:
         print("Setting up USB Connection")
-        visonicTask, visonicProtocol = await async_create_usb_visonic_connection(path="//./" + args.usb, loop=testloop, panelConfig=getConfigData())
+        visonicTask, visonicProtocol = await async_create_usb_visonic_connection(path=args.usb, loop=testloop, panelConfig=getConfigData())
     else:
         print("No Valid Connection Configuration")
     
@@ -345,7 +332,13 @@ def setupLocalLogger(level: str = "WARNING", logfile = False):
     # level = logging.getLevelName('INFO')
     level = logging.getLevelName(level)  # INFO, DEBUG
     root_logger.setLevel(level)
-    
+
+def handle_exception(loop, context):
+    # context["message"] will always be there; but context["exception"] may not
+    msg = context.get("exception", context["message"])
+    #print(f"Caught exception: {msg}")
+    #print(f"                  {context}")
+ 
 if __name__ == '__main__':
     setupLocalLogger("DEBUG", False)   # one of "WARNING"  "INFO"  "ERROR"   "DEBUG"
     #logging.basicConfig(level=logging.DEBUG)
@@ -358,11 +351,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     testloop = asyncio.get_event_loop()
+    testloop.set_exception_handler(handle_exception)
 
     task = testloop.create_task(startitall(testloop))
     try:
-        print("Calling run_forever")
-        #testloop.run_until_complete(task)
+        #print("Calling run_forever")
         testloop.run_forever()
     except KeyboardInterrupt:
         pass
@@ -371,4 +364,4 @@ if __name__ == '__main__':
     finally:
         # cleanup connection
         print("Cleaning up")
-        testloop.close()
+        #testloop.close()

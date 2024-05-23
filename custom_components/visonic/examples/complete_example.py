@@ -177,18 +177,28 @@ class MyTransport(AlTransport):
 
 class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, serial_connection, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.serial_connection = serial_connection
 
     def data_received(self, data):
         super().vp_data_received(data)
 
     def connection_made(self, transport):
+        self.transport = transport
         self.trans = MyTransport(t=transport)
         super().vp_connection_made(self.trans)
 
     def connection_lost(self, exc):
         super().vp_connection_lost(exc)
+
+    def changeSerialBaud(self, baud : int):
+        if self.serial_connection:
+            print(f"[ClientVisonicProtocol] ClientVisonicProtocol 1, {transport.serial.baudrate} {type(transport.serial.baudrate)}")
+            self.transport.serial.baudrate = baud
+            print(f"[ClientVisonicProtocol] ClientVisonicProtocol 2, {transport.serial.baudrate} {type(transport.serial.baudrate)}")
+        else: 
+            print("Changing the baud of the ethernet connection is not possible")
 
     # This is needed so we can create the class instance before giving it to the protocol handlers
     def __call__(self):
@@ -325,7 +335,7 @@ class VisonicClient:
         if excep is None:
             print("AlVisonic has caused an exception, no exception information is available")
         else:
-            print("AlVisonic has caused an exception %s %s", str(excep), str(another_parameter))
+            print(f"AlVisonic has caused an exception {str(excep)} {str(another_parameter)}")
         # General update trigger
         #    0 is a disconnect and (hopefully) reconnect from an exception (probably comms related)
         sleep(5.0)
@@ -355,6 +365,7 @@ class VisonicClient:
             sock.settimeout(1.0)  # set timeout to 1 second to flush the receive buffer
             sock.connect((address, port))
 
+            pl_sock = None
             # Flush the buffer, receive any data and dump it
             try:
                 dummy = sock.recv(10000)  # try to receive 100 bytes
@@ -366,7 +377,7 @@ class VisonicClient:
             # set the timeout to infinite
             sock.settimeout(None)
 
-            vp = ClientVisonicProtocol(panelConfig=panelConfig, loop=loop)
+            vp = ClientVisonicProtocol(serial_connection = False, panelConfig=panelConfig, pl_sock = pl_sock, loop=loop)
 
             #print("The vp " + str(type(vp)) + "   with value " + str(vp))
             # create the connection to the panel as an asyncio protocol handler and then set it up in a task
@@ -396,13 +407,13 @@ class VisonicClient:
         path = path
         baud = int(baud)
         try:
-            vp = ClientVisonicProtocol(panelConfig=panelConfig, loop=loop)
+            vp = ClientVisonicProtocol(serial_connection = True, panelConfig=panelConfig, loop=loop)
             # create the connection to the panel as an asyncio protocol handler and then set it up in a task
             conn = create_serial_connection(loop, vp, path, baud)
             visonicTask = loop.create_task(conn)
             return visonicTask, vp
-        except:
-            print("Setting USB Options Exception")
+        except Exception as ex:
+            print(f"Setting USB Options Exception {ex}")
         return None, None
 
 
@@ -455,6 +466,7 @@ class VisonicClient:
             self.visonicProtocol.onNewSwitch(self.onNewSwitch)
             # Record that we have started the system
             self.SystemStarted = True
+            print(f"Visonic System Started")
             return True
 
         self.visonicTask = None
@@ -904,6 +916,7 @@ def handle_exception(loop, context):
     # context["message"] will always be there; but context["exception"] may not
     msg = context.get("exception", context["message"])
     print(f"Caught exception: {msg}")
+    print(f"                  {context}")
     asyncio.create_task(shutdown(loop))
 
 async def shutdown(loop, signal=None):

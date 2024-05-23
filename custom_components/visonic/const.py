@@ -31,9 +31,6 @@ DOMAINCLIENTTASK = f"{DOMAIN}_client_task"
 NOTIFICATION_ID = f"{DOMAIN}_notification"
 NOTIFICATION_TITLE = "Visonic Alarm Panel"
 
-# update listener
-VISONIC_UPDATE_LISTENER = f"{DOMAIN}_update_listener"
-
 # The HA bus events that this integration can generate
 ALARM_PANEL_CHANGE_EVENT = f"{DOMAIN}_alarm_panel_state_update"
 ALARM_PANEL_LOG_FILE_COMPLETE = f"{DOMAIN}_alarm_panel_event_log_complete"

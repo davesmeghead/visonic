@@ -25,16 +25,6 @@ from .create_schema import VisonicSchema
 
 _LOGGER = logging.getLogger(__name__)
 
-def create_parameters_sequence(s : str) -> list:
-    step_sequence = []
-    if s == available_emulation_modes[0]:
-        step_sequence = [2,10,11,12]       
-    elif s == available_emulation_modes[1]:
-        step_sequence = [10,11] 
-    elif s == available_emulation_modes[2] or s == available_emulation_modes[3]:
-        step_sequence = [10] 
-    return step_sequence
-
 class MyHandlers(data_entry_flow.FlowHandler):
     """My generic handler for config flow ConfigFlow and OptionsFlow."""
 
@@ -50,6 +40,16 @@ class MyHandlers(data_entry_flow.FlowHandler):
             # convert python map to dictionary and set defaults for the options flow handler
             c = self.combineSettings(config_entry)
             self.myschema.set_default_options(options = c)
+
+    def create_parameters_sequence(self, s : str) -> list:
+        step_sequence = []
+        if s == available_emulation_modes[0]:
+            step_sequence = [2,10,11,12]       
+        elif s == available_emulation_modes[1]:
+            step_sequence = [10,11] 
+        elif s == available_emulation_modes[2] or s == available_emulation_modes[3]:
+            step_sequence = [10] 
+        return step_sequence
 
     def combineSettings(self, entry):
         """Combine the old settings from data and the new from options."""
@@ -271,7 +271,7 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         self.current_pos = -1
 
         if CONF_EMULATION_MODE in user_input:
-            self.step_sequence = create_parameters_sequence(user_input[CONF_EMULATION_MODE])
+            self.step_sequence = self.create_parameters_sequence(user_input[CONF_EMULATION_MODE])
             if len(self.step_sequence) == 0:
                 _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE set to {user_input[CONF_EMULATION_MODE]} **********************************")
                 return self.async_abort(reason="emulation_mode_error")
@@ -370,7 +370,7 @@ class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
                 self.current_pos = -1
 
                 if CONF_EMULATION_MODE in self.config:
-                    self.step_sequence = create_parameters_sequence(self.config[CONF_EMULATION_MODE])
+                    self.step_sequence = self.create_parameters_sequence(self.config[CONF_EMULATION_MODE])
                     if 2 in self.step_sequence:
                         self.step_sequence.remove(2) # remove the init parameters and only include modifyable
                     if len(self.step_sequence) == 0:

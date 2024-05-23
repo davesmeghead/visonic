@@ -82,7 +82,7 @@ class VisonicImage(ImageEntity):
                 if self._attr_image_last_updated is not None:
                     interval = self._visonic_device.jpg_time - self._attr_image_last_updated
                 if interval > timedelta(seconds=1):
-                    _LOGGER.debug("image updating image")
+                    _LOGGER.debug("[onChange] updating image")
                     self._sensor_image = self._visonic_device.jpg_data
                     self._attr_image_last_updated = self._visonic_device.jpg_time
                     # Ask HA to schedule an update

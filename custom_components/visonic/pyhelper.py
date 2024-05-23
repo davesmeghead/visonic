@@ -396,6 +396,233 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
         return dd
 
 
+class ImageRecord:
+    # The details of an individual image
+    
+    def __init__(self, zone, image_id, size, next_seq, lastimage, parent):
+        self.image_id = image_id              # The image_id is the image number from the panel.  The panel outputs a sequence of images.
+        self.size = size                      # The size of the image in bytes
+        self.buffer = bytearray(size)         # Data buffer
+        self.lastimage = lastimage            # Boolean, is this the last image that the panel is sending
+        self.current = 0                      # current position in the buffer as if gets filled with data
+        self.next_sequence = next_seq         # The panel sends the data in a series of messages that are sequenced
+        self.ongoing = True                   # Are we creating the image or have we finished
+        self.last = _getUTCTime()             # Date/Time of the last data from the panel, used for timeouts
+        self.zone = zone                      # The zone that the image is from
+        self.parent = parent                  # The parent ImageZoneClass
+        
+    def addBufferData(self, databuffer, sequence) -> bool:
+        if self.ongoing and self.next_sequence is not None and sequence == self.next_sequence:
+            self.next_sequence = (self.next_sequence + 0x10) & 0xFF
+            self.last = _getUTCTime()
+            datalen = len(databuffer)
+            self.buffer[self.current : self.current+datalen] = databuffer
+            self.current = self.current + datalen
+            if self.current == self.size:
+                self.ongoing = False
+            log.debug(f"[handle_msgtypeF4]         current position {self.current}    next sequence = {self.next_sequence}       ongoing = {self.ongoing}")
+            return True
+        log.debug("[handle_msgtypeF4]       ERROR: Attempt to add image data and the record has not been created")
+        return False
+        
+    def isImageComplete(self) -> bool:
+        return not self.ongoing
+
+    def isOngoing(self) -> bool:
+        return self.ongoing and self.current > 0
+
+class ImageZoneClass:
+    def __init__(self):
+        self.start = _getUTCTime()             # Start time
+        self.count = 0                         # How many images did the user ask for, this defaults to 11 as we can't set this to the panel and 11 is how many the panel sends anyway
+        self.totalimages = 255                 # After the first image, the panel tells us how many images
+        self.unique_id = -1                    # Each sequence has a unique id
+        self.current_image = None              # The current image being built
+        self.images = { }                      # Image Store, images are replaced when a new one is sent
+    
+    def isImageComplete(self) -> bool:
+        return self.current_image.isImageComplete() if self.current_image is not None else False
+
+    def isOngoing(self) -> bool:
+        return self.current_image.isOngoing() if self.current_image is not None else False
+
+class AlImageManager:
+    def __init__(self):
+        self.ImageZone = {}                     # Zone and Image Store
+        self.current_zone = None                # when not None then building an image for this zone number
+        self.last_image = None                  # A shortcut to the last successfully built image
+
+    def _current_image(self):
+        return self.ImageZone[self.current_zone].current_image if self.current_zone is not None and self.current_zone in self.ImageZone else None
+
+    def isImageDataInProgress(self) -> bool:
+        for zone, value in self.ImageZone.items():
+            if value.isOngoing():
+                return True
+        return False
+
+    def terminateIfExceededTimeout(self, seconds):
+        img = self._current_image()
+        if img is not None:
+            interval = _getUTCTime() - img.last
+            if interval is not None and interval >= timedelta(seconds=seconds):
+                if img.isOngoing():
+                    self.terminateImage()
+                else:
+                    self.ImageZone[self.current_zone].current_image = None
+                    self.current_zone = None
+
+    def create(self, zone, count) -> bool:
+        # set up an entry in ImageZone with no images
+        #    count is the number of images that the user asked for
+        if zone not in self.ImageZone:
+            self.ImageZone[zone] = ImageZoneClass()
+        if self.ImageZone[zone].isOngoing():
+            return False
+        self.last_image = None
+        self.ImageZone[zone].count = count
+        log.debug(f'[AlImageManager]  Create JPG : zone = {zone}   start time = {self.ImageZone[zone].start}   count = {self.ImageZone[zone].count}')
+        return True
+
+    def hasStartedSequence(self):
+        return self._current_image() is not None
+
+    def setCurrent(self, zone, unique_id, image_id, size, sequence, lastimage, totalimages) -> bool:
+        if self.hasStartedSequence():
+            return False
+        self.current_zone = zone
+        if zone not in self.ImageZone:
+            return False
+#            log.debug("[AlImageManager]         Warning: creating empty image record to receive an image")
+#            self.create(zone, 11)          # default to 11  
+        
+        self.ImageZone[zone].unique_id = unique_id
+        self.ImageZone[zone].totalimages = totalimages
+
+        # Always replace the existing ImageRecord if one already exists
+        record = ImageRecord(zone = zone, image_id = image_id, size = size, lastimage = lastimage, next_seq = (sequence + 0x10) & 0xFF, parent = self.ImageZone[zone])
+
+        if image_id in self.ImageZone[zone].images:
+            del self.ImageZone[zone].images[image_id]
+        self.ImageZone[zone].images[image_id] = record
+        self.ImageZone[zone].current_image = record
+
+        log.debug(f'[AlImageManager]  setCurrent zone = {self.current_zone}  unique_id = {hex(unique_id)}    image_id = {image_id}')
+        log.debug(f"[AlImageManager]             total filesize {record.size}    next sequence = {hex(record.next_sequence)}     lastimage = {record.lastimage}    totalimages = {totalimages}")
+        self.last_image = None
+        return True
+    
+    def addData(self, databuffer, sequence) -> bool:
+        img = self._current_image()
+        if img is not None:
+            insequence = img.addBufferData(databuffer, sequence)
+            if img.isImageComplete():
+                self.last_image = self.ImageZone[self.current_zone].current_image
+                self.ImageZone[self.current_zone].current_image = None
+                self.current_zone = None
+            return insequence
+        return False
+    
+    def isImageComplete(self):
+        return self.last_image is not None
+    
+    def getLastImageRecord(self):
+        if self.last_image is not None:
+            if self.last_image.parent is not None:
+                return self.last_image.zone, self.last_image.parent.unique_id, self.last_image.image_id, self.last_image.parent.totalimages, self.last_image.buffer, self.last_image.lastimage
+        return -1, -1, -1, -1, None, False
+
+    def isValidImage(self, zone, image) -> bool:
+        return zone in self.ImageZone and image in self.ImageZone[zone].images
+    
+    def isValidZone(self, zone) -> bool:
+        return zone in self.ImageZone
+    
+    def getImage(self, zone, image):
+        return self.ImageZone[zone].images[image].buffer if self.isValidImage(zone, image) else None
+    
+    def getImageList(self, zone) -> []:
+        return list(self.ImageZone[zone].images) if self.isValidZone(zone) else list()
+    
+    def terminateImage(self):
+        img = self._current_image()
+        if img is not None:
+            if img.image_id in self.ImageZone[self.current_zone].images:
+                del self.ImageZone[self.current_zone].images[img.image_id]
+            self.ImageZone[self.current_zone].current_image = None
+        self.current_zone = None
+        self.last_image = None
+
+
+class MyChecksumCalc:
+
+    # check the checksum of received messages
+    def _validatePDU(self, packet: bytearray) -> bool:
+        """Verify if packet is valid.
+        >>> Packets start with a preamble (\x0D) and end with postamble (\x0A)
+        """
+        # Validate a received message
+        # Does it start with a header
+        if packet[:1] != b"\x0D":
+            return False
+        # Does it end with a footer
+        if packet[-1:] != b"\x0A":
+            return False
+
+        # Check the CRC
+        if packet[-2:-1] == self._calculateCRC(packet[1:-2]):
+            # log.debug("[_validatePDU] VALID CRC PACKET!")
+            return True
+
+        # Check the CRC
+        if packet[-2:-1] == self._calculateCRCAlt(packet[1:-2]):
+            # log.debug("[_validatePDU] VALID ALT CRC PACKET!")
+            return True
+
+        if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] + 1:
+            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {0} and {1} alt calc is {2}".format(self._toString(packet), hex(self._calculateCRC(packet[1:-2])[0]).upper(), hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()))
+            return True
+
+        if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] - 1:
+            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {0} and {1} alt calc is {2}".format(self._toString(packet), hex(self._calculateCRC(packet[1:-2])[0]).upper(), hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()))
+            return True
+
+        log.debug("[_validatePDU] Not valid packet, CRC failed, may be ongoing and not final 0A")
+        return False
+
+    # alternative to calculate the checksum for sending and receiving messages
+    def _calculateCRCAlt(self, msg: bytearray):
+        """ Calculate CRC Checksum """
+        # log.debug("[_calculateCRC] Calculating for: %s", self._toString(msg))
+        # Calculate the checksum
+        checksum = 0
+        for char in msg[0 : len(msg)]:
+            checksum += char
+        # 29/8/2022
+        #      This works for both my panels and always validates exactly (never using the +1 or -1 code in _validatePDU)
+        #      It also matches the checksums that the Powerlink 3.1 module generates.
+        checksum = 256 - (checksum % 255)
+        if checksum == 256:
+            checksum = 1
+        # log.debug("[_calculateCRC] Calculating for: {self._toString(msg)}     calculated CRC is: {self._toString(bytearray([checksum]))}")
+        return bytearray([checksum])
+
+    # calculate the checksum for sending and receiving messages
+    def _calculateCRC(self, msg: bytearray):
+        """ Calculate CRC Checksum """
+        # log.debug("[_calculateCRC] Calculating for: %s", self._toString(msg))
+        # Calculate the checksum
+        checksum = 0
+        for char in msg[0 : len(msg)]:
+            checksum += char
+        checksum = 0xFF - (checksum % 0xFF)
+        if checksum == 0xFF:
+            checksum = 0x00
+        # log.debug("[_calculateCRC] Calculating for: {self._toString(msg)}     calculated CRC is: {self._toString(bytearray([checksum]))}")
+        return bytearray([checksum])
+
+
+
 class AlPanelInterfaceHelper(AlPanelInterface):
 
     def __init__(self):
@@ -519,7 +746,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
     # Convert byte array to a string of hex values
     def _toString(self, array_alpha: bytearray):
-        return "".join("%02x " % b for b in array_alpha)
+        return ("".join("%02x " % b for b in array_alpha))[:-1]
 
     # get the current date and time
     def _getTimeFunction(self) -> datetime:
@@ -545,7 +772,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         if count > 0:
             self.PanelLastEvent = zonemode[0] + "/" + name[0]
 
-        log.debug(f"Last event {datadict}")
+        #log.debug(f"Last event {datadict}")
         return datadict
 
     def setLastEventData(self, reset : bool = False) -> dict:
@@ -689,6 +916,11 @@ class AlPanelInterfaceHelper(AlPanelInterface):
             self.PanelMode = AlPanelMode.STOPPED
             self.PanelState = AlPanelStatus.UNKNOWN
             self.PanelStatus = {}
+            log.debug("[Controller] ********************************************************************************")
+            log.debug("[Controller] ********************************************************************************")
+            log.debug("[Controller] ****************************** Operations Suspended ****************************")
+            log.debug("[Controller] ********************************************************************************")
+            log.debug("[Controller] ********************************************************************************")
         self.PanelLastEventData = self.setLastEventData()
 
     def dumpSensorsToStringList(self) -> list:

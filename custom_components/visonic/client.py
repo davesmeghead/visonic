@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 from .pyconst import AlEnum, AlTransport, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlSensorDevice, AlLogPanelEvent, AlSensorType, AlSwitchDevice
 from .pyvisonic import VisonicProtocol
 from functools import partial
+from homeassistant.components import persistent_notification
 
 from enum import IntEnum
 from requests import ConnectTimeout, HTTPError
@@ -99,7 +100,7 @@ class PanelCondition(IntEnum):
     CHECK_EVENT_LOG_COMMAND = 13
     CHECK_X10_COMMAND = 14
 
-CLIENT_VERSION = "0.9.1.1"
+CLIENT_VERSION = "0.9.2.0"
 
 MAX_CLIENT_LOG_ENTRIES = 100
 
@@ -113,37 +114,44 @@ ActionList = (
 class MyTransport(AlTransport):
  
     def __init__(self, t):
-        self.transport = t
+        self._transport = t
     
     def write(self, b : bytearray):
-        self.transport.write(b)
+        self._transport.write(b)
 
     def close(self):
-        self.transport.close()
+        self._transport.close()
+
+    def changeSerialBaud(self, baud : int):
+        print(f"[MyTransport] A, {self._transport.serial.baudrate} {type(self._transport.serial.baudrate)}")
+        self._transport.serial.baudrate = baud
+        print(f"[MyTransport] B, {self._transport.serial.baudrate} {type(self._transport.serial.baudrate)}")
+
 
 # This class joins the Protocol data stream to the visonic protocol handler.
 #    transport needs to have 2 functions:   write(bytearray)  and  close()
 class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 
     def __init__(self, client = None, *args, **kwargs):
-        _LOGGER.debug("Initialising ClientVisonicProtocol A")
         super().__init__(*args, **kwargs)
-        _LOGGER.debug("Initialising ClientVisonicProtocol B")
         if client is not None:
-            _LOGGER.debug("Initialising ClientVisonicProtocol C")
             client.tellemaboutme(self)
-            _LOGGER.debug("Initialising ClientVisonicProtocol D")
-        _LOGGER.debug("Initialising ClientVisonicProtocol E")    
 
     def data_received(self, data):
         super().vp_data_received(data)
 
     def connection_made(self, transport):
-        self.trans = MyTransport(t=transport)
-        super().vp_connection_made(self.trans)
+        self._transport = transport
+        super().vp_connection_made(MyTransport(t=transport))
 
     def connection_lost(self, exc):
         super().vp_connection_lost(exc)
+        self._transport = None
+
+    def changeSerialBaud(self, baud : int):
+        print(f"[ClientVisonicProtocol] A, {self._transport.serial.baudrate} {type(self._transport.serial.baudrate)}")
+        self._transport.serial.baudrate = baud
+        print(f"[ClientVisonicProtocol] B, {self._transport.serial.baudrate} {type(self._transport.serial.baudrate)}")
 
     # This is needed so we can create the class instance before giving it to the protocol handlers
     def __call__(self):
@@ -161,6 +169,7 @@ class VisonicClient:
         self.createdAlarmPanel = False
         # Get the user defined config
         self.config = cf.copy()
+        self.vp = None
         
         self.sensor_task = None
         self.select_task = None
@@ -170,11 +179,19 @@ class VisonicClient:
 
         self.sensor_list = list()
         self.x10_list = list()
+
+        self.no_data_from_panel = False
+        self.baud_rate = 9600
+
+        self.delayBetweenAttempts = 60.0
+        self.totalAttempts = 1
+
+        self.alarm_entity_created = False
         
         self.DisableAllCommands = False
 
         self.strlog = []
-        self.logstate_debug(f"init panel {str(panelident)}  language {str(self.hass.config.language)}   self.config = {self.config}")
+        #self.logstate_debug(f"init panel {str(panelident)}  language {str(self.hass.config.language)}   self.config = {self.config}")
         
         self.panelident = panelident
 
@@ -255,9 +272,7 @@ class VisonicClient:
         if condition == AvailableNotifications.ALWAYS or condition in notification_config:
             # Create an info entry in the log file and an HA notification
             self.logstate_info(f"HA Notification: {message}")
-            self.hass.components.persistent_notification.create(
-                message, title=NOTIFICATION_TITLE, notification_id=NOTIFICATION_ID
-            )
+            persistent_notification.create(self.hass, message, title=NOTIFICATION_TITLE, notification_id=NOTIFICATION_ID)
         else:
             # Just create a log file entry (but indicate that it wasnt shown in the frontend to the user
             self.logstate_info(f"HA Warning (not shown in frontend due to user config), condition is {condition} message={message}")
@@ -569,6 +584,7 @@ class VisonicClient:
                 self.logstate_debug(f"X10 Device {dev.getDeviceID()} already in the list")
 
     def setupAlarmPanel(self):
+        self.alarm_entity_created = True
         if self.DisableAllCommands:
             self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setup(self.entry, MONITOR_SENSOR_STR))
         else:
@@ -726,6 +742,7 @@ class VisonicClient:
         elif event_id == AlCondition.WATCHDOG_TIMEOUT_RETRYING:
             self.createNotification(AvailableNotifications.PANEL_OPERATION, "Communication Timeout - Watchdog Timeout, restoring panel connection" )
         elif event_id == AlCondition.NO_DATA_FROM_PANEL:
+            self.no_data_from_panel = True
             self.createNotification(AvailableNotifications.CONNECTION_PROBLEM, "Connection Problem - No data from the panel" )
             asyncio.ensure_future(self.service_panel_stop(), loop=self.hass.loop)
         elif event_id == AlCondition.COMMAND_REJECTED:
@@ -810,18 +827,9 @@ class VisonicClient:
         if self.visonicProtocol is not None:
             self.visonicProtocol.updateSettings(self.getConfigData())
 
-    # Create a connection using asyncio using an ip and port
-    async def async_create_tcp_visonic_connection(self, address, port, panelConfig : PanelConfig = None, loop=None):
-        """Create Visonic manager class, returns tcp transport coroutine."""
-        loop = loop if loop else asyncio.get_event_loop()
-        
-        #self.logstate_debug("Setting address and port")
-        address = address
-        port = int(port)
-
-        sock = None
+    def _createSocketConnection(self, address, port):
         try:
-            self.logstate_debug("Setting TCP socket Options")
+            self.logstate_debug(f"Setting TCP socket Options {address} {port}")
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
@@ -831,7 +839,7 @@ class VisonicClient:
 
             # Flush the buffer, receive any data and dump it
             try:
-                dummy = sock.recv(10000)  # try to receive 100 bytes
+                dummy = sock.recv(10000)  # try to receive 10000 bytes
                 self.logstate_debug("Buffer Flushed and Received some data!")
             except socket.timeout:  # fail after 1 second of no activity
                 #self.logstate_debug("Buffer Flushed and Didn't receive data! [Timeout]")
@@ -839,26 +847,44 @@ class VisonicClient:
 
             # set the timeout to infinite
             sock.settimeout(None)
-
-            vp = ClientVisonicProtocol(panelConfig=panelConfig, loop=loop)
-
-            # create the connection to the panel as an asyncio protocol handler and then set it up in a task
-            coro = loop.create_connection(vp, sock=sock)
-
-            self.logstate_debug("The coro type is " + str(type(coro)) + "   with value " + str(coro))
-            visonicTask = loop.create_task(coro)
-
-            return visonicTask, vp
-
+            
+            return sock
+            
         except socket.error as err:
-            #err = _
             self.logstate_debug("Setting TCP socket Options Exception {0}".format(err))
             if sock is not None:
                 sock.close()
+
+        return None
+
+    # Create a connection using asyncio using an ip and port
+    async def async_create_tcp_visonic_connection(self, address, port, panelConfig : PanelConfig = None, powerlink_connected = False, powerlink_port = "30001", loop=None):
+        """Create Visonic manager class, returns tcp transport coroutine."""
+        loop = loop if loop else asyncio.get_event_loop()
+        
+        try:
+            sock = self._createSocketConnection(address, int(port))
+            if sock is not None:
+                pl_sock = None # self._createSocketConnection(address, int(powerlink_port)) if powerlink_connected else None
+
+                # Create the Protocol Handler for the Panel, also handle Powerlink connection inside this protocol handler
+                self.vp = ClientVisonicProtocol(panelConfig=panelConfig, pl_sock = pl_sock, loop=loop)
+
+                # create the connection to the panel as an asyncio protocol handler and then set it up in a task
+                coro = loop.create_connection(self.vp, sock=sock)
+
+                #self.logstate_debug("The coro type is " + str(type(coro)) + "   with value " + str(coro))
+                # Wrap the coroutine in a task to add it to the asyncio loop
+                visonicTask = loop.create_task(coro)
+
+                return visonicTask, self.vp
+
+        except Exception as ex:
+            pass
+            
         return None, None
 
     def tellemaboutme(self, thisisme):
-        self.logstate_debug(f"Here This is me {thisisme}")
         self.vp = thisisme
 
     # Create a connection using asyncio through a linux port (usb or rs232)
@@ -866,7 +892,6 @@ class VisonicClient:
         """Create Visonic manager class, returns rs232 transport coroutine."""
         from serial_asyncio import create_serial_connection
 
-        self.logstate_debug("Here AA")
         loop=loop if loop else asyncio.get_event_loop()
 
         self.logstate_debug("Setting USB Options")
@@ -879,28 +904,22 @@ class VisonicClient:
             loop=loop,
         )
 
-        self.logstate_debug("Here BB")
-
         # setup serial connection
         path = path
         baud = int(baud)
         try:
-            self.logstate_debug(f"Here CC {path} {baud}")
             self.vp = None
+            
             # create the connection to the panel as an asyncio protocol handler and then set it up in a task
             conn = create_serial_connection(loop, protocol, path, baud)
-            self.logstate_debug("The coro type is " + str(type(conn)) + "   with value " + str(conn))
+            #self.logstate_debug("The coro type is " + str(type(conn)) + "   with value " + str(conn))
             visonicTask = loop.create_task(conn)
-            self.logstate_debug("Here DD")
             ctr = 0
             while self.vp is None and ctr < 20:     # 20 with a sleep of 0.1 is approx 2 seconds. Wait up to 2 seconds for this to start.
-                self.logstate_debug("Here EE")
                 await asyncio.sleep(0.1)            # This should only happen once while the Protocol Handler starts up and calls tellemaboutme to set self.vp
                 ctr = ctr + 1
             if self.vp is not None:
-                self.logstate_debug("Here FF")
                 return visonicTask, self.vp
-            self.logstate_debug("Here GG")
         except Exception as ex:
             self.logstate_debug(f"Setting USB Options Exception {ex}")
         return None, None
@@ -943,13 +962,13 @@ class VisonicClient:
             
         elif device_type == "usb":
             path = self.config.get(CONF_PATH)
-            baud = self.config.get(CONF_DEVICE_BAUD)
+            #baud = self.config.get(CONF_DEVICE_BAUD)
             (
                 self.visonicTask,
                 self.visonicProtocol,
             ) = await self.async_create_usb_visonic_connection(
                 path=path,
-                baud=baud,
+                baud=self.baud_rate,
                 panelConfig=self.getConfigData(),
                 loop=self.hass.loop,
             )
@@ -1009,7 +1028,7 @@ class VisonicClient:
             if not self.DisableAllCommands:
                 await self.hass.config_entries.async_forward_entry_unload(self.entry, SELECT_STR)
             await self.hass.config_entries.async_forward_entry_unload(self.entry, BINARY_SENSOR_STR)
-            #await self.hass.config_entries.async_forward_entry_unload(self.entry, IMAGE_SENSOR_STR)
+            await self.hass.config_entries.async_forward_entry_unload(self.entry, IMAGE_SENSOR_STR)
         else:
             self.logstate_debug("No Sensors to Unload")
         
@@ -1023,21 +1042,23 @@ class VisonicClient:
         self.sensor_list = list()
         self.x10_list = list()
         
-        if self.DisableAllCommands:
-            self.logstate_debug("Unloading Alarm Panel Sensor")
-            # unload the alarm panel
-            await self.hass.config_entries.async_forward_entry_unload(self.entry, MONITOR_SENSOR_STR)
-        else:
-            self.logstate_debug("Unloading Alarm Control Panel")
-            # unload the alarm panel
-            await self.hass.config_entries.async_forward_entry_unload(self.entry, ALARM_PANEL_ENTITY)
+        if self.alarm_entity_created:
+            if self.DisableAllCommands:
+                self.logstate_debug("Unloading Alarm Panel Sensor")
+                # unload the alarm panel
+                await self.hass.config_entries.async_forward_entry_unload(self.entry, MONITOR_SENSOR_STR)
+            else:
+                self.logstate_debug("Unloading Alarm Control Panel")
+                # unload the alarm panel
+                await self.hass.config_entries.async_forward_entry_unload(self.entry, ALARM_PANEL_ENTITY)
+            self.alarm_entity_created = False
 
         # cancel the task from within HA
         if self.visonicTask is not None:
             self.logstate_debug("........... Closing down Current Task")
             self.visonicTask.cancel()
             await asyncio.sleep(2.0)
-            if self.visonicTask.done():
+            if self.visonicTask is not None and self.visonicTask.done():
                 self.logstate_debug("........... Current Task Done")
             else:
                 self.logstate_debug("........... Current Task Not Done")
@@ -1049,7 +1070,7 @@ class VisonicClient:
 
     async def service_panel_start(self, force : bool):
         """Service call to start the connection."""
-        # force is set True on initial connection so the totalAttempts (for the number of reconnections) can be set to 0. 
+        # force is set True on initial connection so the self.totalAttempts (for the number of reconnections) can be set to 0. 
         #    It is forced to try at least once on integration start (or reload)
         if self.SystemStarted:
             self.logstate_warning("Request to Start and the integraion is already running and connected")
@@ -1057,21 +1078,10 @@ class VisonicClient:
 
         #self.logstate_debug(f"service_panel_start, connecting   force = {force}")
 
-        delayBetweenAttempts = 60.0
-        totalAttempts = 1
-
-        if CONF_RETRY_CONNECTION_DELAY in self.config:
-            delayBetweenAttempts = float(self.config.get(CONF_RETRY_CONNECTION_DELAY))   # seconds
-
-        if CONF_RETRY_CONNECTION_COUNT in self.config:
-            totalAttempts = int(self.config.get(CONF_RETRY_CONNECTION_COUNT))
-        
         attemptCounter = 0
-        #self.logstate_debug(f"     {attemptCounter} of {totalAttempts}")
-        while force or attemptCounter < totalAttempts:
-            self.logstate_debug("........... connection attempt {0} of {1}".format(attemptCounter + 1, totalAttempts))
-            self.visonicTask = None
-            self.visonicProtocol = None
+        #self.logstate_debug(f"     {attemptCounter} of {self.totalAttempts}")
+        while force or attemptCounter < self.totalAttempts:
+            self.logstate_debug("........... connection attempt {0} of {1}".format(attemptCounter + 1, self.totalAttempts))
             if await self.connect_to_alarm():
                 self.logstate_debug("........... connection made")
                 self.fireHAEvent( {"condition": 0, "action": ActionList[0], "state": "connected", "attempt": attemptCounter + 1} )
@@ -1079,9 +1089,9 @@ class VisonicClient:
             self.fireHAEvent( {"condition": 0, "action": ActionList[0], "state": "failedattempt", "attempt": attemptCounter + 1} )
             attemptCounter = attemptCounter + 1
             force = False
-            if attemptCounter < totalAttempts:
-                self.logstate_debug("........... connection attempt delay {0} seconds".format(delayBetweenAttempts))
-                await asyncio.sleep(delayBetweenAttempts)
+            if attemptCounter < self.totalAttempts:
+                self.logstate_debug("........... connection attempt delay {0} seconds".format(self.delayBetweenAttempts))
+                await asyncio.sleep(self.delayBetweenAttempts)
 
         self.createNotification(
             AvailableNotifications.CONNECTION_PROBLEM,
@@ -1315,14 +1325,14 @@ class VisonicClient:
         else:
             self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
-    #def getJPG(self, ident: int, count : int):
-    #    """Send a request to get the jpg images from a camera """
-    #    if not self.DisableAllCommands:
-    #        # ident in range 1 to 64
-    #        if self.visonicProtocol is not None:
-    #            retval = self.visonicProtocol.getJPG(ident, count)
-    #    else:
-    #        self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+    def getJPG(self, ident: int, count : int):
+        """Send a request to get the jpg images from a camera """
+        if not self.DisableAllCommands:
+            # ident in range 1 to 64
+            if self.visonicProtocol is not None:
+                retval = self.visonicProtocol.getJPG(ident, count)
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
     def decode_code(self, data) -> str:
         """Decode the alarm code."""
@@ -1458,32 +1468,30 @@ class VisonicClient:
         else:
             self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
-    # Service alarm_control_panel.alarm_sensor_bypass
-    # {"entity_id": "binary_sensor.visonic_z01", "bypass":"True", "code":"1234" }
+    # Service alarm_control_panel.retrieve_jpg_imge
     def sensor_update_image(self, eid : str):
         """Bypass individual sensors."""
-        self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Command to get image is Disabled")
-        #if not self.DisableAllCommands:
-        #    # This function concerns itself with bypassing a sensor and the visonic panel interaction
-        #    mybpstate = self.hass.states.get(eid)
-        #    if mybpstate is not None:
-        #        if DEVICE_ATTRIBUTE_NAME in mybpstate.attributes and PANEL_ATTRIBUTE_NAME in mybpstate.attributes:
-        #            devid = mybpstate.attributes[DEVICE_ATTRIBUTE_NAME]
-        #            #self.logstate_debug("Attempt to bypass sensor mybpstate.attributes = {0}".format(mybpstate.attributes))
-        #            panel = mybpstate.attributes[PANEL_ATTRIBUTE_NAME]
-        #            if panel == self.getPanelID(): # This should be done in _init_ but check again to make sure as its a critical operation
-        #                if devid >= 1 and devid <= 64:
-        #                    self.getJPG(devid, 4)  # The 4 is the number of images to retrieve but it doesnt work
-        #                else:
-        #                    self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, incorrect device {str(devid)} for entity {eid}")
-        #            else:
-        #                self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, device {str(devid)} but entity {eid} not connected to this panel")
-        #        else:
-        #            self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, incorrect entity {eid}")
-        #    else:
-        #        self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, unknown device state for entity {eid}")
-        #else:
-        #    self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+        if not self.DisableAllCommands:
+            # This function concerns itself with bypassing a sensor and the visonic panel interaction
+            mybpstate = self.hass.states.get(eid)
+            if mybpstate is not None:
+                if DEVICE_ATTRIBUTE_NAME in mybpstate.attributes and PANEL_ATTRIBUTE_NAME in mybpstate.attributes:
+                    devid = mybpstate.attributes[DEVICE_ATTRIBUTE_NAME]
+                    #self.logstate_debug("Attempt to bypass sensor mybpstate.attributes = {0}".format(mybpstate.attributes))
+                    panel = mybpstate.attributes[PANEL_ATTRIBUTE_NAME]
+                    if panel == self.getPanelID(): # This should be done in _init_ but check again to make sure as its a critical operation
+                        if devid >= 1 and devid <= 64:
+                            self.getJPG(devid, 11)  # The 11 is the number of images to retrieve but it doesnt work
+                        else:
+                            self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, incorrect device {str(devid)} for entity {eid}")
+                    else:
+                        self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, device {str(devid)} but entity {eid} not connected to this panel")
+                else:
+                    self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, incorrect entity {eid}")
+            else:
+                self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, unknown device state for entity {eid}")
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
 
     def dump_dict(self, d):
@@ -1492,34 +1500,30 @@ class VisonicClient:
 
     async def service_sensor_image(self, call):
         """Service call to bypass a sensor in the panel."""
-        self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Command to get image is Disabled")
-#        if not self.DisableAllCommands:
-#            self.logstate_debug("Received sensor image update request")
-#            if not self.isPanelConnected():
-#                raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
-#
-#            # if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
-#            if isinstance(call.data, dict):
-#                self.logstate_debug("  Sensor_image = %s", str(type(call.data)))
-#                self.dump_dict(call.data)
-#                if ATTR_ENTITY_ID in call.data:
-#                    eid = str(call.data[ATTR_ENTITY_ID])
-#                    if not eid.startswith(IMAGE_SENSOR_STR + "."):
-#                        eid = IMAGE_SENSOR_STR + "." + eid
-#                    if valid_entity_id(eid):
-#                        if call.context.user_id:
-#                            await self.checkUserPermission(call, POLICY_CONTROL, call.data[ATTR_ENTITY_ID])
-#                        
-#                        self.sensor_update_image(eid)
-#                    else:
-#                        self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, invalid entity {eid}")
-#                else:
-#                    self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
-#            else:
-#                self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
-#        else:
-#            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+        if not self.DisableAllCommands:
+            self.logstate_debug("Received sensor image update request")
+            if not self.isPanelConnected():
+                raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
 
+            # if type(call.data) is dict or str(type(call.data)) == "<class 'mappingproxy'>" or str(type(call.data)) == "<class 'homeassistant.util.read_only_dict.ReadOnlyDict'>":
+            if isinstance(call.data, dict):
+                if ATTR_ENTITY_ID in call.data:
+                    eid = str(call.data[ATTR_ENTITY_ID])
+                    if not eid.startswith(IMAGE_SENSOR_STR + "."):
+                        eid = IMAGE_SENSOR_STR + "." + eid
+                    if valid_entity_id(eid):
+                        if call.context.user_id:
+                            await self.checkUserPermission(call, POLICY_CONTROL, call.data[ATTR_ENTITY_ID])
+                        
+                        self.sensor_update_image(eid)
+                    else:
+                        self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, invalid entity {eid}")
+                else:
+                    self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
+            else:
+                self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()} but entity not defined")
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
     async def service_sensor_bypass(self, call):
         """Service call to bypass a sensor in the panel."""
@@ -1597,6 +1601,15 @@ class VisonicClient:
     async def connect(self):
         """Connect to the alarm panel using the pyvisonic library."""
         try:
+            if CONF_DEVICE_BAUD in self.config:
+                self.baud_rate = self.config.get(CONF_DEVICE_BAUD)
+
+            if CONF_RETRY_CONNECTION_DELAY in self.config:
+                self.delayBetweenAttempts = float(self.config.get(CONF_RETRY_CONNECTION_DELAY))   # seconds
+
+            if CONF_RETRY_CONNECTION_COUNT in self.config:
+                self.totalAttempts = int(self.config.get(CONF_RETRY_CONNECTION_COUNT))
+
             #self.logstate_info("Client connecting.....")
             # Establish a callback to stop the component when the stop event occurs
             self.hass.bus.async_listen_once(

@@ -71,11 +71,10 @@ class VisonicBinarySensor(BinarySensorEntity):
         self._current_value = (self._visonic_device.isTriggered() or self._visonic_device.isOpen())
         self._is_available = self._visonic_device.isEnrolled()
         
-        #self.isitacamera = False
-        #if sensor.getSensorType() == AlSensorType.CAMERA:
-        #   VisonicBinarySensor.createImageEntity(self.hass, self.entry, self.client, sensor)           
-        #else:
-        #   self.isitacamera = True
+        self.checking_for_camera_type = True
+        if sensor.getSensorType() == AlSensorType.CAMERA:
+           VisonicBinarySensor.createImageEntity(self.hass, self.entry, self.client, sensor)           
+           self.checking_for_camera_type = False
 
         self._visonic_device.onChange(self.onChange)
 
@@ -121,11 +120,11 @@ class VisonicBinarySensor(BinarySensorEntity):
         """Call on any change to the sensor."""
         # the sensor parameter is the same as self._visonic_device, but it's a generic callback handler that cals this function
         # Update the current value based on the device state
-        #_LOGGER.debug(f"   In binary sensor VisonicSensor onchange {self._visonic_device}   self.isitacamera={self.isitacamera}")
+        #_LOGGER.debug(f"   In binary sensor VisonicSensor onchange {self._visonic_device}   self.checking_for_camera_type={self.checking_for_camera_type}")
         if self._visonic_device is not None:
-            #if self.isitacamera and sensor.getSensorType() == AlSensorType.CAMERA:
-            #    VisonicBinarySensor.createImageEntity(self.hass, self.entry, self.client, sensor) 
-            #    self.isitacamera = False
+            if self.checking_for_camera_type and sensor.getSensorType() == AlSensorType.CAMERA:
+                VisonicBinarySensor.createImageEntity(self.hass, self.entry, self.client, sensor) 
+                self.checking_for_camera_type = False
         
             self._current_value = (self._visonic_device.isTriggered() or self._visonic_device.isOpen())
             self._is_available = self._visonic_device.isEnrolled()

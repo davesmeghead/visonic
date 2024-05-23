@@ -192,6 +192,7 @@ class AlPanelCommand(AlEnum):
     FIRE = AlIntEnum(7)
     EMERGENCY = AlIntEnum(8)
     PANIC = AlIntEnum(9)
+    CHANGE_BAUD = AlIntEnum(20)
 a = AlPanelCommand()
 
 # The set of commands that can be used to mute and trigger the siren
