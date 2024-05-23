@@ -96,7 +96,7 @@ except:
     from pyconst import AlTransport, AlPanelDataStream, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlTroubleType, AlAlarmType, AlPanelStatus, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlLogPanelEvent, AlSensorType
     from pyhelper import MyChecksumCalc, AlImageManager, ImageRecord, titlecase, pmPanelTroubleType_t, pmPanelAlarmType_t, AlPanelInterfaceHelper, AlSensorDeviceHelper, AlSwitchDeviceHelper
 
-PLUGIN_VERSION = "1.3.0.1"
+PLUGIN_VERSION = "1.3.2.0"
 
 # Some constants to help readability of the code
 
@@ -4735,11 +4735,18 @@ class PacketHandling(ProtocolBase):
             # Zone Types
             #     e.g. 03 2d 45 ff 08 03 40 04 0c 07 07 07 0c 06 07 07 07 06 06 07 07 06 07 07 07 07 0a 0a 07 07 09 09 0a 0a 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 05 07 8b 43
             #     e.g. 03 2d 45 ff 08 03 40 04 0c 07 07 07 0c 06 07 07 07 06 06 07 07 06 07 07 07 07 0a 0a 07 07 09 09 0a 0a 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 07 05 07 91 43
-            start = 45
+            #          03 2d 23 ff 08 03 1e 0c 0c 0c 07 07 0c 07 07 07 07 06 06 07 07 06 07 07 07 07 0a 0a 07 07 09 09 0a 0a 07 07 07 ab 43 
+
+            start = 0
             if msgLen == 69:
                 start = 6
             elif msgLen == 94:
                 start = 6
+            elif msgLen == 35:
+                start = 6
+            else:
+                log.debug("[handle_msgtypeB0]            ************** Received message, zone types, but unknown length so not processing it ***************")
+                return
             zoneLen = data[start]
             log.debug("[handle_msgtypeB0]       Received message, zone types, length = {0}".format(zoneLen))
             for i in range(0, zoneLen):
