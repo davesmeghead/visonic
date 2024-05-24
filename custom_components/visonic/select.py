@@ -33,7 +33,7 @@ async def async_setup_entry(
     #_LOGGER.debug("************* select async_setup_entry **************")
 
     if DOMAIN in hass.data:
-        #_LOGGER.debug("   In select async_setup_entry")
+        # _LOGGER.debug("   In select async_setup_entry")
         client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
         if not client.isDisableAllCommands():
             sensors = [
@@ -41,7 +41,8 @@ async def async_setup_entry(
             ]
             # empty the list as we have copied the entries so far in to sensors
             hass.data[DOMAIN][entry.entry_id][SELECT_STR] = list()
-            async_add_entities(sensors, True)
+            if len(sensors) > 0:
+                async_add_entities(sensors, True)
 
 
 class VisonicSelect(SelectEntity):

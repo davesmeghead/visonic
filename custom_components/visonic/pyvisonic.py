@@ -37,7 +37,7 @@
 #################################################################
 
 import os
-import requests
+# import requests
 
 # The defaults are set for use in Home Assistant.
 #    If using MocroPython / CircuitPython then set these values in the environment
@@ -96,7 +96,7 @@ except:
     from pyconst import AlTransport, AlPanelDataStream, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlTroubleType, AlAlarmType, AlPanelStatus, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlLogPanelEvent, AlSensorType
     from pyhelper import MyChecksumCalc, AlImageManager, ImageRecord, titlecase, pmPanelTroubleType_t, pmPanelAlarmType_t, AlPanelInterfaceHelper, AlSensorDeviceHelper, AlSwitchDeviceHelper
 
-PLUGIN_VERSION = "1.3.2.0"
+PLUGIN_VERSION = "1.3.2.2"
 
 # Some constants to help readability of the code
 
@@ -658,221 +658,181 @@ pmPanelType_t = {
    10 : "PowerMaster 33", 13 : "PowerMaster 360", 15 : "PowerMaster 33", 16 : "PowerMaster 360R"
 }
 
-# Config for each panel type (0-16).  8 is a PowerMaster 30, 10 is a PowerMaster 33, 15 is a PowerMaster 33 later model.  Don't know what 9, 11, 12, 13 or 14 is.
+# Config for each panel type (0-16).  8 is a PowerMaster 30, 10 is a PowerMaster 33, 15 is a PowerMaster 33 later model.  Don't know what 9, 11, 12 or 14 is.
 pmPanelConfig_t = {
    "CFG_PARTITIONS"  : (   1,   1,   1,   1,   3,   3,   1,   3,   3,   3,   3,   3,   3,   3,   3,   3,   3 ),
-   "CFG_EVENTS"      : ( 250, 250, 250, 250, 250, 250, 250, 250,1000,1000,1000,1000,1000,1000,1000,1000,1000 ),
-   "CFG_KEYFOBS"     : (   8,   8,   8,   8,   8,   8,   8,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
+#   "CFG_EVENTS"      : ( 250, 250, 250, 250, 250, 250, 250, 250,1000,1000,1000,1000,1000,1000,1000,1000,1000 ),
+#   "CFG_KEYFOBS"     : (   8,   8,   8,   8,   8,   8,   8,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
    "CFG_1WKEYPADS"   : (   8,   8,   8,   8,   8,   8,   8,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 ),
    "CFG_2WKEYPADS"   : (   2,   2,   2,   2,   2,   2,   2,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
    "CFG_SIRENS"      : (   2,   2,   2,   2,   2,   2,   2,   4,   8,   8,   8,   8,   8,   8,   8,   8,   8 ),
    "CFG_USERCODES"   : (   8,   8,   8,   8,   8,   8,   8,   8,  48,  48,  48,  48,  48,  48,  48,  48,  48 ),
-   "CFG_PROXTAGS"    : (   0,   0,   8,   0,   8,   8,   0,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
-   "CFG_WIRELESS"    : (  28,  28,  28,  28,  28,  28,  28,  29,  62,  62,  62,  62,  62,  62,  62,  62,  62 ), # 30, 64
-   "CFG_WIRED"       : (   2,   2,   2,   2,   2,   2,   1,   1,   2,   2,   2,   2,   2,   2,   2,   2,   0 ),
-   "CFG_ZONECUSTOM"  : (   0,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5 )
+#   "CFG_PROXTAGS"    : (   0,   0,   8,   0,   8,   8,   0,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
+#   "CFG_ZONECUSTOM"  : (   0,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5 ),
+   "CFG_WIRELESS"    : (  28,  28,  28,  28,  28,  28,  29,  29,  62,  62,  62,  62,  62,  64,  62,  62,  64 ), # Wireless + Wired total 30 or 64
+   "CFG_WIRED"       : (   2,   2,   2,   2,   2,   2,   1,   1,   2,   2,   2,   2,   2,   0,   2,   2,   0 )
 }
 
-Dumpy = False
+XDumpy = False      # Used to dump PowerMax Data to the log file
+SDumpy = False      # Used to dump PowerMaster Data to the log file
+Dumpy = XDumpy or SDumpy
 
 # PMAX EEPROM CONFIGURATION version 1_2
 SettingsCommand = collections.namedtuple('SettingsCommand', 'show count type poff psize pstep pbitoff name values')
 DecodePanelSettings = {
-    "ChangedTime"    : SettingsCommand(  True, 1, "DATE",    248,   48,   0,    -1,  "EPROM Change Time I Think",          { } ),
-    "jamDetect"      : SettingsCommand(  True, 1, "BYTE",    256,    8,   0,    -1,  "Jamming Detection",                  { '1':"UL 20/20", '2':"EN 30/60", '3':"Class 6", '4':"Other", '0':"Disable"} ),
-    "entryDelays"    : SettingsCommand(  True, 2, "BYTE",    257,    8,   1,     2,  ["Entry Delay 1","Entry Delay 2"],    { '0':"None", '15':"15 Seconds", '30':"30 Seconds", '45':"45 Seconds", '60':"1 Minute", '180':"3 Minutes", '240':"4 Minutes"}),  # 257, 258
-    "exitDelay"      : SettingsCommand(  True, 1, "BYTE",    259,    8,   0,    -1,  "Exit Delay",                         { '30':"30 Seconds", '60':"60 Seconds", '90':"90 Seconds", '120':"2 Minutes", '180':"3 Minutes", '240':"4 Minutes"}),
-    "bellTime"       : SettingsCommand(  True, 1, "BYTE",    260,    8,   0,    -1,  "Bell Time",                          { '1':"1 Minute", '3':"3 Minutes", '4':"4 Minutes", '8':"8 Minutes", '10':"10 Minutes", '15':"15 Minutes", '20':"20 Minutes"}),
-    "piezoBeeps"     : SettingsCommand(  True, 1, "BYTE",    261,    8,   0,    -1,  "Piezo Beeps",                        { '3':"Enable (off when home)", '2':"Enable", '1':"Off when Home", '0':"Disable"} ),
-    "swingerStop"    : SettingsCommand(  True, 1, "BYTE",    262,    8,   0,    -1,  "Swinger Stop",                       { '1':"After 1 Time", '2':"After 2 Times", '3':"After 3 Times", '0':"No Shutdown"} ),
-    "fobAux"         : SettingsCommand(  True, 2, "BYTE",    263,    8,  14,    -1,  ["Aux Key 1","Aux Key 2"],            { '1':"System Status", '2':"Instant Arm", '3':"Cancel Exit Delay", '4':"PGM/X-10"} ), # 263, 277
-    "supervision"    : SettingsCommand(  True, 1, "BYTE",    264,    8,   0,    -1,  "Supervision Interval",               { '1':"1 Hour", '2':"2 Hours", '4':"4 Hours", '8':"8 Hours", '12':"12 Hours", '0':"Disable"} ),
-    "noActivity"     : SettingsCommand(  True, 1, "BYTE",    265,    8,   0,    -1,  "No Activity Time",                   { '3':"3 Hours", '6':"6 Hours",'12':"12 Hours", '24':"24 Hours", '48':"48 Hours", '72':"72 Hours", '0':"Disable"} ),
-    "cancelTime"     : SettingsCommand(  True, 1, "BYTE",    266,    8,   0,    -1,  "Alarm Cancel Time",                  { '0':"Inactive", '1':"1 Minute", '5':"5 Minutes", '15':"15 Minutes", '60':"60 Minutes", '240':"4 Hours"}),
-    "abortTime"      : SettingsCommand(  True, 1, "BYTE",    267,    8,   0,    -1,  "Abort Time",                         { '0':"None", '15':"15 Seconds", '30':"30 Seconds", '45':"45 Seconds", '60':"1 Minute", '120':"2 Minutes", '180':"3 Minutes", '240':"4 Minutes"} ),
-    "confirmAlarm"   : SettingsCommand(  True, 1, "BYTE",    268,    8,   0,    -1,  "Confirm Alarm Timer",                { '0':"None", '30':"30 Minutes", '45':"45 Minutes", '60':"60 Minutes", '90':"90 Minutes"} ),
-    "screenSaver"    : SettingsCommand(  True, 1, "BYTE",    269,    8,   0,    -1,  "Screen Saver",                       { '2':"Reset By Key", '1':"Reset By Code", '0':"Off"} ),
-    "resetOption"    : SettingsCommand(  True, 1, "BYTE",    270,    8,   0,    -1,  "Reset Option",                       { '1':"Engineer Reset", '0':"User Reset"}  ),
-    "duress"         : SettingsCommand(  True, 1, "CODE",    273,   16,   0,    -1,  "Duress",                             {  } ),
-    "acFailure"      : SettingsCommand(  True, 1, "BYTE",    275,    8,   0,    -1,  "AC Failure Report",                  { '0':"None", '5':"5 Minutes", '30':"30 Minutes", '60':"60 Minutes", '180':"180 Minutes"} ),
-    "userPermit"     : SettingsCommand(  True, 1, "BYTE",    276,    8,   0,    -1,  "User Permit",                        { '1':"Enable", '0':"Disable"} ),
-    "zoneRestore"    : SettingsCommand(  True, 1, "BYTE",    280,    1,   0,     0,  "Zone Restore",                       { '0':"Report Restore", '1':"Don't Report"} ),
-    "tamperOption"   : SettingsCommand(  True, 1, "BYTE",    280,    1,   0,     1,  "Tamper Option",                      { '1':"On", '0':"Off"} ),
-    "pgmByLineFail"  : SettingsCommand(  True, 1, "BYTE",    280,    1,   0,     2,  "PGM By Line Fail",                   { '1':"Yes", '0':"No"} ),
-    "usrArmOption"   : SettingsCommand(  True, 1, "BYTE",    280,    1,   0,     5,  "Auto Arm Option",                    { '1':"Enable", '0':"Disable"} ),
-    "send2wv"        : SettingsCommand(  True, 1, "BYTE",    280,    1,   0,     6,  "Send 2wv Code",                      { '1':"Send", '0':"Don't Send"} ),
-    "memoryPrompt"   : SettingsCommand(  True, 1, "BYTE",    281,    1,   0,     0,  "Memory Prompt",                      { '1':"Enable", '0':"Disable" } ),
-    "usrTimeFormat"  : SettingsCommand(  True, 1, "BYTE",    281,    1,   0,     1,  "Time Format",                        { '0':"USA - 12H", '1':"Europe - 24H"}),
-    "usrDateFormat"  : SettingsCommand(  True, 1, "BYTE",    281,    1,   0,     2,  "Date Format",                        { '0':"USA MM/DD/YYYY", '1':"Europe DD/MM/YYYY"}),
-    "lowBattery"     : SettingsCommand(  True, 1, "BYTE",    281,    1,   0,     3,  "Low Battery Acknowledge",            { '1':"On", '0':"Off"} ),
-    "notReady"       : SettingsCommand(  True, 1, "BYTE",    281,    1,   0,     4,  "Not Ready",                          { '0':"Normal", '1':"In Supervision"}  ),
-    "x10Flash"       : SettingsCommand(  True, 1, "BYTE",    281,    1,   0,     5,  "X10 Flash On Alarm",                 { '0':"No Flash", '1':"All Lights Flash" } ),
-    "disarmOption"   : SettingsCommand(  True, 1, "BYTE",    281,    2,   0,     6,  "Disarm Option",                      { '0':"Any Time", '1':"On Entry All", '2':"On Entry Wireless", '3':"Entry + Away KP"} ),
-    "sirenOnLine"    : SettingsCommand(  True, 1, "BYTE",    282,    1,   0,     1,  "Siren On Line",                      { '0':"Disable on Fail", '1':"Enable on Fail" }  ),
-    "uploadOption"   : SettingsCommand(  True, 1, "BYTE",    282,    1,   0,     2,  "Upload Option",                      { '0':"When System Off", '1':"Any Time"} ),
-    "panicAlarm"     : SettingsCommand(  True, 1, "BYTE",    282,    2,   0,     4,  "Panic Alarm",                        { '1':"Silent Panic", '2':"Audible Panic", '0':"Disable Panic"}  ),
-    "exitMode"       : SettingsCommand(  True, 1, "BYTE",    282,    2,   0,     6,  "Exit Mode",                          { '1':"Restart Exit", '2':"Off by Door", '0':"Normal"} ),
-    "bellReport"     : SettingsCommand(  True, 1, "BYTE",    283,    1,   0,     0,  "Bell Report Option",                 { '1':"EN Standard", '0':"Others"}  ),
-    "intStrobe"      : SettingsCommand(  True, 1, "BYTE",    283,    1,   0,     1,  "Internal/Strobe Siren",              { '0':"Internal Siren", '1':"Strobe"} ),
-    "quickArm"       : SettingsCommand(  True, 1, "BYTE",    283,    1,   0,     3,  "Quick Arm",                          { '1':"On", '0':"Off"} ),
-    "backLight"      : SettingsCommand(  True, 1, "BYTE",    283,    1,   0,     5,  "Back Light Time",                    { '1':"Allways On", '0':"Off After 10 Seconds"} ),
-    "voice2Private"  : SettingsCommand(  True, 1, "BYTE",    283,    1,   0,     6,  "Two-Way Voice - Private",            { '0':"Disable", '1':"Enable"} ),
-    "latchKey"       : SettingsCommand(  True, 1, "BYTE",    283,    1,   0,     7,  "Latchkey Arming",                    { '1':"On", '0':"Off"} ),
-    "bypass"         : SettingsCommand(  True, 1, "BYTE",    284,    2,   0,     6,  "Bypass",                             { '2':"Manual Bypass", '0':"No Bypass", '1':"Force Arm"} ),
-    "troubleBeeps"   : SettingsCommand(  True, 1, "BYTE",    284,    2,   0,     1,  "Trouble Beeps",                      { '3':"Enable", '1':"Off at Night", '0':"Disable"} ),
-    "crossZoning"    : SettingsCommand(  True, 1, "BYTE",    284,    1,   0,     0,  "Cross Zoning",                       { '1':"On", '0':"Off"} ),
-    "recentClose"    : SettingsCommand(  True, 1, "BYTE",    284,    1,   0,     3,  "Recent Close Report",                { '1':"On", '0':"Off"} ),
-    "piezoSiren"     : SettingsCommand(  True, 1, "BYTE",    284,    1,   0,     5,  "Piezo Siren",                        { '1':"On", '0':"Off"} ),
-    "dialMethod"     : SettingsCommand(  True, 1, "BYTE",    285,    1,   0,     0,  "Dialing Method",                     { '0':"Tone (DTMF)", '1':"Pulse"} ),
-    "privateAck"     : SettingsCommand( Dumpy, 1, "BYTE",    285,    1,   0,     1,  "Private Telephone Acknowledge",      { '0':"Single Acknowledge", '1':"All Acknowledge"} ),
-    "remoteAccess"   : SettingsCommand(  True, 1, "BYTE",    285,    1,   0,     2,  "Remote Access",                      { '1':"On", '0':"Off"}),
-    "reportConfirm"  : SettingsCommand(  True, 1, "BYTE",    285,    2,   0,     6,  "Report Confirmed Alarm",             { '0':"Disable Report", '1':"Enable Report", '2':"Enable + Bypass"} ),
-    "centralStation" : SettingsCommand(  True, 2, "PHONE",   288,   64,  11,    -1,  ["1st Central Tel", "2nd Central Tel"], {} ), # 288, 299
-    "accountNo"      : SettingsCommand(  True, 2, "ACCOUNT", 296,   24,  11,    -1,  ["1st Account No","2nd Account No"],  {} ), # 296, 307
-    "usePhoneNrs"    : SettingsCommand( Dumpy, 4, "PHONE",   310,   64,   8,    -1,  ["1st Private Tel","2nd Private Tel","3rd Private Tel","4th Private Tel"],  {} ),  # 310, 318, 326, 334
-    "pagerNr"        : SettingsCommand(  True, 1, "PHONE",   342,   64,   0,    -1,  "Pager Tel Number",                   {} ),
-    "pagerPIN"       : SettingsCommand(  True, 1, "PHONE",   350,   64,   0,    -1,  "Pager PIN #",                        {} ),
-    "ringbackTime"   : SettingsCommand(  True, 1, "BYTE",    358,    8,   0,    -1,  "Ringback Time",                      { '1':"1 Minute", '3':"3 Minutes", '5':"5 Minutes", '10':"10 Minutes"} ),
-    "reportCentral"  : SettingsCommand(  True, 1, "BYTE",    359,    8,   0,    -1,  "Report to Central Station",          { '15':"All * Backup", '7':"All but Open/Close * Backup", '255':"All * All", '119':"All but Open/Close * All but Open/Close", '135':"All but Alert * Alert", '45':"Alarms * All but Alarms", '0':"Disable"} ),
-    "pagerReport"    : SettingsCommand(  True, 1, "BYTE",    360,    8,   0,    -1,  "Report To Pager",                    { '15':"All", '3':"All + Alerts", '7':"All but Open/Close", '12':"Troubles+Open/Close", '4':"Troubles", '8':"Open/Close", '0':"Disable Report"}  ),
-    "privateReport"  : SettingsCommand(  True, 1, "BYTE",    361,    8,   0,    -1,  "Reporting To Private Tel",           { '15':"All", '7':"All but Open/Close", '13':"All but Alerts", '1':"Alarms", '2':"Alerts", '8':"Open/Close", '0':"Disable Report"} ),
-    "csDialAttempt"  : SettingsCommand(  True, 1, "BYTE",    362,    8,   0,    -1,  "Central Station Dialing Attempts",   { '2':"2", '4':"4", '8':"8", '12':"12", '16':"16"} ),
-    "reportFormat"   : SettingsCommand(  True, 1, "BYTE",    363,    8,   0,    -1,  "Report Format",                      { '0':"Contact ID", '1':"SIA", '2':"4/2 1900/1400", '3':"4/2 1800/2300", '4':"Scancom"}  ),
-    "pulseRate"      : SettingsCommand(  True, 1, "BYTE",    364,    8,   0,    -1,  "4/2 Pulse Rate",                     { '0':"10 pps", '1':"20 pps", '2':"33 pps", '3':"40 pps"} ),
-    "privateAttempt" : SettingsCommand( Dumpy, 1, "BYTE",    365,    8,   0,    -1,  "Private Telephone Dialing Attempts", { '1':"1 Attempt", '2':"2 Attempts", '3':"3 Attempts", '4':"4 Attempts"} ),
-    "voice2Central"  : SettingsCommand(  True, 1, "BYTE",    366,    8,   0,    -1,  "Two-Way Voice To Central Stations",  { '10':"Time-out 10 Seconds", '45':"Time-out 45 Seconds", '60':"Time-out 60 Seconds", '90':"Time-out 90 Seconds", '120':"Time-out 2 Minutes", '1':"Ring Back", '0':"Disable"} ),
-    "autotestTime"   : SettingsCommand(  True, 1, "TIME",    367,   16,   0,    -1,  "Autotest Time",                      {} ),
-    "autotestCycle"  : SettingsCommand(  True, 1, "BYTE",    369,    8,   0,    -1,  "Autotest Cycle",                     { '1':"1 Day", '4':"5 Days", '2':"7 Days", '3':"30 Days", '0':"Disable"}  ),
-    "areaCode"       : SettingsCommand( Dumpy, 1, "CODE",    371,   24,   0,    -1,  "Area Code",                          {} ),
-    "outAccessNr"    : SettingsCommand( Dumpy, 1, "CODE",    374,    8,   0,    -1,  "Out Access Number",                  {} ),
-    "lineFailure"    : SettingsCommand(  True, 1, "BYTE",    375,    8,   0,    -1,  "Line Failure Report",                { '0':"Don't Report", '1':"Immediately", '5':"5 Minutes", '30':"30 Minutes", '60':"60 Minutes", '180':"180 Minutes"} ),
-    "remoteProgNr"   : SettingsCommand(  True, 1, "PHONE",   376,   64,   0,    -1,  "Remote Programmer Tel. No.",         {} ),
-    "inactiveReport" : SettingsCommand(  True, 1, "BYTE",    384,    8,   0,    -1,  "System Inactive Report",             { '0':"Disable", '180':"7 Days", '14':"14 Days", '30':"30 Days", '90':"90 Days"} ),
-    "ambientLevel"   : SettingsCommand(  True, 1, "BYTE",    388,    8,   0,    -1,  "Ambient Level",                      { '0':"High Level", '1':"Low Level"} ),
-    "plFailure"      : SettingsCommand(  True, 1, "BYTE",    391,    8,   0,    -1,  "PowerLink Failure",                  { '1':"Report", '0':"Disable Report"} ),
-    "gsmPurpose"     : SettingsCommand(  True, 1, "BYTE",    392,    8,   0,    -1,  "GSM Line Purpose",                   { '1':"GSM is Backup", '2':"GSM is Primary", '3':"GSM Only", '0':"SMS Only" } ),
-    "gsmSmsReport"   : SettingsCommand(  True, 1, "BYTE",    393,    8,   0,    -1,  "GSM Report to SMS",                  { '15':"All", '7':"All but Open/Close", '13':"All but Alerts", '1':"Alarms", '2':"Alerts", '8':"Open/Close", '0':"Disable Report"} ),
-    "gsmFailure"     : SettingsCommand(  True, 1, "BYTE",    394,    8,   0,    -1,  "GSM Line Failure",                   { '0':"Don't Report", '2':"2 Minutes", '5':"5 Minutes", '15':"15 Minutes", '30':"30 Minutes"} ),
-    "gsmInstall"     : SettingsCommand( Dumpy, 1, "BYTE",    395,    8,   0,    -1,  "GSM Install",                        { '1':"Installed", '0':"Not Installed"} ),
-    "gsmSmsNrs"      : SettingsCommand( Dumpy, 4, "PHONE",   396,   64,   8,    -1,  ["1st SMS Tel","2nd SMS Tel","3rd SMS Tel","4th SMS Tel"], {} ),  #  396,404,412,420
-    "gsmAntenna"     : SettingsCommand(  True, 1, "BYTE",    447,    8,   0,    -1,  "GSM Select Antenna",                 { '0':"Internal antenna", '1':"External antenna", '2':"Auto detect"} ),
+    "ChangedTime"    : SettingsCommand(   True,  1, "DATE",    248,  48,   0,    -1,  "EPROM Change Time I Think",          { } ),
+    "jamDetect"      : SettingsCommand(   True,  1, "BYTE",    256,   8,   0,    -1,  "Jamming Detection",                  { '1':"UL 20/20", '2':"EN 30/60", '3':"Class 6", '4':"Other", '0':"Disable"} ),
+    "entryDelays"    : SettingsCommand(   True,  2, "BYTE",    257,   8,   1,     2,  ["Entry Delay 1","Entry Delay 2"],    { '0':"None", '15':"15 Seconds", '30':"30 Seconds", '45':"45 Seconds", '60':"1 Minute", '180':"3 Minutes", '240':"4 Minutes"}),  # 257, 258
+    "exitDelay"      : SettingsCommand(   True,  1, "BYTE",    259,   8,   0,    -1,  "Exit Delay",                         { '30':"30 Seconds", '60':"60 Seconds", '90':"90 Seconds", '120':"2 Minutes", '180':"3 Minutes", '240':"4 Minutes"}),
+    "bellTime"       : SettingsCommand(   True,  1, "BYTE",    260,   8,   0,    -1,  "Bell Time",                          { '1':"1 Minute", '3':"3 Minutes", '4':"4 Minutes", '8':"8 Minutes", '10':"10 Minutes", '15':"15 Minutes", '20':"20 Minutes"}),
+    "piezoBeeps"     : SettingsCommand(   True,  1, "BYTE",    261,   8,   0,    -1,  "Piezo Beeps",                        { '3':"Enable (off when home)", '2':"Enable", '1':"Off when Home", '0':"Disable"} ),
+    "swingerStop"    : SettingsCommand(   True,  1, "BYTE",    262,   8,   0,    -1,  "Swinger Stop",                       { '1':"After 1 Time", '2':"After 2 Times", '3':"After 3 Times", '0':"No Shutdown"} ),
+    "fobAux"         : SettingsCommand(   True,  2, "BYTE",    263,   8,  14,    -1,  ["Aux Key 1","Aux Key 2"],            { '1':"System Status", '2':"Instant Arm", '3':"Cancel Exit Delay", '4':"PGM/X-10"} ), # 263, 277
+    "supervision"    : SettingsCommand(   True,  1, "BYTE",    264,   8,   0,    -1,  "Supervision Interval",               { '1':"1 Hour", '2':"2 Hours", '4':"4 Hours", '8':"8 Hours", '12':"12 Hours", '0':"Disable"} ),
+    "noActivity"     : SettingsCommand(   True,  1, "BYTE",    265,   8,   0,    -1,  "No Activity Time",                   { '3':"3 Hours", '6':"6 Hours",'12':"12 Hours", '24':"24 Hours", '48':"48 Hours", '72':"72 Hours", '0':"Disable"} ),
+    "cancelTime"     : SettingsCommand(   True,  1, "BYTE",    266,   8,   0,    -1,  "Alarm Cancel Time",                  { '0':"Inactive", '1':"1 Minute", '5':"5 Minutes", '15':"15 Minutes", '60':"60 Minutes", '240':"4 Hours"}),
+    "abortTime"      : SettingsCommand(   True,  1, "BYTE",    267,   8,   0,    -1,  "Abort Time",                         { '0':"None", '15':"15 Seconds", '30':"30 Seconds", '45':"45 Seconds", '60':"1 Minute", '120':"2 Minutes", '180':"3 Minutes", '240':"4 Minutes"} ),
+    "confirmAlarm"   : SettingsCommand(   True,  1, "BYTE",    268,   8,   0,    -1,  "Confirm Alarm Timer",                { '0':"None", '30':"30 Minutes", '45':"45 Minutes", '60':"60 Minutes", '90':"90 Minutes"} ),
+    "screenSaver"    : SettingsCommand(   True,  1, "BYTE",    269,   8,   0,    -1,  "Screen Saver",                       { '2':"Reset By Key", '1':"Reset By Code", '0':"Off"} ),
+    "resetOption"    : SettingsCommand(   True,  1, "BYTE",    270,   8,   0,    -1,  "Reset Option",                       { '1':"Engineer Reset", '0':"User Reset"}  ),
+    "duress"         : SettingsCommand(   True,  1, "CODE",    273,  16,   0,    -1,  "Duress",                             {  } ),
+    "acFailure"      : SettingsCommand(   True,  1, "BYTE",    275,   8,   0,    -1,  "AC Failure Report",                  { '0':"None", '5':"5 Minutes", '30':"30 Minutes", '60':"60 Minutes", '180':"180 Minutes"} ),
+    "userPermit"     : SettingsCommand(   True,  1, "BYTE",    276,   8,   0,    -1,  "User Permit",                        { '1':"Enable", '0':"Disable"} ),
+    "zoneRestore"    : SettingsCommand(   True,  1, "BYTE",    280,   1,   0,     0,  "Zone Restore",                       { '0':"Report Restore", '1':"Don't Report"} ),
+    "tamperOption"   : SettingsCommand(   True,  1, "BYTE",    280,   1,   0,     1,  "Tamper Option",                      { '1':"On", '0':"Off"} ),
+    "pgmByLineFail"  : SettingsCommand(   True,  1, "BYTE",    280,   1,   0,     2,  "PGM By Line Fail",                   { '1':"Yes", '0':"No"} ),
+    "usrArmOption"   : SettingsCommand(   True,  1, "BYTE",    280,   1,   0,     5,  "Auto Arm Option",                    { '1':"Enable", '0':"Disable"} ),
+    "send2wv"        : SettingsCommand(   True,  1, "BYTE",    280,   1,   0,     6,  "Send 2wv Code",                      { '1':"Send", '0':"Don't Send"} ),
+    "memoryPrompt"   : SettingsCommand(   True,  1, "BYTE",    281,   1,   0,     0,  "Memory Prompt",                      { '1':"Enable", '0':"Disable" } ),
+    "usrTimeFormat"  : SettingsCommand(   True,  1, "BYTE",    281,   1,   0,     1,  "Time Format",                        { '0':"USA - 12H", '1':"Europe - 24H"}),
+    "usrDateFormat"  : SettingsCommand(   True,  1, "BYTE",    281,   1,   0,     2,  "Date Format",                        { '0':"USA MM/DD/YYYY", '1':"Europe DD/MM/YYYY"}),
+    "lowBattery"     : SettingsCommand(   True,  1, "BYTE",    281,   1,   0,     3,  "Low Battery Acknowledge",            { '1':"On", '0':"Off"} ),
+    "notReady"       : SettingsCommand(   True,  1, "BYTE",    281,   1,   0,     4,  "Not Ready",                          { '0':"Normal", '1':"In Supervision"}  ),
+    "x10Flash"       : SettingsCommand(   True,  1, "BYTE",    281,   1,   0,     5,  "X10 Flash On Alarm",                 { '0':"No Flash", '1':"All Lights Flash" } ),
+    "disarmOption"   : SettingsCommand(   True,  1, "BYTE",    281,   2,   0,     6,  "Disarm Option",                      { '0':"Any Time", '1':"On Entry All", '2':"On Entry Wireless", '3':"Entry + Away KP"} ),
+    "sirenOnLine"    : SettingsCommand(   True,  1, "BYTE",    282,   1,   0,     1,  "Siren On Line",                      { '0':"Disable on Fail", '1':"Enable on Fail" }  ),
+    "uploadOption"   : SettingsCommand(   True,  1, "BYTE",    282,   1,   0,     2,  "Upload Option",                      { '0':"When System Off", '1':"Any Time"} ),
+    "panicAlarm"     : SettingsCommand(   True,  1, "BYTE",    282,   2,   0,     4,  "Panic Alarm",                        { '1':"Silent Panic", '2':"Audible Panic", '0':"Disable Panic"}  ),
+    "exitMode"       : SettingsCommand(   True,  1, "BYTE",    282,   2,   0,     6,  "Exit Mode",                          { '1':"Restart Exit", '2':"Off by Door", '0':"Normal"} ),
+    "bellReport"     : SettingsCommand(   True,  1, "BYTE",    283,   1,   0,     0,  "Bell Report Option",                 { '1':"EN Standard", '0':"Others"}  ),
+    "intStrobe"      : SettingsCommand(   True,  1, "BYTE",    283,   1,   0,     1,  "Internal/Strobe Siren",              { '0':"Internal Siren", '1':"Strobe"} ),
+    "quickArm"       : SettingsCommand(   True,  1, "BYTE",    283,   1,   0,     3,  "Quick Arm",                          { '1':"On", '0':"Off"} ),
+    "backLight"      : SettingsCommand(   True,  1, "BYTE",    283,   1,   0,     5,  "Back Light Time",                    { '1':"Allways On", '0':"Off After 10 Seconds"} ),
+    "voice2Private"  : SettingsCommand(   True,  1, "BYTE",    283,   1,   0,     6,  "Two-Way Voice - Private",            { '0':"Disable", '1':"Enable"} ),
+    "latchKey"       : SettingsCommand(   True,  1, "BYTE",    283,   1,   0,     7,  "Latchkey Arming",                    { '1':"On", '0':"Off"} ),
+    "bypass"         : SettingsCommand(   True,  1, "BYTE",    284,   2,   0,     6,  "Bypass",                             { '2':"Manual Bypass", '0':"No Bypass", '1':"Force Arm"} ),
+    "troubleBeeps"   : SettingsCommand(   True,  1, "BYTE",    284,   2,   0,     1,  "Trouble Beeps",                      { '3':"Enable", '1':"Off at Night", '0':"Disable"} ),
+    "crossZoning"    : SettingsCommand(   True,  1, "BYTE",    284,   1,   0,     0,  "Cross Zoning",                       { '1':"On", '0':"Off"} ),
+    "recentClose"    : SettingsCommand(   True,  1, "BYTE",    284,   1,   0,     3,  "Recent Close Report",                { '1':"On", '0':"Off"} ),
+    "piezoSiren"     : SettingsCommand(   True,  1, "BYTE",    284,   1,   0,     5,  "Piezo Siren",                        { '1':"On", '0':"Off"} ),
+    "dialMethod"     : SettingsCommand(   True,  1, "BYTE",    285,   1,   0,     0,  "Dialing Method",                     { '0':"Tone (DTMF)", '1':"Pulse"} ),
+    "privateAck"     : SettingsCommand(  Dumpy,  1, "BYTE",    285,   1,   0,     1,  "Private Telephone Acknowledge",      { '0':"Single Acknowledge", '1':"All Acknowledge"} ),
+    "remoteAccess"   : SettingsCommand(   True,  1, "BYTE",    285,   1,   0,     2,  "Remote Access",                      { '1':"On", '0':"Off"}),
+    "reportConfirm"  : SettingsCommand(   True,  1, "BYTE",    285,   2,   0,     6,  "Report Confirmed Alarm",             { '0':"Disable Report", '1':"Enable Report", '2':"Enable + Bypass"} ),
+    "centralStation" : SettingsCommand(   True,  2, "PHONE",   288,  64,  11,    -1,  ["1st Central Tel", "2nd Central Tel"], {} ), # 288, 299
+    "accountNo"      : SettingsCommand(   True,  2, "ACCOUNT", 296,  24,  11,    -1,  ["1st Account No","2nd Account No"],  {} ), # 296, 307
+    "usePhoneNrs"    : SettingsCommand(  Dumpy,  4, "PHONE",   310,  64,   8,    -1,  ["1st Private Tel","2nd Private Tel","3rd Private Tel","4th Private Tel"],  {} ),  # 310, 318, 326, 334
+    "pagerNr"        : SettingsCommand(   True,  1, "PHONE",   342,  64,   0,    -1,  "Pager Tel Number",                   {} ),
+    "pagerPIN"       : SettingsCommand(   True,  1, "PHONE",   350,  64,   0,    -1,  "Pager PIN #",                        {} ),
+    "ringbackTime"   : SettingsCommand(   True,  1, "BYTE",    358,   8,   0,    -1,  "Ringback Time",                      { '1':"1 Minute", '3':"3 Minutes", '5':"5 Minutes", '10':"10 Minutes"} ),
+    "reportCentral"  : SettingsCommand(   True,  1, "BYTE",    359,   8,   0,    -1,  "Report to Central Station",          { '15':"All * Backup", '7':"All but Open/Close * Backup", '255':"All * All", '119':"All but Open/Close * All but Open/Close", '135':"All but Alert * Alert", '45':"Alarms * All but Alarms", '0':"Disable"} ),
+    "pagerReport"    : SettingsCommand(   True,  1, "BYTE",    360,   8,   0,    -1,  "Report To Pager",                    { '15':"All", '3':"All + Alerts", '7':"All but Open/Close", '12':"Troubles+Open/Close", '4':"Troubles", '8':"Open/Close", '0':"Disable Report"}  ),
+    "privateReport"  : SettingsCommand(   True,  1, "BYTE",    361,   8,   0,    -1,  "Reporting To Private Tel",           { '15':"All", '7':"All but Open/Close", '13':"All but Alerts", '1':"Alarms", '2':"Alerts", '8':"Open/Close", '0':"Disable Report"} ),
+    "csDialAttempt"  : SettingsCommand(   True,  1, "BYTE",    362,   8,   0,    -1,  "Central Station Dialing Attempts",   { '2':"2", '4':"4", '8':"8", '12':"12", '16':"16"} ),
+    "reportFormat"   : SettingsCommand(   True,  1, "BYTE",    363,   8,   0,    -1,  "Report Format",                      { '0':"Contact ID", '1':"SIA", '2':"4/2 1900/1400", '3':"4/2 1800/2300", '4':"Scancom"}  ),
+    "pulseRate"      : SettingsCommand(   True,  1, "BYTE",    364,   8,   0,    -1,  "4/2 Pulse Rate",                     { '0':"10 pps", '1':"20 pps", '2':"33 pps", '3':"40 pps"} ),
+    "privateAttempt" : SettingsCommand(  Dumpy,  1, "BYTE",    365,   8,   0,    -1,  "Private Telephone Dialing Attempts", { '1':"1 Attempt", '2':"2 Attempts", '3':"3 Attempts", '4':"4 Attempts"} ),
+    "voice2Central"  : SettingsCommand(   True,  1, "BYTE",    366,   8,   0,    -1,  "Two-Way Voice To Central Stations",  { '10':"Time-out 10 Seconds", '45':"Time-out 45 Seconds", '60':"Time-out 60 Seconds", '90':"Time-out 90 Seconds", '120':"Time-out 2 Minutes", '1':"Ring Back", '0':"Disable"} ),
+    "autotestTime"   : SettingsCommand(   True,  1, "TIME",    367,  16,   0,    -1,  "Autotest Time",                      {} ),
+    "autotestCycle"  : SettingsCommand(   True,  1, "BYTE",    369,   8,   0,    -1,  "Autotest Cycle",                     { '1':"1 Day", '4':"5 Days", '2':"7 Days", '3':"30 Days", '0':"Disable"}  ),
+    "areaCode"       : SettingsCommand(  Dumpy,  1, "CODE",    371,  24,   0,    -1,  "Area Code",                          {} ),
+    "outAccessNr"    : SettingsCommand(  Dumpy,  1, "CODE",    374,   8,   0,    -1,  "Out Access Number",                  {} ),
+    "lineFailure"    : SettingsCommand(   True,  1, "BYTE",    375,   8,   0,    -1,  "Line Failure Report",                { '0':"Don't Report", '1':"Immediately", '5':"5 Minutes", '30':"30 Minutes", '60':"60 Minutes", '180':"180 Minutes"} ),
+    "remoteProgNr"   : SettingsCommand(   True,  1, "PHONE",   376,  64,   0,    -1,  "Remote Programmer Tel. No.",         {} ),
+    "inactiveReport" : SettingsCommand(   True,  1, "BYTE",    384,   8,   0,    -1,  "System Inactive Report",             { '0':"Disable", '180':"7 Days", '14':"14 Days", '30':"30 Days", '90':"90 Days"} ),
+    "ambientLevel"   : SettingsCommand(   True,  1, "BYTE",    388,   8,   0,    -1,  "Ambient Level",                      { '0':"High Level", '1':"Low Level"} ),
+    "plFailure"      : SettingsCommand(   True,  1, "BYTE",    391,   8,   0,    -1,  "PowerLink Failure",                  { '1':"Report", '0':"Disable Report"} ),
+    "gsmPurpose"     : SettingsCommand(   True,  1, "BYTE",    392,   8,   0,    -1,  "GSM Line Purpose",                   { '1':"GSM is Backup", '2':"GSM is Primary", '3':"GSM Only", '0':"SMS Only" } ),
+    "gsmSmsReport"   : SettingsCommand(   True,  1, "BYTE",    393,   8,   0,    -1,  "GSM Report to SMS",                  { '15':"All", '7':"All but Open/Close", '13':"All but Alerts", '1':"Alarms", '2':"Alerts", '8':"Open/Close", '0':"Disable Report"} ),
+    "gsmFailure"     : SettingsCommand(   True,  1, "BYTE",    394,   8,   0,    -1,  "GSM Line Failure",                   { '0':"Don't Report", '2':"2 Minutes", '5':"5 Minutes", '15':"15 Minutes", '30':"30 Minutes"} ),
+    "gsmInstall"     : SettingsCommand(  Dumpy,  1, "BYTE",    395,   8,   0,    -1,  "GSM Install",                        { '1':"Installed", '0':"Not Installed"} ),
+    "gsmSmsNrs"      : SettingsCommand(  Dumpy,  4, "PHONE",   396,  64,   8,    -1,  ["1st SMS Tel","2nd SMS Tel","3rd SMS Tel","4th SMS Tel"], {} ),  #  396,404,412,420
+    "gsmAntenna"     : SettingsCommand(   True,  1, "BYTE",    447,   8,   0,    -1,  "GSM Select Antenna",                 { '0':"Internal antenna", '1':"External antenna", '2':"Auto detect"} ),
 
-    "userCodeMax"    : SettingsCommand( Dumpy, 8, "BYTE",    506,   16,   2,    -1,  "PowerMax User Codes",                {} ),
-    "userCodeMaster" : SettingsCommand( Dumpy,48, "BYTE",   2712,   16,   2,    -1,  "PowerMaster User Codes",             {} ),
+    "userCodeMax"    : SettingsCommand( XDumpy,  8, "BYTE",    506,  16,   2,    -1,  "PowerMax User Codes",                {} ),
+    "userCodeMaster" : SettingsCommand( SDumpy, 48, "BYTE",   2712,  16,   2,    -1,  "PowerMaster User Codes",             {} ),
 
-    "masterCode"     : SettingsCommand( Dumpy, 1, "BYTE",    522,   16,   0,    -1,  "Master Code",                        {} ),
-    "installerCode"  : SettingsCommand( Dumpy, 1, "BYTE",    524,   16,   0,    -1,  "Installer Code",                     {} ),
-    "masterDlCode"   : SettingsCommand( Dumpy, 1, "BYTE",    526,   16,   0,    -1,  "Master Download Code",               {} ),
-    "instalDlCode"   : SettingsCommand( Dumpy, 1, "BYTE",    528,   16,   0,    -1,  "Installer Download Code",            {} ),
+    "masterCode"     : SettingsCommand( SDumpy,  1, "BYTE",    522,  16,   0,    -1,  "Master Code",                        {} ),
+    "installerCode"  : SettingsCommand(  Dumpy,  1, "BYTE",    524,  16,   0,    -1,  "Installer Code",                     {} ),
+    "masterDlCode"   : SettingsCommand(  Dumpy,  1, "BYTE",    526,  16,   0,    -1,  "Master Download Code",               {} ),
+    "instalDlCode"   : SettingsCommand( SDumpy,  1, "BYTE",    528,  16,   0,    -1,  "Installer Download Code",            {} ),
 
-    "x10Lockout"     : SettingsCommand( Dumpy, 1, "TIME",    532,   16,   0,    -1,  "X10 Lockout Time (start HH:MM)",     {} ),
-    "x10HouseCode"   : SettingsCommand( Dumpy, 1, "BYTE",    536,    8,   0,    -1,  "X10 House Code",                     { '0':"A", '1':"B", '2':"C", '3':"D", '4':"E", '5':"F", '6':"G", '7':"H", '8':"I", '9':"J", '10':"K", '11':"L", '12':"M", '13':"N", '14':"O", '15':"P"}  ),
-    "x10ByArmAway"   : SettingsCommand( Dumpy,16, "BYTE",    537,    8,   1,    -1,  "X10 By Arm Away",                    { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
-    "x10ByArmHome"   : SettingsCommand( Dumpy,16, "BYTE",    553,    8,   1,    -1,  "X10 By Arm Home",                    { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
-    "x10ByDisarm"    : SettingsCommand( Dumpy,16, "BYTE",    569,    8,   1,    -1,  "X10 By Disarm",                      { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
-    "x10ByDelay"     : SettingsCommand( Dumpy,16, "BYTE",    585,    8,   1,    -1,  "X10 By Delay",                       { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
-    "x10ByMemory"    : SettingsCommand( Dumpy,16, "BYTE",    601,    8,   1,    -1,  "X10 By Memory",                      { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
-    "x10ByKeyfob"    : SettingsCommand( Dumpy,16, "BYTE",    617,    8,   1,    -1,  "X10 By Keyfob",                      { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
-    "x10ActZoneA"    : SettingsCommand( Dumpy,16, "BYTE",    633,    8,   1,    -1,  "X10 Act Zone A",                     { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
-    "x10ActZoneB"    : SettingsCommand( Dumpy,16, "BYTE",    649,    8,   1,    -1,  "X10 Act Zone B",                     { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
-    "x10ActZoneC"    : SettingsCommand( Dumpy,16, "BYTE",    665,    8,   1,    -1,  "X10 Act Zone C",                     { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
-    "x10PulseTime"   : SettingsCommand( Dumpy,16, "BYTE",    681,    8,   1,    -1,  "X10 Pulse Time",                     { '255':"Disable", '0':"Unknown", '2':"2 Seconds", '30':"30 Seconds", '120':"2 Minutes", '240':"4 Minutes"} ),
-    "x10Zone"        : SettingsCommand( Dumpy,16, "BYTE",    697,   24,   3,    -1,  "X10 Zone Data",                      {} ),
+    "x10Lockout"     : SettingsCommand(  Dumpy,  1, "TIME",    532,  16,   0,    -1,  "X10 Lockout Time (start HH:MM)",     {} ),
+    "x10HouseCode"   : SettingsCommand(  Dumpy,  1, "BYTE",    536,   8,   0,    -1,  "X10 House Code",                     { '0':"A", '1':"B", '2':"C", '3':"D", '4':"E", '5':"F", '6':"G", '7':"H", '8':"I", '9':"J", '10':"K", '11':"L", '12':"M", '13':"N", '14':"O", '15':"P"}  ),
+    "x10ByArmAway"   : SettingsCommand(  Dumpy, 16, "BYTE",    537,   8,   1,    -1,  "X10 By Arm Away",                    { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
+    "x10ByArmHome"   : SettingsCommand(  Dumpy, 16, "BYTE",    553,   8,   1,    -1,  "X10 By Arm Home",                    { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
+    "x10ByDisarm"    : SettingsCommand(  Dumpy, 16, "BYTE",    569,   8,   1,    -1,  "X10 By Disarm",                      { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
+    "x10ByDelay"     : SettingsCommand(  Dumpy, 16, "BYTE",    585,   8,   1,    -1,  "X10 By Delay",                       { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
+    "x10ByMemory"    : SettingsCommand(  Dumpy, 16, "BYTE",    601,   8,   1,    -1,  "X10 By Memory",                      { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
+    "x10ByKeyfob"    : SettingsCommand(  Dumpy, 16, "BYTE",    617,   8,   1,    -1,  "X10 By Keyfob",                      { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
+    "x10ActZoneA"    : SettingsCommand(  Dumpy, 16, "BYTE",    633,   8,   1,    -1,  "X10 Act Zone A",                     { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
+    "x10ActZoneB"    : SettingsCommand(  Dumpy, 16, "BYTE",    649,   8,   1,    -1,  "X10 Act Zone B",                     { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
+    "x10ActZoneC"    : SettingsCommand(  Dumpy, 16, "BYTE",    665,   8,   1,    -1,  "X10 Act Zone C",                     { '255':"Disable", '0':"Disable", '1':"Turn Off", '2':"Turn On", '3':"Pulse Active", '4':"Toggle"} ),
+    "x10PulseTime"   : SettingsCommand(  Dumpy, 16, "BYTE",    681,   8,   1,    -1,  "X10 Pulse Time",                     { '255':"Disable", '0':"Unknown", '2':"2 Seconds", '30':"30 Seconds", '120':"2 Minutes", '240':"4 Minutes"} ),
+    "x10Zone"        : SettingsCommand(  Dumpy, 16, "BYTE",    697,  24,   3,    -1,  "X10 Zone Data",                      {} ),
 
-    "x10Unknown1"    : SettingsCommand( Dumpy, 1, "BYTE",    745,    8,   0,    -1,  "X10 Unknown 1",                      {} ),
-    "x10Unknown2"    : SettingsCommand( Dumpy, 1, "BYTE",    746,    8,   0,    -1,  "X10 Unknown 2",                      {} ),
+    "x10Unknown1"    : SettingsCommand(  Dumpy,  1, "BYTE",    745,   8,   0,    -1,  "X10 Unknown 1",                      {} ),
+    "x10Unknown2"    : SettingsCommand(  Dumpy,  1, "BYTE",    746,   8,   0,    -1,  "X10 Unknown 2",                      {} ),
 
-    "x10Trouble"     : SettingsCommand( Dumpy, 1, "BYTE",    747,    8,   0,    -1,  "X10 Trouble Indication",             { '1':"Enable", '0':"Disable"} ),
-    "x10Phase"       : SettingsCommand( Dumpy, 1, "BYTE",    748,    8,   0,    -1,  "X10 3 Phase and frequency",          { '0':"Disable", '1':"50 Hz", '2':"60 Hz"} ),
-    "x10ReportCs1"   : SettingsCommand( Dumpy, 1, "BYTE",    749,    1,   0,     0,  "X10 Report on Fail to Central Station 1", { '1':"Enable", '0':"Disable"} ),
-    "x10ReportCs2"   : SettingsCommand( Dumpy, 1, "BYTE",    749,    1,   0,     1,  "X10 Report on Fail to Central Station 2", { '1':"Enable", '0':"Disable"} ),
-    "x10ReportPagr"  : SettingsCommand( Dumpy, 1, "BYTE",    749,    1,   0,     2,  "X10 Report on Fail to Pager",        { '1':"Enable", '0':"Disable"} ),
-    "x10ReportPriv"  : SettingsCommand( Dumpy, 1, "BYTE",    749,    1,   0,     3,  "X10 Report on Fail to Private",      { '1':"Enable", '0':"Disable"} ),
-    "x10ReportSMS"   : SettingsCommand( Dumpy, 1, "BYTE",    749,    1,   0,     4,  "X10 Report on Fail to SMS",          { '1':"Enable", '0':"Disable"} ),
-    "usrVoice"       : SettingsCommand( Dumpy, 1, "BYTE",    763,    8,   0,    -1,  "Set Voice Option",                   { '0':"Disable Voice", '1':"Enable Voice"} ),
-    "usrSquawk"      : SettingsCommand( Dumpy, 1, "BYTE",    764,    8,   0,    -1,  "Squawk Option",                      { '0':"Disable", '1':"Low Level", '2':"Medium Level", '3':"High Level"}),
-    "usrArmTime"     : SettingsCommand( Dumpy, 1, "TIME",    765,   16,   0,    -1,  "Auto Arm Time",                      {} ),
-    "PartitionData"  : SettingsCommand(Dumpy,255, "BYTE",    768,    8,   1,    -1,  "Partition Data. Not sure what it is",{} ),   # I'm not sure how many bytes this is or what they mean, i get all 255 bytes to the next entry so they can be displayed
-    "panelEprom"     : SettingsCommand(  True, 1, "STRING", 1024,  128,   0,    -1,  "Panel Eprom",                        {} ),
-    "panelSoftware"  : SettingsCommand(  True, 1, "STRING", 1040,  144,   0,    -1,  "Panel Software",                     {} ),
-    "panelSerial"    : SettingsCommand(  True, 1, "CODE",   1072,   48,   0,    -1,  "Panel Serial",                       {} ),   # page 4 offset 48
-    "panelTypeCode"  : SettingsCommand( Dumpy, 1, "BYTE",   1078,    8,   0,    -1,  "Panel Code Type",                    {} ),   # page 4 offset 54 and 55 ->> Panel type code
-    "panelSerialCode": SettingsCommand( Dumpy, 1, "BYTE",   1079,    8,   0,    -1,  "Panel Serial Code",                  {} ),   # page 4 offset 55
+    "x10Trouble"     : SettingsCommand(  Dumpy,  1, "BYTE",    747,   8,   0,    -1,  "X10 Trouble Indication",             { '1':"Enable", '0':"Disable"} ),
+    "x10Phase"       : SettingsCommand(  Dumpy,  1, "BYTE",    748,   8,   0,    -1,  "X10 Phase and frequency",            { '0':"Disable", '1':"50 Hz", '2':"60 Hz"} ),
+    "x10ReportCs1"   : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     0,  "X10 Report on Fail to Central Station 1", { '1':"Enable", '0':"Disable"} ),
+    "x10ReportCs2"   : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     1,  "X10 Report on Fail to Central Station 2", { '1':"Enable", '0':"Disable"} ),
+    "x10ReportPagr"  : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     2,  "X10 Report on Fail to Pager",        { '1':"Enable", '0':"Disable"} ),
+    "x10ReportPriv"  : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     3,  "X10 Report on Fail to Private",      { '1':"Enable", '0':"Disable"} ),
+    "x10ReportSMS"   : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     4,  "X10 Report on Fail to SMS",          { '1':"Enable", '0':"Disable"} ),
+    "usrVoice"       : SettingsCommand(  Dumpy,  1, "BYTE",    763,   8,   0,    -1,  "Set Voice Option",                   { '0':"Disable Voice", '1':"Enable Voice"} ),
+    "usrSquawk"      : SettingsCommand(  Dumpy,  1, "BYTE",    764,   8,   0,    -1,  "Squawk Option",                      { '0':"Disable", '1':"Low Level", '2':"Medium Level", '3':"High Level"}),
+    "usrArmTime"     : SettingsCommand(  Dumpy,  1, "TIME",    765,  16,   0,    -1,  "Auto Arm Time",                      {} ),
+    "PartitionData"  : SettingsCommand(  Dumpy,255, "BYTE",    768,   8,   1,    -1,  "Partition Data. Not sure what it is",{} ),   # I'm not sure how many bytes this is or what they mean, i get all 255 bytes to the next entry so they can be displayed
+    "panelEprom"     : SettingsCommand(   True,  1, "STRING", 1024, 128,   0,    -1,  "Panel Eprom",                        {} ),
+    "panelSoftware"  : SettingsCommand(   True,  1, "STRING", 1040, 144,   0,    -1,  "Panel Software",                     {} ),
+    "panelSerial"    : SettingsCommand(   True,  1, "CODE",   1072,  48,   0,    -1,  "Panel Serial",                       {} ),   # page 4 offset 48
+    "panelTypeCode"  : SettingsCommand(  Dumpy,  1, "BYTE",   1078,   8,   0,    -1,  "Panel Code Type",                    {} ),   # page 4 offset 54 and 55 ->> Panel type code
+    "panelSerialCode": SettingsCommand(  Dumpy,  1, "BYTE",   1079,   8,   0,    -1,  "Panel Serial Code",                  {} ),   # page 4 offset 55
 
-    "ZoneDataPMax"   : SettingsCommand( Dumpy,30, "BYTE",   2304,   32,   4,    -1,  "Zone Data, PowerMax",                {} ),   # 4 bytes each, 30 zones --> 120 bytes
-    "ZoneDataPMaster": SettingsCommand( Dumpy,64, "BYTE",   2304,    8,   1,    -1,  "Zone Data, PowerMaster",             {} ),   # 1 bytes each, 64 zones --> 64 bytes
+    "MaybeEventLog"  : SettingsCommand(  Dumpy,256, "BYTE",   1247,   8,   1,    -1,  "Maybe the event log",                {} ),   # Structure not known   was length 808 but cut to 256 to see what data we get
+    "x10ZoneNames"   : SettingsCommand(  Dumpy, 32, "BYTE",   2862,   8,   1,    -1,  "X10 Location Name references",       {} ),     # originally 16 and 2864 
+    "MaybeScreenSaver":SettingsCommand(  Dumpy, 75, "BYTE",   5888,   8,   1,    -1,  "Maybe the screen saver",             {} ),   # Structure not known 
 
-    "ZoneNamePMaster": SettingsCommand( Dumpy,64, "BYTE",   2400,    8,   1,    -1,  "Zone Names, PowerMaster",            {} ),   # This will be downloaded by a PowerMax but will be meaningless
+#PowerMax Only
+    "ZoneDataPMax"   : SettingsCommand( XDumpy, 30, "BYTE",   2304,  32,   4,    -1,  "Zone Data, PowerMax",                {} ),   # 4 bytes each, 30 zones --> 120 bytes
+    "KeyFobsPMax"    : SettingsCommand( XDumpy, 16, "BYTE",   2424,  32,   4,    -1,  "Maybe KeyFob Data PowerMax",         {} ),   # Structure not known
 
-    "ZoneSignal"     : SettingsCommand( Dumpy,28, "BYTE",   2522,    8,   1,    -1,  "Zone Signal Strength",               {} ),   # 28 zones
-    "Keypad2PMax"    : SettingsCommand( Dumpy, 2, "BYTE",   2560,   32,   4,    -1,  "Keypad2 Data, PowerMax",             {} ),   # 4 bytes each, 2 keypads 
-    "Keypad1PMax"    : SettingsCommand( Dumpy, 8, "BYTE",   2592,   32,   4,    -1,  "Keypad1 Data, PowerMax",             {} ),   # 4 bytes each, 8 keypads 
-    "SirensPMax"     : SettingsCommand( Dumpy, 2, "BYTE",   2656,   32,   4,    -1,  "Siren Data, PowerMax",               {} ),   # 4 bytes each, 2 sirens 
+    "ZoneSignalPMax" : SettingsCommand( XDumpy, 28, "BYTE",   2522,   8,   1,    -1,  "Zone Signal Strength, PowerMax",     {} ),   # 28 wireless zones
+    "Keypad2PMax"    : SettingsCommand( XDumpy,  2, "BYTE",   2560,  32,   4,    -1,  "Keypad2 Data, PowerMax",             {} ),   # 4 bytes each, 2 keypads 
+    "Keypad1PMax"    : SettingsCommand( XDumpy,  8, "BYTE",   2592,  32,   4,    -1,  "Keypad1 Data, PowerMax",             {} ),   # 4 bytes each, 8 keypads        THIS TOTALS 32 BYTES BUT IN OTHER SYSTEMS IVE SEEN 64 BYTES
+    "SirensPMax"     : SettingsCommand( XDumpy,  2, "BYTE",   2656,  32,   4,    -1,  "Siren Data, PowerMax",               {} ),   # 4 bytes each, 2 sirens 
 
-    "x10ZoneNames"   : SettingsCommand( Dumpy,16, "BYTE",   2864,    8,   1,    -1,  "X10 Location Name references",       {} ),
+    "ZoneNamePMax"   : SettingsCommand( XDumpy, 30, "BYTE",   2880,   8,   1,    -1,  "Zone Names, PowerMax",               {} ),
 
-    "ZoneNamePMax"   : SettingsCommand( Dumpy,30, "BYTE",   2880,    8,   1,    -1,  "Zone Names, PowerMax",               {} ),
+    "Test2"          : SettingsCommand(  Dumpy,128, "BYTE",   2816,   8,   1,    -1,  "Test 2 String, PowerMax",            {} ),   # 0xB00
+    "Test1"          : SettingsCommand(  Dumpy,128, "BYTE",   2944,   8,   1,    -1,  "Test 1 String, PowerMax",            {} ),   # 0xB80
 
-    "SirensPMaster"  : SettingsCommand( Dumpy, 8, "BYTE",  46818,   80,  10,    -1,  "Siren Data, PowerMaster",            {} ),   # 10 bytes each, 8 sirens
-    "KeypadPMaster"  : SettingsCommand( Dumpy,32, "BYTE",  46898,   80,  10,    -1,  "Keypad Data, PowerMaster",           {} ),   # 10 bytes each, 32 keypads 
-    "ZoneExtPMaster" : SettingsCommand( Dumpy,64, "BYTE",  47218,   80,  10,    -1,  "Zone Extended Data, PowerMaster",    {} ),   # 10 bytes each, 64 zones 
+    "ZoneStrPMax"    : SettingsCommand(  Dumpy, 32,"STRING",  6400, 128,  16,    -1,  "Zone String, PowerMax",              {} ),   # Not Sure what this is   originally 512 bytes, 32 strings of 16 characters each
+    #"ZoneCustomPMax" : SettingsCommand(  Dumpy, 80, "BYTE",   6816,   8,   1,    -1,  "Zone Custom, PowerMax",              {} ),   # Not Sure what this is   originally 80 bytes -->  THIS OVERLAPS WITH PREVIOUS ANYWAY
 
-    "ZoneDelay"      : SettingsCommand( Dumpy,64, "BYTE",  49542,   16,   2,    -1,  "Zone Delay, PowerMaster",            {} )   # This is the Zone Delay settings for Motion Sensors -> Dev Settings --> Disarm Activity  
+#PowerMaster only
+    "ZoneDataPMaster": SettingsCommand( SDumpy, 64, "BYTE",   2304,   8,   1,    -1,  "Zone Data, PowerMaster",             {} ),   # 1 bytes each, 64 zones --> 64 bytes
+    "ZoneNamePMaster": SettingsCommand( SDumpy, 64, "BYTE",   2400,   8,   1,    -1,  "Zone Names, PowerMaster",            {} ),   # This will be downloaded by a PowerMax but will be meaningless
 
-# *****************     "ZoneDataPMax"   : SettingsCommand(Dumpy,255, "LIST",   ccccccc,    8,   1,    -1,  "Zone Data for PowerMax",{} )
+    "SirensPMaster"  : SettingsCommand( SDumpy,  8, "BYTE",  46818,  80,  10,    -1,  "Siren Data, PowerMaster",            {} ),   # 10 bytes each, 8 sirens
+    "KeypadPMaster"  : SettingsCommand( SDumpy, 32, "BYTE",  46898,  80,  10,    -1,  "Keypad Data, PowerMaster",           {} ),   # 10 bytes each, 32 keypads 
+    "ZoneExtPMaster" : SettingsCommand( SDumpy, 64, "BYTE",  47218,  80,  10,    -1,  "Zone Extended Data, PowerMaster",    {} ),   # 10 bytes each, 64 zones 
+
+    "AlarmLED"       : SettingsCommand( SDumpy, 64, "BYTE",  49250,   8,   1,    -1,  "Alarm LED, PowerMaster",             {} ),   # This is the Alarm LED On/OFF settings for Motion Sensors -> Dev Settings --> Alarm LED
+    "ZoneDelay"      : SettingsCommand( SDumpy, 64, "BYTE",  49542,  16,   2,    -1,  "Zone Delay, PowerMaster",            {} )    # This is the Zone Delay settings for Motion Sensors -> Dev Settings --> Disarm Activity  
 }
-
-# To use the following, use  "MSG_DL" above and replace bytes 1 to 4 with the following
-#    page index lenhigh lenlow
-# I think that these combinations also work but as yet untested
-#      Get History from panel:     0d 3e 06 80 d2 07 b0 00 00 01 01 0a a4 0a
-#      Get Event Log from panel:   0d 3e df 04 28 03 b0 0b 1c 05 13 00 c2 0a
-#      Panel Definitions           0d 3e 00 01 10 00 b0 1e 08 01 02 04 d2 0a
-#      Zone Definitions            0d 3e 11 03 1e 00 b0 01 01 01 01 01 d9 0a
-#      Pin Codes                   0d 3e fa 01 10 00 b0 00 00 00 00 00 05 0a   and
-#                                  0d 3e 51 03 08 00 b0 01 01 01 01 01 af 0a
-#      Site Information            0d 3e 0a 02 08 00 b0 14 56 50 00 00 42 0a   and
-#                                  0d 3e 00 03 01 00 b0 01 01 01 01 01 08 0a
-#      Screen Saver                0d 3e 00 17 4b 00 b0 00 00 00 00 00 ae 0a
-#      RF Diagnostics              0d 3e da 09 1c 00 b0 00 00 00 00 00 11 0a
-#pmDownloadItem_t = {
-#   "MSG_DL_TIME"         : convertByteArray('00 F8 00 06'),   # not used
-#   "MSG_DL_COMMDEF"      : convertByteArray('01 01 00 1E'),   # not used
-#   "MSG_DL_PHONENRS"     : convertByteArray('01 36 00 20'),   # not used
-#   "MSG_DL_PINCODES"     : convertByteArray('01 FA 00 10'),   # not used
-#   "MSG_DL_INSTPIN"      : convertByteArray('02 0C 00 02'),   # not used
-#   "MSG_DL_DOWNLOADPIN"  : convertByteArray('02 0E 00 02'),   # not used
-#   "MSG_DL_PGMX10"       : convertByteArray('02 14 00 D5'),   # not used
-#   "MSG_DL_PARTITIONS"   : convertByteArray('03 00 00 F0'),   # not used
-#   "MSG_DL_PANELFW"      : convertByteArray('04 00 00 20'),   # not used
-#   "MSG_DL_SERIAL"       : convertByteArray('04 30 00 08'),   # not used
-#   "MSG_DL_EVENTLOG"     : convertByteArray('04 DF 03 28'),   # not used
-#   "MSG_DL_ZONES"        : convertByteArray('09 00 00 78'),   # not used
-#   "MSG_DL_KEYFOBS"      : convertByteArray('09 78 00 40'),   # not used
-#   "MSG_DL_ZONESIGNAL"   : convertByteArray('09 DA 00 1C'),   # not used    # zone signal strength - the 1C may be the zone count i.e. the 28 wireless zones
-#   "MSG_DL_2WKEYPAD"     : convertByteArray('0A 00 00 08'),   # not used
-#   "MSG_DL_1WKEYPAD"     : convertByteArray('0A 20 00 40'),   # not used
-#   "MSG_DL_SIRENS"       : convertByteArray('0A 60 00 08'),   # not used
-#   "MSG_DL_X10NAMES"     : convertByteArray('0B 30 00 10'),   # not used
-#   "MSG_DL_ZONENAMES"    : convertByteArray('0B 40 00 1E'),   # not used
-#   "MSG_DL_ZONESTR"      : convertByteArray('19 00 02 00'),   # not used
-#   "MSL_DL_ZONECUSTOM"   : convertByteArray('1A A0 00 50'),   # not used
-#
-#   "MSG_DL_MR_ZONENAMES" : convertByteArray('09 60 00 40'),   # not used
-#   "MSG_DL_MR_PINCODES"  : convertByteArray('0A 98 00 60'),   # not used
-#   "MSG_DL_MR_SIRENS"    : convertByteArray('B6 E2 00 50'),   # not used
-#   "MSG_DL_MR_KEYPADS"   : convertByteArray('B7 32 01 40'),   # not used
-#   "MSG_DL_MR_ZONES"     : convertByteArray('B8 72 02 80'),   # not used
-#   "MSG_DL_MR_ZONES1"    : convertByteArray('B8 72 00 A0'),   # not used
-#   "MSG_DL_MR_ZONES2"    : convertByteArray('B9 12 00 A0'),   # not used
-#   "MSG_DL_MR_ZONES3"    : convertByteArray('B9 B2 00 A0'),   # not used
-#   "MSG_DL_MR_ZONES4"    : convertByteArray('BA 52 00 A0'),   # not used
-#   "MSG_DL_MR_SIRKEYZON" : convertByteArray('B6 E2 04 10'),   # not used - Combines Sirens keypads and sensors
-#   "MSG_DL_MR_ZONEDELAY" : convertByteArray('C1 86 00 80'),   # not used     - This is the Zone Delay settings for Motion Sensors -> Dev Settings --> Disarm Activity
-#   "MSG_DL_MR_ALARMLED"  : convertByteArray('C0 62 00 40'),   # not used - This is the Alarm LED On/OFF settings for Motion Sensors -> Dev Settings --> Alarm LED
-#
-#   "MSG_DL_ALL"          : convertByteArray('00 00 00 00')    #
-#}
 
 # These blocks are not value specific, they are used to download blocks of EPROM data that we need without reference to what the data means
 #    They are used when EEPROM_DOWNLOAD_ALL is False
@@ -891,16 +851,19 @@ pmBlockDownload = {
             convertByteArray('80 03 80 00'),
             convertByteArray('00 04 80 00'),
             convertByteArray('80 04 80 00'),
+            convertByteArray('00 05 80 00'),   # added
+            convertByteArray('80 05 80 00'),   # added
             convertByteArray('00 09 80 00'),
             convertByteArray('80 09 80 00'),
             convertByteArray('00 0A 80 00'),
             convertByteArray('80 0A 80 00'),
-            convertByteArray('00 0B 80 00'),
-            convertByteArray('80 0B 80 00'),
-            convertByteArray('00 19 80 00'),
-            convertByteArray('80 19 80 00'),
-            convertByteArray('00 1A 80 00'),
-            convertByteArray('80 1A 80 00')
+            convertByteArray('00 0B 80 00'),   # Test2
+            convertByteArray('80 0B 80 00'),   # Test1
+            convertByteArray('00 17 80 00'),   # added to test MaybeScreenSaver  0x1700 = 5888
+            convertByteArray('00 19 80 00'),   # ZoneStrPMax
+            convertByteArray('80 19 80 00'),   # ZoneStrPMax
+            convertByteArray('00 1A 80 00'),   # ZoneStrPMax
+            convertByteArray('80 1A 80 00')    # ZoneStrPMax
     ),
     "PowerMaster" : (
             convertByteArray('00 B6 80 00'),
@@ -995,12 +958,12 @@ pmZoneType_t = {
 } # "Arming Key", "Guard" ??
 
 # Zone names are taken from the panel, so no langauage support needed
-pmZoneName_t = (
+pmZoneName_t = [
    "Attic", "Back door", "Basement", "Bathroom", "Bedroom", "Child room", "Conservatory", "Play room", "Dining room", "Downstairs",
    "Emergency", "Fire", "Front door", "Garage", "Garage door", "Guest room", "Hall", "Kitchen", "Laundry room", "Living room",
    "Master bathroom", "Master bedroom", "Office", "Upstairs", "Utility room", "Yard", "Custom 1", "Custom 2", "Custom 3",
    "Custom 4", "Custom 5", "Not Installed"
-)
+]
 
 pmZoneChime_t = {
    "EN" : ("Off", "Melody", "Zone", "Invalid"),
@@ -1561,14 +1524,14 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     #   We need to clear the send queue and reset the send parameters to immediately send an MSG_ENROLL
     def _sendMsgENROLL(self, triggerdownload):
         """ Auto enroll the PowerMax/Master unit """
-        altDownloadCode = "DF FD"
+        altDownloadCode = "BB BB"
         if not self.doneAutoEnroll:
             self.doneAutoEnroll = True
             self._sendCommand("MSG_ENROLL", options=[ [4, convertByteArray(self.DownloadCode)] ])
             if triggerdownload:
                 self._startDownload()
         elif self.DownloadCode == altDownloadCode:
-            log.warning("[_sendMsgENROLL] Warning: Trying to re enroll, already tried DFFD and still not successful")
+            log.warning("[_sendMsgENROLL] Warning: Trying to re enroll, already tried BBBB and still not successful")
         else:
             log.debug("[_sendMsgENROLL] Warning: Trying to re enroll but not triggering download")
             self.DownloadCode = altDownloadCode  # Force the Download code to be something different and try again ?????
@@ -2791,6 +2754,55 @@ class PacketHandling(ProtocolBase):
         
         return deviceStr[1:]
     
+    def logEEPROMData(self, addToLog):
+        # If val.show is True but addToLog is False then:
+        #      Add the "True" values to the self.Panelstatus
+        # If val.show is True and addToLog is True then:
+        #      Add all (either PowerMax / PowerMaster) values to the self.Panelstatus and the log file
+        for key in DecodePanelSettings:
+            val = DecodePanelSettings[key]
+            if val.show:
+                result = self._lookupEprom(val)
+                if result is not None:
+                    if type(DecodePanelSettings[key].name) is str and len(result) == 1:
+                        if isinstance(result[0], (bytes, bytearray)):
+                            tmpdata = self._toString(result[0])
+                            if addToLog:
+                                log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, DecodePanelSettings[key].name, tmpdata))
+                            self.PanelStatus[DecodePanelSettings[key].name] = tmpdata
+                        else:
+                            if addToLog:
+                                log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, DecodePanelSettings[key].name, result[0]))
+                            self.PanelStatus[DecodePanelSettings[key].name] = result[0]
+                    
+                    elif type(DecodePanelSettings[key].name) is list and len(result) == len(DecodePanelSettings[key].name):
+                        for i in range(0, len(result)):
+                            if isinstance(result[0], (bytes, bytearray)):
+                                tmpdata = self._toString(result[i])
+                                if addToLog:
+                                    log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, DecodePanelSettings[key].name[i], tmpdata))
+                                self.PanelStatus[DecodePanelSettings[key].name[i]] = tmpdata
+                            else:
+                                if addToLog:
+                                    log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, DecodePanelSettings[key].name[i], result[i]))
+                                self.PanelStatus[DecodePanelSettings[key].name[i]] = result[i]
+                    
+                    elif len(result) > 1 and type(DecodePanelSettings[key].name) is str:
+                        tmpdata = ""
+                        for i in range(0, len(result)):
+                            if isinstance(result[0], (bytes, bytearray)):
+                                tmpdata = tmpdata + self._toString(result[i]) + ", "
+                            else:
+                                tmpdata = tmpdata + str(result[i]) + ", "
+                        # there's at least 2 so this will not exception
+                        tmpdata = tmpdata[:-2]
+                        if addToLog:
+                            log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, DecodePanelSettings[key].name, tmpdata))
+                        self.PanelStatus[DecodePanelSettings[key].name] = tmpdata
+                    
+                    else:
+                        log.debug( "[Process Settings]   ************************** NOTHING DONE ************************     {0:<18}  {1}  {2}".format(key, DecodePanelSettings[key].name, result))
+
     # _processEPROMSettings
     #    Decode the EEPROM and the various settings to determine
     #       The general state of the panel
@@ -2802,32 +2814,26 @@ class PacketHandling(ProtocolBase):
         """Process Settings from the downloaded EPROM data from the panel"""
         log.debug("[Process Settings] Process Settings from EPROM")
 
-        # Process settings
-
-        # List of door/window sensors
-        doorZoneStr = ""
-        # List of motion sensors
-        motionZoneStr = ""
-        # List of smoke sensors
-        smokeZoneStr = ""
-        # List of other sensors
-        otherZoneStr = ""
-        pmPanelTypeNr = None
-
         # ------------------------------------------------------------------------------------------------------------------------------------------------
         # Panel type and serial number
-        #     This kind of checks whether the EEPROM settings have been downloaded OK
-        pmPanelTypeNr = self._lookupEpromSingle("panelSerialCode")
-        if pmPanelTypeNr is not None and 0 <= pmPanelTypeNr >= 16:
-            #pmPanelTypeNr = int(pmPanelTypeNrStr)
+        #     This checks whether the EEPROM settings have been downloaded OK
+        pmPanelTypeNr = self._lookupEpromSingle("panelSerialCode")    
+        if pmPanelTypeNr is not None and 1 <= pmPanelTypeNr <= 16:
+            log.debug("[Process Settings] old pmPanelTypeNr {0} ({1})    model {2}".format(pmPanelTypeNr, self.PanelType, self.PanelModel))
             self.PanelModel = pmPanelType_t[pmPanelTypeNr] if pmPanelTypeNr in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
-            #log.debug("[Process Settings] EPROM Data")
-            log.debug("[Process Settings] pmPanelTypeNr {0} ({1})    model {2}".format(pmPanelTypeNr, self.PanelType, self.PanelModel))
-            if self.PanelType is None:
-                self.PanelType = pmPanelTypeNr
-                self.PowerMaster = self.PanelType >= 7
+            self.PanelType = pmPanelTypeNr
+            self.PowerMaster = self.PanelType >= 7
+            log.debug("[Process Settings] new pmPanelTypeNr {0} ({1})    model {2}".format(pmPanelTypeNr, self.PanelType, self.PanelModel))
+        elif pmPanelTypeNr is not None and pmPanelTypeNr == 0:
+            # Then its a Basic PowerMax wih Download Capabilities only, assume the latter
+            log.error(f"[Process Settings] Lookup of panel type reveals that this seems to be a PowerMax Panel and supports EEPROM Download only with no capability, going to Standard Mode")
+            self._gotoStandardMode()
+            return
         else:
-            log.error("[Process Settings] Lookup of panel type string and model from the EEPROM failed, assuming EPROM download failed")
+            # Somekind of error or the EEPROM hasn't downloaded
+            log.error(f"[Process Settings] Lookup of panel type string and model from the EEPROM failed, assuming EEPROM download failed {pmPanelTypeNr=}, going to Standard Mode")
+            self._gotoStandardMode()
+            return
 
         # self._dumpEPROMSettings()
 
@@ -2838,9 +2844,18 @@ class PacketHandling(ProtocolBase):
             if self.pmDownloadComplete:
                 log.debug("[Process Settings] Processing settings information")
 
+                # List of door/window sensors
+                doorZoneStr = ""
+                # List of motion sensors
+                motionZoneStr = ""
+                # List of smoke sensors
+                smokeZoneStr = ""
+                # List of other sensors
+                otherZoneStr = ""
+
                 # log.debug("[Process Settings] Panel Type Number " + str(pmPanelTypeNr) + "    serial string " + self._toString(panelSerialType))
                 zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][pmPanelTypeNr] + pmPanelConfig_t["CFG_WIRED"][pmPanelTypeNr]
-                dummy_customCnt = pmPanelConfig_t["CFG_ZONECUSTOM"][pmPanelTypeNr]
+                #dummy_customCnt = pmPanelConfig_t["CFG_ZONECUSTOM"][pmPanelTypeNr]
                 userCnt = pmPanelConfig_t["CFG_USERCODES"][pmPanelTypeNr]
                 partitionCnt = pmPanelConfig_t["CFG_PARTITIONS"][pmPanelTypeNr]
 
@@ -2862,52 +2877,7 @@ class PacketHandling(ProtocolBase):
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process Panel Settings to display in the user interface
-                for key in DecodePanelSettings:
-                    val = DecodePanelSettings[key]
-                    #if val.show:
-                    if False:
-                        result = self._lookupEprom(val)
-                        if result is not None:
-                            if len(result) == 1 and type(DecodePanelSettings[key].name) is str:
-                                tmpdata = result[0]
-                                if isinstance(result[0], (bytes, bytearray)):
-                                    tmpdata = "HEX: "
-                                    for i in result:
-                                        tmpdata = tmpdata + self._toString(i) + ", "
-                                    tmpdata = tmpdata[:-2]
-                                log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, DecodePanelSettings[key].name, tmpdata))
-                                if isinstance(result[0], (bytes, bytearray) ):
-                                    self.PanelStatus[DecodePanelSettings[key].name] = self._toString(result[0])
-                                else:
-                                    self.PanelStatus[DecodePanelSettings[key].name] = result[0]
-                            
-                            elif len(result) >= 1 and type(DecodePanelSettings[key].name) is list:
-                                tmpdata = result
-                                if isinstance(result[0], (bytes, bytearray)):
-                                    tmpdata = "HEX: "
-                                    for i in result:
-                                        tmpdata = tmpdata + self._toString(i) + ", "
-                                    tmpdata = tmpdata[:-2]
-                                log.debug( "[Process Settings]      {0:<18}  {1}         {2}".format(key, DecodePanelSettings[key].name, tmpdata))
-
-                                for i in range(0, len(result)):
-                                    if isinstance(result[i], (bytes, bytearray) ):
-                                        self.PanelStatus[DecodePanelSettings[key].name[i]] = self._toString(result[i])
-                                    else:
-                                        self.PanelStatus[DecodePanelSettings[key].name[i]] = result[i]
-                            
-                            elif len(result) > 1 and type(DecodePanelSettings[key].name) is str:
-                                tmpdata = result
-                                if isinstance(result[0], (bytes, bytearray)):
-                                    tmpdata = "HEX: "
-                                    for i in result:
-                                        tmpdata = tmpdata + self._toString(i) + ", "
-                                    tmpdata = tmpdata[:-2]
-                                log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, DecodePanelSettings[key].name, tmpdata))
-                                self.PanelStatus[DecodePanelSettings[key].name] = result
-                            
-                            else:
-                                log.debug( "[Process Settings]   ************************** NOTHING DONE ************************     {0:<18}  {1}  {2}".format(key, DecodePanelSettings[key].name, result))
+                self.logEEPROMData(Dumpy)
 
                 # ------------------------------------------------------------------------------------------------------------------------------------------------
                 # Process alarm settings
@@ -2978,8 +2948,14 @@ class PacketHandling(ProtocolBase):
                     # alarmledarray = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_MR_ALARMLED"])
                     # log.debug("[Process Settings] alarmled = " + self._toString(alarmledarray))
                 else:
+                    zonestrings = self._lookupEprom(DecodePanelSettings["ZoneStrPMax"])
+                    for i in range(0, len(zonestrings)):
+                        pmZoneName_t[i] = zonestrings[i].strip()
+                
                     # zoneNames = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_ZONENAMES"])
                     zoneNames = self._lookupEprom(DecodePanelSettings["ZoneNamePMax"])
+                    zonesignalstrength = self._lookupEprom(DecodePanelSettings["ZoneSignalPMax"])
+                    log.debug("[Process Settings] ZoneSignal " + self._toString(zonesignalstrength))
                     
                 # This is 120 bytes. These 2 get the same data block but they are structured differently
                 # It is 30 zones, each is 4 bytes
@@ -3003,8 +2979,6 @@ class PacketHandling(ProtocolBase):
 
                 ################# TEST #######################
 
-                zonesignalstrength = self._lookupEprom(DecodePanelSettings["ZoneSignal"])
-                log.debug("[Process Settings] ZoneSignal " + self._toString(zonesignalstrength))
                 log.debug("[Process Settings] Zones Names Buffer :  {0}".format(self._toString(zoneNames)))
 
                 if len(pmaster_zone_data) > 0 and len(zoneNames) > 0:
@@ -3079,17 +3053,12 @@ class PacketHandling(ProtocolBase):
                                     self.onNewSwitchHandler(self.SwitchList[i])
                                 break # break the j loop and continue to the next i, we shouldn't need this (i not in self.SwitchList) in the if test but kept just in case!
 
-                doorZones = doorZoneStr[1:]
-                motionZones = motionZoneStr[1:]
-                smokeZones = smokeZoneStr[1:]
-                otherZones = otherZoneStr[1:]
-
                 log.debug("[Process Settings] Adding zone devices")
 
-                self.PanelStatus["Door Zones"] = doorZones
-                self.PanelStatus["Motion Zones"] = motionZones
-                self.PanelStatus["Smoke Zones"] = smokeZones
-                self.PanelStatus["Other Zones"] = otherZones
+                self.PanelStatus["Door Zones"] = doorZoneStr[1:]
+                self.PanelStatus["Motion Zones"] = motionZoneStr[1:]
+                self.PanelStatus["Smoke Zones"] = smokeZoneStr[1:]
+                self.PanelStatus["Other Zones"] = otherZoneStr[1:]
                 self.PanelStatus["Devices"] = self._processKeypadsAndSirens(pmPanelTypeNr)
 
                 # INTERFACE : Create Partitions in the interface

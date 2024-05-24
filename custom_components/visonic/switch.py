@@ -29,7 +29,8 @@ async def async_setup_entry(
                 VisonicSwitch(client, device) for device in hass.data[DOMAIN][entry.entry_id][SWITCH_STR]
             ]
             hass.data[DOMAIN][entry.entry_id][SWITCH_STR] = list()
-            async_add_entities(devices, True)
+            if len(devices) > 0:
+                async_add_entities(devices, True)
 
 
 class VisonicSwitch(SwitchEntity):
@@ -37,7 +38,7 @@ class VisonicSwitch(SwitchEntity):
 
     def __init__(self, client: VisonicClient, visonic_device: AlSwitchDevice):
         """Initialise a Visonic X10 Device."""
-        _LOGGER.debug("Creating X10 Switch %s", visonic_device.id)
+        #_LOGGER.debug("Creating X10 Switch %s", visonic_device.id)
         self._client = client
         self._visonic_device = visonic_device
         self._visonic_device.onChange(self.onChange)

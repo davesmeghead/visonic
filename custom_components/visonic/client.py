@@ -100,7 +100,7 @@ class PanelCondition(IntEnum):
     CHECK_EVENT_LOG_COMMAND = 13
     CHECK_X10_COMMAND = 14
 
-CLIENT_VERSION = "0.9.2.1"
+CLIENT_VERSION = "0.9.2.3"
 
 MAX_CLIENT_LOG_ENTRIES = 100
 
@@ -621,7 +621,7 @@ class VisonicClient:
                 platforms = entity_platform.async_get_platforms(self.hass, "visonic")
                 for p in platforms:
                     if p.config_entry.entry_id == self.entry.entry_id:
-                        #_LOGGER.debug(f"onNewSensor platform is {p}")
+                        # _LOGGER.debug(f"onNewSensor platform is {p}")
                         if p.domain == BINARY_SENSOR_STR:
                             platform_bin_sen = p
                         if p.domain == SELECT_STR:

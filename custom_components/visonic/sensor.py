@@ -39,14 +39,15 @@ async def async_setup_entry(
     async_add_entities: Callable[[List[Entity], bool], None],
 ) -> None:
     """Set up the Visonic Alarm Sensors for Monitor."""
-    _LOGGER.debug("************* sensor async_setup_entry **************")
+    # _LOGGER.debug("************* sensor async_setup_entry **************")
     if DOMAIN in hass.data:
         #_LOGGER.debug("   In binary sensor async_setup_entry")
         client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        va = VisonicSensor(hass, client, 1)
-        # Add it to HA
-        devices = [va]
-        async_add_entities(devices, True)
+        if not client.isDisableAllCommands():
+            va = VisonicSensor(hass, client, 1)
+            # Add it to HA
+            devices = [va]
+            async_add_entities(devices, True)
 
 class VisonicSensor(Entity):
     """Representation of a Visonic alarm control panel as a simple sensor for monitor."""

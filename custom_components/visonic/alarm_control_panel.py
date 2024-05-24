@@ -61,9 +61,8 @@ async def async_setup_entry(
             # Add it to HA
             devices = [va]
             async_add_entities(devices, True)
-
-    platform = entity_platform.async_get_current_platform()
-    _LOGGER.debug(f"alarm control panel async_setup_entry called {platform}")
+    #platform = entity_platform.async_get_current_platform()
+    #_LOGGER.debug(f"alarm control panel async_setup_entry called {platform}")
 
 
 class VisonicAlarm(alarm.AlarmControlPanelEntity):

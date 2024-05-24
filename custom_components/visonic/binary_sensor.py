@@ -35,14 +35,16 @@ async def async_setup_entry(
     #_LOGGER.debug("************* binary sensor async_setup_entry **************")
 
     if DOMAIN in hass.data:
-        #_LOGGER.debug("   In binary sensor async_setup_entry")
+        #_LOGGER.debug("In binary sensor async_setup_entry")
         client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        sensors = [
-            VisonicBinarySensor(hass, client, device, entry) for device in hass.data[DOMAIN][entry.entry_id][BINARY_SENSOR_STR]
-        ]
-        # empty the list as we have copied the entries so far in to sensors
-        hass.data[DOMAIN][entry.entry_id][BINARY_SENSOR_STR] = list()
-        async_add_entities(sensors, True)
+        if not client.isDisableAllCommands():
+            sensors = [
+                VisonicBinarySensor(hass, client, device, entry) for device in hass.data[DOMAIN][entry.entry_id][BINARY_SENSOR_STR]
+            ]
+            # empty the list as we have copied the entries so far in to sensors
+            hass.data[DOMAIN][entry.entry_id][BINARY_SENSOR_STR] = list()
+            if len(sensors) > 0:
+                async_add_entities(sensors, True)
 
 
 #   Each Sensor in Visonic Alarms can be Armed/Bypassed individually
@@ -63,7 +65,7 @@ class VisonicBinarySensor(BinarySensorEntity):
         self._dname = sensor.createFriendlyName()
         pname = client.getMyString()
         self._name = pname.lower() + self._dname.lower()
-        #_LOGGER.debug("   In binary sensor VisonicSensor friendlyname : " + str(self._name))
+        # _LOGGER.debug("   In binary sensor VisonicSensor friendlyname : " + str(self._name))
         
         self._panel = client.getPanelID()
   
