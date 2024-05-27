@@ -48,7 +48,7 @@ available_emulation_modes = [
 ]
 
 myconfig = { 
-    CONF_DOWNLOAD_CODE: "AAAA",
+    CONF_DOWNLOAD_CODE: "",
     CONF_EMULATION_MODE: available_emulation_modes[0],
     CONF_FORCE_AUTOENROLL: True,
     CONF_AUTO_SYNC_TIME : True,

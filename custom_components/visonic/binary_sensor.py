@@ -116,6 +116,7 @@ class VisonicBinarySensor(BinarySensorEntity):
         await super().async_will_remove_from_hass()
         self._visonic_device = None
         self._is_available = False
+        self.client = None
         _LOGGER.debug("binary sensor async_will_remove_from_hass")
 
     def onChange(self, sensor : AlSensorDevice, s : AlSensorCondition):

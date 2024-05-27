@@ -71,6 +71,8 @@ class VisonicSelect(SelectEntity):
         """Remove from hass."""
         await super().async_will_remove_from_hass()
         self._visonic_device = None
+        self._client = None
+        self._is_available = False
         _LOGGER.debug("select async_will_remove_from_hass")
 
     def onChange(self, sensor : AlSensorDevice, s : AlSensorCondition):

@@ -100,7 +100,7 @@ class PanelCondition(IntEnum):
     CHECK_EVENT_LOG_COMMAND = 13
     CHECK_X10_COMMAND = 14
 
-CLIENT_VERSION = "0.9.2.3"
+CLIENT_VERSION = "0.9.3.0"
 
 MAX_CLIENT_LOG_ENTRIES = 100
 
@@ -614,6 +614,7 @@ class VisonicClient:
             if sensor not in self.sensor_list:
                 self.sensor_list.append(sensor)
                 #self.logstate_warning(f"Adding Sensor to list {sensor}")
+                self.logstate_debug("VS: Sensor list %s", sensor)
 
                 platform_bin_sen = None
                 platform_select = None

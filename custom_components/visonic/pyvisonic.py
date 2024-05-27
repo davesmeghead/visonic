@@ -16,7 +16,7 @@
 
 #################################################################
 ######### Known Panel Types to work (or not) ####################
-#    PanelType=0 : PowerMax , Model=21   Powermaster False  <<== THIS DOES NOT WORK (NO POWERLINK SUPPORT and only supports EPROM download i.e no sensor data) ==>>
+#    PanelType=0 : PowerMax , Model=21   Powermaster False  <<== THIS DOES NOT WORK (NO POWERLINK SUPPORT and only supports EEPROM download i.e no sensor data) ==>>
 #    PanelType=1 : PowerMax+ , Model=33   Powermaster False
 #    PanelType=1 : PowerMax+ , Model=47   Powermaster False
 #    PanelType=2 : PowerMax Pro , Model=22   Powermaster False
@@ -96,7 +96,7 @@ except:
     from pyconst import AlTransport, AlPanelDataStream, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlTroubleType, AlAlarmType, AlPanelStatus, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlLogPanelEvent, AlSensorType
     from pyhelper import MyChecksumCalc, AlImageManager, ImageRecord, titlecase, pmPanelTroubleType_t, pmPanelAlarmType_t, AlPanelInterfaceHelper, AlSensorDeviceHelper, AlSwitchDeviceHelper
 
-PLUGIN_VERSION = "1.3.2.2"
+PLUGIN_VERSION = "1.3.3.1"
 
 # Some constants to help readability of the code
 
@@ -131,7 +131,10 @@ KEEP_ALIVE_PERIOD = 25  # Seconds
 DOWNLOAD_TIMEOUT = 90
 DOWNLOAD_TIMEOUT_GIVE_UP = 280    # 
 
-# Number of seconds delay between trying to achieve EPROM download
+# Default Download Code
+DEFAULT_DL_CODE = "56 50"
+
+# Number of seconds delay between trying to achieve EEPROM download
 DOWNLOAD_RETRY_DELAY = 60
 
 # Number of times to retry the retrieval of a block to download, this is a total across all blocks to download and not each block
@@ -652,35 +655,49 @@ EVENT_TYPE_PERIMETER_RESTORE = 0x12
 EVENT_TYPE_DELAY_RESTORE = 0x13
 EVENT_TYPE_CONFIRM_ALARM = 0x0E
 
+# Panel Names for each panel type (0-16).
+#     0 : "PowerMax" is not a supported panel type  
+#     Assume 360R is Panel 16 for this release as it was released after the PM33, I'll correct it when I know, copy the 360 settings
 pmPanelType_t = {
    0 : "PowerMax", 1 : "PowerMax+", 2 : "PowerMax Pro", 3 : "PowerMax Complete", 4 : "PowerMax Pro Part",
    5  : "PowerMax Complete Part", 6 : "PowerMax Express", 7 : "PowerMaster 10",   8 : "PowerMaster 30",
    10 : "PowerMaster 33", 13 : "PowerMaster 360", 15 : "PowerMaster 33", 16 : "PowerMaster 360R"
 }
 
-# Config for each panel type (0-16).  8 is a PowerMaster 30, 10 is a PowerMaster 33, 15 is a PowerMaster 33 later model.  Don't know what 9, 11, 12 or 14 is.
-pmPanelConfig_t = {
-   "CFG_PARTITIONS"  : (   1,   1,   1,   1,   3,   3,   1,   3,   3,   3,   3,   3,   3,   3,   3,   3,   3 ),
-#   "CFG_EVENTS"      : ( 250, 250, 250, 250, 250, 250, 250, 250,1000,1000,1000,1000,1000,1000,1000,1000,1000 ),
-#   "CFG_KEYFOBS"     : (   8,   8,   8,   8,   8,   8,   8,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
-   "CFG_1WKEYPADS"   : (   8,   8,   8,   8,   8,   8,   8,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 ),
-   "CFG_2WKEYPADS"   : (   2,   2,   2,   2,   2,   2,   2,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
-   "CFG_SIRENS"      : (   2,   2,   2,   2,   2,   2,   2,   4,   8,   8,   8,   8,   8,   8,   8,   8,   8 ),
-   "CFG_USERCODES"   : (   8,   8,   8,   8,   8,   8,   8,   8,  48,  48,  48,  48,  48,  48,  48,  48,  48 ),
-#   "CFG_PROXTAGS"    : (   0,   0,   8,   0,   8,   8,   0,   8,  32,  32,  32,  32,  32,  32,  32,  32,  32 ),
-#   "CFG_ZONECUSTOM"  : (   0,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5 ),
-   "CFG_WIRELESS"    : (  28,  28,  28,  28,  28,  28,  29,  29,  62,  62,  62,  62,  62,  64,  62,  62,  64 ), # Wireless + Wired total 30 or 64
-   "CFG_WIRED"       : (   2,   2,   2,   2,   2,   2,   1,   1,   2,   2,   2,   2,   2,   0,   2,   2,   0 )
+# Config for each panel type (0-16).  
+#     Assume 360R is Panel 16 for this release as it was released after the PM33, I'll correct it when I know
+#     Don't know what 9, 11, 12 or 14 are so just copy other settings. I know that there are Commercial/Industry Panel versions so it might be them, could also be the 360R, who knows.
+#               So make column 16 the same as column 13
+#     This data defines each panel type's maximum capability
+pmPanelConfig_t = {    #      0       1       2       3       4       5       6       7       8       9      10      11      12      13      14      15      16      See pmPanelType_t above
+   "CFG_SUPPORTED"   : (  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True ), # Supported Panels i.e. not a PowerMax
+   "CFG_KEEPALIVE"   : (  10000,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     15,     25,     25,     15 ), # Keep Alive message interval if no other messages sent
+   "CFG_DLCODE_1"    : ( "5650", "5650", "5650", "5650", "5650", "5650", "5650", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA" ), # Default download codes (for reset panels or panels that have not been changed)
+   "CFG_DLCODE_2"    : ( "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB" ), # Alternative (Master) default download codes
+   "CFG_PARTITIONS"  : (      1,      1,      1,      1,      3,      3,      1,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3 ),
+   "CFG_EVENTS"      : (    250,    250,    250,    250,    250,    250,    250,    250,   1000,   1000,   1000,   1000,   1000,   1000,   1000,   1000,   1000 ),
+   "CFG_KEYFOBS"     : (      8,      8,      8,      8,      8,      8,      8,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
+   "CFG_1WKEYPADS"   : (      8,      8,      8,      8,      8,      8,      8,      0,      0,      0,      0,      0,      0,      0,      0,      0,      0 ),
+   "CFG_2WKEYPADS"   : (      2,      2,      2,      2,      2,      2,      2,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
+   "CFG_SIRENS"      : (      2,      2,      2,      2,      2,      2,      2,      4,      8,      8,      8,      8,      8,      8,      8,      8,      8 ),
+   "CFG_USERCODES"   : (      8,      8,      8,      8,      8,      8,      8,      8,     48,     48,     48,     48,     48,     48,     48,     48,     48 ),
+   "CFG_PROXTAGS"    : (      0,      0,      8,      0,      8,      8,      0,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
+   "CFG_ZONECUSTOM"  : (      0,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5 ),
+   "CFG_WIRELESS"    : (     28,     28,     28,     28,     28,     28,     29,     29,     62,     62,     62,     62,     62,     64,     62,     62,     64 ), # Wireless + Wired total 30 or 64
+   "CFG_WIRED"       : (      2,      2,      2,      2,      2,      2,      1,      1,      2,      2,      2,      2,      2,      0,      2,      2,      0 ),
+   "CFG_AUTO_ENROLL" : (  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False ), # 360 and 360R cannot autoenroll to Powerlink
+   "CFG_POWERMASTER" : (  False,  False,  False,  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True ), # Panels that use and respond to the additional PowerMaster Protocols
+   "CFG_INIT_SUPPORT": (  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False )  # Panels that support the INIT command
 }
 
-XDumpy = False      # Used to dump PowerMax Data to the log file
-SDumpy = False      # Used to dump PowerMaster Data to the log file
+XDumpy = False # True     # Used to dump PowerMax Data to the log file
+SDumpy = False # False    # Used to dump PowerMaster Data to the log file
 Dumpy = XDumpy or SDumpy
 
 # PMAX EEPROM CONFIGURATION version 1_2
 SettingsCommand = collections.namedtuple('SettingsCommand', 'show count type poff psize pstep pbitoff name values')
 DecodePanelSettings = {
-    "ChangedTime"    : SettingsCommand(   True,  1, "DATE",    248,  48,   0,    -1,  "EPROM Change Time I Think",          { } ),
+    "ChangedTime"    : SettingsCommand(  False,  1, "DATE",    248,  48,   0,    -1,  "EEPROM Change Time I Think",         { } ),
     "jamDetect"      : SettingsCommand(   True,  1, "BYTE",    256,   8,   0,    -1,  "Jamming Detection",                  { '1':"UL 20/20", '2':"EN 30/60", '3':"Class 6", '4':"Other", '0':"Disable"} ),
     "entryDelays"    : SettingsCommand(   True,  2, "BYTE",    257,   8,   1,     2,  ["Entry Delay 1","Entry Delay 2"],    { '0':"None", '15':"15 Seconds", '30':"30 Seconds", '45':"45 Seconds", '60':"1 Minute", '180':"3 Minutes", '240':"4 Minutes"}),  # 257, 258
     "exitDelay"      : SettingsCommand(   True,  1, "BYTE",    259,   8,   0,    -1,  "Exit Delay",                         { '30':"30 Seconds", '60':"60 Seconds", '90':"90 Seconds", '120':"2 Minutes", '180':"3 Minutes", '240':"4 Minutes"}),
@@ -757,6 +774,7 @@ DecodePanelSettings = {
     "gsmFailure"     : SettingsCommand(   True,  1, "BYTE",    394,   8,   0,    -1,  "GSM Line Failure",                   { '0':"Don't Report", '2':"2 Minutes", '5':"5 Minutes", '15':"15 Minutes", '30':"30 Minutes"} ),
     "gsmInstall"     : SettingsCommand(  Dumpy,  1, "BYTE",    395,   8,   0,    -1,  "GSM Install",                        { '1':"Installed", '0':"Not Installed"} ),
     "gsmSmsNrs"      : SettingsCommand(  Dumpy,  4, "PHONE",   396,  64,   8,    -1,  ["1st SMS Tel","2nd SMS Tel","3rd SMS Tel","4th SMS Tel"], {} ),  #  396,404,412,420
+    "displayName"    : SettingsCommand(  Dumpy,  1,"STRING",   428, 128,   0,    -1,  "Displayed String Panel Name",        {} ),   # This is shown on the display as it is centred in the string.  360 shows "SECURITY SYSTEM" for example
     "gsmAntenna"     : SettingsCommand(   True,  1, "BYTE",    447,   8,   0,    -1,  "GSM Select Antenna",                 { '0':"Internal antenna", '1':"External antenna", '2':"Auto detect"} ),
 
     "userCodeMax"    : SettingsCommand( XDumpy,  8, "BYTE",    506,  16,   2,    -1,  "PowerMax User Codes",                {} ),
@@ -781,13 +799,12 @@ DecodePanelSettings = {
     "x10PulseTime"   : SettingsCommand(  Dumpy, 16, "BYTE",    681,   8,   1,    -1,  "X10 Pulse Time",                     { '255':"Disable", '0':"Unknown", '2':"2 Seconds", '30':"30 Seconds", '120':"2 Minutes", '240':"4 Minutes"} ),
     "x10Zone"        : SettingsCommand(  Dumpy, 16, "BYTE",    697,  24,   3,    -1,  "X10 Zone Data",                      {} ),
 
-    "x10Unknown1"    : SettingsCommand(  Dumpy,  1, "BYTE",    745,   8,   0,    -1,  "X10 Unknown 1",                      {} ),
-    "x10Unknown2"    : SettingsCommand(  Dumpy,  1, "BYTE",    746,   8,   0,    -1,  "X10 Unknown 2",                      {} ),
+    "x10Unknown"     : SettingsCommand(  Dumpy,  2, "BYTE",    745,   8,   1,    -1,  "X10 Unknown",                        {} ),
 
     "x10Trouble"     : SettingsCommand(  Dumpy,  1, "BYTE",    747,   8,   0,    -1,  "X10 Trouble Indication",             { '1':"Enable", '0':"Disable"} ),
     "x10Phase"       : SettingsCommand(  Dumpy,  1, "BYTE",    748,   8,   0,    -1,  "X10 Phase and frequency",            { '0':"Disable", '1':"50 Hz", '2':"60 Hz"} ),
-    "x10ReportCs1"   : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     0,  "X10 Report on Fail to Central Station 1", { '1':"Enable", '0':"Disable"} ),
-    "x10ReportCs2"   : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     1,  "X10 Report on Fail to Central Station 2", { '1':"Enable", '0':"Disable"} ),
+    "x10ReportCs1"   : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     0,  "X10 Report on Fail to Central 1",    { '1':"Enable", '0':"Disable"} ),
+    "x10ReportCs2"   : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     1,  "X10 Report on Fail to Central 2",    { '1':"Enable", '0':"Disable"} ),
     "x10ReportPagr"  : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     2,  "X10 Report on Fail to Pager",        { '1':"Enable", '0':"Disable"} ),
     "x10ReportPriv"  : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     3,  "X10 Report on Fail to Private",      { '1':"Enable", '0':"Disable"} ),
     "x10ReportSMS"   : SettingsCommand(  Dumpy,  1, "BYTE",    749,   1,   0,     4,  "X10 Report on Fail to SMS",          { '1':"Enable", '0':"Disable"} ),
@@ -795,15 +812,17 @@ DecodePanelSettings = {
     "usrSquawk"      : SettingsCommand(  Dumpy,  1, "BYTE",    764,   8,   0,    -1,  "Squawk Option",                      { '0':"Disable", '1':"Low Level", '2':"Medium Level", '3':"High Level"}),
     "usrArmTime"     : SettingsCommand(  Dumpy,  1, "TIME",    765,  16,   0,    -1,  "Auto Arm Time",                      {} ),
     "PartitionData"  : SettingsCommand(  Dumpy,255, "BYTE",    768,   8,   1,    -1,  "Partition Data. Not sure what it is",{} ),   # I'm not sure how many bytes this is or what they mean, i get all 255 bytes to the next entry so they can be displayed
-    "panelEprom"     : SettingsCommand(   True,  1, "STRING", 1024, 128,   0,    -1,  "Panel Eprom",                        {} ),
-    "panelSoftware"  : SettingsCommand(   True,  1, "STRING", 1040, 144,   0,    -1,  "Panel Software",                     {} ),
+    "panelEprom"     : SettingsCommand(   True,  1,"STRING",  1024, 128,   0,    -1,  "Panel Eprom",                        {} ),
+    "panelSoftware"  : SettingsCommand(   True,  1,"STRING",  1040, 144,   0,    -1,  "Panel Software",                     {} ),
     "panelSerial"    : SettingsCommand(   True,  1, "CODE",   1072,  48,   0,    -1,  "Panel Serial",                       {} ),   # page 4 offset 48
-    "panelTypeCode"  : SettingsCommand(  Dumpy,  1, "BYTE",   1078,   8,   0,    -1,  "Panel Code Type",                    {} ),   # page 4 offset 54 and 55 ->> Panel type code
-    "panelSerialCode": SettingsCommand(  Dumpy,  1, "BYTE",   1079,   8,   0,    -1,  "Panel Serial Code",                  {} ),   # page 4 offset 55
+    "panelModelCode" : SettingsCommand(  Dumpy,  1, "BYTE",   1078,   8,   0,    -1,  "Panel Model Code",                   {} ),   # page 4 offset 54 and 55 ->> Panel model code
+    "panelTypeCode"  : SettingsCommand(  Dumpy,  1, "BYTE",   1079,   8,   0,    -1,  "Panel Type Code",                    {} ),   # page 4 offset 55
 
-    "MaybeEventLog"  : SettingsCommand(  Dumpy,256, "BYTE",   1247,   8,   1,    -1,  "Maybe the event log",                {} ),   # Structure not known   was length 808 but cut to 256 to see what data we get
-    "x10ZoneNames"   : SettingsCommand(  Dumpy, 32, "BYTE",   2862,   8,   1,    -1,  "X10 Location Name references",       {} ),     # originally 16 and 2864 
-    "MaybeScreenSaver":SettingsCommand(  Dumpy, 75, "BYTE",   5888,   8,   1,    -1,  "Maybe the screen saver",             {} ),   # Structure not known 
+    #"MaybeEventLog"  : SettingsCommand(  Dumpy,256, "BYTE",   1247,   8,   1,    -1,  "Maybe the event log",                {} ),   # Structure not known   was length 808 but cut to 256 to see what data we get
+    "x10ZoneNames"   : SettingsCommand(  Dumpy, 16, "BYTE",   2864,   8,   1,    -1,  "X10 Location Name references",       {} ),   # 
+    #"MaybeScreenSaver":SettingsCommand(  Dumpy, 75, "BYTE",   5888,   8,   1,    -1,  "Maybe the screen saver",             {} ),   # Structure not known 
+
+    "ZoneStringNames": SettingsCommand(  Dumpy, 32,"STRING",  6400, 128,  16,    -1,  "Zone String Names",                  {} ),   # Zone String Names e.g "Attic", "Back door", "Basement", "Bathroom" etc 32 strings of 16 characters each, replace pmZoneName_t
 
 #PowerMax Only
     "ZoneDataPMax"   : SettingsCommand( XDumpy, 30, "BYTE",   2304,  32,   4,    -1,  "Zone Data, PowerMax",                {} ),   # 4 bytes each, 30 zones --> 120 bytes
@@ -816,15 +835,12 @@ DecodePanelSettings = {
 
     "ZoneNamePMax"   : SettingsCommand( XDumpy, 30, "BYTE",   2880,   8,   1,    -1,  "Zone Names, PowerMax",               {} ),
 
-    "Test2"          : SettingsCommand(  Dumpy,128, "BYTE",   2816,   8,   1,    -1,  "Test 2 String, PowerMax",            {} ),   # 0xB00
-    "Test1"          : SettingsCommand(  Dumpy,128, "BYTE",   2944,   8,   1,    -1,  "Test 1 String, PowerMax",            {} ),   # 0xB80
-
-    "ZoneStrPMax"    : SettingsCommand(  Dumpy, 32,"STRING",  6400, 128,  16,    -1,  "Zone String, PowerMax",              {} ),   # Not Sure what this is   originally 512 bytes, 32 strings of 16 characters each
-    #"ZoneCustomPMax" : SettingsCommand(  Dumpy, 80, "BYTE",   6816,   8,   1,    -1,  "Zone Custom, PowerMax",              {} ),   # Not Sure what this is   originally 80 bytes -->  THIS OVERLAPS WITH PREVIOUS ANYWAY
+    #"Test2"          : SettingsCommand(  Dumpy,128, "BYTE",   2816,   8,   1,    -1,  "Test 2 String, PowerMax",            {} ),   # 0xB00
+    #"Test1"          : SettingsCommand(  Dumpy,128, "BYTE",   2944,   8,   1,    -1,  "Test 1 String, PowerMax",            {} ),   # 0xB80
 
 #PowerMaster only
     "ZoneDataPMaster": SettingsCommand( SDumpy, 64, "BYTE",   2304,   8,   1,    -1,  "Zone Data, PowerMaster",             {} ),   # 1 bytes each, 64 zones --> 64 bytes
-    "ZoneNamePMaster": SettingsCommand( SDumpy, 64, "BYTE",   2400,   8,   1,    -1,  "Zone Names, PowerMaster",            {} ),   # This will be downloaded by a PowerMax but will be meaningless
+    "ZoneNamePMaster": SettingsCommand( SDumpy, 64, "BYTE",   2400,   8,   1,    -1,  "Zone Names, PowerMaster",            {} ),   # 
 
     "SirensPMaster"  : SettingsCommand( SDumpy,  8, "BYTE",  46818,  80,  10,    -1,  "Siren Data, PowerMaster",            {} ),   # 10 bytes each, 8 sirens
     "KeypadPMaster"  : SettingsCommand( SDumpy, 32, "BYTE",  46898,  80,  10,    -1,  "Keypad Data, PowerMaster",           {} ),   # 10 bytes each, 32 keypads 
@@ -834,13 +850,12 @@ DecodePanelSettings = {
     "ZoneDelay"      : SettingsCommand( SDumpy, 64, "BYTE",  49542,  16,   2,    -1,  "Zone Delay, PowerMaster",            {} )    # This is the Zone Delay settings for Motion Sensors -> Dev Settings --> Disarm Activity  
 }
 
-# These blocks are not value specific, they are used to download blocks of EPROM data that we need without reference to what the data means
+# These blocks are not value specific, they are used to download blocks of EEPROM data that we need without reference to what the data means
 #    They are used when EEPROM_DOWNLOAD_ALL is False
-#    Each block is 128 bytes long. Each EPROM page is 256 bytes so 2 downloads are needed per EPROM page
+#    Each block is 128 bytes long. Each EEPROM page is 256 bytes so 2 downloads are needed per EEPROM page
 #    We have to do it like this as the max message size is 176 bytes. I decided this was messy so I download 128 bytes at a time instead
 pmBlockDownload = {
     "PowerMax" : (
-            convertByteArray('00 00 80 00'),
             convertByteArray('00 00 80 00'),
             convertByteArray('80 00 80 00'),
             convertByteArray('00 01 80 00'),
@@ -851,19 +866,20 @@ pmBlockDownload = {
             convertByteArray('80 03 80 00'),
             convertByteArray('00 04 80 00'),
             convertByteArray('80 04 80 00'),
-            convertByteArray('00 05 80 00'),   # added
-            convertByteArray('80 05 80 00'),   # added
+            #convertByteArray('00 05 80 00'),   # MaybeEventLog added
+            #convertByteArray('80 05 80 00'),   # MaybeEventLog added
             convertByteArray('00 09 80 00'),
             convertByteArray('80 09 80 00'),
             convertByteArray('00 0A 80 00'),
             convertByteArray('80 0A 80 00'),
-            convertByteArray('00 0B 80 00'),   # Test2
-            convertByteArray('80 0B 80 00'),   # Test1
-            convertByteArray('00 17 80 00'),   # added to test MaybeScreenSaver  0x1700 = 5888
-            convertByteArray('00 19 80 00'),   # ZoneStrPMax
-            convertByteArray('80 19 80 00'),   # ZoneStrPMax
-            convertByteArray('00 1A 80 00'),   # ZoneStrPMax
-            convertByteArray('80 1A 80 00')    # ZoneStrPMax
+            convertByteArray('00 0B 80 00'),   # x10ZoneNames
+            convertByteArray('80 0B 80 00'),   # 
+            #convertByteArray('00 17 80 00'),   # added to test MaybeScreenSaver  0x1700 = 5888
+            convertByteArray('00 19 80 00'),   # ZoneStringNames 0x1900 = 6400 Decimal
+            convertByteArray('80 19 80 00'),   # ZoneStringNames
+            convertByteArray('00 1A 80 00'),   # ZoneStringNames
+            convertByteArray('80 1A 80 00')    # ZoneStringNames
+            # 1B00 to B1FF   Represents the messages and menus displayed on the panel itself e.g "READY", "READY MEMORY" etc, It also looks like Partition messages e.g. "Px  RDY"
     ),
     "PowerMaster" : (
             convertByteArray('00 B6 80 00'),
@@ -957,7 +973,7 @@ pmZoneType_t = {
            "24 Heures Silencieuse", "24 Heures Audible", "Incendie", "Intérieure", "Home Delay", "Température", "Extérieure", "16" )
 } # "Arming Key", "Guard" ??
 
-# Zone names are taken from the panel, so no langauage support needed
+# Zone names are taken from the panel, so no langauage support needed, these are updated when EEPROM is downloaded
 pmZoneName_t = [
    "Attic", "Back door", "Basement", "Bathroom", "Bedroom", "Child room", "Conservatory", "Play room", "Dining room", "Downstairs",
    "Emergency", "Fire", "Front door", "Garage", "Garage door", "Guest room", "Hall", "Kitchen", "Laundry room", "Living room",
@@ -1117,7 +1133,10 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
         self.PowerMaster = None              # Set to None to represent unknown until we know True or False
         self.ModelType = None
+        self.PanelType = None
         self.PanelStatus = {}
+        
+        self.KeepAlivePeriod = KEEP_ALIVE_PERIOD
 
         # Loopback capability added. Connect Rx and Tx together without connecting to the panel
         self.loopbackTest = False
@@ -1133,7 +1152,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.CompleteReadOnly = False         # INTERFACE : Get user variable from HA to represent complete readonly
         self.AutoEnroll = True                # INTERFACE : Auto Enroll when don't know panel type. Set to true as default as most panels can do this
         self.AutoSyncTime = True              # INTERFACE : sync time with the panel
-        self.DownloadCode = '56 50'           # INTERFACE : Set the Download Code
+        self.DownloadCode = DEFAULT_DL_CODE   # INTERFACE : Set the Download Code
         self.pmLang = 'EN'                    # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
         self.MotionOffDelay = 120             # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
         self.SirenTriggerList = ["intruder"]  # INTERFACE : This is the trigger list that we can assume is making the siren sound
@@ -1214,7 +1233,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
         # we have finished downloading the EEPROM and are trying to get in to powerlink state
         #    Set to True when
-        #         we complete eprom download and
+        #         we complete EEPROM download and
         #         receive a STOP from the panel (self.pmDownloadComplete is also set to True) and
         #             the last command from us was MSG_START
         #    Set to False when we achieve powerlink i.e. self.pmPowerlinkMode is set to True
@@ -1451,7 +1470,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             log.debug("[Standard Mode] Entering Monitor Mode")
             self.PanelMode = AlPanelMode.MONITOR_ONLY
         elif self.pmDownloadComplete and not self.ForceStandardMode and self.pmGotUserCode:
-            log.debug("[Standard Mode] Entering Standard Plus Mode as we got the pin codes from the EEPROM")
+            log.debug("[Standard Mode] Entering Standard Plus Mode as we got the pin codes from the EEPROM (You can still manually Enroll your Panel)")
             self.PanelMode = AlPanelMode.STANDARD_PLUS
         else:
             log.debug("[Standard Mode] Entering Standard Mode")
@@ -1475,7 +1494,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         # This function checks to determine if the Zone Names and Zone Types have been retrieved and if not it gets them
         #    For PowerMaster it also asks the panel for the sensor list
         retval = None
-        if self.PanelType is not None and 0 <= self.PanelType <= 15:
+        if self.PanelType is not None and 0 <= self.PanelType <= 16:
             retval = False
             zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
             if self.PowerMaster is not None and self.PowerMaster:
@@ -1525,8 +1544,11 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     def _sendMsgENROLL(self, triggerdownload):
         """ Auto enroll the PowerMax/Master unit """
         altDownloadCode = "BB BB"
+        if self.PanelType is not None:
+            altDownloadCode = pmPanelConfig_t["CFG_DLCODE_2"][self.PanelType][:2] + " " + pmPanelConfig_t["CFG_DLCODE_2"][self.PanelType][2:]
         if not self.doneAutoEnroll:
             self.doneAutoEnroll = True
+            log.debug("[_sendMsgENROLL] Sending message enrol with the Download Code")
             self._sendCommand("MSG_ENROLL", options=[ [4, convertByteArray(self.DownloadCode)] ])
             if triggerdownload:
                 self._startDownload()
@@ -1538,7 +1560,12 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             self._sendCommand("MSG_ENROLL", options=[ [4, convertByteArray(self.DownloadCode)] ])
 
     def _triggerEnroll(self, force):
-        if force or (self.PanelType is not None and self.PanelType >= 3):
+        # Only attempt to auto enroll powerlink for newer panels but not the 360 or 360R.
+        #       Older panels need the user to manually enroll
+        #       360 and 360R can get to Standard Plus but not Powerlink as (I assume that) they already have this hardware and panel will not support 2 powerlink connections
+        if self.PanelType is not None:  # By the time EEPROM download is complete, this should be set but just check to make sure
+            self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
+        if force or (self.PanelType is not None and self.AutoEnroll):
             # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
             log.debug("[_triggerEnroll] Trigger Powerlink Attempt")
             # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel,
@@ -1681,12 +1708,19 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         and not self.pmPowerlinkMode
                     ):
                         # Third, when download has completed successfully, and not ForceStandard from the user, then attempt to connect in powerlink
-                        if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
+                        if self.PanelType is not None:  # By the time EEPROM download is complete, this should be set but just check to make sure
                             # Attempt to enter powerlink mode
+                            self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
                             self._reset_watchdog_timeout()
                             self.powerlink_counter = self.powerlink_counter + 1
                             #log.debug("[Controller] Powerlink Counter {0}".format(self.powerlink_counter))
-                            if (self.powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
+                            if not self.AutoEnroll:
+                                if self.PanelModel is not None:
+                                    log.debug(f"[Controller] Panel {self.PanelModel} does not support Auto Enroll for Powerlink, going to one of the standard modes")
+                                else:
+                                    log.debug(f"[Controller] Panel {self.PanelType} does not support Auto Enroll for Powerlink, going to one of the standard modes")
+                                self._gotoStandardMode()
+                            elif (self.powerlink_counter % POWERLINK_RETRY_DELAY) == 0:  # when the remainder is zero
                                 self._triggerEnroll(False)
                             elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
                                 log.debug("[Controller] ****************************** During Powerlink Attempts - Response Timer Expired ********************************")
@@ -1810,12 +1844,12 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     # TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      
 
                     # Is it time to send an I'm Alive message to the panel
-                    if not prevent_status_updates and len(self.SendList) == 0 and not self.pmDownloadMode and self.keep_alive_counter >= KEEP_ALIVE_PERIOD:  #
-                        # Every KEEP_ALIVE_PERIOD seconds, unless watchdog has been reset
+                    if not prevent_status_updates and len(self.SendList) == 0 and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
+                        # Every self.KeepAlivePeriod seconds, unless watchdog has been reset
                         self._reset_keep_alive_messages()
 
                         status_counter = status_counter + 1
-                        if status_counter >= 3:  # around the loop i.e every KEEP_ALIVE_PERIOD * 3 seconds
+                        if status_counter >= 3:  # around the loop i.e every self.KeepAlivePeriod * 3 seconds
                             status_counter = 0
                             if not self.pmPowerlinkMode:
                                 # When is standard mode, sending this asks the panel to send us the status so we know that the panel is ok.
@@ -1977,13 +2011,13 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         elif self.pmFlexibleLength > 0 and data == PACKET_FOOTER and pdu_len + 1 < self.pmIncomingPduLen and (self.pmIncomingPduLen - pdu_len) < self.pmFlexibleLength:
             # Only do this when:
             #       Looking for "flexible" messages
-            #              At the time of writing this, only the 0x3F EPROM Download PDU does this with some PowerMaster panels
+            #              At the time of writing this, only the 0x3F EEPROM Download PDU does this with some PowerMaster panels
             #       Have got the PACKET_FOOTER message terminator
             #       We have not yet received all bytes we expect to get
             #       We are within 5 bytes of the expected message length, self.pmIncomingPduLen - pdu_len is the old length as we already have another byte in data
             #              At the time of writing this, the 0x3F was always only up to 3 bytes short of the expected length and it would pass the CRC checks
             # Do not do this when (pdu_len + 1 == self.pmIncomingPduLen) i.e. the correct length
-            # There is possibly a fault with some panels as they sometimes do not send the full EPROM data.
+            # There is possibly a fault with some panels as they sometimes do not send the full EEPROM data.
             #    - Rather than making it panel specific I decided to make this a generic capability
             self.ReceiveData.append(data)  # add byte to the message buffer
             if self.pmCurrentPDU.ignorechecksum or self._validatePDU(self.ReceiveData):  # if the message passes CRC checks then process it
@@ -2330,6 +2364,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             self.pmExpectedResponse = []
             log.debug("[StartDownload] Starting download mode")
             self._sendCommand("MSG_DOWNLOAD", options=[ [3, convertByteArray(self.DownloadCode)] ])  #
+            #self._sendCommand("MSG_BUMP")
             self.PanelMode = AlPanelMode.DOWNLOAD
             self.PanelState = AlPanelStatus.DOWNLOADING  # Downloading
             self.triggeredDownload = True
@@ -2367,16 +2402,15 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 for dl in range(0, lenMaster):
                     self.myDownloadList.append(pmBlockDownload["PowerMaster"][dl])
 
-
     # Attempt to enroll with the panel in the same was as a powerlink module would inside the panel
     def _readPanelSettings(self, isPowerMaster):
         """ Attempt to Enroll as a Powerlink """
-        log.debug("[Panel Settings] Uploading panel settings")
+        log.debug("[Panel Settings] Downloading panel settings")
 
         # Populate the full list of EEPROM blocks
         self._populateEPROMDownload(isPowerMaster)
 
-        # Send the first EPROM block to the panel to retrieve
+        # Send the first EEPROM block to the panel to retrieve
         self._sendCommand("MSG_DL", options=[ [1, self.myDownloadList.pop(0)] ])  # Read the names of the zones
 
 
@@ -2456,7 +2490,7 @@ class PacketHandling(ProtocolBase):
 
     # _writeEPROMSettings: add a certain setting to the settings table
     #      When we send a MSG_DL and insert the 4 bytes from pmDownloadItem_t, what we're doing is setting the page, index and len
-    # This function stores the downloaded status and EPROM data
+    # This function stores the downloaded status and EEPROM data
     def _writeEPROMSettings(self, page, index, setting):
         settings_len = len(setting)
         wrap = index + settings_len - 0x100
@@ -2498,7 +2532,7 @@ class PacketHandling(ProtocolBase):
             #    log.debug("[Write Settings] Page {0} is now {1}".format(page+i, self._toString(self.pmRawSettings[page + i])))
 
     # _readEPROMSettingsPageIndex
-    # This function retrieves the downloaded status and EPROM data
+    # This function retrieves the downloaded status and EEPROM data
     def _readEPROMSettingsPageIndex(self, page, index, settings_len):
         retlen = settings_len
         retval = bytearray()
@@ -2518,7 +2552,7 @@ class PacketHandling(ProtocolBase):
             self.pmDownloadComplete = False
             # prevent any more retrieval of the EEPROM settings and put us back to Standard Mode
             self._delayDownload()
-            # try to download panel EPROM again
+            # try to download panel EEPROM again
             self._startDownload()
         # return a bytearray filled with 0xFF values
         retval = bytearray()
@@ -2531,9 +2565,9 @@ class PacketHandling(ProtocolBase):
     def _readEPROMSettings(self, item):
         return self._readEPROMSettingsPageIndex(item[0], item[1], item[3] + (0x100 * item[2]))
 
-    # This function was going to save the settings (including EPROM) to a file
+    # This function was going to save the settings (including EEPROM) to a file
     def _dumpEPROMSettings(self):
-        log.debug("Dumping EPROM Settings")
+        log.debug("Dumping EEPROM Settings")
         for p in range(0, 0x100):  ## assume page can go from 0 to 255
             if p in self.pmRawSettings:
                 for j in range(0, 0x100, 0x10):  ## assume that each page can be 256 bytes long, step by 16 bytes
@@ -2595,6 +2629,7 @@ class PacketHandling(ProtocolBase):
                     nr = self._readEPROMSettingsPageIndex(page, pos + j, 1)
                     if nr[0] != 0xFF:
                         myvalue = myvalue + chr(nr[0])
+                myvalue = myvalue.strip()
             else:
                 myvalue = "Not Set"
 
@@ -2621,7 +2656,7 @@ class PacketHandling(ProtocolBase):
     def createSensor(self, i, zoneInfo, sensor_type, motiondelaytime = None, part = [1]) -> AlSensorType:
         zoneName = "Unknown"
         if i in self.ZoneNames:
-            zoneName = pmZoneName_t[self.ZoneNames[i]]
+            zoneName = pmZoneName_t[self.ZoneNames[i] & 0x1F]
         sensorType = AlSensorType.UNKNOWN
         sensorModel = "Model Unknown"
 
@@ -2663,11 +2698,11 @@ class PacketHandling(ProtocolBase):
         zoneType = zoneInfo & 0x0F
         zoneChime = (zoneInfo >> 4) & 0x03
 
-        log.debug("[Process Settings]      Z{0:0>2} :  sensor_type={1:0>2}   zoneInfo={2:0>2}   ZTypeName={3}   Chime={4}   SensorType={5}   zoneName={6}".format(
-               i+1, hex(sensor_type).upper(), hex(zoneInfo).upper(), pmZoneType_t["EN"][zoneType], pmZoneChime_t["EN"][zoneChime], sensorType, zoneName))
+        #log.debug("[Process Settings]      Z{0:0>2} :  sensor_type={1:0>2}   zoneInfo={2:0>2}   ZTypeName={3}   Chime={4}   SensorType={5}   zoneName={6}".format(
+        #       i+1, hex(sensor_type).upper(), hex(zoneInfo).upper(), pmZoneType_t["EN"][zoneType], pmZoneChime_t["EN"][zoneChime], sensorType, zoneName))
 
         if i in self.SensorList:
-            # If we get EPROM data, assume it is all correct and override any existing settings (as they were assumptions)
+            # If we get EEPROM data, assume it is all correct and override any existing settings (as some were assumptions)
             self.SensorList[i].stype = sensorType
             self.SensorList[i].sid = sensor_type
             self.SensorList[i].model = sensorModel
@@ -2676,7 +2711,7 @@ class PacketHandling(ProtocolBase):
             self.SensorList[i].zname = zoneName
             self.SensorList[i].zchime = pmZoneChime_t[self.pmLang][zoneChime]
             self.SensorList[i].partition = part
-            self.SensorList[i].id = i + 1
+            #self.SensorList[i].id = i + 1
             self.SensorList[i].motiondelaytime = motiondelaytime
 
         else:
@@ -2686,13 +2721,15 @@ class PacketHandling(ProtocolBase):
             if self.onNewSensorHandler is not None:
                 self.onNewSensorHandler(self.SensorList[i])
 
-        self.SensorList[i].enrolled = True
-        self.SensorList[i].pushChange(AlSensorCondition.ENROLLED)
+            # Only enrolled once
+            self.SensorList[i].enrolled = True
+            self.SensorList[i].pushChange(AlSensorCondition.ENROLLED)
     
     def _processKeypadsAndSirens(self, pmPanelTypeNr) -> str:
         sirenCnt = pmPanelConfig_t["CFG_SIRENS"][pmPanelTypeNr]
         keypad1wCnt = pmPanelConfig_t["CFG_1WKEYPADS"][pmPanelTypeNr]
         keypad2wCnt = pmPanelConfig_t["CFG_2WKEYPADS"][pmPanelTypeNr]
+
         # ------------------------------------------------------------------------------------------------------------------------------------------------
         # Process Devices (Sirens and Keypads)
 
@@ -2700,57 +2737,37 @@ class PacketHandling(ProtocolBase):
         if self.PowerMaster is not None and self.PowerMaster: # PowerMaster models
             # Process keypad settings
             setting = self._lookupEprom(DecodePanelSettings["KeypadPMaster"])
-            #setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_MR_KEYPADS"])
-            if len(setting) == keypad2wCnt:
-                for i in range(0, keypad2wCnt):
-                    if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0 or setting[i][3] != 0 or setting[i][4] != 0:
-                        log.debug("[Process Settings] Found an enrolled PowerMaster keypad {0}".format(i))
-                        deviceStr = "{0},K2{1:0>2}".format(deviceStr, i)
-            else:
-                log.debug(f"[Process Settings] Mismatch PowerMaster Keypad {len(setting)}   {keypad2wCnt}")
+            for i in range(0, min(len(setting), keypad2wCnt)):
+                if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0 or setting[i][3] != 0 or setting[i][4] != 0:
+                    log.debug("[Process Settings] Found an enrolled PowerMaster keypad {0}".format(i))
+                    deviceStr = "{0},K2{1:0>2}".format(deviceStr, i)
 
             # Process siren settings
-            setting = self._lookupEprom(DecodePanelSettings["KeypadPMaster"])
-            # setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_MR_SIRENS"])
-            if len(setting) == sirenCnt:
-                for i in range(0, sirenCnt):
-                    if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0 or setting[i][3] != 0 or setting[i][4] != 0:
-                        log.debug("[Process Settings] Found an enrolled PowerMaster siren {0}".format(i))
-                        deviceStr = "{0},S{1:0>2}".format(deviceStr, i)
-            else:
-                log.debug(f"[Process Settings] Mismatch PowerMaster Sirens {len(setting)}   {sirenCnt}")
+            setting = self._lookupEprom(DecodePanelSettings["SirensPMaster"])
+            for i in range(0, min(len(setting), sirenCnt)):
+                if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0 or setting[i][3] != 0 or setting[i][4] != 0:
+                    log.debug("[Process Settings] Found an enrolled PowerMaster siren {0}".format(i))
+                    deviceStr = "{0},S{1:0>2}".format(deviceStr, i)
         else:
             # Process keypad settings
             setting = self._lookupEprom(DecodePanelSettings["Keypad1PMax"])
-            #setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_1WKEYPAD"])
-            if len(setting) == keypad1wCnt:
-                for i in range(0, keypad1wCnt):
-                    if setting[i][0] != 0 or setting[i][1] != 0:
-                        log.debug("[Process Settings] Found an enrolled PowerMax 1-way keypad {0}".format(i))
-                        deviceStr = "{0},K1{1:0>2}".format(deviceStr, i)
-            else:
-                log.debug(f"[Process Settings] Mismatch PowerMax 1-way keypad {len(setting)}   {keypad1wCnt}")
+            for i in range(0, min(len(setting), keypad1wCnt)):
+                if setting[i][0] != 0 or setting[i][1] != 0:
+                    log.debug("[Process Settings] Found an enrolled PowerMax 1-way keypad {0}".format(i))
+                    deviceStr = "{0},K1{1:0>2}".format(deviceStr, i)
 
             setting = self._lookupEprom(DecodePanelSettings["Keypad2PMax"])
-            #setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_2WKEYPAD"])
-            if len(setting) == keypad2wCnt:
-                for i in range(0, keypad2wCnt):
-                    if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0:
-                        log.debug("[Process Settings] Found an enrolled PowerMax 2-way keypad {0}".format(i))
-                        deviceStr = "{0},K2{1:0>2}".format(deviceStr, i)
-            else:
-                log.debug(f"[Process Settings] Mismatch PowerMax 2-way keypad {len(setting)}   {keypad2wCnt}")
+            for i in range(0, min(len(setting), keypad2wCnt)):
+                if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0:
+                    log.debug("[Process Settings] Found an enrolled PowerMax 2-way keypad {0}".format(i))
+                    deviceStr = "{0},K2{1:0>2}".format(deviceStr, i)
 
             # Process siren settings
             setting = self._lookupEprom(DecodePanelSettings["SirensPMax"])
-            # setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_SIRENS"])
-            if len(setting) == sirenCnt:
-                for i in range(0, sirenCnt):
-                    if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0:
-                        log.debug("[Process Settings] Found a PowerMax siren {0}".format(i))
-                        deviceStr = "{0},S{1:0>2}".format(deviceStr, i)
-            else:
-                log.debug(f"[Process Settings] Mismatch PowerMax Sirens {len(setting)}   {sirenCnt}")
+            for i in range(0, min(len(setting), sirenCnt)):
+                if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0:
+                    log.debug("[Process Settings] Found a PowerMax siren {0}".format(i))
+                    deviceStr = "{0},S{1:0>2}".format(deviceStr, i)
         
         return deviceStr[1:]
     
@@ -2811,279 +2828,297 @@ class PacketHandling(ProtocolBase):
     #       The phone numbers
     #       The user pin codes
     def _processEPROMSettings(self):
-        """Process Settings from the downloaded EPROM data from the panel"""
-        log.debug("[Process Settings] Process Settings from EPROM")
+        """Process Settings from the downloaded EEPROM data from the panel"""
+        log.debug("[Process Settings] Process Settings from EEPROM")
 
-        # ------------------------------------------------------------------------------------------------------------------------------------------------
-        # Panel type and serial number
-        #     This checks whether the EEPROM settings have been downloaded OK
-        pmPanelTypeNr = self._lookupEpromSingle("panelSerialCode")    
-        if pmPanelTypeNr is not None and 1 <= pmPanelTypeNr <= 16:
-            log.debug("[Process Settings] old pmPanelTypeNr {0} ({1})    model {2}".format(pmPanelTypeNr, self.PanelType, self.PanelModel))
-            self.PanelModel = pmPanelType_t[pmPanelTypeNr] if pmPanelTypeNr in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
-            self.PanelType = pmPanelTypeNr
-            self.PowerMaster = self.PanelType >= 7
-            log.debug("[Process Settings] new pmPanelTypeNr {0} ({1})    model {2}".format(pmPanelTypeNr, self.PanelType, self.PanelModel))
-        elif pmPanelTypeNr is not None and pmPanelTypeNr == 0:
-            # Then its a Basic PowerMax wih Download Capabilities only, assume the latter
-            log.error(f"[Process Settings] Lookup of panel type reveals that this seems to be a PowerMax Panel and supports EEPROM Download only with no capability, going to Standard Mode")
-            self._gotoStandardMode()
-            return
-        else:
-            # Somekind of error or the EEPROM hasn't downloaded
-            log.error(f"[Process Settings] Lookup of panel type string and model from the EEPROM failed, assuming EEPROM download failed {pmPanelTypeNr=}, going to Standard Mode")
-            self._gotoStandardMode()
-            return
+        if self.pmDownloadComplete:
+            # ------------------------------------------------------------------------------------------------------------------------------------------------
+            # Panel type and serial number
+            #     This checks whether the EEPROM settings have been downloaded OK
+            
+            pmDisplayName = self._lookupEpromSingle("displayName")    
 
-        # self._dumpEPROMSettings()
+            log.debug("[Process Settings] old Panel Type: {0}    Model: {1}    Panels Displayed Name: {2}".format(self.PanelType, self.PanelModel, pmDisplayName))
 
-        # ------------------------------------------------------------------------------------------------------------------------------------------------
-        # Need the panel type to be valid so we can decode some of the remaining downloaded data correctly
-        if self.PanelType is not None and self.PanelType in pmPanelType_t:
-
-            if self.pmDownloadComplete:
-                log.debug("[Process Settings] Processing settings information")
-
-                # List of door/window sensors
-                doorZoneStr = ""
-                # List of motion sensors
-                motionZoneStr = ""
-                # List of smoke sensors
-                smokeZoneStr = ""
-                # List of other sensors
-                otherZoneStr = ""
-
-                # log.debug("[Process Settings] Panel Type Number " + str(pmPanelTypeNr) + "    serial string " + self._toString(panelSerialType))
-                zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][pmPanelTypeNr] + pmPanelConfig_t["CFG_WIRED"][pmPanelTypeNr]
-                #dummy_customCnt = pmPanelConfig_t["CFG_ZONECUSTOM"][pmPanelTypeNr]
-                userCnt = pmPanelConfig_t["CFG_USERCODES"][pmPanelTypeNr]
-                partitionCnt = pmPanelConfig_t["CFG_PARTITIONS"][pmPanelTypeNr]
-
-                self.pmPincode_t = [convertByteArray("00 00")] * userCnt  # allow maximum of userCnt user pin codes
-
-                devices = ""
-
-                # ------------------------------------------------------------------------------------------------------------------------------------------------
-                # Process panel type and serial
-
-                pmPanelTypeCodeStr = self._lookupEpromSingle("panelTypeCode")
-                idx = "{0:0>2}{1:0>2}".format(hex(pmPanelTypeNr).upper()[2:], hex(int(pmPanelTypeCodeStr)).upper()[2:])
-                pmPanelName = pmPanelName_t[idx] if idx in pmPanelName_t else "Unknown"
-
-                log.debug("[Process Settings] Processing settings - panel code index {0}".format(idx))
-
-                #  INTERFACE : Add this param to the status panel first
-                self.PanelStatus["Panel Name"] = pmPanelName
-
-                # ------------------------------------------------------------------------------------------------------------------------------------------------
-                # Process Panel Settings to display in the user interface
-                self.logEEPROMData(Dumpy)
-
-                # ------------------------------------------------------------------------------------------------------------------------------------------------
-                # Process alarm settings
-                #log.debug("panic {0}   bypass {1}".format(self._lookupEpromSingle("panicAlarm"), self._lookupEpromSingle("bypass") ))
-                self.pmPanicAlarmSilent = self._lookupEpromSingle("panicAlarm") == "Silent Panic"    # special
-                self.pmBypassOff = self._lookupEpromSingle("bypass") == "No Bypass"                  # special   '2':"Manual Bypass", '0':"No Bypass", '1':"Force Arm"}
-
-                # ------------------------------------------------------------------------------------------------------------------------------------------------
-                # Process user pin codes
-                if self.PowerMaster is not None and self.PowerMaster:
-                    #setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_MR_PINCODES"])
-                    uc = self._lookupEprom(DecodePanelSettings["userCodeMaster"])
-                else:
-                    #setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_PINCODES"])
-                    uc = self._lookupEprom(DecodePanelSettings["userCodeMax"])
-
-                # DON'T SAVE THE USER CODES TO THE LOG
-                #log.debug("[Process Settings] User Codes:")
-                if len(uc) == userCnt:
-                    self.pmPincode_t = uc
-                    self.pmGotUserCode = True
-                    #for i in range(0, userCnt):
-                    #    log.debug(f"[Process Settings]      User {i} has code {self._toString(uc[i])}")
-                else:
-                    log.debug(f"[Process Settings]  User code count is different {userCnt} != {len(uc)}")
-
-                #log.debug(f"[Process Settings]    Installer Code {self._toString(self._lookupEpromSingle('installerCode'))}")
-                #log.debug(f"[Process Settings]    Master DL Code {self._toString(self._lookupEpromSingle('masterDlCode'))}")
-                #if self.PowerMaster is not None and self.PowerMaster:
-                #    log.debug(f"[Process Settings]    Master Code {self._toString(self._lookupEpromSingle('masterCode'))}")
-                #    log.debug(f"[Process Settings]    Installer DL Code {self._toString(self._lookupEpromSingle('instalDlCode'))}")
-
-                # ------------------------------------------------------------------------------------------------------------------------------------------------
-                # Store partition info & check if partitions are on
-                partition = None
-                if partitionCnt > 1:  # Could the panel have more than 1 partition?
-                    # If that panel type can have more than 1 partition, then check to see if the panel has defined more than 1
-                    partition = self._lookupEprom(DecodePanelSettings["PartitionData"])
-                    #partition = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_PARTITIONS"])
-                    if partition is None or partition[0] == 255:
-                        partitionCnt = 1
-                    #else:
-                    #    log.debug("[Process Settings] Partition settings " + self._toString(partition))
-
-                # ------------------------------------------------------------------------------------------------------------------------------------------------
-                # Process zone settings
-                zoneNames = bytearray()
-                #settingMr = bytearray()
-                pmaster_zone_ext_data = [ ]
-
-                if self.PowerMaster is not None and self.PowerMaster:
-                    #zoneNames = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_MR_ZONENAMES"])
-                    zoneNames = self._lookupEprom(DecodePanelSettings["ZoneNamePMaster"])
-                    #settingMr = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_MR_ZONES"])
-                    
-                    # This is 640 bytes.
-                    # It is 64 zones, each is 10 bytes
-                    #    5 = Sensor Type
-                    pmaster_zone_ext_data = self._lookupEprom(DecodePanelSettings["ZoneExtPMaster"])
-
-                    #for i in range(0, 640):
-                    #    if settingMr[i] != pmaster_zone_ext_data[i//10][i%10]:
-                    #        log.debug("[Process Settings] Zone Extended Data is different BOOOOOOOOOOOOOOO {0} {1}".format(settingMr[i], pmaster_zone_ext_data[i//10][i%10]))
-                    
-                    # log.debug("[Process Settings] MSG_DL_MR_ZONES Buffer " + self._toString(settingMr))
-                    # motiondelayarray = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_MR_ZONEDELAY"])
-                    motiondelayarray = self._lookupEprom(DecodePanelSettings["ZoneDelay"])
-                    # alarmledarray = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_MR_ALARMLED"])
-                    # log.debug("[Process Settings] alarmled = " + self._toString(alarmledarray))
-                else:
-                    zonestrings = self._lookupEprom(DecodePanelSettings["ZoneStrPMax"])
-                    for i in range(0, len(zonestrings)):
-                        pmZoneName_t[i] = zonestrings[i].strip()
-                
-                    # zoneNames = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_ZONENAMES"])
-                    zoneNames = self._lookupEprom(DecodePanelSettings["ZoneNamePMax"])
-                    zonesignalstrength = self._lookupEprom(DecodePanelSettings["ZoneSignalPMax"])
-                    log.debug("[Process Settings] ZoneSignal " + self._toString(zonesignalstrength))
-                    
-                # This is 120 bytes. These 2 get the same data block but they are structured differently
-                # It is 30 zones, each is 4 bytes
-                #    2 = Sensor Type
-                #    3 = Zone Info
-                pmax_zone_data   = self._lookupEprom(DecodePanelSettings["ZoneDataPMax"])     
-                # This is 64 bytes. These 2 get the same data block but they are structured differently
-                # It is 64 zones, each is 1 byte, represents Zone Info
-                pmaster_zone_data = self._lookupEprom(DecodePanelSettings["ZoneDataPMaster"])  # This is 64 bytes
-                
-                #setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_ZONES"])
-                
-                ################# TEST #######################
-                #for i in range(0, 120):
-                #    if setting[i] != pmax_zone_data[i//4][i%4]:
-                #        log.debug("[Process Settings] Zone pmax_zone_data   Data is different BOOOOOOOOOOOOOOO {0} {1}".format(setting[i], pmax_zone_data[i//4][i%4]))
-
-                #for i in range(0, 64):
-                #    if setting[i] != pmaster_zone_data[i]:
-                #        log.debug("[Process Settings] Zone pmaster_zone_data Data is different BOOOOOOOOOOOOOOO {0} {1}".format(setting[i], pmaster_zone_data[i]))
-
-                ################# TEST #######################
-
-                log.debug("[Process Settings] Zones Names Buffer :  {0}".format(self._toString(zoneNames)))
-
-                if len(pmaster_zone_data) > 0 and len(zoneNames) > 0:
-                    log.debug("[Process Settings] Zones:    len settings {0}     len zoneNames {1}    zoneCnt {2}".format(len(pmax_zone_data), len(zoneNames), zoneCnt))
-                    for i in range(0, zoneCnt):
-
-                        self.ZoneNames[i] = zoneNames[i] & 0x1F
-                        self.ZoneTypes[i] = int(pmaster_zone_data[i]) if self.PowerMaster is not None and self.PowerMaster else int(pmax_zone_data[i][3])
-                        zoneEnrolled = int(pmaster_zone_ext_data[i][5]) != 0 if self.PowerMaster is not None and self.PowerMaster else int(pmax_zone_data[i][2]) != 0
-
-                        if zoneEnrolled:
-                            sensor_type = int(pmaster_zone_ext_data[i][5]) if self.PowerMaster is not None and self.PowerMaster else int(pmax_zone_data[i][2])
-                            motiondel = motiondelayarray[i][0] + (256 * motiondelayarray[i][1]) if self.PowerMaster is not None and self.PowerMaster else None
-
-                            #part = []
-                            #if partitionCnt > 1 and partition is not None:
-                            #    for j in range(0, partitionCnt):
-                            #        if (partition[0x11 + i] & (1 << j)) > 0:
-                            #            # log.debug("[Process Settings]     Adding to partition list - ref {0}  Z{1:0>2}   Partition {2}".format(i, i+1, j+1))
-                            #            part.append(j + 1)
-                            #else:
-                            #    part = [1]
-                            part = [1]
-                            
-                            sensorType = self.createSensor( i, zoneInfo = self.ZoneTypes[i], sensor_type = sensor_type, motiondelaytime = motiondel, part = part )
-
-                            if i in self.SensorList:
-                                if sensorType == AlSensorType.MAGNET or sensorType == AlSensorType.WIRED:
-                                    doorZoneStr = "{0},Z{1:0>2}".format(doorZoneStr, i + 1)
-                                elif sensorType == AlSensorType.MOTION or sensorType == AlSensorType.CAMERA:
-                                    motionZoneStr = "{0},Z{1:0>2}".format(motionZoneStr, i + 1)
-                                elif sensorType == AlSensorType.SMOKE or sensorType == AlSensorType.GAS:
-                                    smokeZoneStr = "{0},Z{1:0>2}".format(smokeZoneStr, i + 1)
-                                else:
-                                    otherZoneStr = "{0},Z{1:0>2}".format(otherZoneStr, i + 1)
-
+            pmPanelTypeNr = self._lookupEpromSingle("panelTypeCode")    
+            
+            if pmPanelTypeNr is not None and pmPanelTypeNr == 0xFF:
+                log.error(f"[Process Settings] Lookup of panel type string and model from the EEPROM failed, assuming EEPROM download failed {pmPanelTypeNr=}, going to Standard Mode")
+                self._gotoStandardMode()
+                return
+            
+            elif pmPanelTypeNr is not None:
+                # Assume download success, so test if it is a supported panel type
+                self.PanelType = pmPanelTypeNr
+                if 0 <= self.PanelType <= len(pmPanelConfig_t["CFG_SUPPORTED"]) - 1:
+                    isSupported = pmPanelConfig_t["CFG_SUPPORTED"][self.PanelType]
+                    if isSupported:
+                        self.PanelModel = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
+                        self.PowerMaster = pmPanelConfig_t["CFG_POWERMASTER"][self.PanelType]
+                        self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
+                        self.KeepAlivePeriod = pmPanelConfig_t["CFG_KEEPALIVE"][self.PanelType]
+                        self.pmInitSupportedByPanel = pmPanelConfig_t["CFG_INIT_SUPPORT"][self.PanelType]
+                        if self.PanelType in pmPanelType_t:
+                            log.debug("[Process Settings] new Panel Type: {0}    Model: {1}".format(self.PanelType, self.PanelModel))
                         else:
-                            if i in self.SensorList:
-                                log.debug("[Process Settings]       Removing sensor {0} as it is not enrolled".format(i+1))
-                                del self.SensorList[i]
-                                # self.SensorList[i] = None # remove zone if needed
+                            log.error(f"This Visonic Panel type {self.PanelType} is not fully supported and you need to report it to the Author of this software")
+                    else:
+                        # Panel 0 i.e original PowerMax
+                        log.error(f"Lookup of Visonic Panel type reveals that this seems to be a PowerMax Panel and supports EEPROM Download only with no capability, going to Standard Mode but this Panel cannot be used with this Integration")
+                        self._gotoStandardMode()
+                        return
+                else:
+                    # Then it is an unknown panel type i.e. not in range 0 to 16
+                    log.error(f"Lookup of Visonic Panel type {self.PanelType} reveals that this is a new Panel Type that is unknown to this Software. Going to Standard Mode for basic capability only, please contact the Author of this software")
+                    # Goto standard Mode to provide basic capability
+                    self._gotoStandardMode()
+                    return
 
-                self.sensorsCreated = True
+            elif self.PanelType is not None:             # Set by the receipt of a 3C message, in that case the other vars should also be set
+                if self.PanelType in pmPanelType_t:
+                    log.debug("[Process Settings] old Panel Type {0}    Model {1}".format(self.PanelType, self.PanelModel))
+                else:
+                    log.error(f"This Visonic panel type {self.PanelType} is not fully supported and you need to report it to the Author of this software")
+                return # This would allow the download to be tried again
 
-                # ------------------------------------------------------------------------------------------------------------------------------------------------
-                # Process PGM/X10 settings
+            elif self.PanelType is None or self.PanelType == 0xFF:  # Not set by the receipt of a 3C message or it is invalid
+                log.error(f"[Process Settings] Lookup of panel type string and model from the EEPROM failed, assuming EEPROM download failed {pmPanelTypeNr=}, going to Standard Mode")
+                # Assume here that the 3C has not been received and the download has failed, go to standard mode
+                self._gotoStandardMode()
+                return
 
-                s = []
-                s.append(self._lookupEprom(DecodePanelSettings["x10ByArmAway"]))
-                s.append(self._lookupEprom(DecodePanelSettings["x10ByArmHome"]))
-                s.append(self._lookupEprom(DecodePanelSettings["x10ByDisarm"]))
-                s.append(self._lookupEprom(DecodePanelSettings["x10ByDelay"]))
-                s.append(self._lookupEprom(DecodePanelSettings["x10ByMemory"]))
-                s.append(self._lookupEprom(DecodePanelSettings["x10ByKeyfob"]))
-                s.append(self._lookupEprom(DecodePanelSettings["x10ActZoneA"]))
-                s.append(self._lookupEprom(DecodePanelSettings["x10ActZoneB"]))
-                s.append(self._lookupEprom(DecodePanelSettings["x10ActZoneC"]))
+            else:
+                # Some kind of error or the EEPROM hasn't downloaded. We should only get here if the EEPROM has been downloaded and it doesn't look like that it has been
+                log.error(f"[Process Settings] Lookup of panel type string and model from the EEPROM failed, assuming EEPROM download failed {pmPanelTypeNr=}, going to Standard Mode")
+                # Assume here that the 3C has not been received and the download has failed, go to standard mode
+                self._gotoStandardMode()
+                return
 
-                x10Names = self._lookupEprom(DecodePanelSettings["x10ZoneNames"])
+            # ------------------------------------------------------------------------------------------------------------------------------------------------
+            # Need the panel type to be valid so we can decode some of the remaining downloaded data correctly
+            # when we get here then self.PanelType is set and it's a known panel type i.e. if self.PanelType is not None and self.PanelType in pmPanelType_t is TRUE
+            # ------------------------------------------------------------------------------------------------------------------------------------------------
 
-                # setting = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_PGMX10"])
-                # x10Names = self._readEPROMSettings(pmDownloadItem_t["MSG_DL_X10NAMES"])
+            # self._dumpEPROMSettings()
+
+            log.debug("[Process Settings] Processing settings information")
+
+            # List of door/window sensors
+            doorZoneStr = ""
+            # List of motion sensors
+            motionZoneStr = ""
+            # List of smoke sensors
+            smokeZoneStr = ""
+            # List of other sensors
+            otherZoneStr = ""
+
+            # log.debug("[Process Settings] Panel Type Number " + str(self.PanelType) + "    serial string " + self._toString(panelSerialType))
+            zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
+            #dummy_customCnt = pmPanelConfig_t["CFG_ZONECUSTOM"][self.PanelType]
+            userCnt = pmPanelConfig_t["CFG_USERCODES"][self.PanelType]
+            partitionCnt = pmPanelConfig_t["CFG_PARTITIONS"][self.PanelType]
+
+            self.pmPincode_t = [convertByteArray("00 00")] * userCnt  # allow maximum of userCnt user pin codes
+
+            # ------------------------------------------------------------------------------------------------------------------------------------------------
+            # Process panel type and serial
+
+            pmPanelTypeCodeStr = self._lookupEpromSingle("panelModelCode")
+            idx = "{0:0>2}{1:0>2}".format(hex(self.PanelType).upper()[2:], hex(int(pmPanelTypeCodeStr)).upper()[2:])
+            pmPanelName = pmPanelName_t[idx] if idx in pmPanelName_t else "Unknown"
+
+            log.debug("[Process Settings]   Processing settings - panel code index {0}".format(idx))
+
+            #  INTERFACE : Add this param to the status panel first
+            self.PanelStatus["Panel Name"] = pmPanelName
+
+            # ------------------------------------------------------------------------------------------------------------------------------------------------
+            # Process Panel Settings to display in the user interface
+            self.logEEPROMData(Dumpy)
+
+            # ------------------------------------------------------------------------------------------------------------------------------------------------
+            # Process alarm settings
+            #log.debug("panic {0}   bypass {1}".format(self._lookupEpromSingle("panicAlarm"), self._lookupEpromSingle("bypass") ))
+            self.pmPanicAlarmSilent = self._lookupEpromSingle("panicAlarm") == "Silent Panic"    # special
+            self.pmBypassOff = self._lookupEpromSingle("bypass") == "No Bypass"                  # special   '2':"Manual Bypass", '0':"No Bypass", '1':"Force Arm"}
+
+            # ------------------------------------------------------------------------------------------------------------------------------------------------
+            # Process user pin codes
+            if self.PowerMaster is not None and self.PowerMaster:
+                uc = self._lookupEprom(DecodePanelSettings["userCodeMaster"])
+            else:
+                uc = self._lookupEprom(DecodePanelSettings["userCodeMax"])
+
+            # DON'T SAVE THE USER CODES TO THE LOG
+            #log.debug("[Process Settings] User Codes:")
+            if len(uc) == userCnt:
+                self.pmPincode_t = uc
+                self.pmGotUserCode = True
+                #for i in range(0, userCnt):
+                #    log.debug(f"[Process Settings]      User {i} has code {self._toString(uc[i])}")
+            else:
+                log.debug(f"[Process Settings]  User code count is different {userCnt} != {len(uc)}")
+
+            #log.debug(f"[Process Settings]    Installer Code {self._toString(self._lookupEpromSingle('installerCode'))}")
+            #log.debug(f"[Process Settings]    Master DL Code {self._toString(self._lookupEpromSingle('masterDlCode'))}")
+            #if self.PowerMaster is not None and self.PowerMaster:
+            #    log.debug(f"[Process Settings]    Master Code {self._toString(self._lookupEpromSingle('masterCode'))}")
+            #    log.debug(f"[Process Settings]    Installer DL Code {self._toString(self._lookupEpromSingle('instalDlCode'))}")
+
+            # ------------------------------------------------------------------------------------------------------------------------------------------------
+            # Store partition info & check if partitions are on
+            partition = None
+            if partitionCnt > 1:  # Could the panel have more than 1 partition?
+                # If that panel type can have more than 1 partition, then check to see if the panel has defined more than 1
+                partition = self._lookupEprom(DecodePanelSettings["PartitionData"])
+                if partition is None or partition[0] == 255:
+                    partitionCnt = 1
+                #else:
+                #    log.debug("[Process Settings] Partition settings " + self._toString(partition))
+
+            # ------------------------------------------------------------------------------------------------------------------------------------------------
+            # Process zone settings
+
+            # Update the zone names e.g. "Attic", "Back door", "Basement", "Bathroom" etc
+            zonestrings = self._lookupEprom(DecodePanelSettings["ZoneStringNames"])
+            if zonestrings is not None:
+                for i in range(0, len(zonestrings)):
+                    pmZoneName_t[i] = zonestrings[i].strip()
+
+            zoneNames = bytearray()
+            #settingMr = bytearray()
+            pmaster_zone_ext_data = [ ]
+
+            if self.PowerMaster is not None and self.PowerMaster:
+                zoneNames = self._lookupEprom(DecodePanelSettings["ZoneNamePMaster"])
+                # This is 640 bytes.
+                # It is 64 zones, each is 10 bytes
+                #    5 = Sensor Type
+                pmaster_zone_ext_data = self._lookupEprom(DecodePanelSettings["ZoneExtPMaster"])
+                motiondelayarray = self._lookupEprom(DecodePanelSettings["ZoneDelay"])
+            else:
+                zoneNames = self._lookupEprom(DecodePanelSettings["ZoneNamePMax"])
+                zonesignalstrength = self._lookupEprom(DecodePanelSettings["ZoneSignalPMax"])
+                log.debug("[Process Settings] ZoneSignal " + self._toString(zonesignalstrength))
                 
-                for i in range(0, 16):
-                    if i == 0 or x10Names[i - 1] != 0x1F:   # python should process left to right, so i == 0 gets evaluated first.
-                        for j in range(0, 9):
-                            if i not in self.SwitchList and s[j][i] != 'Disable':
-                                x10Location = "PGM" if i == 0 else pmZoneName_t[x10Names[i - 1] & 0x1F]
-                                x10Type = "OnOff Switch" if i == 0 else "Dimmer Switch"
+            # These 2 get the same data block but they are structured differently
+            
+            # It is 30 zones, each is 4 bytes
+            #    2 = Sensor Type
+            #    3 = Zone Info
+            pmax_zone_data   = self._lookupEprom(DecodePanelSettings["ZoneDataPMax"])      # This is 120 bytes. 
+            
+            # This is 64 bytes. These 2 get the same data block but they are structured differently
+            # It is 64 zones, each is 1 byte, represents Zone Info
+            pmaster_zone_data = self._lookupEprom(DecodePanelSettings["ZoneDataPMaster"])  # This is 64 bytes
+
+            if self.PowerMaster is not None and self.PowerMaster:
+                log.debug("[Process Settings]   Zones:    len settings {0}     len zoneNames {1}    zoneCnt {2}".format(len(pmaster_zone_data), len(zoneNames), zoneCnt))
+            else:
+                log.debug("[Process Settings]   Zones:    len settings {0}     len zoneNames {1}    zoneCnt {2}".format(len(pmax_zone_data), len(zoneNames), zoneCnt))
+            
+            log.debug("[Process Settings]     Zones Names Buffer :  {0}".format(self._toString(zoneNames)))
+
+            if len(pmax_zone_data) > 0 and len(pmaster_zone_data) > 0 and len(zoneNames) > 0:
+                for i in range(0, zoneCnt):
+
+                    self.ZoneNames[i] = zoneNames[i] & 0x1F
+                    self.ZoneTypes[i] = int(pmaster_zone_data[i]) if self.PowerMaster is not None and self.PowerMaster else int(pmax_zone_data[i][3])
+                    
+                    zoneEnrolled = False
+                    if self.PowerMaster:  # PowerMaster models
+                        zoneEnrolled = pmaster_zone_ext_data[i][4:9] != bytearray.fromhex("00 00 00 00 00")
+                    else:
+                        zoneEnrolled = pmax_zone_data[i][0:3] != bytearray.fromhex("00 00 00")
+
+                    if zoneEnrolled:
+                        #if self.PowerMaster:
+                        #    log.debug(f"[Process Settings]  Zone data = {self._toString(pmaster_zone_ext_data[i])}")
+                        #else:
+                        #    log.debug(f"[Process Settings]  Zone data = {self._toString(pmax_zone_data[i])}")
+
+                        sensor_type = int(pmaster_zone_ext_data[i][5]) if self.PowerMaster is not None and self.PowerMaster else int(pmax_zone_data[i][2])
+                        motiondel = motiondelayarray[i][0] + (256 * motiondelayarray[i][1]) if self.PowerMaster is not None and self.PowerMaster else None
+
+                        #part = []
+                        #if partitionCnt > 1 and partition is not None:
+                        #    for j in range(0, partitionCnt):
+                        #        if (partition[0x11 + i] & (1 << j)) > 0:
+                        #            # log.debug("[Process Settings]     Adding to partition list - ref {0}  Z{1:0>2}   Partition {2}".format(i, i+1, j+1))
+                        #            part.append(j + 1)
+                        #else:
+                        #    part = [1]
+                        part = [1]
+                        
+                        sensorType = self.createSensor( i, zoneInfo = self.ZoneTypes[i], sensor_type = sensor_type, motiondelaytime = motiondel, part = part )
+
+                        if i in self.SensorList:
+                            if sensorType == AlSensorType.MAGNET or sensorType == AlSensorType.WIRED:
+                                doorZoneStr = "{0},Z{1:0>2}".format(doorZoneStr, i + 1)
+                            elif sensorType == AlSensorType.MOTION or sensorType == AlSensorType.CAMERA:
+                                motionZoneStr = "{0},Z{1:0>2}".format(motionZoneStr, i + 1)
+                            elif sensorType == AlSensorType.SMOKE or sensorType == AlSensorType.GAS:
+                                smokeZoneStr = "{0},Z{1:0>2}".format(smokeZoneStr, i + 1)
+                            else:
+                                otherZoneStr = "{0},Z{1:0>2}".format(otherZoneStr, i + 1)
+
+                    elif i in self.SensorList:
+                        log.debug("[Process Settings]       Removing sensor {0} as it is not enrolled in Panel EEPROM Data".format(i+1))
+                        del self.SensorList[i]
+                        # self.SensorList[i] = None # remove zone if needed
+
+            self.sensorsCreated = True
+
+            # ------------------------------------------------------------------------------------------------------------------------------------------------
+            # Process PGM/X10 settings
+
+            log.debug("[Process Settings]   Processing X10 devices")
+
+            s = []
+            s.append(self._lookupEprom(DecodePanelSettings["x10ByArmAway"]))  # 0 = pgm, 1 = X01
+            s.append(self._lookupEprom(DecodePanelSettings["x10ByArmHome"]))
+            s.append(self._lookupEprom(DecodePanelSettings["x10ByDisarm"]))
+            s.append(self._lookupEprom(DecodePanelSettings["x10ByDelay"]))
+            s.append(self._lookupEprom(DecodePanelSettings["x10ByMemory"]))
+            s.append(self._lookupEprom(DecodePanelSettings["x10ByKeyfob"]))
+            s.append(self._lookupEprom(DecodePanelSettings["x10ActZoneA"]))
+            s.append(self._lookupEprom(DecodePanelSettings["x10ActZoneB"]))
+            s.append(self._lookupEprom(DecodePanelSettings["x10ActZoneC"]))
+
+            x10Names = self._lookupEprom(DecodePanelSettings["x10ZoneNames"])  # 0 = X01
+
+            for i in range(0, 16):
+                if i == 0 or x10Names[i - 1] != 0x1F:   # python should process left to right, so i == 0 gets evaluated first.   0x1F is "Not Installed" in ZoneStringNames
+                    for j in range(0, 9):
+                        if i not in self.SwitchList and s[j][i] != 'Disable':
+                            x10Location = "PGM" if i == 0 else pmZoneName_t[x10Names[i - 1] & 0x1F]
+                            x10Type = "OnOff Switch" if i == 0 else "Dimmer Switch"
+                            if i in self.SwitchList:
+                                self.SwitchList[i].type = x10Type
+                                self.SwitchList[i].location = x10Location
+                                self.SwitchList[i].state = False
+                            else:
                                 self.SwitchList[i] = X10Device(type=x10Type, location=x10Location, id=i, enabled=True)
                                 if self.onNewSwitchHandler is not None:
                                     self.onNewSwitchHandler(self.SwitchList[i])
-                                break # break the j loop and continue to the next i, we shouldn't need this (i not in self.SwitchList) in the if test but kept just in case!
+                            break # break the j loop and continue to the next i, we shouldn't need this (i not in self.SwitchList) in the if test but kept just in case!
 
-                log.debug("[Process Settings] Adding zone devices")
+            self.PanelStatus["Door Zones"] = doorZoneStr[1:]
+            self.PanelStatus["Motion Zones"] = motionZoneStr[1:]
+            self.PanelStatus["Smoke Zones"] = smokeZoneStr[1:]
+            self.PanelStatus["Other Zones"] = otherZoneStr[1:]
+            self.PanelStatus["Devices"] = self._processKeypadsAndSirens(self.PanelType)
 
-                self.PanelStatus["Door Zones"] = doorZoneStr[1:]
-                self.PanelStatus["Motion Zones"] = motionZoneStr[1:]
-                self.PanelStatus["Smoke Zones"] = smokeZoneStr[1:]
-                self.PanelStatus["Other Zones"] = otherZoneStr[1:]
-                self.PanelStatus["Devices"] = self._processKeypadsAndSirens(pmPanelTypeNr)
+            # INTERFACE : Create Partitions in the interface
+            # for i in range(1, partitionCnt+1): # TODO
 
-                # INTERFACE : Create Partitions in the interface
-                # for i in range(1, partitionCnt+1): # TODO
+            log.debug("[Process Settings] Ready for use")
 
-                log.debug("[Process Settings] Ready for use")
-
-            else:
-                log.warning("[Process Settings] WARNING: Cannot process panel EPROM settings, download has not completed")
-
-        elif pmPanelTypeNr is None or pmPanelTypeNr == 0xFF:
-            log.warning("[Process Settings] WARNING: Cannot process panel EPROM settings, we're probably connected to the panel in standard mode")
         else:
-            log.warning("[Process Settings] WARNING: Cannot process panel EPROM settings, the panel is too new new new {0}".format(self.PanelType))
+            log.warning("[Process Settings] WARNING: Cannot process panel EEPROM settings, download has not completed")
 
-        self._dumpSensorsToLogFile()
+        self._dumpSensorsToLogFile(True)
 
-#        if self.PanelType == 13 or self.PanelType == 16:
-#            log.debug("[Process Settings]         PowerMaster 360 (R), going to full powerlink and calling Restore")
-#            self.pmPowerlinkMode = True
-#            self.pmPowerlinkModePending = False
-#            self.PanelMode = AlPanelMode.POWERLINK  # it is truly in powerlink now we are receiving powerlink alive messages from the panel
-#            self._triggerRestoreStatus()
-#            self._dumpSensorsToLogFile()
-#        elif self.pmPowerlinkMode:
         if self.pmPowerlinkMode:
             self.PanelMode = AlPanelMode.POWERLINK
         elif self.pmDownloadComplete and self.pmGotUserCode:
@@ -3103,7 +3138,7 @@ class PacketHandling(ProtocolBase):
             # log.debug('[Disconnection] Suspended. Sorry but all operations have been suspended, please recreate connection')
             return
 
-        # log.debug("[_processReceivedPacket] Received Packet %s", self._toString(packet))
+        log.debug("[_processReceivedPacket] Received Packet %s", self._toString(packet))
         
         # Check the current packet against the last packet to determine if they are the same
         if self.lastPacket is not None:
@@ -3229,7 +3264,7 @@ class PacketHandling(ProtocolBase):
             self.handle_msgtypeAD(packet[2:-2])
             pushchange = True
         elif packet[1] == 0xB0:  # PowerMaster Event
-            if not self.pmDownloadMode:  # only process when not downloading EPROM
+            if not self.pmDownloadMode:  # only process when not downloading EEPROM
                 self.handle_msgtypeB0(packet[2:-2])
                 #pushchange = True
         elif packet[1] == REDIRECT_POWERLINK_DATA:  # Redirected Powerlink Data
@@ -3273,7 +3308,7 @@ class PacketHandling(ProtocolBase):
     def setZoneName(self, key) -> bool:
         if key in self.SensorList and key in self.ZoneNames and self.SensorList[key].zname is None:     # if not already set
             log.debug("[setZoneName]                  Setting Zone Name {0}".format(self.ZoneNames[key]))
-            self.SensorList[key].zname = pmZoneName_t[self.ZoneNames[key]]
+            self.SensorList[key].zname = pmZoneName_t[self.ZoneNames[key] & 0x1F]
             return True
         return False
 
@@ -3389,13 +3424,28 @@ class PacketHandling(ProtocolBase):
                     log.debug("[handle_msgtype08] Got an Access Denied and we have sent a Download command to the Panel")
                     self.pmDownloadMode = False
                     self.doneAutoEnroll = False
-                    if self.PanelType is not None:  # By the time EPROM download is complete, this should be set but just check to make sure
-                        if self.PanelType >= 3:     # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
+
+                    #if not self.pmGotPanelDetails:
+                    #    # Download has already been triggered
+                    #    # This is a check at 5 seconds in to see if the panel details have been retrieved.  If not then send BUMP to get the 3C message data.
+                    #    log.debug("[handle_msgtype08] Sending BUMP, Not yet received the panel details")
+                    #    self._sendCommand("MSG_BUMP")
+
+                    if self.PanelType is not None:  # By the time EEPROM download is complete, this should be set but just check to make sure
+                        self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
+                        # We should be in Standard Plus by now.
+                        # Only attempt to auto enroll powerlink for newer panels but not the 360 or 360R.
+                        #       Older panels need the user to manually enroll
+                        #       360 and 360R can get to Standard Plus but not Powerlink as (I assume that) they already have this hardware and panel will not support 2 powerlink connections
+                        #if self.PanelType >= 3:     # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
+                        if self.AutoEnroll:          
                             log.debug("[handle_msgtype08]                   Try to auto enroll (panel type {0})".format(self.PanelType))
                             self._sendMsgENROLL(True)  # Auto enroll, trigger download.  The panel type indicates that it can auto enroll
-                    elif self.AutoEnroll:
+                    
+                    elif self.AutoEnroll: # We do not know the panel type
                         log.debug("[handle_msgtype08]                   Auto enroll (panel type unknown but user settings say to autoenroll)")
                         self._sendMsgENROLL(True)  #  Auto enroll, retrigger download
+                
                 elif lastCommandData[0] != 0xAB and lastCommandData[0] != 0x0B:  # Powerlink command and the Stop Command
                     log.debug("[handle_msgtype08] Attempt to send a command message to the panel that has been rejected")
                     self.sendPanelUpdate(AlCondition.COMMAND_REJECTED)  # push changes through to the host, something has been rejected (other than the pin)
@@ -3456,10 +3506,18 @@ class PacketHandling(ProtocolBase):
         self.ModelType = data[4]
         self.PanelType = data[5]
 
-        self.PowerMaster = (self.PanelType >= 7)
+        self.PowerMaster = pmPanelConfig_t["CFG_POWERMASTER"][self.PanelType]
         self.PanelModel = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
-        self.pmInitSupportedByPanel = (self.PanelType >= 4)
-
+        self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
+        self.pmInitSupportedByPanel = pmPanelConfig_t["CFG_INIT_SUPPORT"][self.PanelType]
+        self.KeepAlivePeriod = pmPanelConfig_t["CFG_KEEPALIVE"][self.PanelType]
+        if self.DownloadCode == DEFAULT_DL_CODE:
+            # If the panel still has its startup default Download Code, or if it hasn't been set by the user to something different
+            self.DownloadCode = pmPanelConfig_t["CFG_DLCODE_1"][self.PanelType][:2] + " " + pmPanelConfig_t["CFG_DLCODE_1"][self.PanelType][2:]
+            log.debug("[handle_msgtype3C] Setting Download Code from the Default value {0} to the default Panel Value {1}".format(DEFAULT_DL_CODE, self.DownloadCode))
+        else:
+            log.debug("[handle_msgtype3C] Using the user defined Download Code <obfuscated>")
+        
         log.debug("[handle_msgtype3C] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(self.PanelType, self.ModelType, self.PanelModel, self.PowerMaster))
 
         if self.PowerMaster and self.ForceStandardMode:
@@ -3468,7 +3526,7 @@ class PacketHandling(ProtocolBase):
         self.pmGotPanelDetails = True
 
         if not self.ForceStandardMode:
-            # We got a first response, now we can Download the panel EPROM settings
+            # We got a first response, now we can Download the panel EEPROM settings
             interval = self._getUTCTimeFunction() - self.lastSendOfDownloadEprom
             td = timedelta(seconds=DOWNLOAD_RETRY_DELAY)  # prevent multiple requests for the EEPROM panel settings, at least DOWNLOAD_RETRY_DELAY seconds
             log.debug("[handle_msgtype3C] interval={0}  td={1}   self.lastSendOfDownloadEprom(UTC)={2}    timenow(UTC)={3}".format(interval, td, self.lastSendOfDownloadEprom, self._getUTCTimeFunction()))
@@ -3481,7 +3539,7 @@ class PacketHandling(ProtocolBase):
                 #    On a particular panel we received a 3C and send the first download block request.
                 #       We received nothing for 10 seconds and then another 3C from the panel.
                 #       Originally we ignored this and then the panel sent a timeout 20 seconds later, so lets try resending the request
-                log.debug("[handle_msgtype3C]          Asking for panel EPROM again")
+                log.debug("[handle_msgtype3C]          Asking for panel EEPROM again")
                 self.lastSendOfDownloadEprom = self._getUTCTimeFunction()
                 self._readPanelSettings(self.PowerMaster)
 
@@ -3498,10 +3556,11 @@ class PacketHandling(ProtocolBase):
         iIndex = data[0]
         iPage = data[1]
         iLength = data[2]
-
+        
+        #pr = bytes((x for x in data[3:] if x >= 0x20 and x < 127))
         log.debug("[handle_msgtype3F] actual data block length=" + str(len(data)-3) + "   data content length=" + str(iLength))
 
-        # PowerMaster 10 (Model 7) and PowerMaster 33 (Model 10) has a very specific problem with downloading the Panel EPROM and doesn't respond with the correct number of bytes
+        # PowerMaster 10 (Model 7) and PowerMaster 33 (Model 10) has a very specific problem with downloading the Panel EEPROM and doesn't respond with the correct number of bytes
         # if self.PanelType is not None and self.ModelType is not None and ((self.PanelType == 7 and self.ModelType == 68) or (self.PanelType == 10 and self.ModelType == 71)):
         #    if iLength != len(data) - 3:
         #        log.debug("[handle_msgtype3F] Not checking data length as it could be incorrect.  We requested {0} and received {1}".format(iLength, len(data) - 3))
@@ -3526,7 +3585,7 @@ class PacketHandling(ProtocolBase):
         self._writeEPROMSettings(iPage, iIndex, data[3:])
 
         if len(self.myDownloadList) > 0:
-            self._sendCommand("MSG_DL", options=[ [1, self.myDownloadList.pop(0)] ])  # Read the next block of EPROM data
+            self._sendCommand("MSG_DL", options=[ [1, self.myDownloadList.pop(0)] ])  # Read the next block of EEPROM data
         else:
             # This is the message to tell us that the panel has finished download mode, so we too should stop download mode
             self.pmDownloadMode = False
@@ -3536,7 +3595,7 @@ class PacketHandling(ProtocolBase):
                 log.debug("[handle_msgtype3F]                last command {0}".format(self._toString(lastCommandData)))
                 if lastCommandData is not None:
                     if lastCommandData[0] == 0x3E:  # Download Data
-                        log.debug("[handle_msgtype3F] We're almost in powerlink mode *****************************************")
+                        #log.debug("[handle_msgtype3F] We're almost in powerlink mode *****************************************")
                         self.pmPowerlinkModePending = True
             else:
                 log.debug("[handle_msgtype3F]                no last command")
@@ -4943,10 +5002,14 @@ class PacketHandling(ProtocolBase):
     # =======================================================================================================
     # =======================================================================================================
 
-    def _dumpSensorsToLogFile(self):
-        log.debug("================================================== Display Status ==================================================")
+    def _dumpSensorsToLogFile(self, incX10 = False):
+        log.debug("================================================================================ Display Status ================================================================================")
         for key, sensor in self.SensorList.items():
             log.debug("     key {0:<2} Sensor {1}".format(key, sensor))
+        if incX10:
+            for key, device in self.SwitchList.items():
+                log.debug("     key {0:<2} X10    {1}".format(key, device))
+        
         log.debug("   Model {: <18}     PowerMaster {: <18}     LastEvent {: <18}     Ready   {: <13}".format(self.PanelModel,
                                         'Yes' if self.PowerMaster else 'No', self.getPanelLastEvent(), 'Yes' if self.PanelReady else 'No'))
         pm = titlecase(self.PanelMode.name.replace("_"," ")) # str(AlPanelMode()[self.PanelMode]).replace("_"," ")
@@ -4954,7 +5017,7 @@ class PacketHandling(ProtocolBase):
         al = titlecase(self.PanelAlarmStatus.name.replace("_"," ")) # str(AlAlarmType()[self.PanelAlarmStatus]).replace("_"," ")
 
         log.debug("   Mode  {: <18}     Status      {: <18}     Trouble {: <13}     AlarmStatus {: <12}".format(pm, self.PanelStatusText, ts, al))
-        log.debug("====================================================================================================================")
+        log.debug("================================================================================================================================================================================")
 
     def _createPin(self, pin : str):
         # Pin is None when either we can perform the action without a code OR we're in Powerlink/StandardPlus and have the pin code to use

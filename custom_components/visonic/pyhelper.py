@@ -330,8 +330,8 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
         strn = ""
         strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
         #strn = strn + (" name=None" if self.name == None else " name={0:<4}".format(self.name))
-        strn = strn + (" type=None" if self.type == None else " type={0:<15}".format(self.type))
-        strn = strn + (" location=None" if self.location == None else " location={0:<14}".format(self.location))
+        strn = strn + (" Type=None           " if self.type == None else " Type={0:<15}".format(self.type))
+        strn = strn + (" Loc=None          " if self.location == None else " Loc={0:<14}".format(self.location))
         strn = strn + (" enabled=None" if self.enabled == None else " enabled={0:<2}".format(self.enabled))
         strn = strn + (" state=None" if self.state == None else " state={0:<8}".format(self.state))
         return strn

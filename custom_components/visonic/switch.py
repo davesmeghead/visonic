@@ -50,12 +50,14 @@ class VisonicSwitch(SwitchEntity):
 
         self._panel = client.getPanelID()
         self._current_value = self._visonic_device.isOn()
+        self._is_available = True
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
         await super().async_will_remove_from_hass()
         self._visonic_device = None
+        self._is_available = False
         self._client = None
         _LOGGER.debug("switch async_will_remove_from_hass")
 
@@ -65,6 +67,12 @@ class VisonicSwitch(SwitchEntity):
         _LOGGER.debug("Switch changeHandler %s", str(self._name))
         self._current_value = self._visonic_device.isOn()
         self.schedule_update_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        #_LOGGER.debug(f"   In binary sensor VisonicSensor available self._is_available = {self._is_available}    self._current_value = {self._current_value}")
+        return self._is_available
 
     @property
     def should_poll(self):

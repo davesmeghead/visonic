@@ -428,7 +428,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
                     if clientTask is not None:
                         clientTask.cancel()
 
-                    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+                    #unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
                     del hass.data[DOMAIN][DOMAINDATA][eid]
                     del hass.data[DOMAIN][DOMAINCLIENT][eid]
@@ -437,9 +437,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
                     #if hass.data[DOMAIN][eid]:
                     #    hass.data[DOMAIN].pop(eid)
                     #
-                    _LOGGER.debug("************* terminate connection success **************")
-                    #return True
-                    return unload_ok
+                    _LOGGER.debug(f"************* Panel {panelid} terminate connection success **************")
+                    return True
+                    #return unload_ok
                 else:
                     _LOGGER.debug("************* terminate connection fail, no client **************")
 

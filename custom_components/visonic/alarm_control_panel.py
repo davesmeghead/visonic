@@ -101,6 +101,13 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         self.schedule_update_ha_state(True)
 
     @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        if self._client is None:
+            return False
+        return self._client.isPanelConnected()
+
+    @property
     def unique_id(self) -> str:
         """Return a unique ID."""
         return self._myname + "_" + str(self._partition_id)
