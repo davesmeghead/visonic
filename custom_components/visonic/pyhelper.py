@@ -5,6 +5,9 @@ import os
 #    If using MocroPython / CircuitPython then set these values in the environment
 MicroPython = os.getenv("MICRO_PYTHON")
 
+# Turn off auto code formatting when using black
+# fmt: off
+
 if MicroPython is not None:
     #import time as datetime
     from adafruit_datetime import datetime, timedelta
@@ -44,11 +47,17 @@ import math
 import json
 import asyncio
 import re
+import inspect
+from inspect import currentframe, getframeinfo, stack
 
 try:
-    from .pyconst import AlIntEnum, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlPanelInterface, AlSensorDevice, AlLogPanelEvent, AlSensorType, AlSwitchDevice
+    from .pyconst import (AlIntEnum, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, 
+                          AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlPanelInterface, AlSensorDevice, 
+                          AlLogPanelEvent, AlSensorType, AlSwitchDevice)
 except:
-    from pyconst import AlIntEnum, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlPanelInterface, AlSensorDevice, AlLogPanelEvent, AlSensorType, AlSwitchDevice
+    from pyconst import (AlIntEnum, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, 
+                         AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlPanelInterface, AlSensorDevice, 
+                         AlLogPanelEvent, AlSensorType, AlSwitchDevice)
 
 # Event Type Constants
 EVENT_TYPE_SYSTEM_RESET = 0x60
@@ -97,6 +106,55 @@ def capitalize(s):
 
 def titlecase(s):
     return re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda word: capitalize(word.group(0)), s)
+
+class vloggerclass:
+    def __init__(self, panel_id : int, detail : bool = False):
+        self.detail = detail
+        if panel_id is not None:
+            self.panel_id_str = "P" + str(panel_id) + "  "
+        else:
+            self.panel_id_str = "PU" + "  "
+    
+    def _createPrefix(self) -> str:
+        previous_frame = currentframe().f_back.f_back
+        (
+            filepath,
+            line_number,
+            function,
+            lines,
+            index,
+        ) = inspect.getframeinfo(previous_frame)
+        filename = filepath[filepath.rfind('/')+1:]
+        return f"{filename:<13} {line_number:>5} {function:<25}"
+    
+    def debug(self, msg, *args, **kwargs):
+        try:
+            s = self._createPrefix() + " " + self.panel_id_str if self.detail else ""
+            log.debug(s + (msg % args % kwargs))
+        except Exception as ex:
+            log.error(f"[vloggerclass] Exception  {ex}")
+            
+    def info(self, msg, *args, **kwargs):
+        try:
+            s = self._createPrefix() + " " + self.panel_id_str if self.detail else ""
+            log.info(s + (msg % args % kwargs))
+        except Exception as ex:
+            log.error(f"[vloggerclass] Exception  {ex}")
+
+    def warning(self, msg, *args, **kwargs):
+        try:
+            s = self._createPrefix() + " " + self.panel_id_str if self.detail else ""
+            log.warning(s + (msg % args % kwargs))
+        except Exception as ex:
+            log.error(f"[vloggerclass] Exception  {ex}")
+
+    def error(self, msg, *args, **kwargs):
+        try:
+            s = self._createPrefix() + " " + self.panel_id_str if self.detail else ""
+            log.error(s + (msg % args % kwargs))
+        except Exception as ex:
+            log.error(f"[vloggerclass] Exception  {ex}")
+
 
 class AlSensorDeviceHelper(AlSensorDevice):
 
@@ -193,6 +251,16 @@ class AlSensorDeviceHelper(AlSensorDevice):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def onChange(self, callback : Callable = None):
+        if callback is None:
+            self._callback = []
+        else:
+            self._callback.append(callback)
+
+    def pushChange(self, s : AlSensorCondition):
+        for cb in self._callback:
+            cb(self, s)
+
     def getDeviceID(self):
         return self.id
 
@@ -252,13 +320,6 @@ class AlSensorDeviceHelper(AlSensorDevice):
         if self.motiondelaytime is not None and (self.getSensorType() == AlSensorType.MOTION or self.getSensorType() == AlSensorType.CAMERA):
             return NO_DELAY_SET if self.motiondelaytime == 0xFFFF else str(self.motiondelaytime)
         return NO_DELAY_SET
-
-    def onChange(self, callback : Callable = None):
-        self._callback.append(callback)
-
-    def pushChange(self, s : AlSensorCondition):
-        for cb in self._callback:
-            cb(self, s)
 
     # JSON conversions
     def fromJSON(self, decode):
@@ -352,6 +413,16 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def onChange(self, callback : Callable = None):
+        if callback is None:
+            self._callback = []
+        else:
+            self._callback.append(callback)
+
+    def pushChange(self, s : AlSensorCondition):
+        for cb in self._callback:
+            cb(self, s)
+
     def getDeviceID(self):
         return self.id
 
@@ -366,13 +437,6 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
 
     def isOn(self) -> bool:
         return self.state #
-
-    def onChange(self, callback : Callable = None):
-        self._callback.append(callback)
-
-    def pushChange(self):
-        for cb in self._callback:
-            cb(self)
 
     def fromJSON(self, decode):
         if "enabled" in decode:
@@ -625,12 +689,16 @@ class MyChecksumCalc:
 
 class AlPanelInterfaceHelper(AlPanelInterface):
 
-    def __init__(self):
+    def __init__(self, panel_id):
         """Initialize class."""
         super().__init__()
         # Class Variables
+        #self.log = vloggerclass(panel_id=panel_id)
         self.suspendAllOperations = False
+        self._initVars()
+        self.PanelLastEventData = self.setLastEventData()
 
+    def _initVars(self):
         # set the event callback handlers to None
         self.onPanelChangeHandler = None
         self.onNewSensorHandler = None
@@ -653,6 +721,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         self.PanelAlarmStatus = AlAlarmType.NONE
         self.PanelTroubleStatus = AlTroubleType.NONE
         self.PanelLastEvent = "Unknown"
+        self.PanelStatusText = "Unknown"
 
         # Keep a dict of the sensors so we know if its new or existing
         self.SensorList = {}
@@ -666,8 +735,23 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         # Define model type to be unknown
         self.PanelModel = "Unknown"
         self.PanelType = None
+        
+    def _dumpSensorsToLogFile(self, incX10 = False):
+        log.debug(" ================================================================================ Display Status ================================================================================")
+        for key, sensor in self.SensorList.items():
+            log.debug("     key {0:<2} Sensor {1}".format(key, sensor))
+        if incX10:
+            for key, device in self.SwitchList.items():
+                log.debug("     key {0:<2} X10    {1}".format(key, device))
+        
+        log.debug("   Model {: <18}     PowerMaster {: <18}     LastEvent {: <18}     Ready   {: <13}".format(self.PanelModel,
+                                        'Yes' if self.PowerMaster else 'No', self.getPanelLastEvent(), 'Yes' if self.PanelReady else 'No'))
+        pm = titlecase(self.PanelMode.name.replace("_"," ")) # str(AlPanelMode()[self.PanelMode]).replace("_"," ")
+        ts = titlecase(self.PanelTroubleStatus.name.replace("_"," ")) # str(AlTroubleType()[self.PanelTroubleStatus]).replace("_"," ")
+        al = titlecase(self.PanelAlarmStatus.name.replace("_"," ")) # str(AlAlarmType()[self.PanelAlarmStatus]).replace("_"," ")
 
-        self.PanelLastEventData = self.setLastEventData()
+        log.debug("   Mode  {: <18}     Status      {: <18}     Trouble {: <13}     AlarmStatus {: <12}".format(pm, self.PanelStatusText, ts, al))
+        log.debug(" ================================================================================================================================================================================")
 
     def getPanelModel(self):
         return self.PanelModel
@@ -913,6 +997,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
     def shutdownOperation(self):
         if not self.suspendAllOperations:
             self.suspendAllOperations = True
+            self._initVars()
             self.PanelMode = AlPanelMode.STOPPED
             self.PanelState = AlPanelStatus.UNKNOWN
             self.PanelStatus = {}
@@ -934,3 +1019,6 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         for key, switch in self.SwitchList.items():
             retval.append("key {0:<2} Switch {1}".format(key, switch))
         return retval
+
+# Turn on auto code formatting when using black
+# fmt: on

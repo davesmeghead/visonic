@@ -4,16 +4,6 @@ from enum import Enum, IntFlag
 # The domain for the integration
 DOMAIN = "visonic"
 
-# The platforms in the integration
-ALARM_PANEL_ENTITY = "alarm_control_panel"
-BINARY_SENSOR_STR = "binary_sensor"
-IMAGE_SENSOR_STR = "image"
-MONITOR_SENSOR_STR = "sensor"
-SWITCH_STR = "switch"
-SELECT_STR = "select"
-
-#PLATFORMS = [ALARM_PANEL_ENTITY, BINARY_SENSOR_STR, IMAGE_SENSOR_STR, SWITCH_STR, SELECT_STR]
-
 VISONIC_UNIQUE_NAME = "Visonic Alarm"
 
 #from enum import IntFlag
@@ -21,11 +11,6 @@ class SensorEntityFeature(IntFlag):
     """Supported features of the zone sensor entity."""
     BYPASS_FEATURE = 1
     ARMED_FEATURE = 2
-
-# Constants for storing data in hass[DOMAIN]
-DOMAINCLIENT = f"{DOMAIN}_client"
-DOMAINDATA = f"{DOMAIN}_data"
-DOMAINCLIENTTASK = f"{DOMAIN}_client_task"
 
 # Constants for sending a persistent notification to the frontend when there is a fault
 NOTIFICATION_ID = f"{DOMAIN}_notification"

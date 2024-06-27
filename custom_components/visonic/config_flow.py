@@ -12,7 +12,6 @@ from .const import (
     CONF_EMULATION_MODE,
     available_emulation_modes,
     DOMAIN, 
-    DOMAINCLIENT, 
     CONF_ALARM_NOTIFICATIONS, 
     CONF_OVERRIDE_CODE
 )
@@ -255,12 +254,16 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
     async def async_step_myethernet(self, user_input=None):
         """Handle the input processing of the config flow."""
         self.config.update(user_input)
+        self.config[CONF_PATH] = ""
+        self.config[CONF_DEVICE_BAUD] = int(9600)
         return await self._show_form(step="parameters1")
 
     # ask for the usb settings
     async def async_step_myusb(self, user_input=None):
         """Handle the input processing of the config flow."""
         self.config.update(user_input)
+        self.config[CONF_HOST] = ""
+        self.config[CONF_PORT] = ""
         return await self._show_form(step="parameters1")
 
     async def async_step_parameters1(self, user_input=None):
@@ -322,6 +325,8 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
                         data[CONF_DEVICE_TYPE] = "ethernet"
                         data[CONF_HOST] = device_type[CONF_HOST]
                         data[CONF_PORT] = device_type[CONF_PORT]
+                        data[CONF_PATH] = ""
+                        data[CONF_DEVICE_BAUD] = int(9600)
                     elif device_type[CONF_DEVICE_TYPE] == "usb":
                         data[CONF_DEVICE_TYPE] = "usb"
                         data[CONF_PATH] = device_type[CONF_PATH]
@@ -329,6 +334,8 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
                             data[CONF_DEVICE_BAUD] = device_type[CONF_DEVICE_BAUD]
                         else:
                             data[CONF_DEVICE_BAUD] = int(9600)
+                        data[CONF_HOST] = ""
+                        data[CONF_PORT] = ""
                 else:
                     data[k] = import_config.get(k)
         except Exception as er:

@@ -3,51 +3,63 @@
 import logging
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
+from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+from . import VisonicConfigEntry
 from .pyconst import AlX10Command, AlSwitchDevice
 from .client import VisonicClient
 from .const import (
     DOMAIN,
-    DOMAINCLIENT,
     PANEL_ATTRIBUTE_NAME,
     DEVICE_ATTRIBUTE_NAME,
-    SWITCH_STR,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
+    hass: HomeAssistant,
+    entry: VisonicConfigEntry,
+    async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up the Visonic Alarm Binary Sensors."""
-    if DOMAIN in hass.data:
-        client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        if not client.isDisableAllCommands():
-            devices = [
-                VisonicSwitch(client, device) for device in hass.data[DOMAIN][entry.entry_id][SWITCH_STR]
-            ]
-            hass.data[DOMAIN][entry.entry_id][SWITCH_STR] = list()
-            if len(devices) > 0:
-                async_add_entities(devices, True)
+    """Set up the Visonic X10 Switch."""
+    #_LOGGER.debug(f"switch async_setup_entry start")
+    client: VisonicClient = entry.runtime_data.client
+
+    @callback
+    def async_add_switch(device: AlSwitchDevice) -> None:
+        """Add Visonic Switch."""
+        entities: list[SwitchEntity] = []
+        entities.append(VisonicSwitch(hass, client, device))
+        _LOGGER.debug(f"switch adding {device.getDeviceID()}")
+        async_add_entities(entities)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"{DOMAIN}_{entry.entry_id}_add_{SWITCH_DOMAIN}",
+            async_add_switch,
+        )
+    )
+    #_LOGGER.debug("switch async_setup_entry exit")
 
 
 class VisonicSwitch(SwitchEntity):
     """Representation of a Visonic X10 Switch."""
 
-    def __init__(self, client: VisonicClient, visonic_device: AlSwitchDevice):
+    def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSwitchDevice):
         """Initialise a Visonic X10 Device."""
         #_LOGGER.debug("Creating X10 Switch %s", visonic_device.id)
         self._client = client
         self._visonic_device = visonic_device
         self._visonic_device.onChange(self.onChange)
         self._x10id = self._visonic_device.getDeviceID()
-
         self._dname = self._visonic_device.createFriendlyName()
         pname = client.getMyString()
         self._name = pname.lower() + self._dname.lower()
-
         self._panel = client.getPanelID()
         self._current_value = self._visonic_device.isOn()
         self._is_available = True
@@ -66,7 +78,8 @@ class VisonicSwitch(SwitchEntity):
         # the switch parameter is the same as self._visonic_device, but it's a generic callback handler that cals this function
         _LOGGER.debug("Switch changeHandler %s", str(self._name))
         self._current_value = self._visonic_device.isOn()
-        self.schedule_update_ha_state()
+        if self.entity_id is not None:
+            self.schedule_update_ha_state()
 
     @property
     def available(self) -> bool:

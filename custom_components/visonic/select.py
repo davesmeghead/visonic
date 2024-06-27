@@ -1,21 +1,19 @@
-"""Support for Visonic Sensros Armed Select."""
+"""Support for Visonic Sensors Armed Select."""
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
+
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
-from homeassistant.const import (
-    ATTR_ARMED,
-)
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-#from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import Entity
-from .pyconst import AlSensorDevice, AlSensorType, AlCommandStatus, AlSensorCondition
-from .const import DOMAIN, DOMAINCLIENT, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, AvailableNotifications, SELECT_STR
-
+from . import VisonicConfigEntry
+from .pyconst import AlSensorDevice, AlCommandStatus, AlSensorCondition
+from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, AvailableNotifications
 from .client import VisonicClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,24 +23,29 @@ ARMED = "Armed"
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: Callable[[List[Entity], bool], None],
+    entry: VisonicConfigEntry,
+    async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Visonic Alarm Bypass/Arm Select"""
+    #_LOGGER.debug(f"select async_setup_entry start")
+    client: VisonicClient = entry.runtime_data.client
 
-    #_LOGGER.debug("************* select async_setup_entry **************")
+    @callback
+    def async_add_select(device: AlSensorDevice) -> None:
+        """Add Visonic Select Sensor."""
+        entities: list[SelectEntity] = []
+        entities.append(VisonicSelect(hass, client, device))
+        _LOGGER.debug(f"select adding {device.getDeviceID()}")
+        async_add_entities(entities)
 
-    if DOMAIN in hass.data:
-        # _LOGGER.debug("   In select async_setup_entry")
-        client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        if not client.isDisableAllCommands():
-            sensors = [
-                VisonicSelect(hass, client, device) for device in hass.data[DOMAIN][entry.entry_id][SELECT_STR]
-            ]
-            # empty the list as we have copied the entries so far in to sensors
-            hass.data[DOMAIN][entry.entry_id][SELECT_STR] = list()
-            if len(sensors) > 0:
-                async_add_entities(sensors, True)
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"{DOMAIN}_{entry.entry_id}_add_{SELECT_DOMAIN}",
+            async_add_select,
+        )
+    )
+    #_LOGGER.debug("select async_setup_entry exit")
 
 
 class VisonicSelect(SelectEntity):
@@ -55,13 +58,10 @@ class VisonicSelect(SelectEntity):
         self._client = client
         self._visonic_device = visonic_device
         self._visonic_device.onChange(self.onChange)
-        
         dname = visonic_device.createFriendlyName()
         pname = client.getMyString()
         self._name = pname.lower() + dname.lower()
-
         self._panel = client.getPanelID()
-        
         self._is_available = self._visonic_device.isEnrolled()
         self._is_armed = not self._visonic_device.isBypass()
         self._pending_state_is_armed = None
@@ -89,7 +89,8 @@ class VisonicSelect(SelectEntity):
             self._pending_state_is_armed = None
 
         # Ask HA to schedule an update
-        self.schedule_update_ha_state(True)
+        if self.entity_id is not None:
+            self.schedule_update_ha_state(True)
 
     @property
     def options(self) -> list[str]:
@@ -155,7 +156,8 @@ class VisonicSelect(SelectEntity):
                 self._client.sendHANotification(AvailableNotifications.ALWAYS, message)
         else:
             raise ValueError(f"Can't set the armed state to {option}. Allowed states are: {self.options}")
-        self.schedule_update_ha_state(True)
+        if self.entity_id is not None:
+            self.schedule_update_ha_state(True)
 
     @property
     def extra_state_attributes(self):

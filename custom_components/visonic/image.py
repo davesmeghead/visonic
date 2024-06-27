@@ -1,40 +1,50 @@
-"""Support for Visonic Camera image."""
-import asyncio
-import io
+"""Support for Visonic PIR Camera image."""
 import logging
-from datetime import datetime, timedelta
-from typing import Callable, List
+from datetime import timedelta
+#from typing import Callable, List
 
 from homeassistant.components.image import ImageEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.components.image import DOMAIN as IMAGE_DOMAIN
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+#from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-import homeassistant.util.dt as dt_util
-from .pyconst import AlSensorDevice, AlSensorType, AlSensorCondition
+#import homeassistant.util.dt as dt_util
+
+from .pyconst import AlSensorDevice, AlSensorCondition
 from .client import VisonicClient
-from .const import DOMAIN, SensorEntityFeature, DOMAINCLIENT, IMAGE_SENSOR_STR, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME
+from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME
+from . import VisonicConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: VisonicConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Visonic Image Entity for Camera PIRs"""
 
-    #_LOGGER.debug("************* image async_setup_entry **************")
+    #_LOGGER.debug(f"image async_setup_entry start")
+    client: VisonicClient = entry.runtime_data.client
 
-    if DOMAIN in hass.data:
-        #_LOGGER.debug("   In binary sensor async_setup_entry")
-        client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        images = [
-            VisonicImage(hass, client, device) for device in hass.data[DOMAIN][entry.entry_id][IMAGE_SENSOR_STR]
-        ]
-        # empty the list as we have copied the entries so far in to sensors
-        #hass.data[DOMAIN][entry.entry_id][IMAGE_SENSOR_STR] = list()
-        async_add_entities(images, True)
+    @callback
+    def async_add_image(device: AlSensorDevice) -> None:
+        """Add Visonic Image Sensor."""
+        entities: list[ImageEntity] = []
+        entities.append(VisonicImage(hass, client, device))
+        _LOGGER.debug(f"image adding {device.getDeviceID()}")
+        async_add_entities(entities)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"{DOMAIN}_{entry.entry_id}_add_{IMAGE_DOMAIN}",
+            async_add_image,
+        )
+    )
+    #_LOGGER.debug("image async_setup_entry exit")
 
 
 class VisonicImage(ImageEntity):
@@ -50,16 +60,12 @@ class VisonicImage(ImageEntity):
         self._attr_image_url = None
         self._attr_content_type = "image/jpeg"
         self._attr_should_poll = False
-
         self._visonic_device = visonic_device
         self._visonic_device.onChange(self.onChange)
-
         self._dname = visonic_device.createFriendlyName()
         pname = client.getMyString()
         self._name = pname.lower() + self._dname.lower()
-        
         self._panel = client.getPanelID()
-        
         self._sensor_image = None
         #_LOGGER.debug(f"************* image init ************** Sensor ID {self._dname}     Sensor Type {visonic_device.getSensorType()}")
 
@@ -86,10 +92,11 @@ class VisonicImage(ImageEntity):
                     self._sensor_image = self._visonic_device.jpg_data
                     self._attr_image_last_updated = self._visonic_device.jpg_time
                     # Ask HA to schedule an update
-                    self.schedule_update_ha_state()
+                    if self.entity_id is not None:
+                        self.schedule_update_ha_state()
         else:
             _LOGGER.debug("changeHandler: image on change called but sensor is not defined")
-        
+
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""

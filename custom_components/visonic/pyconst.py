@@ -6,6 +6,9 @@ import sys
 #    If using CircuitPython then set these values in the settings.toml file
 MicroPython = os.getenv("MICRO_PYTHON")
 
+# Turn off auto code formatting when using black
+# fmt: off
+
 if MicroPython is not None:
     print("Py Libraries Using MicroPython")
     import adafruit_logging as logging
@@ -62,6 +65,7 @@ class AlEnum:
     exclusions = ['value_of', 'get_variables', 'exclusions', 'mydictionary', 'mytester']
 
     def __init__(self):  # Need an instance to create the dictionary - or could use a classmethod
+        # This ensures that the constructor is only called once and raises an exception if not
         myname = self.__class__.__name__
         tester = getattr(self.__class__, "mytester", "default_tester")
         if tester != "default_tester":
@@ -123,8 +127,7 @@ class AlEnum:
             raise ValueError(f"'{cls.__name__}' enum not found for '{value}'")
 
 # This class represents the reasons that could trigger an alarm
-#     These could be set even if the siren is not sounding, depending
-#          on the panel settings
+#     These could be set even if the siren is not sounding, depending on the panel settings
 class AlAlarmType(AlEnum):
     UNKNOWN = AlIntEnum(0)
     NONE = AlIntEnum(1)
@@ -622,4 +625,6 @@ class AlPanelInterface(ABC):
     def onPanelLog(self, fn : Callable):             # onPanelLog ( event_log_entry : AlLogPanelEvent )
         pass
 
+# Turn on auto code formatting when using black
+# fmt: on
 

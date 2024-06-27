@@ -1,12 +1,12 @@
 """Create a connection to a Visonic PowerMax or PowerMaster Alarm System and Create a Simple Entity to Report Status only."""
 
 import logging
-import voluptuous as vol
 from enum import IntEnum
-from typing import Callable, List
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import Entity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 # Use the standard HA core attributes, alarm states and services to report status
 from homeassistant.const import (
@@ -20,13 +20,10 @@ from homeassistant.const import (
 )
 
 from .client import VisonicClient
-
+from . import VisonicConfigEntry
 from .const import (
     DOMAIN,
-    DOMAINCLIENT,
-    DOMAINDATA,
     PANEL_ATTRIBUTE_NAME,
-    MONITOR_SENSOR_STR,
 )
 
 from .pyconst import AlPanelStatus
@@ -35,19 +32,29 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: Callable[[List[Entity], bool], None],
+    entry: VisonicConfigEntry,
+    async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Visonic Alarm Sensors for Monitor."""
-    # _LOGGER.debug("************* sensor async_setup_entry **************")
-    if DOMAIN in hass.data:
-        #_LOGGER.debug("   In binary sensor async_setup_entry")
-        client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        if not client.isDisableAllCommands():
-            va = VisonicSensor(hass, client, 1)
-            # Add it to HA
-            devices = [va]
-            async_add_entities(devices, True)
+    #_LOGGER.debug(f"sensor async_setup_entry start")
+    client: VisonicClient = entry.runtime_data.client
+
+    @callback
+    def async_add_sensor() -> None:
+        """Add Visonic Sensor (to behave instead of the alarm panel when all comms is prevented)."""
+        entities: list[Entity] = []
+        entities.append(VisonicSensor(hass, client, 1))
+        _LOGGER.debug(f"sensor adding entity")
+        async_add_entities(entities)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"{DOMAIN}_{entry.entry_id}_add_{SENSOR_DOMAIN}",
+            async_add_sensor,
+        )
+    )
+    #_LOGGER.debug("sensor async_setup_entry exit")
 
 class VisonicSensor(Entity):
     """Representation of a Visonic alarm control panel as a simple sensor for monitor."""
@@ -81,7 +88,8 @@ class VisonicSensor(Entity):
     # The callback handler from the client. All we need to do is schedule an update.
     def onChange(self, event_id: IntEnum, datadictionary: dict):
         """HA Event Callback."""
-        self.schedule_update_ha_state(False)
+        if self.entity_id is not None:
+            self.schedule_update_ha_state(False)
 
     @property
     def unique_id(self) -> str:
@@ -144,8 +152,8 @@ class VisonicSensor(Entity):
                 elif armcode == AlPanelStatus.ARMED_AWAY:
                     self._mystate = STATE_ALARM_ARMED_AWAY
 
-            # Currently may only contain self.hass.data[DOMAIN][DOMAINDATA]["Exception Count"]
-            data = self.hass.data[DOMAIN][DOMAINDATA][self._client.getEntryID()]
+            # Currently may only contain Exception Count"
+            data = self._client.getClientStatusDict()
             #_LOGGER.debug("data {data}")
             stat = self._client.getPanelStatusDict()
             #_LOGGER.debug("stat {stat}")
