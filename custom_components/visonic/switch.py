@@ -34,7 +34,7 @@ async def async_setup_entry(
         """Add Visonic Switch."""
         entities: list[SwitchEntity] = []
         entities.append(VisonicSwitch(hass, client, device))
-        _LOGGER.debug(f"switch adding {device.getDeviceID()}")
+        #_LOGGER.debug(f"switch adding {device.getDeviceID()}")
         async_add_entities(entities)
 
     entry.async_on_unload(

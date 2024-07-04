@@ -36,7 +36,7 @@ async def async_setup_entry(
         """Add Visonic Binary Sensor."""
         entities: list[BinarySensorEntity] = []
         entities.append(VisonicBinarySensor(hass, client, device, entry))
-        _LOGGER.debug(f"binary sensor adding {device.getDeviceID()}")
+        #_LOGGER.debug(f"binary sensor adding {device.getDeviceID()}")
         async_add_entities(entities)
 
     entry.async_on_unload(

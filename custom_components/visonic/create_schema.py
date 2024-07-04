@@ -27,7 +27,6 @@ from .const import (
     CONF_ENABLE_REMOTE_DISARM,
     CONF_ENABLE_SENSOR_BYPASS,
     CONF_ARM_CODE_AUTO,
-    CONF_OVERRIDE_CODE,
     CONF_FORCE_KEYPAD,
     CONF_ARM_HOME_ENABLED,
     CONF_ARM_NIGHT_ENABLED,
@@ -188,14 +187,14 @@ class VisonicSchema:
     def create_parameters10(self, options: dict):
         """Create parameter set 10."""
         # Panel settings - can be modified/edited
-        # _LOGGER.debug(f'Create 10 {options.get(CONF_OVERRIDE_CODE, "")}')
         return {
             vol.Optional(
                 CONF_MOTION_OFF_DELAY,
                 default=self.create_default(options, CONF_MOTION_OFF_DELAY, 120),
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
             vol.Optional(
-                CONF_SIREN_SOUNDING, default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
+                CONF_SIREN_SOUNDING, 
+                default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
             ): selector.SelectSelector(selector.SelectSelectorConfig(options=available_siren_values, multiple=True, sort=True, translation_key=CONF_SIREN_SOUNDING)),
             #vol.Optional(
             #    CONF_SIREN_SOUNDING,
@@ -219,8 +218,6 @@ class VisonicSchema:
     def create_parameters11(self, options: dict):
         """Create parameter set 11."""
         # Panel settings - can be modified/edited
-        # _LOGGER.debug(f'Create 11 {options.get(CONF_OVERRIDE_CODE, "")}')
-        tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
         return {
             vol.Optional(
                 CONF_ARM_CODE_AUTO,
@@ -257,9 +254,6 @@ class VisonicSchema:
                 CONF_ENABLE_SENSOR_BYPASS,
                 default=self.create_default(options, CONF_ENABLE_SENSOR_BYPASS, False),
             ): bool,
-            vol.Optional(
-                CONF_OVERRIDE_CODE, default = 0, description={"suggested_value": (0 if tmp == "" else int(tmp))}
-            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=9999, mode=selector.NumberSelectorMode.BOX)), #vol.All (cv.string, cv.matches_regex("(^[0-9]{4}$|^$)")), #("(^[0-9][0-9][0-9][0-9]$|^$)")
         }
 
     def create_parameters12(self, options: dict):

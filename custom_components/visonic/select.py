@@ -6,6 +6,7 @@ import logging
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
 
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -35,7 +36,7 @@ async def async_setup_entry(
         """Add Visonic Select Sensor."""
         entities: list[SelectEntity] = []
         entities.append(VisonicSelect(hass, client, device))
-        _LOGGER.debug(f"select adding {device.getDeviceID()}")
+        #_LOGGER.debug(f"select adding {device.getDeviceID()}")
         async_add_entities(entities)
 
     entry.async_on_unload(
@@ -155,7 +156,7 @@ class VisonicSelect(SelectEntity):
                     message = "Sensor Bypass: EPROM Download is in progress, please try again after this is complete"
                 self._client.sendHANotification(AvailableNotifications.ALWAYS, message)
         else:
-            raise ValueError(f"Can't set the armed state to {option}. Allowed states are: {self.options}")
+            raise HomeAssistantError(f"Can't set the armed state to {option}. Allowed states are: {self.options}")
         if self.entity_id is not None:
             self.schedule_update_ha_state(True)
 

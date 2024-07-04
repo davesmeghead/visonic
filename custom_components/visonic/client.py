@@ -61,7 +61,6 @@ from .const import (
     CONF_ENABLE_REMOTE_DISARM,
     CONF_ENABLE_SENSOR_BYPASS,
     CONF_ARM_CODE_AUTO,
-    CONF_OVERRIDE_CODE,
     CONF_FORCE_KEYPAD,
     CONF_ARM_HOME_ENABLED,
     CONF_ARM_NIGHT_ENABLED,
@@ -119,7 +118,7 @@ class PanelCondition(IntEnum):
     CHECK_EVENT_LOG_COMMAND = 13
     CHECK_X10_COMMAND = 14
 
-CLIENT_VERSION = "0.9.3.0"
+CLIENT_VERSION = "0.9.4.0"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -254,9 +253,6 @@ class VisonicClient:
                 int(e) if e.isdigit() else e for e in self.exclude_x10_list.split(",")
             ]
 
-    async def async_setup_platform(self, platform: Platform) -> None:
-        await self.hass.async_create_task(self.hass.config_entries.async_forward_entry_setups( self.entry, [ platform ]  ) )
-        
     def logstate_debug(self, msg, *args, **kwargs):
         s = "P" + str(self.getPanelID()) + "  " + (msg % args % kwargs)
         _LOGGER.debug(s)
@@ -414,13 +410,6 @@ class VisonicClient:
             pd["Client Version"] = CLIENT_VERSION
             return pd
         return {}
-
-    def hasValidOverrideCode(self) -> bool:
-        """Is there a valid override code."""
-        tmpOCode = self.config.get(CONF_OVERRIDE_CODE, "")
-        if type(tmpOCode) == str and len(tmpOCode) == 4 and tmpOCode.isdigit():
-            return True
-        return False
 
     def process_command(self, command: str):
         """Convert object into dict to maintain backward compatibility."""
@@ -608,7 +597,7 @@ class VisonicClient:
         platforms = ep.async_get_platforms(self.hass, DOMAIN)
         _LOGGER.debug(f"         platforms {platforms}")
 
-        
+   
     async def _setupVisonicEntity(self, platform, domain, param = None):
         """Setup a platform and add an entity using the dispatcher."""
         if platform not in self.loaded_platforms:
@@ -923,27 +912,19 @@ class VisonicClient:
             if psc == AlPanelStatus.UNKNOWN or psc == AlPanelStatus.SPECIAL or psc == AlPanelStatus.DOWNLOADING:
                 return False, None   # Return invalid as panel not in correct state to do anything
             
-            override_code = self.config.get(CONF_OVERRIDE_CODE, "")
-            
             if panelmode == AlPanelMode.STANDARD:
                 if psc == AlPanelStatus.DISARMED:
                     if self.isArmWithoutCode():  # 
                         #self.logstate_debug("Here B")
                         return True, "0000"        # If the panel can arm without a usercode then we can use 0000 as the usercode
-                    elif self.hasValidOverrideCode():
-                        return True, override_code
                     return False, None             # use keypad so invalidate the return, there should be a valid 4 code code
                 else:
-                    if self.hasValidOverrideCode() and not forcedKeypad:
-                        return True, override_code
                     return False, None             # use keypad so invalidate the return, there should be a valid 4 code code
             elif panelmode == AlPanelMode.POWERLINK or panelmode == AlPanelMode.STANDARD_PLUS:  # 
                 if psc == AlPanelStatus.DISARMED and self.isArmWithoutCode() and forcedKeypad:
-                    return True, override_code if self.hasValidOverrideCode() else None   # Override code or usercode
+                    return True, None    
                 if forcedKeypad:
                     return False, None   # use keypad so invalidate the return, there should be a valid 4 code code
-                if self.hasValidOverrideCode():
-                    return True, override_code
                 return True, None    # Usercode
             elif panelmode == AlPanelMode.DOWNLOAD or panelmode == AlPanelMode.STARTING:  # No need to output to log file when starting or downloading EEPROM as this is normal operation
                 return False, None # Return invalid as panel downloading EEPROM
@@ -960,10 +941,7 @@ class VisonicClient:
         #self.logstate_debug("Getting Pin Start")
         if code is None or code == "" or len(code) != 4:
             panelmode = self.getPanelMode()
-            if self.hasValidOverrideCode():
-                # The override is set and valid
-                return True, self.config.get(CONF_OVERRIDE_CODE, "")
-            elif panelmode == AlPanelMode.POWERLINK or panelmode == AlPanelMode.STANDARD_PLUS:
+            if panelmode == AlPanelMode.POWERLINK or panelmode == AlPanelMode.STANDARD_PLUS:
                 # Powerlink or StdPlus and so we downloaded the code codes
                 return True, None
             else:
@@ -1070,17 +1048,13 @@ class VisonicClient:
 #            self.logstate_debug("Code Required as force numeric keypad set in config")
 #            return True
 #
-#        if self.hasValidOverrideCode():
-#            self.logstate_debug("No Code Required as code set in config")
-#            return False
-#
 #        self.logstate_debug("Code Required")
 #        return True
 
     # =======================================================================================================
     # =======================================================================================================
     # =======================================================================================================
-    # ======== Functions below this are the service calls from Home Assistant and the Frontend controls =====
+    # ======== Functions below this are the service calls and the Frontend controls from Home Assistant =====
     # =======================================================================================================
     # =======================================================================================================
     # =======================================================================================================
@@ -1102,6 +1076,7 @@ class VisonicClient:
             if self.isPanelConnected():
                 # The panel is connected and is in a known state
                 if call.context.user_id:
+                    #self.logstate_debug(f"Checking user information for permissions: {call.context.user_id}")
                     # Check security permissions (that this user has access to the alarm panel entity)
                     await self._checkUserPermission(call, POLICY_READ, Platform.ALARM_CONTROL_PANEL + "." + self.getAlarmPanelUniqueIdent())
                 self.logstate_debug(f"Received {message} request - user approved")
@@ -1156,8 +1131,8 @@ class VisonicClient:
             if valid_entity_id(eid):
                 # Its a valid entity
                 if call.context.user_id:
-                    # Check security permissions (that this user has access to this entity)
-                    self.logstate_debug(f"Checking user information for permissions: {call.context.user_id}")
+                    #self.logstate_debug(f"Checking user information for permissions: {call.context.user_id}")
+                    # Check security permissions (that this user has access to the alarm panel entity)
                     await self._checkUserPermission(call, POLICY_CONTROL, call.data[ATTR_ENTITY_ID])
                 mybpstate = self.hass.states.get(eid)
                 if mybpstate is not None:
@@ -1571,6 +1546,8 @@ class VisonicClient:
             raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
 
         if call.context.user_id:
+            #self.logstate_debug(f"Checking user information for permissions: {call.context.user_id}")
+            # Check security permissions (that this user has access to the alarm panel entity)
             await self._checkUserPermission(call, POLICY_CONTROL, Platform.ALARM_CONTROL_PANEL + "." + self.getAlarmPanelUniqueIdent())
 
         self.logstate_debug("User has requested visonic panel reconnection")

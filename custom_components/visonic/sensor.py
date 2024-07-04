@@ -44,7 +44,7 @@ async def async_setup_entry(
         """Add Visonic Sensor (to behave instead of the alarm panel when all comms is prevented)."""
         entities: list[Entity] = []
         entities.append(VisonicSensor(hass, client, 1))
-        _LOGGER.debug(f"sensor adding entity")
+        #_LOGGER.debug(f"sensor adding entity")
         async_add_entities(entities)
 
     entry.async_on_unload(

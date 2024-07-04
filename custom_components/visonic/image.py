@@ -1,16 +1,14 @@
 """Support for Visonic PIR Camera image."""
 import logging
 from datetime import timedelta
-#from typing import Callable, List
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.components.image import DOMAIN as IMAGE_DOMAIN
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-#from homeassistant.config_entries import ConfigEntry
+
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-#import homeassistant.util.dt as dt_util
 
 from .pyconst import AlSensorDevice, AlSensorCondition
 from .client import VisonicClient
@@ -34,7 +32,7 @@ async def async_setup_entry(
         """Add Visonic Image Sensor."""
         entities: list[ImageEntity] = []
         entities.append(VisonicImage(hass, client, device))
-        _LOGGER.debug(f"image adding {device.getDeviceID()}")
+        #_LOGGER.debug(f"image adding {device.getDeviceID()}")
         async_add_entities(entities)
 
     entry.async_on_unload(

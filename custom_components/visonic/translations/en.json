@@ -73,7 +73,6 @@
                 "description": "",
                 "title": "Alarm Panel Arm/Disarm Settings",
                 "data": {
-                    "override_code": "Override User Code (Set to 0 for not used)",
                     "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "force_numeric_keypad": "Force use of a Numeric Keypad",
                     "arm_home_enabled": "Arm Home Enabled",
@@ -96,15 +95,6 @@
                     "panellog_csv_filename": "The CSV Filename (and path)",
                     "panellog_reverse_order": "Reverse the output order",
                     "panellog_max_entries": "Only output the most recent X log entries"
-                }
-            },
-            "parameters20": {
-                "description": "Alarm Panel PowerMaster users only",
-                "title": "B0 Processing",
-                "data": {
-                    "b0_enable_motion_processing": "Enable B0 message processing (PowerMaster Panels only)",
-                    "b0_min_time_between_triggers": "Minimum time between triggers",
-                    "b0_max_time_for_trigger_event": "Maximum time for trigger event"
                 }
             }
         }
@@ -137,7 +127,6 @@
                 "description": "",
                 "title": "Alarm Panel Arm/Disarm Settings",
                 "data": {
-                    "override_code": "Override User Code (Set to 0 for not used)",
                     "arm_without_usercode": "Arm without User Code (not supported by all panels)",
                     "force_numeric_keypad": "Force use of a Numeric Keypad",
                     "arm_home_enabled": "Arm Home Enabled",
@@ -160,15 +149,6 @@
                     "panellog_csv_filename": "The CSV Filename (and path)",
                     "panellog_reverse_order": "Reverse the output order",
                     "panellog_max_entries": "Only output the most recent X log entries"
-                }
-            },
-            "parameters20": {
-                "description": "Alarm Panel PowerMaster users only",
-                "title": "B0 Processing",
-                "data": {
-                    "b0_enable_motion_processing": "Enable B0 message processing (PowerMaster Panels only)",
-                    "b0_min_time_between_triggers": "Minimum time between triggers",
-                    "b0_max_time_for_trigger_event": "Maximum time for trigger event"
                 }
             }
         }

@@ -67,6 +67,8 @@ async def async_setup_entry(
 class VisonicAlarm(alarm.AlarmControlPanelEntity):
     """Representation of a Visonic alarm control panel."""
 
+#    _unrecorded_attributes = alarm.AlarmControlPanelEntity._unrecorded_attributes | frozenset({-})
+
     def __init__(self, hass: HomeAssistant, client: VisonicClient, partition_id: int):
         """Initialize a Visonic security alarm."""
         self.hass = hass

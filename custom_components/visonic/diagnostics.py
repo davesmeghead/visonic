@@ -44,4 +44,4 @@ async def async_get_config_entry_diagnostics(
             "panel connected": 'no',
         }
 
-    return async_redact_data(fred, ("override_code","download_code","host","port"))
+    return async_redact_data(fred, ("download_code","host","port"))

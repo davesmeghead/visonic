@@ -1,5 +1,6 @@
 """Config flow for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 
+from typing import Any
 import logging
 
 from .const import (
@@ -12,11 +13,21 @@ from .const import (
     CONF_EMULATION_MODE,
     available_emulation_modes,
     DOMAIN, 
-    CONF_ALARM_NOTIFICATIONS, 
-    CONF_OVERRIDE_CODE
+    VISONIC_UNIQUE_NAME,
+    CONF_ALARM_NOTIFICATIONS
 )
 
-from homeassistant import config_entries, data_entry_flow
+from homeassistant import data_entry_flow
+from homeassistant.data_entry_flow import FlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+    CONN_CLASS_LOCAL_POLL,
+    HANDLERS,
+#    ENTRY_STATE_LOADED,
+)
 from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT
 from homeassistant.core import callback
 
@@ -106,7 +117,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
             step_id=step,
             data_schema=ds,
             errors=errors if errors else {},
-            description_placeholders=placeholders if placeholders else {},
+            #description_placeholders=placeholders if placeholders else {},
         )
 
     async def gotonext(self, user_input=None):
@@ -140,26 +151,6 @@ class MyHandlers(data_entry_flow.FlowHandler):
     async def validate_input(self, data: dict):
         """Validate the input."""
         # Validation to be implemented
-        #tmpOCode = data.get(CONF_OVERRIDE_CODE, "")
-        #_LOGGER.debug(f'validate_input type={type(tmpOCode)}  value={tmpOCode}')
-
-        # Convert the override code from a float to a string, if set to 0 then empty the string    
-        if CONF_OVERRIDE_CODE in data:
-            tmp : str = str(int(data[CONF_OVERRIDE_CODE]))
-            if len(tmp) == 0 or len(tmp) > 4 or (len(tmp) == 1 and tmp == "0"):
-                tmp = ""
-            elif len(tmp) == 1:
-                tmp = "000" + tmp
-            elif len(tmp) == 2:
-                tmp = "00" + tmp
-            elif len(tmp) == 3:
-                tmp = "0" + tmp
-            
-            data[CONF_OVERRIDE_CODE] = tmp        
-        
-        #tmpOCode = data.get(CONF_OVERRIDE_CODE, "")
-        #_LOGGER.debug(f'validate_input type={type(tmpOCode)}  value={tmpOCode}')
-
         # return a temporary title to use
         return {"title": "Alarm Panel"}
 
@@ -168,8 +159,6 @@ class MyHandlers(data_entry_flow.FlowHandler):
         try:
             #_LOGGER.debug('processcomplete')
             info = await self.validate_input(self.config)
-            #tmpOCode = self.config.get(CONF_OVERRIDE_CODE, "")
-            #_LOGGER.debug(f'processcomplete type={type(tmpOCode)}  value={tmpOCode}')
             if info is not None:
                 # convert comma separated string to a list
                 if CONF_SIREN_SOUNDING in self.config:
@@ -199,17 +188,17 @@ class MyHandlers(data_entry_flow.FlowHandler):
         return self.async_abort(reason="device_error")
 
 
-@config_entries.HANDLERS.register(DOMAIN)
-class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
+@HANDLERS.register(DOMAIN)
+class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
     """Handle a Visonic flow."""
 
     VERSION = 2
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
+    CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     def __init__(self):
         """Initialize options flow."""
         MyHandlers.__init__(self)
-        config_entries.ConfigFlow.__init__(self)
+        ConfigFlow.__init__(self)
         _LOGGER.debug("Visonic ConfigFlow init")
 
     def dumpMyState(self):
@@ -221,15 +210,15 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
                 _LOGGER.debug("No Entries found")
 
             cur_entry = entries[0]
-            is_loaded = cur_entry.state == config_entries.ENTRY_STATE_LOADED
+            #is_loaded = cur_entry.state == ENTRY_STATE_LOADED
 
-            _LOGGER.debug("Is loaded %s", is_loaded)
+            #_LOGGER.debug("Is loaded %s", is_loaded)
         # else:
         #    _LOGGER.debug("Invalid List")
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
+    def async_get_options_flow(config_entry : ConfigEntry):
         """Get the options flow for this handler."""
         _LOGGER.debug("Visonic async_get_options_flow")
         return VisonicOptionsFlowHandler(config_entry)
@@ -240,7 +229,10 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         _LOGGER.debug("async_step_device %s", user_input)
         #self.dumpMyState()
         if user_input is not None and CONF_DEVICE_TYPE in user_input and CONF_PANEL_NUMBER in user_input:
-            self.config[CONF_PANEL_NUMBER] = max(0, int(user_input[CONF_PANEL_NUMBER]))
+            panel_num = max(0, int(user_input[CONF_PANEL_NUMBER]))
+            await self.async_set_unique_id(VISONIC_UNIQUE_NAME + " Panel " + panel_num)
+            self._abort_if_unique_id_configured()
+            self.config[CONF_PANEL_NUMBER] = panel_num
             self.config[CONF_DEVICE_TYPE] = user_input[CONF_DEVICE_TYPE].lower()
             if self.config[CONF_DEVICE_TYPE] == "ethernet":
                 return await self._show_form(step="myethernet")
@@ -285,7 +277,7 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         return await self.gotonext(user_input)
 
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle a user config flow."""
         # determine if a panel connection has already been made and stop a second connection
         # _LOGGER.debug("Visonic async_step_user")
@@ -303,8 +295,6 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         # importing a yaml config setup
         info = await self.validate_input(user_input)
         if info is not None:
-            #await self.async_set_unique_id(VISONIC_UNIQUE_NAME)
-            self._abort_if_unique_id_configured()
             return self.async_create_entry(title=info["title"], data=user_input)
         return self.async_abort(reason="device_error")
 
@@ -349,16 +339,16 @@ class VisonicConfigFlow(config_entries.ConfigFlow, MyHandlers, domain=DOMAIN):
         return await self.async_step_user(data)
 
 
-class VisonicOptionsFlowHandler(config_entries.OptionsFlow, MyHandlers):
+class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
     """Handle options."""
 
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
+    CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
-    def __init__(self, config_entry):
+    def __init__(self, config_entry : ConfigEntry):
         """Initialize options flow."""
         MyHandlers.__init__(self, config_entry)
-        config_entries.OptionsFlow.__init__(self)
+        OptionsFlow.__init__(self)
         self.config = dict(config_entry.options)
         self.entry_id = config_entry.entry_id
         #_LOGGER.debug(f"init {self.entry_id} {self.config}")

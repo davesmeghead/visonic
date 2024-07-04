@@ -35,11 +35,6 @@ CONF_MOTION_OFF_DELAY = "motion_off"
 CONF_SIREN_SOUNDING = "siren_sounding"
 CONF_EEPROM_ATTRIBUTES = "show_eeprom_attributes"
 
-# Temporary B0 Config Items
-CONF_B0_ENABLE_MOTION_PROCESSING = "b0_enable_motion_processing"
-CONF_B0_MIN_TIME_BETWEEN_TRIGGERS = "b0_min_time_between_triggers"
-CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT = "b0_max_time_for_trigger_event"
-
 available_emulation_modes = [
     "Powerlink Emulation",
     "Force Standard Mode",

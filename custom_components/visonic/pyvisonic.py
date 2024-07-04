@@ -1338,6 +1338,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         
         # Current F4 jpg image 
         self.ImageManager = AlImageManager()
+        self.ignoreF4DataMessages = False
+        self.image_ignore = set()
 
         ##############################################################################################################################################################
         ##############################################################################################################################################################
@@ -2522,7 +2524,7 @@ class PacketHandling(ProtocolBase):
         self.pmForceArmSetInPanel = False          # If the Panel is using "Force Arm" then sensors may be automatically armed and bypassed by the panel when it is armed and disarmed
 
         self.lastPacketCounter = 0
-        self.sensorsCreated = False  # Have the sensors benn created. Either from an A5 message or the EEPROM data
+        self.sensorsCreated = False  # Have the sensors been created. Either from an A5 message or the EEPROM data
 
         # EXPERIMENTAL
         # The PowerMaster "B0" Messages
@@ -4947,25 +4949,36 @@ class PacketHandling(ProtocolBase):
         msgtype = data[0]
         sequence = data[2]
         datalen = data[3]
-        datastart = 4
         
         pushchange = False
 
         if msgtype == 0x03:     # JPG Header 
             log.debug("[handle_msgtypeF4]  data {0}".format(self._toString(data)))
             pushchange = True
-            tmp = data[5]
-            zone = (10 * int(tmp // 16)) + (tmp % 16)         # the // does integer floor division so always rounds down
+            zone = (10 * int(data[5] // 16)) + (data[5] % 16)         # the // does integer floor division so always rounds down
             unique_id = data[6]
             image_id = data[7]
-         
-            if self.ImageManager.isImageDataInProgress():
+            lastimage = (data[11] == 1)
+            size = (data[13] * 256) + data[12]
+            totalimages = data[14]
+
+            if zone in self.image_ignore:
+                log.debug(f"[handle_msgtypeF4]        Ignoring Image Header, so not processing F4 data {lastimage=}")
+                if lastimage:
+                    self.image_ignore.remove(zone)
+            elif self.ImageManager.isImageDataInProgress():
                 # We have received an unexpected F4 message header when the previous image transfer is still in progress
-                log.debug(f"[handle_msgtypeF4]        Previous Image transfer incomplete, so not processing F4 data")
+                log.debug(f"[handle_msgtypeF4]        Previous Image transfer incomplete, so not processing F4 data and terminating image creation for zone {zone}")
+                self.image_ignore.add(zone)        # Prevent the user being able to ask for this zone again until we've cleared all the current data
+                self.ignoreF4DataMessages = True   # Ignore 0x05 data packets
+                self.ImageManager.terminateImage()
 
             elif self.PanelMode == AlPanelMode.UNKNOWN or self.PanelMode == AlPanelMode.PROBLEM or self.PanelMode == AlPanelMode.STARTING or self.PanelMode == AlPanelMode.DOWNLOAD or self.PanelMode == AlPanelMode.STOPPED:
-                # We have received an unexpected F4 message so ignore it and try to prevent the panel from sending more
+                # 
                 log.debug(f"[handle_msgtypeF4]        PanelMode is {self.PanelMode} so not processing F4 data")
+                self.image_ignore.add(zone)        # Prevent the user being able to ask for this zone again until we've cleared all the current data
+                self.ignoreF4DataMessages = True   # Ignore 0x05 data packets
+                self.ImageManager.terminateImage()
 
             elif zone - 1 in self.SensorList and self.SensorList[zone-1].getSensorType() == AlSensorType.CAMERA:
                 log.debug(f"[handle_msgtypeF4]        Processing")
@@ -4977,10 +4990,11 @@ class PacketHandling(ProtocolBase):
                         self.ImageManager.create(zone, 11)   # This makes sure that there isn't an ongoing image retrieval for this sensor
 
                 # Initialise the receipt of an image in the ImageManager
-                self.ImageManager.setCurrent(zone = zone, unique_id = unique_id, image_id = image_id, size = (data[13] * 256) + data[12], sequence = sequence, lastimage = (data[11] == 1), totalimages = data[14])
+                self.ImageManager.setCurrent(zone = zone, unique_id = unique_id, image_id = image_id, size = size, sequence = sequence, lastimage = lastimage, totalimages = totalimages)
  
                 if self.PanelMode == AlPanelMode.POWERLINK or self.PanelMode == AlPanelMode.STANDARD_PLUS or self.PanelMode == AlPanelMode.STANDARD:
                     # Assume that we are managing the interaction/protocol with the panel
+                    self.ignoreF4DataMessages = False
                     
                     self._addPDUToSendList(convertByteArray('0d ab 0e 00 17 1e 00 00 03 01 05 00 43 c5 0a'))
 
@@ -5001,11 +5015,12 @@ class PacketHandling(ProtocolBase):
                 log.debug(f"[handle_msgtypeF4]        Panel sending image for Zone {zone} but it does not exist or is not a CAMERA")
 
         elif msgtype == 0x05:   # JPG Data
-            if not self.ImageManager.hasStartedSequence():
-                log.debug(f"[handle_msgtypeF4]        Not processing F4 data") #, attempting to stop F4 data")
-            else:
+            if self.ignoreF4DataMessages:
+                log.debug(f"[handle_msgtypeF4]        Not processing F4 0x05 data")
+            elif self.ImageManager.hasStartedSequence():
                 # Image receipt has been initialised by self.ImageManager.setCurrent
                 #     Therefore we only get here when PanelMode is COMPLETE_READONLY, MONITOR_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
+                datastart = 4
                 inSequence = self.ImageManager.addData(data[datastart:datastart+datalen], sequence)
                 if inSequence:
                     if self.ImageManager.isImageComplete():
@@ -5167,12 +5182,14 @@ class VisonicProtocol(PacketHandling):
         if not self.pmDownloadMode:
             if state == AlPanelCommand.CHANGE_BAUD:
                 if self.PanelMode == AlPanelMode.POWERLINK and self.pmGotUserCode:
-                    log.debug("[requestPanelCommand] Changing Baud Rate, *************** always use 38400 and ignore code parameter ************")
+                    log.debug(f"[requestPanelCommand] Changing Baud Rate")
                     bpin = self._createPin(None)
                     self._clearList()
-                    # code = convert code to a baud rate, insert at pos 14
-                    self._addMessageToSendList("MSG_PM_SETBAUD", options=[ [4, bpin] ])  #
-                    #self._addMessageToSendList("MSG_PM_SETBAUD", options=[ [4, bpin] ])  #
+                    #
+                    baudrate = 38400
+                    br = hexify(baudrate)
+                    log.debug(f"[requestPanelCommand] Changing Baud Rate, *************** {bpin} ********* {br} ***")
+
                     return AlCommandStatus.SUCCESS
                 else:
                     return AlCommandStatus.FAIL_INVALID_STATE
@@ -5224,18 +5241,17 @@ class VisonicProtocol(PacketHandling):
         return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
 
     def getJPG(self, device : int, count : int) -> AlCommandStatus:
-        if self.PanelMode == AlPanelMode.STANDARD or self.PanelMode == AlPanelMode.STANDARD_PLUS or self.PanelMode == AlPanelMode.POWERLINK:
-            if not self.pmDownloadMode:
-                #if device >= 1 and device <= 64:
-                #    if device - 1 in self.SensorList and self.SensorList[device-1].getSensorType() == AlSensorType.CAMERA:
-                #        if self.ImageManager.create(device, count):   # This makes sure that there isn't an ongoing image retrieval for this sensor
-                #            self._addMessageToSendList("MSG_GET_IMAGE", options=[ [1, count], [2, device] ])  #  
-                #            return AlCommandStatus.SUCCESS
-                return AlCommandStatus.FAIL_INVALID_STATE
-            else:
-                return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
-        else:
+        if not self.pmDownloadMode:
+            if self.PanelMode == AlPanelMode.STANDARD or self.PanelMode == AlPanelMode.STANDARD_PLUS or self.PanelMode == AlPanelMode.POWERLINK:
+                if device >= 1 and device <= 64:
+                    if device - 1 in self.SensorList and self.SensorList[device-1].getSensorType() == AlSensorType.CAMERA:
+                        if device not in self.image_ignore:
+                            if self.ImageManager.create(device, count):   # This makes sure that there isn't an ongoing image retrieval for this sensor
+                                #self._addMessageToSendList("MSG_GET_IMAGE", options=[ [1, count], [2, device] ])  #  
+                                return AlCommandStatus.SUCCESS
             return AlCommandStatus.FAIL_INVALID_STATE
+        else:
+            return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
 
     # Individually arm/disarm the sensors
     #   This sets/clears the bypass for each sensor

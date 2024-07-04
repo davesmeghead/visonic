@@ -587,6 +587,9 @@ class AlImageManager:
             return insequence
         return False
     
+#    def currentZone(self) -> int:
+#        return self.current_zone
+        
     def isImageComplete(self):
         return self.last_image is not None
     

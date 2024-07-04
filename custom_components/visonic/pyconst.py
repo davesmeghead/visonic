@@ -260,7 +260,7 @@ a = AlTroubleType()
 # This is used for when AlCondition is set to ZONE_UPDATE to update the HA
 #   frontend and send out an HA Event
 class AlSensorCondition(AlEnum):
-    RESET = AlIntEnum(0)      # This causes the client to update the frontend etc but it does not send out an HA Event
+    RESET = AlIntEnum(0)
     STATE = AlIntEnum(1)
     TAMPER = AlIntEnum(2)
     BATTERY = AlIntEnum(3)
