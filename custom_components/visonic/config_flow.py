@@ -230,7 +230,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         #self.dumpMyState()
         if user_input is not None and CONF_DEVICE_TYPE in user_input and CONF_PANEL_NUMBER in user_input:
             panel_num = max(0, int(user_input[CONF_PANEL_NUMBER]))
-            await self.async_set_unique_id(VISONIC_UNIQUE_NAME + " Panel " + panel_num)
+            await self.async_set_unique_id(VISONIC_UNIQUE_NAME + " Panel " + str(panel_num))
             self._abort_if_unique_id_configured()
             self.config[CONF_PANEL_NUMBER] = panel_num
             self.config[CONF_DEVICE_TYPE] = user_input[CONF_DEVICE_TYPE].lower()
