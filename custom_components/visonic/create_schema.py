@@ -42,6 +42,7 @@ from .const import (
     CONF_EMULATION_MODE,
     CONF_LANGUAGE,
     CONF_MOTION_OFF_DELAY,
+    CONF_MAGNET_CLOSED_DELAY,
     CONF_SIREN_SOUNDING,
     CONF_LOG_CSV_FN,
     CONF_LOG_CSV_TITLE,
@@ -191,6 +192,10 @@ class VisonicSchema:
             vol.Optional(
                 CONF_MOTION_OFF_DELAY,
                 default=self.create_default(options, CONF_MOTION_OFF_DELAY, 120),
+            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
+            vol.Optional(
+                CONF_MAGNET_CLOSED_DELAY,
+                default=self.create_default(options, CONF_MAGNET_CLOSED_DELAY, 5),
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
             vol.Optional(
                 CONF_SIREN_SOUNDING, 

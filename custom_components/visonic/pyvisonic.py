@@ -1213,6 +1213,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.DownloadCode = DEFAULT_DL_CODE   # INTERFACE : Set the Download Code
         self.pmLang = 'EN'                    # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
         self.MotionOffDelay = 120             # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
+        self.MagnetClosedDelay = 5            # INTERFACE : Get the magnet sensor closed delay time (between subsequent triggers)
         self.SirenTriggerList = ["intruder"]  # INTERFACE : This is the trigger list that we can assume is making the siren sound
         self.IncludeEEPROMAttributes = False  # INTERFACE : Whether to include the EEPROM attributes in the alarm panel HA attributes list
 
@@ -1401,6 +1402,10 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 # Get the motion sensor off delay time (between subsequent triggers)
                 self.MotionOffDelay = newdata[AlConfiguration.MotionOffDelay]
                 log.debug("[Settings] Motion Off Delay set to {0}".format(self.MotionOffDelay))
+            if AlConfiguration.MagnetClosedDelay in newdata:
+                # Get the magnet sensor closed delay time (between subsequent triggers)
+                self.MagnetClosedDelay = newdata[AlConfiguration.MagnetClosedDelay]
+                log.debug("[Settings] Magnet closed Delay set to {0}".format(self.MagnetClosedDelay))
             if AlConfiguration.SirenTriggerList in newdata:
                 tmpList = newdata[AlConfiguration.SirenTriggerList]
                 self.SirenTriggerList = [x.lower() for x in tmpList]
@@ -2542,7 +2547,7 @@ class PacketHandling(ProtocolBase):
             if self.PostponeEventTimer == 0:
                 self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
 
-    # For the sensors that have been triggered, turn them off after self.MotionOffDelay seconds
+    # For the sensors that have been triggered, turn them off after self.MotionOffDelay seconds or self.MagnetClosedDelay depending on the type
     async def _resetTriggeredStateTimer(self):
         """ reset triggered state"""
         counter = 0
@@ -2550,15 +2555,28 @@ class PacketHandling(ProtocolBase):
             counter = counter + 1
             # cycle through the sensors and set the triggered value back to False after the timeout duration
             #    get it here so if it gets updated then we use the new value
-            td = timedelta(seconds=self.MotionOffDelay)
             for key in self.SensorList:
                 if self.SensorList[key].triggered:
                     interval = self._getUTCTimeFunction() - self.SensorList[key].utctriggertime
                     # at least self.MotionOffDelay seconds as it also depends on the frequency the panel sends messages
+
+                    # Diferent delay times based on the sensor type
+                    if self.SensorList[key].stype == AlSensorType.MAGNET:
+                        td = timedelta(seconds=self.MagnetClosedDelay)
+                    else:
+                        td = timedelta(seconds=self.MotionOffDelay)
+
+                    #log.debug("[_debug]  Sensor {0}: using {1} for delay".format(key, td))
+                    #log.debug("[_debug]  Sensor {0}: current interval: {1}".format(key, interval))
+
                     if interval > td:
                         log.debug("[_resetTriggeredStateTimer]   Sensor {0}   triggered to False".format(key))
                         self.SensorList[key].triggered = False
                         self.SensorList[key].pushChange(AlSensorCondition.RESET)
+                        #log.debug("[_debug]  Sensor {0}: Interval > td".format(key))
+                    else:
+                        #log.debug("[_debug]  Sensor {0}: Interval <= td".format(key))
+
             # check every 0.5 seconds
             self.checkPostponeTimer()
             await asyncio.sleep(0.25)  # must be less than 5 seconds for self.suspendAllOperations:

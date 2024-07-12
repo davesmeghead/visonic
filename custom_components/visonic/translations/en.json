@@ -65,6 +65,7 @@
                     "siren_sounding": "List of triggers for the siren",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off": "Motion off delay time (seconds)",
+                    "magnet_closed": "Magnet closed delay time (seconds)",
                     "retry_connection_count": "Try this number of times to attempt the connection",
                     "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
                 }
@@ -119,6 +120,7 @@
                     "siren_sounding": "List of triggers for the siren",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off": "Motion off delay time (seconds)",
+                    "magnet_closed": "Magnet closed delay time (seconds)",
                     "retry_connection_count": "Try this number of times to attempt the connection",
                     "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
                 }
