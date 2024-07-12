@@ -2574,7 +2574,7 @@ class PacketHandling(ProtocolBase):
                         self.SensorList[key].triggered = False
                         self.SensorList[key].pushChange(AlSensorCondition.RESET)
                         #log.debug("[_debug]  Sensor {0}: Interval > td".format(key))
-                    else:
+                    #else:
                         #log.debug("[_debug]  Sensor {0}: Interval <= td".format(key))
 
             # check every 0.5 seconds
