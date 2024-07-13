@@ -152,6 +152,8 @@ class AlConfiguration(AlEnum):
     EEPROMAttributes = AlIntEnum(10)      # Boolean
     DisableAllCommands = AlIntEnum(11)    # Boolean
     CompleteReadOnly = AlIntEnum(12)      # Boolean
+    MagnetClosedDelay = AlIntEnum(13)         # Integer (seconds)
+    EmergencyOffDelay = AlIntEnum(14)         # Integer (seconds)
 a = AlConfiguration()
 
 # The set of panel modes
@@ -440,8 +442,11 @@ class PanelConfig(TypedDict):
     AlConfiguration.DownloadCode:         str
     AlConfiguration.PluginLanguage:       str
     AlConfiguration.MotionOffDelay:       int
+    AlConfiguration.MagnetClosedDelay:    int
+    AlConfiguration.EmergencyOffDelay:    int
     AlConfiguration.SirenTriggerList:     list[str]
     AlConfiguration.EEPROMAttributes:     bool
+
 
 
 class AlTransport(ABC):

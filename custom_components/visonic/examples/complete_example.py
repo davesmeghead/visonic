@@ -37,7 +37,9 @@ CONF_AUTO_SYNC_TIME = "sync_time"
 CONF_LANGUAGE = "language"
 CONF_EMULATION_MODE = "emulation_mode"
 
-CONF_MOTION_OFF_DELAY = "motion_off"
+CONF_MOTION_OFF_DELAY = "motion_off_delay"
+CONF_MAGNET_CLOSED_DELAY = "magnet_closed_delay"
+CONF_EMER_OFF_DELAY = "emergency_off_delay"
 CONF_SIREN_SOUNDING = "siren_sounding"
 CONF_EEPROM_ATTRIBUTES = "show_eeprom_attributes"
 
@@ -61,6 +63,8 @@ myconfig = {
     CONF_AUTO_SYNC_TIME : True,
     CONF_LANGUAGE: "EN",
     CONF_MOTION_OFF_DELAY: 10,
+    CONF_MAGNET_CLOSED_DELAY: 10,
+    CONF_EMER_OFF_DELAY: 10,
     CONF_SIREN_SOUNDING: ["Intruder"],
     CONF_EEPROM_ATTRIBUTES: False
 }
@@ -322,6 +326,8 @@ class VisonicClient:
             ),
             AlConfiguration.PluginLanguage: self.config.get(CONF_LANGUAGE, "EN"),
             AlConfiguration.MotionOffDelay: self.config.get(CONF_MOTION_OFF_DELAY, 120),
+            AlConfiguration.MagnetClosedDelay: self.config.get(CONF_MAGNET_CLOSED_DELAY, 5),
+            AlConfiguration.EmergencyOffDelay: self.config.get(CONF_EMER_OFF_DELAY, 120),
             AlConfiguration.SirenTriggerList: self.config.get(
                 CONF_SIREN_SOUNDING, ["Intruder"]
             ),

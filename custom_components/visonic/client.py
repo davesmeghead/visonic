@@ -75,6 +75,8 @@ from .const import (
     CONF_EMULATION_MODE,
     CONF_LANGUAGE,
     CONF_MOTION_OFF_DELAY,
+    CONF_MAGNET_CLOSED_DELAY,
+    CONF_EMER_OFF_DELAY,
     CONF_SIREN_SOUNDING,
     CONF_LOG_CSV_FN,
     CONF_LOG_CSV_TITLE,
@@ -846,6 +848,8 @@ class VisonicClient:
             ),
             AlConfiguration.PluginLanguage: self.config.get(CONF_LANGUAGE, "EN"),
             AlConfiguration.MotionOffDelay: self.config.get(CONF_MOTION_OFF_DELAY, 120),
+            AlConfiguration.MagnetClosedDelay: self.config.get(CONF_MAGNET_CLOSED_DELAY, 5),
+            AlConfiguration.EmergencyOffDelay: self.config.get(CONF_EMER_OFF_DELAY, 120),
             AlConfiguration.SirenTriggerList: self.config.get(
                 CONF_SIREN_SOUNDING, ["Intruder"]
             ),
