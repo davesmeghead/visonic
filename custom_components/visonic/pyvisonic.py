@@ -1214,8 +1214,26 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.pmLang = 'EN'                    # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
         self.MotionOffDelay = 120             # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
         self.MagnetClosedDelay = 5            # INTERFACE : Get the magnet sensor closed delay time (between subsequent triggers)
+        self.EmergencyOffDelay = 120          # INTERFACE : Get the emergency sensors off delay time (between subsequent triggers)
         self.SirenTriggerList = ["intruder"]  # INTERFACE : This is the trigger list that we can assume is making the siren sound
         self.IncludeEEPROMAttributes = False  # INTERFACE : Whether to include the EEPROM attributes in the alarm panel HA attributes list
+
+        self.TriggerOffDelayList = {          # INTERFACE : Trigger Off delays to apply for each sensor type, divided in 3 configuration delays.
+            AlSensorType.MAGNET: timedelta(seconds=5),
+            AlSensorType.WIRED: timedelta(seconds=5),
+            AlSensorType.MOTION: timedelta(seconds=120),
+            AlSensorType.CAMERA: timedelta(seconds=120),
+            AlSensorType.VIBRATION: timedelta(seconds=120),
+            AlSensorType.SHOCK: timedelta(seconds=120),
+            AlSensorType.SMOKE: timedelta(seconds=120),
+            AlSensorType.GAS: timedelta(seconds=120),
+            AlSensorType.FLOOD: timedelta(seconds=120),
+            AlSensorType.TEMPERATURE: timedelta(seconds=120),
+            AlSensorType.SOUND: timedelta(seconds=120),
+            AlSensorType.UNKNOWN: timedelta(seconds=0),
+            AlSensorType.IGNORED: timedelta(seconds=0)
+        }
+
 
         # Now that the defaults have been set, update them from the panel config dictionary (that may not have all settings in)
         self.updateSettings(panelConfig)
@@ -1398,14 +1416,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 # Get the plugin language from HA, either "EN", "FR" or "NL"
                 self.pmLang = newdata[AlConfiguration.PluginLanguage]
                 log.debug("[Settings] Language set to {0}".format(self.pmLang))
-            if AlConfiguration.MotionOffDelay in newdata:
-                # Get the motion sensor off delay time (between subsequent triggers)
-                self.MotionOffDelay = newdata[AlConfiguration.MotionOffDelay]
-                log.debug("[Settings] Motion Off Delay set to {0}".format(self.MotionOffDelay))
-            if AlConfiguration.MagnetClosedDelay in newdata:
-                # Get the magnet sensor closed delay time (between subsequent triggers)
-                self.MagnetClosedDelay = newdata[AlConfiguration.MagnetClosedDelay]
-                log.debug("[Settings] Magnet closed Delay set to {0}".format(self.MagnetClosedDelay))
             if AlConfiguration.SirenTriggerList in newdata:
                 tmpList = newdata[AlConfiguration.SirenTriggerList]
                 self.SirenTriggerList = [x.lower() for x in tmpList]
@@ -1413,6 +1423,26 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             if AlConfiguration.EEPROMAttributes in newdata:
                 self.IncludeEEPROMAttributes = newdata[AlConfiguration.EEPROMAttributes]
                 log.debug("[Settings] Include EEPROM Attributes set to {0}".format(self.IncludeEEPROMAttributes))
+            if AlConfiguration.MotionOffDelay in newdata:
+                # Get the motion sensor off delay time (between subsequent triggers)
+                self.TriggerOffDelayList[AlSensorType.MOTION] = timedelta(seconds=newdata[AlConfiguration.MotionOffDelay])
+                self.TriggerOffDelayList[AlSensorType.CAMERA] = timedelta(seconds=newdata[AlConfiguration.MotionOffDelay])
+                log.debug("[Settings] Motion Off Delay set to {0}".format(self.MotionOffDelay))
+            if AlConfiguration.MagnetClosedDelay in newdata:
+                # Get the magnet sensor closed delay time (between subsequent triggers)
+                self.TriggerOffDelayList[AlSensorType.MAGNET] = timedelta(seconds=newdata[AlConfiguration.MagnetClosedDelay])
+                self.TriggerOffDelayList[AlSensorType.WIRED] = timedelta(seconds=newdata[AlConfiguration.MagnetClosedDelay])
+                log.debug("[Settings] Magnet closed Delay set to {0}".format(self.MagnetClosedDelay))
+            if AlConfiguration.EmergencyOffDelay in newdata:
+                # Get the emergency sensors sensor off delay time (between subsequent triggers)
+                self.TriggerOffDelayList[AlSensorType.VIBRATION] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
+                self.TriggerOffDelayList[AlSensorType.SHOCK] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
+                self.TriggerOffDelayList[AlSensorType.SMOKE] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
+                self.TriggerOffDelayList[AlSensorType.GAS] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
+                self.TriggerOffDelayList[AlSensorType.FLOOD] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
+                self.TriggerOffDelayList[AlSensorType.TEMPERATURE] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
+                self.TriggerOffDelayList[AlSensorType.SOUND] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
+                log.debug("[Settings] Emergency Off Delay set to {0}".format(self.EmergencyOffDelay))
 
         if self.CompleteReadOnly:
             self.DisableAllCommands = True
@@ -2560,11 +2590,13 @@ class PacketHandling(ProtocolBase):
                     interval = self._getUTCTimeFunction() - self.SensorList[key].utctriggertime
                     # at least self.MotionOffDelay seconds as it also depends on the frequency the panel sends messages
 
-                    # Diferent delay times based on the sensor type
-                    if self.SensorList[key].stype == AlSensorType.MAGNET:
-                        td = timedelta(seconds=self.MagnetClosedDelay)
-                    else:
-                        td = timedelta(seconds=self.MotionOffDelay)
+                    # TODO: change wich sensors use each timer
+
+                    # Get what delay to use with sensor type
+                    td = self.TriggerOffDelayList.get(self.SensorList[key].stype, None)
+                    if td is None: # In case some sensor type is added to the integration but not mapped, use no delay and warn in console
+                        td = timedelta(seconds=0)
+                        log.warning("[_resetTriggeredStateTimer] Sensor {0} of type {1} does not have a delay assigned, using 0s".format(key, self.SensorList[key].stype))
 
                     #log.debug("[_debug]  Sensor {0}: using {1} for delay".format(key, td))
                     #log.debug("[_debug]  Sensor {0}: current interval: {1}".format(key, interval))
@@ -2573,9 +2605,8 @@ class PacketHandling(ProtocolBase):
                         log.debug("[_resetTriggeredStateTimer]   Sensor {0}   triggered to False".format(key))
                         self.SensorList[key].triggered = False
                         self.SensorList[key].pushChange(AlSensorCondition.RESET)
-                        #log.debug("[_debug]  Sensor {0}: Interval > td".format(key))
-                    #else:
-                        #log.debug("[_debug]  Sensor {0}: Interval <= td".format(key))
+
+
 
             # check every 0.5 seconds
             self.checkPostponeTimer()
