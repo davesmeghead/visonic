@@ -1218,18 +1218,20 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.SirenTriggerList = ["intruder"]  # INTERFACE : This is the trigger list that we can assume is making the siren sound
         self.IncludeEEPROMAttributes = False  # INTERFACE : Whether to include the EEPROM attributes in the alarm panel HA attributes list
 
-        self.TriggerOffDelayList = {          # INTERFACE : Trigger Off delays to apply for each sensor type, divided in 3 configuration delays.
-            AlSensorType.MAGNET: timedelta(seconds=5),
-            AlSensorType.WIRED: timedelta(seconds=5),
-            AlSensorType.MOTION: timedelta(seconds=120),
-            AlSensorType.CAMERA: timedelta(seconds=120),
-            AlSensorType.VIBRATION: timedelta(seconds=120),
-            AlSensorType.SHOCK: timedelta(seconds=120),
-            AlSensorType.SMOKE: timedelta(seconds=120),
-            AlSensorType.GAS: timedelta(seconds=120),
-            AlSensorType.FLOOD: timedelta(seconds=120),
-            AlSensorType.TEMPERATURE: timedelta(seconds=120),
-            AlSensorType.SOUND: timedelta(seconds=120),
+
+        # Trigger Off delays to apply for each sensor type
+        self.TriggerOffDelayList = {
+            AlSensorType.MAGNET: timedelta(seconds=self.MagnetClosedDelay),
+            AlSensorType.WIRED: timedelta(seconds=self.MagnetClosedDelay),
+            AlSensorType.MOTION: timedelta(seconds=self.MotionOffDelay),
+            AlSensorType.CAMERA: timedelta(seconds=self.MotionOffDelay),
+            AlSensorType.VIBRATION: timedelta(seconds=self.EmergencyOffDelay),
+            AlSensorType.SHOCK: timedelta(seconds=self.EmergencyOffDelay),
+            AlSensorType.SMOKE: timedelta(seconds=self.EmergencyOffDelay),
+            AlSensorType.GAS: timedelta(seconds=self.EmergencyOffDelay),
+            AlSensorType.FLOOD: timedelta(seconds=self.EmergencyOffDelay),
+            AlSensorType.TEMPERATURE: timedelta(seconds=self.EmergencyOffDelay),
+            AlSensorType.SOUND: timedelta(seconds=self.EmergencyOffDelay),
             AlSensorType.UNKNOWN: timedelta(seconds=0),
             AlSensorType.IGNORED: timedelta(seconds=0)
         }
@@ -1425,24 +1427,28 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 log.debug("[Settings] Include EEPROM Attributes set to {0}".format(self.IncludeEEPROMAttributes))
             if AlConfiguration.MotionOffDelay in newdata:
                 # Get the motion sensor off delay time (between subsequent triggers)
-                self.TriggerOffDelayList[AlSensorType.MOTION] = timedelta(seconds=newdata[AlConfiguration.MotionOffDelay])
-                self.TriggerOffDelayList[AlSensorType.CAMERA] = timedelta(seconds=newdata[AlConfiguration.MotionOffDelay])
+                self.MotionOffDelay =  newdata[AlConfiguration.MotionOffDelay]
+                self.TriggerOffDelayList[AlSensorType.MOTION] = timedelta(seconds=self.MotionOffDelay)
+                self.TriggerOffDelayList[AlSensorType.CAMERA] = timedelta(seconds=self.MotionOffDelay)
                 log.debug("[Settings] Motion Off Delay set to {0}".format(self.MotionOffDelay))
             if AlConfiguration.MagnetClosedDelay in newdata:
                 # Get the magnet sensor closed delay time (between subsequent triggers)
-                self.TriggerOffDelayList[AlSensorType.MAGNET] = timedelta(seconds=newdata[AlConfiguration.MagnetClosedDelay])
-                self.TriggerOffDelayList[AlSensorType.WIRED] = timedelta(seconds=newdata[AlConfiguration.MagnetClosedDelay])
+                self.MagnetClosedDelay =  newdata[AlConfiguration.MagnetClosedDelay]
+                self.TriggerOffDelayList[AlSensorType.MAGNET] = timedelta(seconds=self.MagnetClosedDelay)
+                self.TriggerOffDelayList[AlSensorType.WIRED] = timedelta(seconds=self.MagnetClosedDelay)
                 log.debug("[Settings] Magnet closed Delay set to {0}".format(self.MagnetClosedDelay))
             if AlConfiguration.EmergencyOffDelay in newdata:
                 # Get the emergency sensors sensor off delay time (between subsequent triggers)
-                self.TriggerOffDelayList[AlSensorType.VIBRATION] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
-                self.TriggerOffDelayList[AlSensorType.SHOCK] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
-                self.TriggerOffDelayList[AlSensorType.SMOKE] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
-                self.TriggerOffDelayList[AlSensorType.GAS] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
-                self.TriggerOffDelayList[AlSensorType.FLOOD] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
-                self.TriggerOffDelayList[AlSensorType.TEMPERATURE] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
-                self.TriggerOffDelayList[AlSensorType.SOUND] = timedelta(seconds=newdata[AlConfiguration.EmergencyOffDelay])
+                self.EmergencyOffDelay =  newdata[AlConfiguration.EmergencyOffDelay]
+                self.TriggerOffDelayList[AlSensorType.VIBRATION] = timedelta(seconds=self.EmergencyOffDelay)
+                self.TriggerOffDelayList[AlSensorType.SHOCK] = timedelta(seconds=self.EmergencyOffDelay)
+                self.TriggerOffDelayList[AlSensorType.SMOKE] = timedelta(seconds=self.EmergencyOffDelay)
+                self.TriggerOffDelayList[AlSensorType.GAS] = timedelta(seconds=self.EmergencyOffDelay)
+                self.TriggerOffDelayList[AlSensorType.FLOOD] = timedelta(seconds=self.EmergencyOffDelay)
+                self.TriggerOffDelayList[AlSensorType.TEMPERATURE] = timedelta(seconds=self.EmergencyOffDelay)
+                self.TriggerOffDelayList[AlSensorType.SOUND] = timedelta(seconds=self.EmergencyOffDelay)
                 log.debug("[Settings] Emergency Off Delay set to {0}".format(self.EmergencyOffDelay))
+                
 
         if self.CompleteReadOnly:
             self.DisableAllCommands = True
@@ -2589,8 +2595,6 @@ class PacketHandling(ProtocolBase):
                 if self.SensorList[key].triggered:
                     interval = self._getUTCTimeFunction() - self.SensorList[key].utctriggertime
                     # at least self.MotionOffDelay seconds as it also depends on the frequency the panel sends messages
-
-                    # TODO: change wich sensors use each timer
 
                     # Get what delay to use with sensor type
                     td = self.TriggerOffDelayList.get(self.SensorList[key].stype, None)
