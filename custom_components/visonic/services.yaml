@@ -2,6 +2,7 @@ alarm_panel_eventlog:
   fields:
     entity_id:
       required: true
+      example: 'alarm_control_panel.visonic_alarm'
       selector:
         entity:
           integration: visonic
@@ -16,6 +17,7 @@ alarm_panel_command:
   fields:
     entity_id:
       required: true
+      example: 'alarm_control_panel.visonic_alarm'
       selector:
         entity:
           integration: visonic
@@ -37,6 +39,7 @@ alarm_panel_command:
             - "Emergency"
             - "Panic"
     code:
+      required: false
       example: "1234"
       default: "0000"
       selector:
@@ -46,6 +49,7 @@ alarm_panel_reconnect:
   fields:
     entity_id:
       required: true
+      example: 'alarm_control_panel.visonic_alarm'
       selector:
         entity:
           integration: visonic

@@ -32,19 +32,20 @@ from .const import (
     CONF_ARM_NIGHT_ENABLED,
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
-    CONF_AUTO_SYNC_TIME,
+#    CONF_AUTO_SYNC_TIME,
     CONF_EEPROM_ATTRIBUTES,
     CONF_DEVICE_BAUD,
     CONF_PANEL_NUMBER,
     CONF_DEVICE_TYPE,
     CONF_DOWNLOAD_CODE,
-    CONF_FORCE_AUTOENROLL,
+#    CONF_FORCE_AUTOENROLL,
     CONF_EMULATION_MODE,
     CONF_LANGUAGE,
     CONF_MOTION_OFF_DELAY,
     CONF_MAGNET_CLOSED_DELAY,
     CONF_EMER_OFF_DELAY,
     CONF_SIREN_SOUNDING,
+    CONF_SENSOR_EVENTS,
     CONF_LOG_CSV_FN,
     CONF_LOG_CSV_TITLE,
     CONF_LOG_DONE,
@@ -61,9 +62,24 @@ from .const import (
     DEFAULT_DEVICE_TOPIC,
     DEFAULT_DEVICE_USB,
     AvailableNotifications,
-    AvailableNotificationConfig,
     available_emulation_modes,
 )
+
+from .pyconst import AlSensorCondition
+
+# These need to match the "sensor_event_list" selector in the language json file
+AvailableSensorEvents = {
+    "state" : AlSensorCondition.STATE,
+    "tamper" : AlSensorCondition.TAMPER,
+    "battery" : AlSensorCondition.BATTERY,
+    "bypass" : AlSensorCondition.BYPASS,
+    "problem" : AlSensorCondition.PROBLEM,
+    "enrolled" : AlSensorCondition.ENROLLED,
+    "fire" : AlSensorCondition.FIRE,
+    "emergency" : AlSensorCondition.EMERGENCY,
+    "panic" : AlSensorCondition.PANIC,
+    "camera" : AlSensorCondition.CAMERA
+}
 
 TIME_UNITS = [
     UnitOfTime.SECONDS,
@@ -74,6 +90,7 @@ TIME_UNITS = [
 
 _LOGGER = logging.getLogger(__name__)
 
+# These need to match the "siren_sounding" selector in the language json file
 available_siren_values = [
     "intruder",
     "tamper",
@@ -92,12 +109,10 @@ class VisonicSchema:
             vol.Required(CONF_DEVICE_TYPE, default="Ethernet"): vol.In(["Ethernet", "USB"]),
             vol.Optional(CONF_PANEL_NUMBER, default=0): cv.positive_int,
         }
-
         self.CONFIG_SCHEMA_ETHERNET = {
             vol.Required(CONF_HOST, default=DEFAULT_DEVICE_HOST): str,
             vol.Required(CONF_PORT, default=DEFAULT_DEVICE_PORT): str,
         }
-
         self.CONFIG_SCHEMA_USB = {
             vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB): str,
             vol.Optional(CONF_DEVICE_BAUD, default=DEFAULT_DEVICE_BAUD): str,
@@ -127,8 +142,10 @@ class VisonicSchema:
             # if type(options[key]) is not type(default):
             # # create_default types are different for = siren_sounding <class 'list'> <class 'set'> ['intruder', 'panic', 'gas'] {'intruder'}
             if isinstance(options[key], list) or isinstance(options[key], NodeListClass):
-                # _LOGGER.debug("      its a list")
+                #_LOGGER.debug("      its a list")
                 if CONF_SIREN_SOUNDING == key:
+                    return list(options[key])
+                if CONF_SENSOR_EVENTS == key:
                     return list(options[key])
                 if CONF_ALARM_NOTIFICATIONS == key:
                     return list(options[key])
@@ -139,8 +156,8 @@ class VisonicSchema:
                     return ""
             else:
                 return options[key]
-        else:
-            return default
+        #_LOGGER.debug(f"    returning {default=}")
+        return default
 
 
     # These are only used on creation of the component
@@ -170,16 +187,17 @@ class VisonicSchema:
         # Panel settings - can only be set on creation
         return {
             vol.Optional(
-                CONF_DOWNLOAD_CODE, default=self.create_default(options, CONF_DOWNLOAD_CODE, "")
+                CONF_DOWNLOAD_CODE, 
+                default=self.create_default(options, CONF_DOWNLOAD_CODE, "")
             ): str,
-            vol.Optional(
-                CONF_FORCE_AUTOENROLL,
-                default=self.create_default(options, CONF_FORCE_AUTOENROLL, False),
-            ): bool,
-            vol.Optional(
-                CONF_AUTO_SYNC_TIME,
-                default=self.create_default(options, CONF_AUTO_SYNC_TIME, True),
-            ): bool,
+#            vol.Optional(
+#                CONF_FORCE_AUTOENROLL,
+#                default=self.create_default(options, CONF_FORCE_AUTOENROLL, False),
+#            ): bool,
+#            vol.Optional(
+#                CONF_AUTO_SYNC_TIME,
+#                default=self.create_default(options, CONF_AUTO_SYNC_TIME, True),
+#            ): bool,
             vol.Optional(
                 CONF_EEPROM_ATTRIBUTES,
                 default=self.create_default(options, CONF_EEPROM_ATTRIBUTES, False),
@@ -189,6 +207,12 @@ class VisonicSchema:
     def create_parameters10(self, options: dict):
         """Create parameter set 10."""
         # Panel settings - can be modified/edited
+        #_LOGGER.debug(f"create_parameters10 {options=}")
+        # options=AvailableSensorEvents.keys()   needs to be immutable so made it a list and copied it
+        strlist = [el.value 
+                   for el in AvailableNotifications 
+                   if el != AvailableNotifications.ALWAYS]
+        #_LOGGER.debug(f"create_parameters10 {strlist=}")
         return {
             vol.Optional(
                 CONF_MOTION_OFF_DELAY,
@@ -206,14 +230,15 @@ class VisonicSchema:
                 CONF_SIREN_SOUNDING, 
                 default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
             ): selector.SelectSelector(selector.SelectSelectorConfig(options=available_siren_values, multiple=True, sort=True, translation_key=CONF_SIREN_SOUNDING)),
-            #vol.Optional(
-            #    CONF_SIREN_SOUNDING,
-            #    default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
-            #): cv.multi_select(available_siren_values),
+            vol.Optional(
+                CONF_SENSOR_EVENTS, 
+                default=self.create_default(options, CONF_SENSOR_EVENTS, ["problem"]),
+            ): selector.SelectSelector(selector.SelectSelectorConfig(options=list(AvailableSensorEvents.keys()).copy(), multiple=True, sort=True, translation_key=CONF_SENSOR_EVENTS)),
             vol.Optional(
                 CONF_ALARM_NOTIFICATIONS,
                 default=self.create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
-            ): cv.multi_select(AvailableNotificationConfig),
+            ): selector.SelectSelector(selector.SelectSelectorConfig(options=strlist, multiple=True, sort=True, translation_key=CONF_ALARM_NOTIFICATIONS)),
+            #): cv.multi_select(AvailableNotificationConfig),
             # https://developers.home-assistant.io/docs/data_entry_flow_index/#show-form
             vol.Optional(
                 CONF_RETRY_CONNECTION_COUNT,

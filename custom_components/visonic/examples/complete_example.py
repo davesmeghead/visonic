@@ -32,8 +32,8 @@ except:
 
 # config parameters for myconfig, just to make the defaults easier
 CONF_DOWNLOAD_CODE = "download_code"
-CONF_FORCE_AUTOENROLL = "force_autoenroll"
-CONF_AUTO_SYNC_TIME = "sync_time"
+#CONF_FORCE_AUTOENROLL = "force_autoenroll"
+#CONF_AUTO_SYNC_TIME = "sync_time"
 CONF_LANGUAGE = "language"
 CONF_EMULATION_MODE = "emulation_mode"
 
@@ -47,7 +47,6 @@ class ConnectionMode(Enum):
     POWERLINK = 1
     STANDARD = 2
     DATAONLY = 3
-    MONITOR = 4
 
 class PrintMode(Enum):
     NONE = 0
@@ -59,8 +58,8 @@ class PrintMode(Enum):
 myconfig = { 
     CONF_DOWNLOAD_CODE: "",
     CONF_EMULATION_MODE: ConnectionMode.POWERLINK,
-    CONF_FORCE_AUTOENROLL: True,
-    CONF_AUTO_SYNC_TIME : True,
+#    CONF_FORCE_AUTOENROLL: True,
+#    CONF_AUTO_SYNC_TIME : True,
     CONF_LANGUAGE: "EN",
     CONF_MOTION_OFF_DELAY: 10,
     CONF_MAGNET_CLOSED_DELAY: 10,
@@ -83,7 +82,7 @@ parser.add_argument("-address", help="visonic alarm ip address", default="")
 parser.add_argument("-port", help="visonic alarm ip port", type=int)
 parser.add_argument("-baud", help="visonic alarm baud", type=int, default="9600")
 parser.add_argument("-logfile", help="log file name to output to", default="")
-parser.add_argument("-connect", help="connection mode: powerlink, standard, dataonly, monitor(readonly)", default="powerlink")
+parser.add_argument("-connect", help="connection mode: powerlink, standard, dataonly", default="powerlink")
 parser.add_argument("-print", help="print mode: error, warning, info, debug", default="error")
 args = parser.parse_args()
 
@@ -103,9 +102,6 @@ def setConnectionMode(connect_mode):
     elif connect_mode[0] == "d":
         myconfig[CONF_EMULATION_MODE] = ConnectionMode.DATAONLY
         connection_mode = "Data Only (exchange of simple data with alarm panel, no ability to set alarm state)"
-    elif connect_mode[0] == "m":
-        myconfig[CONF_EMULATION_MODE] = ConnectionMode.MONITOR
-        connection_mode = "Monitor Only (nothing sent to the alarm panel)"
 
 def setupLocalLogger(level: str = "WARNING", empty = False):
     global logger_level
@@ -298,32 +294,27 @@ class VisonicClient:
         v = self.config.get(CONF_EMULATION_MODE, ConnectionMode.POWERLINK)        
         self.ForceStandardMode = v == ConnectionMode.STANDARD
         self.DisableAllCommands = v == ConnectionMode.DATAONLY
-        self.CompleteReadOnly = v == ConnectionMode.MONITOR
 
-        if self.CompleteReadOnly:
-            self.DisableAllCommands = True
         if self.DisableAllCommands:
             self.ForceStandardMode = True
-        # By the time we get here there are 4 combinations of self.CompleteReadOnly, self.DisableAllCommands and self.ForceStandardMode
-        #     All 3 are False --> Try to get to Powerlink 
+        # By the time we get here there are 3 combinations of self.DisableAllCommands and self.ForceStandardMode
+        #     Both are False --> Try to get to Powerlink 
         #     self.ForceStandardMode is True --> Force Standard Mode, the panel can still be armed and disarmed
         #     self.ForceStandardMode and self.DisableAllCommands are True --> The integration interacts with the panel but commands such as arm/disarm/log/bypass are not allowed
-        #     All 3 are True  --> Full readonly, no data sent to the panel
-        # The 2 if statements above ensure these are the only supported combinations.
+        # The if statement above ensure these are the only supported combinations.
 
-        print(f"Emulation Mode {self.config.get(CONF_EMULATION_MODE)}   so setting    ForceStandard to {self.ForceStandardMode}     DisableAllCommands to {self.DisableAllCommands}     CompleteReadOnly to {self.CompleteReadOnly}")
+        print(f"Emulation Mode {self.config.get(CONF_EMULATION_MODE)}   so setting    ForceStandard to {self.ForceStandardMode}     DisableAllCommands to {self.DisableAllCommands}")
 
         return {
             AlConfiguration.DownloadCode: self.config.get(CONF_DOWNLOAD_CODE, ""),
             AlConfiguration.ForceStandard: self.ForceStandardMode,
             AlConfiguration.DisableAllCommands: self.DisableAllCommands,
-            AlConfiguration.CompleteReadOnly: self.CompleteReadOnly,
-            AlConfiguration.AutoEnroll: self.toBool(
-                self.config.get(CONF_FORCE_AUTOENROLL, True)
-            ),
-            AlConfiguration.AutoSyncTime: self.toBool(
-                self.config.get(CONF_AUTO_SYNC_TIME, True)
-            ),
+            #AlConfiguration.AutoEnroll: self.toBool(
+            #    self.config.get(CONF_FORCE_AUTOENROLL, True)
+            #),
+            #AlConfiguration.AutoSyncTime: self.toBool(
+            #    self.config.get(CONF_AUTO_SYNC_TIME, True)
+            #),
             AlConfiguration.PluginLanguage: self.config.get(CONF_LANGUAGE, "EN"),
             AlConfiguration.MotionOffDelay: self.config.get(CONF_MOTION_OFF_DELAY, 120),
             AlConfiguration.MagnetClosedDelay: self.config.get(CONF_MAGNET_CLOSED_DELAY, 5),
@@ -756,7 +747,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
         console.print("Log <code>           Retrieve the panels log file (this takes a few minutes)")
         console.print("Jpg <X> <C>          Download jpg images from zone X, optionally add an image count C but it doesn't work properly")
         console.print("Quit                 Quit the programme")
-        console.print("Connect Mode         Connect to the panel (when not connected) Mode: Powerlink, Standard, DataOnly, Monitor")
+        console.print("Connect Mode         Connect to the panel (when not connected) Mode: Powerlink, Standard, DataOnly")
         console.print("Close                Close the connection to the panel (when connected)")
         console.print("Output Mode          Output mode: Debug, Info, Warning, Error")
         console.print("Print                Display the sensors and switches")

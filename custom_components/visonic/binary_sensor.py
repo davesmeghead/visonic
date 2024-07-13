@@ -22,6 +22,24 @@ from .const import DOMAIN, SensorEntityFeature, PANEL_ATTRIBUTE_NAME, DEVICE_ATT
 
 _LOGGER = logging.getLogger(__name__)
 
+# Dictionary mapping between the Pyvisonic sensor type and the HA Sensor Class
+_stype_to_ha_sensor_class = {
+    AlSensorType.IGNORED     : None,
+    AlSensorType.UNKNOWN     : None,
+    AlSensorType.MOTION      : BinarySensorDeviceClass.MOTION,
+    AlSensorType.CAMERA      : BinarySensorDeviceClass.MOTION,
+    AlSensorType.MAGNET      : BinarySensorDeviceClass.WINDOW,
+    AlSensorType.WIRED       : BinarySensorDeviceClass.DOOR,
+    AlSensorType.SMOKE       : BinarySensorDeviceClass.SMOKE,
+    AlSensorType.FLOOD       : BinarySensorDeviceClass.MOISTURE,
+    AlSensorType.GAS         : BinarySensorDeviceClass.GAS,
+    AlSensorType.VIBRATION   : BinarySensorDeviceClass.VIBRATION, 
+    AlSensorType.SHOCK       : BinarySensorDeviceClass.VIBRATION,
+    AlSensorType.TEMPERATURE : BinarySensorDeviceClass.HEAT,
+    AlSensorType.SOUND       : BinarySensorDeviceClass.SOUND
+}
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: VisonicConfigEntry,
@@ -29,21 +47,24 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Visonic Alarm Binary Sensors."""
     #_LOGGER.debug(f"binary sensor async_setup_entry start")
-    client: VisonicClient = entry.runtime_data.client
+    #client: VisonicClient = entry.runtime_data.client
+    #sensor_list = entry.runtime_data.sensors
 
     @callback
-    def async_add_switch(device: AlSensorDevice) -> None:
+    def async_add_binary_sensor(device: AlSensorDevice) -> None:
         """Add Visonic Binary Sensor."""
+        vbs = VisonicBinarySensor(hass, entry.runtime_data.client, device, entry)
         entities: list[BinarySensorEntity] = []
-        entities.append(VisonicBinarySensor(hass, client, device, entry))
+        entities.append(vbs)
         #_LOGGER.debug(f"binary sensor adding {device.getDeviceID()}")
         async_add_entities(entities)
+        entry.runtime_data.sensors.append(vbs)
 
     entry.async_on_unload(
         async_dispatcher_connect(
             hass,
             f"{DOMAIN}_{entry.entry_id}_add_{BINARY_SENSOR_DOMAIN}",
-            async_add_switch,
+            async_add_binary_sensor,
         )
     )
     #_LOGGER.debug("binary sensor async_setup_entry exit")
@@ -96,7 +117,12 @@ class VisonicBinarySensor(BinarySensorEntity):
                 self.schedule_update_ha_state()
         else:
             _LOGGER.debug("changeHandler: binary sensor on change called but sensor is not defined")
-        
+
+    def getDeviceID(self) -> int:
+        if self._visonic_device is not None:
+            return self._visonic_device.getDeviceID()
+        return 0
+
     @property
     def should_poll(self):
         """Get polling requirement from visonic device."""
@@ -149,25 +175,8 @@ class VisonicBinarySensor(BinarySensorEntity):
         if self._visonic_device is not None:
             stype = self._visonic_device.getSensorType()
             #_LOGGER.debug(f"   In binary sensor VisonicSensor device_class self._is_available = {self._is_available}    self._current_value = {self._current_value}   stype = {stype}")
-            if stype is not None:                
-                if stype == AlSensorType.MOTION or stype == AlSensorType.CAMERA:
-                    return BinarySensorDeviceClass.MOTION
-                if stype == AlSensorType.MAGNET:
-                    return BinarySensorDeviceClass.WINDOW
-                if stype == AlSensorType.WIRED:
-                    return BinarySensorDeviceClass.DOOR
-                if stype == AlSensorType.SMOKE:
-                    return BinarySensorDeviceClass.SMOKE
-                if stype == AlSensorType.FLOOD:
-                    return BinarySensorDeviceClass.MOISTURE
-                if stype == AlSensorType.GAS:
-                    return BinarySensorDeviceClass.GAS
-                if stype == AlSensorType.VIBRATION or stype == AlSensorType.SHOCK:
-                    return BinarySensorDeviceClass.VIBRATION
-                if stype == AlSensorType.TEMPERATURE:
-                    return BinarySensorDeviceClass.HEAT
-                if stype == AlSensorType.SOUND:
-                    return BinarySensorDeviceClass.SOUND
+            if stype is not None and stype in _stype_to_ha_sensor_class:                
+                return _stype_to_ha_sensor_class[stype]
         return None
 
     @property

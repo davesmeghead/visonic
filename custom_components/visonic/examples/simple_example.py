@@ -25,8 +25,8 @@ CONF_PATH = "path"
 
 # config parameters for myconfig, just to make the defaults easier
 CONF_DOWNLOAD_CODE = "download_code"
-CONF_FORCE_AUTOENROLL = "force_autoenroll"
-CONF_AUTO_SYNC_TIME = "sync_time"
+#CONF_FORCE_AUTOENROLL = "force_autoenroll"
+#CONF_AUTO_SYNC_TIME = "sync_time"
 CONF_LANGUAGE = "language"
 #CONF_FORCE_STANDARD = "force_standard"
 CONF_EMULATION_MODE = "emulation_mode"
@@ -41,14 +41,13 @@ available_emulation_modes = [
     "Powerlink Emulation",
     "Force Standard Mode",
     "Minimal Interaction (data only sent to obtain panel state)",
-    "Passive Monitor (no data sent to Alarm Panel)"
 ]
 
 myconfig = { 
     CONF_DOWNLOAD_CODE: "",
     CONF_EMULATION_MODE: available_emulation_modes[0],
-    CONF_FORCE_AUTOENROLL: True,
-    CONF_AUTO_SYNC_TIME : True,
+#    CONF_FORCE_AUTOENROLL: True,
+#    CONF_AUTO_SYNC_TIME : True,
     CONF_LANGUAGE: "EN",
     CONF_MOTION_OFF_DELAY: 10,
     CONF_MAGNET_CLOSED_DELAY: 10,
@@ -110,32 +109,28 @@ def getConfigData() -> PanelConfig:
     v = myconfig.get(CONF_EMULATION_MODE, available_emulation_modes[0])        
     ForceStandardMode = v == available_emulation_modes[1]
     DisableAllCommands = v == available_emulation_modes[2]
-    CompleteReadOnly = v == available_emulation_modes[3]
 
-    if CompleteReadOnly:
-        DisableAllCommands = True
     if DisableAllCommands:
         ForceStandardMode = True
-    # By the time we get here there are 4 combinations of self.CompleteReadOnly, self.DisableAllCommands and self.ForceStandardMode
-    #     All 3 are False --> Try to get to Powerlink 
+    # By the time we get here there are 3 combinations of self.DisableAllCommands and self.ForceStandardMode
+    #     Both are False --> Try to get to Powerlink 
     #     self.ForceStandardMode is True --> Force Standard Mode, the panel can still be armed and disarmed
     #     self.ForceStandardMode and self.DisableAllCommands are True --> The integration interacts with the panel but commands such as arm/disarm/log/bypass are not allowed
-    #     All 3 are True  --> Full readonly, no data sent to the panel
-    # The 2 if statements above ensure these are the only supported combinations.
+    # The if statement above ensure these are the only supported combinations.
 
-    print(f"Emulation Mode {myconfig.get(CONF_EMULATION_MODE)}   so setting    ForceStandard to {ForceStandardMode}     DisableAllCommands to {DisableAllCommands}     CompleteReadOnly to {CompleteReadOnly}")
+    print(f"Emulation Mode {myconfig.get(CONF_EMULATION_MODE)}   so setting    ForceStandard to {ForceStandardMode}     DisableAllCommands to {DisableAllCommands}")
 
     return {
         AlConfiguration.DownloadCode: myconfig.get(CONF_DOWNLOAD_CODE, ""),
         AlConfiguration.ForceStandard: ForceStandardMode,
         AlConfiguration.DisableAllCommands: DisableAllCommands,
-        AlConfiguration.CompleteReadOnly: CompleteReadOnly,
-        AlConfiguration.AutoEnroll: toBool(
-            myconfig.get(CONF_FORCE_AUTOENROLL, True)
-        ),
-        AlConfiguration.AutoSyncTime: toBool(
-            myconfig.get(CONF_AUTO_SYNC_TIME, True)
-        ),
+#        AlConfiguration.CompleteReadOnly: CompleteReadOnly,
+#        AlConfiguration.AutoEnroll: toBool(
+#            myconfig.get(CONF_FORCE_AUTOENROLL, True)
+#        ),
+#        AlConfiguration.AutoSyncTime: toBool(
+#            myconfig.get(CONF_AUTO_SYNC_TIME, True)
+#        ),
         AlConfiguration.PluginLanguage: myconfig.get(CONF_LANGUAGE, "EN"),
         AlConfiguration.MotionOffDelay: myconfig.get(CONF_MOTION_OFF_DELAY, 120),
         AlConfiguration.MagnetClosedDelay: myconfig.get(CONF_MAGNET_CLOSED_DELAY, 5),

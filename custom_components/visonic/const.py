@@ -17,7 +17,9 @@ NOTIFICATION_ID = f"{DOMAIN}_notification"
 NOTIFICATION_TITLE = "Visonic Alarm Panel"
 
 # The HA bus events that this integration can generate
-ALARM_PANEL_CHANGE_EVENT = f"{DOMAIN}_alarm_panel_state_update"
+ALARM_PANEL_CHANGE_EVENT = f"{DOMAIN}_alarm_panel_state"
+ALARM_SENSOR_CHANGE_EVENT = f"{DOMAIN}_alarm_sensor_state"
+ALARM_COMMAND_EVENT = f"{DOMAIN}_alarm_command"
 ALARM_PANEL_LOG_FILE_COMPLETE = f"{DOMAIN}_alarm_panel_event_log_complete"
 ALARM_PANEL_LOG_FILE_ENTRY = f"{DOMAIN}_alarm_panel_event_log_entry"
 
@@ -63,8 +65,8 @@ CONF_PATH = "path"
 CONF_EXCLUDE_SENSOR = "exclude_sensor"
 CONF_EXCLUDE_X10 = "exclude_x10"
 CONF_DOWNLOAD_CODE = "download_code"
-CONF_FORCE_AUTOENROLL = "force_autoenroll"
-CONF_AUTO_SYNC_TIME = "sync_time"
+#CONF_FORCE_AUTOENROLL = "force_autoenroll"
+#CONF_AUTO_SYNC_TIME = "sync_time"
 CONF_LANGUAGE = "language"
 CONF_EMULATION_MODE = "emulation_mode"
 CONF_COMMAND = "command"
@@ -83,6 +85,7 @@ CONF_MOTION_OFF_DELAY = "motion_off_delay"
 CONF_MAGNET_CLOSED_DELAY = "magnet_closed_delay"
 CONF_EMER_OFF_DELAY = "emergency_off_delay"
 CONF_SIREN_SOUNDING = "siren_sounding"
+CONF_SENSOR_EVENTS = "sensor_event_list"
 CONF_RETRY_CONNECTION_COUNT = "retry_connection_count"
 CONF_RETRY_CONNECTION_DELAY = "retry_connection_delay"
 CONF_EEPROM_ATTRIBUTES = "show_eeprom_attributes"
@@ -91,34 +94,20 @@ PIN_REGEX = "^[0-9]{4}$"
 
 class AvailableNotifications(str, Enum):
     ALWAYS = 'always'
-    SIREN = 'sirensounding'
-    TAMPER = 'paneltamper'
-    RESET = 'panelreset'
-    INVALID_PIN = 'invalidpin'
-    PANEL_OPERATION = 'paneloperation'
-    CONNECTION_PROBLEM = 'connectionproblem'
-    BYPASS_PROBLEM = 'bypassproblem'
-    IMAGE_PROBLEM = 'imageproblem'
-    EVENTLOG_PROBLEM = 'eventlogproblem'
-    COMMAND_NOT_SENT = 'commandnotsent'
-
-AvailableNotificationConfig = {
-    AvailableNotifications.SIREN : "Siren Sounding",
-    AvailableNotifications.TAMPER : "Panel Tamper",
-    AvailableNotifications.RESET : "Panel System Reset",
-    AvailableNotifications.INVALID_PIN : "Code Rejected By Panel",
-    AvailableNotifications.PANEL_OPERATION : "Panel Operation",
-    AvailableNotifications.CONNECTION_PROBLEM : "Connection Problems",
-    AvailableNotifications.BYPASS_PROBLEM : "Sensor Bypass Problems",
-    AvailableNotifications.EVENTLOG_PROBLEM : "Event Log Problems",
-    AvailableNotifications.IMAGE_PROBLEM : "Image Retrieval Problems",
-    AvailableNotifications.COMMAND_NOT_SENT : "Command Not Sent To Panel"
-}
+    SIREN = 'siren_sounding'
+    TAMPER = 'panel_tamper'
+    RESET = 'panel_reset'
+    INVALID_PIN = 'invalid_pin'
+    PANEL_OPERATION = 'panel_operation'
+    CONNECTION_PROBLEM = 'connection_problem'
+    BYPASS_PROBLEM = 'bypass_problem'
+    IMAGE_PROBLEM = 'image_problem'
+    EVENTLOG_PROBLEM = 'eventlog_problem'
+    COMMAND_NOT_SENT = 'command_not_sent'
 
 available_emulation_modes = [
     "Powerlink Emulation",
-    "Force Standard Mode",
-    "Minimal Interaction (data only sent to obtain panel state)",
-    "Passive Monitor (no data sent to Alarm Panel)"
+    "Standard",
+    "Minimal Interaction (data only sent to obtain panel state)"
 ]
 

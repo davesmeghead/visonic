@@ -53,9 +53,7 @@
                 "title": "Alarm Panel Powerlink Settings",
                 "data": {
                     "download_code": "Download Code",
-                    "force_autoenroll": "Auto Enroll Supported (Unticked for PowerMax+)",
-                    "show_eeprom_attributes": "Show the EEPROM Data in the Alarm Attributes",
-                    "sync_time": "Synchronise Time to the Alarm Panel"
+                    "show_eeprom_attributes": "Show the EEPROM Data in the Alarm Attributes"
                 }
             },
             "parameters10": {
@@ -63,6 +61,7 @@
                 "title": "Alarm Panel Settings",
                 "data": {
                     "siren_sounding": "List of triggers for the siren",
+                    "sensor_event_list": "List of Sensor changes to create an Event",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off_delay": "Motion/Camera off delay time (seconds)",
                     "magnet_closed_delay": "Magnet/Wired closed delay time (seconds)",
@@ -119,6 +118,7 @@
                 "title": "Alarm Panel Settings",
                 "data": {
                     "siren_sounding": "List of triggers for the siren",
+                    "sensor_event_list": "List of Sensor changes to create an Event",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "motion_off_delay": "Motion/Camera off delay time (seconds)",
                     "magnet_closed_delay": "Magnet/Wired closed delay time (seconds)",
@@ -178,7 +178,7 @@
             "fields": {
                 "entity_id": {
                     "name": "Visonic Panel",
-                    "description": "Name of the visonic panel."
+                    "description": "Name (Entity ID) of the visonic panel."
                 },
                 "command": {
                     "name": "Panel Command",
@@ -250,6 +250,34 @@
                 "x10": "X10",
                 "panic": "Panic"                  
             }
-        }
+        },
+        "sensor_event_list": {
+            "options": {
+				"state":     "State",
+				"tamper":    "Tamper",
+				"battery":   "Battery",
+				"bypass":    "Bypass",
+				"problem":   "Problem",
+				"enrolled":  "Enrolled",
+				"fire":      "Fire",
+				"emergency": "Emergency",
+				"panic":     "Panic",
+				"camera":    "Camera"
+            }
+        },
+		"panel_state_notifications": {
+            "options": {
+				"siren_sounding": "Siren Sounding",
+				"panel_tamper": "Panel Tamper",
+				"panel_reset":  "Panel System Reset",
+				"invalid_pin": "Code Rejected By Panel",
+				"panel_operation": "Panel Operation",
+				"connection_problem": "Connection Problems",
+				"bypass_problem": "Sensor Bypass Problems",
+				"image_problem": "Image Retrieval Problems",
+				"eventlog_problem": "Event Log Problems",
+				"command_not_sent": "Command Not Sent To Panel"
+			}
+		}
     }
 }

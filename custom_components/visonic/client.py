@@ -45,14 +45,18 @@ from homeassistant.util.thread import ThreadWithException
 
 from .pyconst import AlEnum, AlTransport, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlSensorDevice, AlLogPanelEvent, AlSensorType, AlSwitchDevice
 from .pyvisonic import VisonicProtocol
+from .create_schema import AvailableSensorEvents
+
 from .const import (
     available_emulation_modes,
     ALARM_PANEL_CHANGE_EVENT,
+    ALARM_SENSOR_CHANGE_EVENT,
+    ALARM_COMMAND_EVENT,
     ALARM_PANEL_LOG_FILE_COMPLETE,
     ALARM_PANEL_LOG_FILE_ENTRY,
-    ALARM_PANEL_COMMAND,
-    ALARM_PANEL_EVENTLOG,
-    ALARM_PANEL_RECONNECT,
+#    ALARM_PANEL_COMMAND,
+#    ALARM_PANEL_EVENTLOG,
+#    ALARM_PANEL_RECONNECT,
     ATTR_BYPASS,
     VISONIC_UNIQUE_NAME,
     CONF_EXCLUDE_SENSOR,
@@ -66,18 +70,19 @@ from .const import (
     CONF_ARM_NIGHT_ENABLED,
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
-    CONF_AUTO_SYNC_TIME,
+#    CONF_AUTO_SYNC_TIME,
     CONF_EEPROM_ATTRIBUTES,
     CONF_DEVICE_BAUD,
     CONF_DEVICE_TYPE,
     CONF_DOWNLOAD_CODE,
-    CONF_FORCE_AUTOENROLL,
+#    CONF_FORCE_AUTOENROLL,
     CONF_EMULATION_MODE,
     CONF_LANGUAGE,
     CONF_MOTION_OFF_DELAY,
     CONF_MAGNET_CLOSED_DELAY,
     CONF_EMER_OFF_DELAY,
     CONF_SIREN_SOUNDING,
+    CONF_SENSOR_EVENTS,
     CONF_LOG_CSV_FN,
     CONF_LOG_CSV_TITLE,
     CONF_LOG_DONE,
@@ -97,6 +102,17 @@ from .const import (
     AvailableNotifications,
     PIN_REGEX,
 )
+
+messageDict = {
+    AlCommandStatus.SUCCESS                     : "Success",
+    AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS   : "Not supported when downloading EPROM",
+    AlCommandStatus.FAIL_INVALID_CODE           : "Not allowed without valid pin",
+    AlCommandStatus.FAIL_USER_CONFIG_PREVENTED  : "Disabled by user settings",
+    AlCommandStatus.FAIL_INVALID_STATE          : "Invalid state requested",
+    AlCommandStatus.FAIL_X10_PROBLEM            : "General X10 Problem",
+    AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED : "Disabled by panel settings",
+}
+
 
 #BASE_PRELOAD_PLATFORMS = [
 #    "config",
@@ -120,7 +136,7 @@ class PanelCondition(IntEnum):
     CHECK_EVENT_LOG_COMMAND = 13
     CHECK_X10_COMMAND = 14
 
-CLIENT_VERSION = "0.9.4.0"
+CLIENT_VERSION = "0.9.5.0"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -298,7 +314,10 @@ class VisonicClient:
     def createNotification(self, condition : AvailableNotifications, message: str):
         """Create a message in the log file and a notification on the HA Frontend."""
         notification_config = self.config.get(CONF_ALARM_NOTIFICATIONS, [] )
-        if condition == AvailableNotifications.ALWAYS or condition in notification_config:
+        
+        self.logstate_debug(f"notification_config {notification_config}")
+        
+        if condition == AvailableNotifications.ALWAYS or condition.value in notification_config:
             # Create an info entry in the log file and an HA notification
             self.logstate_info(f"HA Notification: {message}")
             persistent_notification.create(self.hass, message, title=NOTIFICATION_TITLE, notification_id=NOTIFICATION_ID)
@@ -697,22 +716,22 @@ class VisonicClient:
                 # The connection to the panel allows interaction with the sensor, including asking to get the image from a camera
                 await self._setupVisonicEntity(Platform.IMAGE, IMAGE_DOMAIN, sensor)
 
-    def fireHAEvent(self, ev: dict):
+    def fireHAEvent(self, name: str, ev: dict):
         ev[PANEL_ATTRIBUTE_NAME] = self.getPanelID()
-        self.logstate_debug(f"Client: Sending HA Event {ev}")
+        self.logstate_debug(f"Client: Sending HA Event {name}  {ev}")
         #self.logstate_debug("Firing HA event, panel={0}  event={1}".format(self.getPanelID(),ev)
-        self.hass.bus.fire(ALARM_PANEL_CHANGE_EVENT, ev)
+        self.hass.bus.fire(name, ev)
 
     def onChange(self, fn : Callable):
         self.onChangeHandler.append(fn)
 
-    def commonBit(self, event_id: AlEnum, datadictionary: dict):
+    def commonBit(self, name: str, event_id: AlCondition, datadictionary: dict):
         # Check to ensure variables are set correctly
         if self.hass is None:
             self.logstate_warning("Attempt to generate HA event when hass is undefined")
             return
         if event_id is None:
-            self.logstate_warning("Attempt to generate HA event when sensor is undefined")
+            self.logstate_warning("Attempt to generate HA event when Event Type is undefined")
             return
         if not self._createdAlarmPanel:
             self._setupAlarmPanel()
@@ -732,23 +751,56 @@ class VisonicClient:
         #  16 is download success
         tmp = int(event_id)
 
-        if 2 <= tmp <= 14: # do not send 0 or 15 or 16 as an HA event   Also do not send zone updates (1)
+        if 1 <= tmp <= 14: # do not send 0 or 15 or 16 as an HA event
             a = {}
-            a["condition"] = tmp
-            a["action"] = ActionList[tmp]
-            b = { }
-            if datadictionary is not None:
-                b = datadictionary.copy()
-            dd = {**a, **b}
-            self.fireHAEvent( dd )
 
-    def onSensorChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
-        #_LOGGER.debug("onSensorChange {0} {1}".format(s.name, sensor) )
-        datadict = {}
-        datadict["zone"] = sensor.getDeviceID()
-        datadict["event"] = str(s)
-        if s != AlSensorCondition.RESET:
-            self.commonBit(AlCondition.ZONE_UPDATE, datadict)
+            if name == ALARM_PANEL_CHANGE_EVENT:
+                a["action"] = ActionList[tmp]
+
+            if datadictionary is not None:
+                if 'event_count' in datadictionary:
+                    b = {k:v for k,v in datadictionary.items() if k in ("mode", "state", "ready", "tamper", "memory", "siren", "bypass", "reset", "alarm", "trouble" )}
+                    if datadictionary["event_count"] > 0:
+                        b["event_valid"] = True
+                        for i in range(0, datadictionary["event_count"]):
+                            c = {k:v[i] for k,v in datadictionary.items() if k in ("event_time", "event_type", "event_event", "event_mode", "event_name" )}
+                            dd = {**a, **b, **c}
+                            self.fireHAEvent( name, dd )
+                    else:
+                        b["event_valid"] = False
+                        dd = {**a, **b}
+                        self.fireHAEvent( name, dd )
+
+                else:
+                    b = datadictionary.copy()
+                    dd = {**a, **b}
+                    self.fireHAEvent( name, dd )
+            else:
+                self.fireHAEvent( name, a )
+
+    def onSensorChange(self, sensor : AlSensorDevice, c : AlSensorCondition):
+        _LOGGER.debug(f"onSensorChange {c.name} {sensor}")
+
+        #_LOGGER.debug(f"onSensorChange event list = {self.config.get(CONF_SENSOR_EVENTS)=}")
+        
+        list_of_sensor_events = [(AvailableSensorEvents[k]) for k in AvailableSensorEvents if k in self.config.get(CONF_SENSOR_EVENTS)]
+
+        #_LOGGER.debug(f"onSensorChange event list = {list_of_sensor_events=}")
+
+        if c in list_of_sensor_events:
+            datadict = {}
+            datadict["zone"] = sensor.getDeviceID()
+            datadict["event"] = str(c).title()
+            datadict["entity_id"] = ""
+            
+            for s in self.entry.runtime_data.sensors:
+                if s.getDeviceID() == sensor.getDeviceID():
+                    #_LOGGER.debug(f"onSensorChange Got it {type(s)}  {s.unique_id}  {s.entity_id}")
+                    datadict["entity_id"] = s.entity_id
+                    break
+            
+            self.commonBit(ALARM_SENSOR_CHANGE_EVENT, AlCondition.ZONE_UPDATE, datadict)
+
         # Check to make sure we have an image entity created for this sensor
         if not self.DisableAllCommands and sensor.getDeviceID() not in self.image_list and sensor.getSensorType() == AlSensorType.CAMERA:
             asyncio.ensure_future(self.create_image_entity(sensor), loop=self.hass.loop)
@@ -758,14 +810,12 @@ class VisonicClient:
         pass
 
     # This can be called from this module but it is also the callback handler for the connection
-    def onPanelChangeHandler(self, event_id: AlCondition, data : dict = None):
+    def onPanelChangeHandler(self, event_id: AlCondition, data : dict, event_name = ALARM_PANEL_CHANGE_EVENT):
         """Generate HA Bus Event."""
         if data is not None:
-            self.commonBit(event_id, data)
-        elif self.visonicProtocol is not None:
-            self.commonBit(event_id, self.visonicProtocol.setLastEventData())
+            self.commonBit(event_name, event_id, data)
         else:
-            self.commonBit(event_id, {})
+            self.commonBit(event_name, event_id, {})
 
         if event_id == AlCondition.DOWNLOAD_SUCCESS:        # download success        
             # Update the friendly name of the control flow
@@ -820,32 +870,27 @@ class VisonicClient:
         v = self.config.get(CONF_EMULATION_MODE, available_emulation_modes[0])        
         self.ForceStandardMode = v == available_emulation_modes[1]
         self.DisableAllCommands = v == available_emulation_modes[2]
-        self.CompleteReadOnly = v == available_emulation_modes[3]
 
-        if self.CompleteReadOnly:
-            self.DisableAllCommands = True
         if self.DisableAllCommands:
             self.ForceStandardMode = True
-        # By the time we get here there are 4 combinations of self.CompleteReadOnly, self.DisableAllCommands and self.ForceStandardMode
-        #     All 3 are False --> Try to get to Powerlink 
+        # By the time we get here there are 3 combinations of self.DisableAllCommands and self.ForceStandardMode
+        #     Both are False --> Try to get to Powerlink 
         #     self.ForceStandardMode is True --> Force Standard Mode, the panel can still be armed and disarmed
         #     self.ForceStandardMode and self.DisableAllCommands are True --> The integration interacts with the panel but commands such as arm/disarm/log/bypass are not allowed
-        #     All 3 are True  --> Full readonly, no data sent to the panel
-        # The 2 if statements above ensure these are the only supported combinations.
+        # The if statement above ensure these are the only supported combinations.
 
-        self.logstate_debug(f"Emulation Mode {self.config.get(CONF_EMULATION_MODE)}   so setting    ForceStandard to {self.ForceStandardMode}     DisableAllCommands to {self.DisableAllCommands}     CompleteReadOnly to {self.CompleteReadOnly}")
+        self.logstate_debug(f"Emulation Mode {self.config.get(CONF_EMULATION_MODE)}   so setting    ForceStandard to {self.ForceStandardMode}     DisableAllCommands to {self.DisableAllCommands}")
 
         return {
             AlConfiguration.DownloadCode: self.config.get(CONF_DOWNLOAD_CODE, ""),
             AlConfiguration.ForceStandard: self.ForceStandardMode,
             AlConfiguration.DisableAllCommands: self.DisableAllCommands,
-            AlConfiguration.CompleteReadOnly: self.CompleteReadOnly,
-            AlConfiguration.AutoEnroll: self.toBool(
-                self.config.get(CONF_FORCE_AUTOENROLL, True)
-            ),
-            AlConfiguration.AutoSyncTime: self.toBool(
-                self.config.get(CONF_AUTO_SYNC_TIME, True)
-            ),
+            # AlConfiguration.AutoEnroll: self.toBool(
+            #     self.config.get(CONF_FORCE_AUTOENROLL, True)
+            # ),
+            #AlConfiguration.AutoSyncTime: self.toBool(
+            #    self.config.get(CONF_AUTO_SYNC_TIME, True)
+            #),
             AlConfiguration.PluginLanguage: self.config.get(CONF_LANGUAGE, "EN"),
             AlConfiguration.MotionOffDelay: self.config.get(CONF_MOTION_OFF_DELAY, 120),
             AlConfiguration.MagnetClosedDelay: self.config.get(CONF_MAGNET_CLOSED_DELAY, 5),
@@ -885,8 +930,9 @@ class VisonicClient:
 
     def stop_subscription(self, event):
         """Shutdown Visonic subscriptions and subscription thread on exit."""
-        self.logstate_debug("Shutting down subscriptions")
-        asyncio.ensure_future(self.service_panel_stop(), loop=self.hass.loop)
+        #self.logstate_debug("Home Assistant is shutting down")
+        if self.SystemStarted:
+            asyncio.ensure_future(self.service_panel_stop(), loop=self.hass.loop)
 
     def onDisconnect(self, reason : str, excep = None):
         """Disconnection Callback for connection disruption to the panel."""
@@ -897,7 +943,7 @@ class VisonicClient:
 
         # General update trigger
         #    0 is a disconnect, state="disconnected" means initial disconnection and (hopefully) reconnect from an exception (probably comms related)
-        self.fireHAEvent( {"condition": 0, "action": ActionList[0], "state": "disconnected", "reason": reason} )
+        self.fireHAEvent( ALARM_PANEL_CHANGE_EVENT, {"action": ActionList[0], "state": "disconnected", "reason": reason} )
 
         self.panel_exception_counter = self.panel_exception_counter + 1
         asyncio.ensure_future(self.disconnect_callback_async(), loop=self.hass.loop)
@@ -953,17 +999,7 @@ class VisonicClient:
                 return False, None
         return True, code
 
-    messageDict = {
-        AlCommandStatus.SUCCESS                     : "Success",
-        AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS   : "Not supported when downloading EPROM",
-        AlCommandStatus.FAIL_INVALID_CODE           : "Not allowed without valid pin",
-        AlCommandStatus.FAIL_USER_CONFIG_PREVENTED  : "Disabled by user settings",
-        AlCommandStatus.FAIL_INVALID_STATE          : "Invalid state requested",
-        AlCommandStatus.FAIL_X10_PROBLEM            : "General X10 Problem",
-        AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED : "Disabled by panel settings",
-    }
-
-    def populateSensorDictionary(self) -> dict:
+    def _populateSensorDictionary(self) -> dict:
         datadict = {}
         datadict["ready"] = self.isPanelReady()
         datadict["open"] = []
@@ -985,21 +1021,22 @@ class VisonicClient:
                     datadict["zonetamper"].append(entname)
         return datadict
 
-    # This should only be called from within this module
-    def generateBusEventReason(self, event_id: PanelCondition, reason: AlCommandStatus, command: str, message: str):
+    # This should only be called from within this module.
+    #     This is Data Set C
+    def _generateBusEventReason(self, event_id: PanelCondition, reason: AlCommandStatus, command: str, message: str):
         """Generate an HA Bus Event with a Reason Code."""
-        datadict = self.populateSensorDictionary()
+        datadict = self._populateSensorDictionary()
         #if self.visonicProtocol is not None:
-        datadict["command"] = command           
+        datadict["command"] = command.title()           
         datadict["reason"] = int(reason)
-        datadict["message"] = message + " " + self.messageDict[reason]
+        datadict["message"] = message + " " + messageDict[reason]
 
-        self.onPanelChangeHandler(event_id, datadict)
+        self.onPanelChangeHandler(event_id = event_id, event_name = ALARM_COMMAND_EVENT, data = datadict)
 
-        #self.logstate_debug("[" + message + "] " + self.messageDict[reason])
+        #self.logstate_debug("[" + message + "] " + messageDict[reason])
 
         if reason != AlCommandStatus.SUCCESS:
-            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, message + " " + self.messageDict[reason])
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, message + " " + messageDict[reason])
 
     def setX10(self, ident: int, state: AlX10Command):
         """Send an X10 command to the panel."""
@@ -1007,7 +1044,7 @@ class VisonicClient:
             # ident in range 0 to 15, state can be one of "off", "on", "dim", "brighten"
             if self.visonicProtocol is not None:
                 retval = self.visonicProtocol.setX10(ident, state)
-                self.generateBusEventReason(PanelCondition.CHECK_X10_COMMAND, retval, "X10", "Send X10 Command")
+                self._generateBusEventReason(PanelCondition.CHECK_X10_COMMAND, retval, "X10", "Send X10 Command")
         else:
             self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
@@ -1107,7 +1144,7 @@ class VisonicClient:
         isValidPL, code = self.pmGetPinSimple(code = pcode)
         if isValidPL:
             return True, code
-        self.generateBusEventReason(cond, AlCommandStatus.FAIL_INVALID_CODE, message, f"{message} Request")
+        self._generateBusEventReason(cond, AlCommandStatus.FAIL_INVALID_CODE, message, f"{message} Request")
         return False, ""
 
     def decode_code_from_dict_or_str(self, data : str | dict | None) -> str:
@@ -1165,7 +1202,7 @@ class VisonicClient:
             if isValidPL:
                 self.logstate_debug("Sending event log request to panel")
                 retval = self.visonicProtocol.getEventLog(code)
-                self.generateBusEventReason(PanelCondition.CHECK_EVENT_LOG_COMMAND, retval, "EventLog", "Event Log Request")
+                self._generateBusEventReason(PanelCondition.CHECK_EVENT_LOG_COMMAND, retval, "EventLog", "Event Log Request")
 
     def getJPG(self, ident: int, count : int):
         """Send a request to get the jpg images from a camera """
@@ -1206,7 +1243,7 @@ class VisonicClient:
             else:
                 retval = AlCommandStatus.FAIL_PANEL_NO_CONNECTION
 
-            self.generateBusEventReason(PanelCondition.CHECK_BYPASS_COMMAND, retval, "Bypass", "Sensor Arm State")
+            self._generateBusEventReason(PanelCondition.CHECK_BYPASS_COMMAND, retval, "Bypass", "Sensor Arm State")
             return retval
         else:
             self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
@@ -1249,19 +1286,19 @@ class VisonicClient:
                             if (command == AlPanelCommand.DISARM and self.isRemoteDisarm()) or (
                                 command != AlPanelCommand.DISARM and self.isRemoteArm()):
                                 retval = vp.requestPanelCommand(command, code)
-                                self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request Arm/Disarm")
+                                self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request Arm/Disarm")
                             else:
-                                self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_USER_CONFIG_PREVENTED , command.name, "Request Arm/Disarm")
+                                self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_USER_CONFIG_PREVENTED , command.name, "Request Arm/Disarm")
                         else:
-                            self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, command.name, "Request Arm/Disarm")
+                            self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, command.name, "Request Arm/Disarm")
 
                     elif vp.isPowerMaster() and (command == AlPanelCommand.MUTE or command == AlPanelCommand.TRIGGER or command == AlPanelCommand.FIRE or command == AlPanelCommand.EMERGENCY or command == AlPanelCommand.PANIC):
                         if isValidPL:
                             self.logstate_debug("Send command to Visonic Alarm Panel: %s", command)
                             retval = vp.requestPanelCommand(command, code)
-                            self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request PowerMaster Panel Command")
+                            self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request PowerMaster Panel Command")
                         else:
-                            self.generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, command.name, "Request PowerMaster Panel Command")
+                            self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, command.name, "Request PowerMaster Panel Command")
                     else:
                         self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, not sent to panel")
                 else:
@@ -1489,12 +1526,6 @@ class VisonicClient:
                 self.logstate_debug("........... Current Task Not Done")
         else:
             self.logstate_debug("........... Current Task not set")
-
-        #data = self.entry.runtime_data
-        #data.binary = list()
-        #data.image = list()    
-        #data.select = list()
-        #data.switch = list()
         
         self._initialise()
 
@@ -1516,9 +1547,9 @@ class VisonicClient:
             self.logstate_debug("........... connection attempt {0} of {1}".format(attemptCounter + 1, self.totalAttempts))
             if await self.connect_to_alarm():
                 self.logstate_debug("........... connection made")
-                self.fireHAEvent( {"condition": 0, "action": ActionList[0], "state": "connected", "attempt": attemptCounter + 1} )
+                self.fireHAEvent( ALARM_PANEL_CHANGE_EVENT, {"action": ActionList[0], "state": "connected", "attempt": attemptCounter + 1} )
                 return
-            self.fireHAEvent( {"condition": 0, "action": ActionList[0], "state": "failedattempt", "attempt": attemptCounter + 1} )
+            self.fireHAEvent( ALARM_PANEL_CHANGE_EVENT, {"action": ActionList[0], "state": "failedattempt", "attempt": attemptCounter + 1} )
             attemptCounter = attemptCounter + 1
             force = False
             if attemptCounter < self.totalAttempts:

@@ -57,7 +57,7 @@ async def async_setup_entry(
     #_LOGGER.debug("sensor async_setup_entry exit")
 
 class VisonicSensor(Entity):
-    """Representation of a Visonic alarm control panel as a simple sensor for monitor."""
+    """Representation of a Visonic alarm control panel as a simple sensor for minimal."""
 
     def __init__(self, hass: HomeAssistant, client: VisonicClient, partition_id: int):
         """Initialize a Visonic security alarm."""

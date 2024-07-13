@@ -143,15 +143,15 @@ a = AlAlarmType()
 # the set of configuration parameters in to this client class
 class AlConfiguration(AlEnum):
     DownloadCode = AlIntEnum(0)           # 4 digit string or ""
-    AutoEnroll = AlIntEnum(1)             # Boolean
-    AutoSyncTime = AlIntEnum(2)           # Boolean
+#    AutoEnroll = AlIntEnum(1)             # Boolean
+#    AutoSyncTime = AlIntEnum(2)           # Boolean
     PluginLanguage = AlIntEnum(3)         # String "EN", "FR", "NL"
     MotionOffDelay = AlIntEnum(4)         # Integer (seconds)
     SirenTriggerList = AlIntEnum(5)       # A list of strings
     ForceStandard = AlIntEnum(6)          # Boolean
     EEPROMAttributes = AlIntEnum(10)      # Boolean
     DisableAllCommands = AlIntEnum(11)    # Boolean
-    CompleteReadOnly = AlIntEnum(12)      # Boolean
+#    CompleteReadOnly = AlIntEnum(12)      # Boolean
     MagnetClosedDelay = AlIntEnum(13)         # Integer (seconds)
     EmergencyOffDelay = AlIntEnum(14)         # Integer (seconds)
 a = AlConfiguration()
@@ -166,7 +166,7 @@ class AlPanelMode(AlEnum):
     POWERLINK = AlIntEnum(5)
     DOWNLOAD = AlIntEnum(6)
     STOPPED = AlIntEnum(7)
-    MONITOR_ONLY = AlIntEnum(8)
+    MINIMAL_ONLY = AlIntEnum(8)
     COMPLETE_READONLY = AlIntEnum(9)
 a = AlPanelMode()
 
@@ -435,10 +435,10 @@ class AlSwitchDevice(ABC):
 
 class PanelConfig(TypedDict):
     AlConfiguration.ForceStandard:        bool
-    AlConfiguration.AutoEnroll:           bool
-    AlConfiguration.AutoSyncTime:         bool
+#    AlConfiguration.AutoEnroll:           bool
+#    AlConfiguration.AutoSyncTime:         bool
     AlConfiguration.DisableAllCommands:   bool
-    AlConfiguration.CompleteReadOnly:     bool
+#    AlConfiguration.CompleteReadOnly:     bool
     AlConfiguration.DownloadCode:         str
     AlConfiguration.PluginLanguage:       str
     AlConfiguration.MotionOffDelay:       int
@@ -446,7 +446,6 @@ class PanelConfig(TypedDict):
     AlConfiguration.EmergencyOffDelay:    int
     AlConfiguration.SirenTriggerList:     list[str]
     AlConfiguration.EEPROMAttributes:     bool
-
 
 
 class AlTransport(ABC):

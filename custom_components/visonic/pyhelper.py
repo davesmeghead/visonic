@@ -27,6 +27,9 @@ if MicroPython is not None:
     def _getUTCTime() -> datetime:
         return datetime.now() # UTC
 
+    mylog = logging.getLogger(__name__)
+    mylog.setLevel(logging.DEBUG)
+
 else:
     import logging
     import datetime
@@ -38,8 +41,8 @@ else:
     def _getUTCTime() -> datetime:
         return datetime.utcnow()
 
-#if DontUseLogger is None:
-log = logging.getLogger(__name__)
+    #if DontUseLogger is None:
+    mylog = logging.getLogger(__name__)
 
 import sys
 import time
@@ -90,6 +93,58 @@ pmPanelTroubleType_t = {
    0x3B : AlTroubleType.BATTERY,       0x3C : AlTroubleType.BATTERY,   0x40 : AlTroubleType.BATTERY,       0x43 : AlTroubleType.BATTERY
 }
 
+class vloggerclass:
+    def __init__(self, loggy, panel_id : int = -1, detail : bool = False):
+        self.detail = detail
+        self.loggy = loggy
+        if panel_id is not None and panel_id >= 0:
+            self.panel_id_str = f"P{panel_id} "
+        else:
+            self.panel_id_str = ""
+    
+    def _createPrefix(self) -> str:
+        previous_frame = currentframe().f_back.f_back
+        (
+            filepath,
+            line_number,
+            function,
+            lines,
+            index,
+        ) = inspect.getframeinfo(previous_frame)
+        filename = filepath[filepath.rfind('/')+1:]
+        return f"{line_number:<5} " + (f"{function:<30} " if self.detail else "")
+    
+    def debug(self, msg, *args, **kwargs):
+        try:
+            s = self.panel_id_str + self._createPrefix()
+            self.loggy.debug(s + (msg % args % kwargs))
+        except Exception as ex:
+            self.loggy.error(f"[vloggerclass] Exception  {ex}")
+            
+    def info(self, msg, *args, **kwargs):
+        try:
+            s = self.panel_id_str + self._createPrefix()
+            self.loggy.info(s + (msg % args % kwargs))
+        except Exception as ex:
+            self.loggy.error(f"[vloggerclass] Exception  {ex}")
+
+    def warning(self, msg, *args, **kwargs):
+        try:
+            s = self.panel_id_str + self._createPrefix()
+            self.loggy.warning(s + (msg % args % kwargs))
+        except Exception as ex:
+            self.loggy.error(f"[vloggerclass] Exception  {ex}")
+
+    def error(self, msg, *args, **kwargs):
+        try:
+            s = self.panel_id_str + self._createPrefix()
+            self.loggy.error(s + (msg % args % kwargs))
+        except Exception as ex:
+            self.loggy.error(f"[vloggerclass] Exception  {ex}")
+
+log = mylog
+#log = vloggerclass(mylog, 0, False)
+
 def toBool(val) -> bool:
     if type(val) == bool:
         return val
@@ -106,54 +161,6 @@ def capitalize(s):
 
 def titlecase(s):
     return re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda word: capitalize(word.group(0)), s)
-
-class vloggerclass:
-    def __init__(self, panel_id : int, detail : bool = False):
-        self.detail = detail
-        if panel_id is not None:
-            self.panel_id_str = "P" + str(panel_id) + "  "
-        else:
-            self.panel_id_str = "PU" + "  "
-    
-    def _createPrefix(self) -> str:
-        previous_frame = currentframe().f_back.f_back
-        (
-            filepath,
-            line_number,
-            function,
-            lines,
-            index,
-        ) = inspect.getframeinfo(previous_frame)
-        filename = filepath[filepath.rfind('/')+1:]
-        return f"{filename:<13} {line_number:>5} {function:<25}"
-    
-    def debug(self, msg, *args, **kwargs):
-        try:
-            s = self._createPrefix() + " " + self.panel_id_str if self.detail else ""
-            log.debug(s + (msg % args % kwargs))
-        except Exception as ex:
-            log.error(f"[vloggerclass] Exception  {ex}")
-            
-    def info(self, msg, *args, **kwargs):
-        try:
-            s = self._createPrefix() + " " + self.panel_id_str if self.detail else ""
-            log.info(s + (msg % args % kwargs))
-        except Exception as ex:
-            log.error(f"[vloggerclass] Exception  {ex}")
-
-    def warning(self, msg, *args, **kwargs):
-        try:
-            s = self._createPrefix() + " " + self.panel_id_str if self.detail else ""
-            log.warning(s + (msg % args % kwargs))
-        except Exception as ex:
-            log.error(f"[vloggerclass] Exception  {ex}")
-
-    def error(self, msg, *args, **kwargs):
-        try:
-            s = self._createPrefix() + " " + self.panel_id_str if self.detail else ""
-            log.error(s + (msg % args % kwargs))
-        except Exception as ex:
-            log.error(f"[vloggerclass] Exception  {ex}")
 
 
 class AlSensorDeviceHelper(AlSensorDevice):
@@ -415,6 +422,7 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
 
     def onChange(self, callback : Callable = None):
         if callback is None:
+            # If any call is None then completely clear the list
             self._callback = []
         else:
             self._callback.append(callback)
@@ -899,7 +907,10 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
     def sendPanelUpdate(self, ev : AlCondition):
         if self.onPanelChangeHandler is not None:
-            self.onPanelChangeHandler(ev)
+            if ev == AlCondition.PANEL_UPDATE or ev == AlCondition.PANEL_UPDATE_ALARM_ACTIVE or ev == AlCondition.PANEL_RESET:
+                self.onPanelChangeHandler(ev, self.setLastEventData())
+            else:
+                self.onPanelChangeHandler(ev, {})
 
     def _searchDict(self, dict, v_search):
         for k, v in dict.items():

@@ -63,8 +63,8 @@ if MicroPython is not None:
         b = binascii.unhexlify(s.replace(' ', ''))
         return bytearray(b)
 
-    log = logging.getLogger(__name__)
-    log.setLevel(logging.DEBUG)
+    mylog = logging.getLogger(__name__)
+    mylog.setLevel(logging.DEBUG)
 
 else:
     import logging
@@ -76,7 +76,7 @@ else:
     def convertByteArray(s) -> bytearray:
         return bytearray.fromhex(s)
 
-    log = logging.getLogger(__name__)
+    mylog = logging.getLogger(__name__)
 
 import asyncio
 import sys
@@ -168,6 +168,10 @@ PACKET_MAX_SIZE = 0xF0
 ACK_MESSAGE = 0x02
 REDIRECT_POWERLINK_DATA = 0xC0
 
+log = mylog
+#from .pyhelper import vloggerclass
+#log = vloggerclass(mylog, 0, False)
+
 # Turn off auto code formatting when using black
 # fmt: off
 #logger_level = None
@@ -201,24 +205,25 @@ pmPanelType_t = {
 #     Don't know what 9, 11, 12 or 14 are so just copy other settings. I know that there are Commercial/Industry Panel versions so it might be them
 #     This data defines each panel type's maximum capability
 pmPanelConfig_t = {    #      0       1       2       3       4       5       6       7       8       9      10      11      12      13      14      15      16      See pmPanelType_t above
-   "CFG_SUPPORTED"   : (  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True ), # Supported Panels i.e. not a PowerMax
-   "CFG_KEEPALIVE"   : (  10000,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     15,     25,     25,     15 ), # Keep Alive message interval if no other messages sent
-   "CFG_DLCODE_1"    : ( "5650", "5650", "5650", "5650", "5650", "5650", "5650", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA" ), # Default download codes (for reset panels or panels that have not been changed)
-   "CFG_DLCODE_2"    : ( "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB" ), # Alternative (Master) known default download codes
-   "CFG_PARTITIONS"  : (      1,      1,      1,      1,      3,      3,      1,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3 ),
-   "CFG_EVENTS"      : (    250,    250,    250,    250,    250,    250,    250,    250,   1000,   1000,   1000,   1000,   1000,   1000,   1000,   1000,   1000 ),
-   "CFG_KEYFOBS"     : (      8,      8,      8,      8,      8,      8,      8,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
-   "CFG_1WKEYPADS"   : (      8,      8,      8,      8,      8,      8,      8,      0,      0,      0,      0,      0,      0,      0,      0,      0,      0 ),
-   "CFG_2WKEYPADS"   : (      2,      2,      2,      2,      2,      2,      2,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
-   "CFG_SIRENS"      : (      2,      2,      2,      2,      2,      2,      2,      4,      8,      8,      8,      8,      8,      8,      8,      8,      8 ),
-   "CFG_USERCODES"   : (      8,      8,      8,      8,      8,      8,      8,      8,     48,     48,     48,     48,     48,     48,     48,     48,     48 ),
-   "CFG_PROXTAGS"    : (      0,      0,      8,      0,      8,      8,      0,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
-   "CFG_ZONECUSTOM"  : (      0,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5 ),
-   "CFG_WIRELESS"    : (     28,     28,     28,     28,     28,     28,     29,     29,     62,     62,     62,     62,     62,     64,     62,     62,     64 ), # Wireless + Wired total 30 or 64
-   "CFG_WIRED"       : (      2,      2,      2,      2,      2,      2,      1,      1,      2,      2,      2,      2,      2,      0,      2,      2,      0 ),
-   "CFG_AUTO_ENROLL" : (  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False ), # 360 and 360R cannot autoenroll to Powerlink
-   "CFG_POWERMASTER" : (  False,  False,  False,  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True ), # Panels that use and respond to the additional PowerMaster Messages
-   "CFG_INIT_SUPPORT": (  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False )  # Panels that support the INIT command
+   "CFG_SUPPORTED"     : (  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True ), # Supported Panels i.e. not a PowerMax
+   "CFG_KEEPALIVE"     : (  10000,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     15,     25,     25,     15 ), # Keep Alive message interval if no other messages sent
+   "CFG_DLCODE_1"      : ( "5650", "5650", "5650", "5650", "5650", "5650", "5650", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA" ), # Default download codes (for reset panels or panels that have not been changed)
+   "CFG_DLCODE_2"      : ( "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB", "BBBB" ), # Alternative (Master) known default download codes
+   "CFG_PARTITIONS"    : (      1,      1,      1,      1,      3,      3,      1,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3 ),
+   "CFG_EVENTS"        : (    250,    250,    250,    250,    250,    250,    250,    250,   1000,   1000,   1000,   1000,   1000,   1000,   1000,   1000,   1000 ),
+   "CFG_KEYFOBS"       : (      8,      8,      8,      8,      8,      8,      8,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
+   "CFG_1WKEYPADS"     : (      8,      8,      8,      8,      8,      8,      8,      0,      0,      0,      0,      0,      0,      0,      0,      0,      0 ),
+   "CFG_2WKEYPADS"     : (      2,      2,      2,      2,      2,      2,      2,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
+   "CFG_SIRENS"        : (      2,      2,      2,      2,      2,      2,      2,      4,      8,      8,      8,      8,      8,      8,      8,      8,      8 ),
+   "CFG_USERCODES"     : (      8,      8,      8,      8,      8,      8,      8,      8,     48,     48,     48,     48,     48,     48,     48,     48,     48 ),
+   "CFG_PROXTAGS"      : (      0,      0,      8,      0,      8,      8,      0,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
+   "CFG_ZONECUSTOM"    : (      0,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5 ),
+   "CFG_WIRELESS"      : (     28,     28,     28,     28,     28,     28,     29,     29,     62,     62,     62,     62,     62,     64,     62,     62,     64 ), # Wireless + Wired total 30 or 64
+   "CFG_WIRED"         : (      2,      2,      2,      2,      2,      2,      1,      1,      2,      2,      2,      2,      2,      0,      2,      2,      0 ),
+   "CFG_AUTO_ENROLL"   : (  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False ), # 360 and 360R cannot autoenroll to Powerlink
+   "CFG_AUTO_SYNCTIME" : (  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True ), # Assume 360 and 360R can auto sync time
+   "CFG_POWERMASTER"   : (  False,  False,  False,  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True ), # Panels that use and respond to the additional PowerMaster Messages
+   "CFG_INIT_SUPPORT"  : (  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False )  # Panels that support the INIT command
 }
 
 ##############################################################################################################################################################################################################################################
@@ -261,6 +266,7 @@ pmSendMsg = {
    "MSG_INIT"         : VisonicCommand(convertByteArray('AB 0A 00 01 00 00 00 00 00 00 00 43'), None   ,  True, False,  FULL, 8.0, "Init PowerLink Connection" ),
    "MSG_X10NAMES"     : VisonicCommand(convertByteArray('AC 00 00 00 00 00 00 00 00 00 00 43'), [0xAC] , False, False,  FULL, 0.0, "Requesting X10 Names" ),
    "MSG_GET_IMAGE"    : VisonicCommand(convertByteArray('AD 99 99 0A FF FF 00 00 00 00 00 43'), [0xAD] ,  True, False,  FULL, 0.0, "Requesting JPG Image" ),           # The first 99 might be the number of images. Request a jpg image, second 99 is the zone.  
+
    # Command codes (powerlink) do not have the 0x43 on the end and are only 11 values
    "MSG_DOWNLOAD"     : VisonicCommand(convertByteArray('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C] , False,  True,   CMD, 0.0, "Start Download Mode" ),            # This gets either an acknowledge OR an Access Denied response
    "MSG_WRITE"        : VisonicCommand(convertByteArray('3D 00 00 00 00 00 00 00 00 00 00')   , None   , False, False,  NONE, 0.0, "Write Data Set" ),
@@ -285,6 +291,8 @@ pmSendMsg = {
    "MSG_ACK_PLINK"    : VisonicCommand(convertByteArray('02 43')                              , None   , False, False,  NONE, 0.0, "Ack Powerlink" ),
  
    # PowerMaster specific
+   "MSG_PM_SETBAUD"   : VisonicCommand(convertByteArray('B0 00 41 0D AA AA 01 FF 28 0C 05 01 00 BB BB 00 05 43'),                None   ,  True, False,   CMD, 2.5, "Powermaster Set Serial Baud Rate" ),
+
    "MSG_PM_SPECIAL1"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 00 00 19 21 68 00 00 20 7C 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 1" ),
    "MSG_PM_SPECIAL2"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 01 00 25 52 55 25 50 00 7D 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 2" ),
    "MSG_PM_SPECIAL3"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 02 00 19 21 68 00 00 01 7E 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 3" ),
@@ -1161,7 +1169,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     log.debug("Initialising Protocol - Protocol Version {0}".format(PLUGIN_VERSION))
 
     def __init__(self, loop=None, panelConfig : PanelConfig = None, panel_id : int = None, packet_callback: Callable = None) -> None:
-        super().__init__(panel_id)
+        super().__init__(panel_id=panel_id)
         """Initialize class."""
         if loop:
             self.loop = loop
@@ -1191,7 +1199,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
         self.PowerMaster = None              # Set to None to represent unknown until we know True or False
         self.ModelType = None
-        self.PanelType = None
+        self.PanelType = None                # We do not yet know the paneltype
         self.PanelStatus = {}
         
         self.KeepAlivePeriod = KEEP_ALIVE_PERIOD
@@ -1207,9 +1215,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         #   These are the default values
         self.ForceStandardMode = False        # INTERFACE : Get user variable from HA to force standard mode or try for PowerLink
         self.DisableAllCommands = False       # INTERFACE : Get user variable from HA to allow or disable all commands to the panel 
-        self.CompleteReadOnly = False         # INTERFACE : Get user variable from HA to represent complete readonly
         self.AutoEnroll = True                # INTERFACE : Auto Enroll when don't know panel type. Set to true as default as most panels can do this
-        self.AutoSyncTime = True              # INTERFACE : sync time with the panel
+        self.AutoSyncTime = False             # INTERFACE : sync time with the panel, assume no until we get the panel type
         self.DownloadCode = DEFAULT_DL_CODE   # INTERFACE : Set the Download Code
         self.pmLang = 'EN'                    # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
         self.MotionOffDelay = 120             # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
@@ -1398,17 +1405,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 # Get user variable from HA to Disable All Commands
                 self.DisableAllCommands = newdata[AlConfiguration.DisableAllCommands]
                 log.debug("[Settings] Disable All Commands set to {0}".format(self.DisableAllCommands))
-            if AlConfiguration.CompleteReadOnly in newdata:
-                # Get user variable from HA to make the integration fully readonly (no data is sent to the panel)
-                self.CompleteReadOnly = newdata[AlConfiguration.CompleteReadOnly]
-                log.debug("[Settings] Complete ReadOnly set to {0}".format(self.CompleteReadOnly))
-            if AlConfiguration.AutoEnroll in newdata:
-                # Force Auto Enroll when don't know panel type. Only set to true
-                self.AutoEnroll = newdata[AlConfiguration.AutoEnroll]
-                log.debug("[Settings] Force Auto Enroll set to {0}".format(self.AutoEnroll))
-            if AlConfiguration.AutoSyncTime in newdata:
-                self.AutoSyncTime = newdata[AlConfiguration.AutoSyncTime]  # INTERFACE : sync time with the panel
-                log.debug("[Settings] Force Auto Sync Time set to {0}".format(self.AutoSyncTime))
             if AlConfiguration.DownloadCode in newdata:
                 tmpDLCode = newdata[AlConfiguration.DownloadCode]  # INTERFACE : Get the download code
                 if len(tmpDLCode) == 4 and type(tmpDLCode) is str:
@@ -1450,17 +1446,14 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 log.debug("[Settings] Emergency Off Delay set to {0}".format(self.EmergencyOffDelay))
                 
 
-        if self.CompleteReadOnly:
-            self.DisableAllCommands = True
         if self.DisableAllCommands:
             self.ForceStandardMode = True
-        # By the time we get here there are 4 combinations of self.CompleteReadOnly, self.DisableAllCommands and self.ForceStandardMode
-        #     All 3 are False --> Try to get to Powerlink 
+        # By the time we get here there are 3 combinations of self.DisableAllCommands and self.ForceStandardMode
+        #     Both are False --> Try to get to Powerlink 
         #     self.ForceStandardMode is True --> Force Standard Mode, the panel can still be armed and disarmed
-        #     self.ForceStandardMode and self.DisableAllCommands are True --> The integration interacts with the panel but commands such as arm/disarm are not allowed
-        #     All 3 are True  --> Full readonly, no data sent to the panel
-        # The 2 if statements above ensure these are the only supported combinations.
-        log.debug(f"[Settings] ForceStandard to {self.ForceStandardMode}     DisableAllCommands to {self.DisableAllCommands}     CompleteReadOnly to {self.CompleteReadOnly}")
+        #     self.ForceStandardMode and self.DisableAllCommands are True --> The integration interacts with the panel but commands such as arm/disarm/log/bypass are not allowed
+        # The if statement above ensure these are the only supported combinations.
+        log.debug(f"[Settings] ForceStandard to {self.ForceStandardMode}     DisableAllCommands to {self.DisableAllCommands}")
          
     def isPowerMaster(self):
         if self.PowerMaster is not None and self.PowerMaster: # PowerMaster models
@@ -1564,12 +1557,9 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             self._sendCommand("MSG_BUMP")
 
     def _gotoStandardMode(self):
-        if self.CompleteReadOnly:
-            log.debug("[Standard Mode] Entering Complete Readonly Mode")
-            self.PanelMode = AlPanelMode.COMPLETE_READONLY
-        elif self.DisableAllCommands:
-            log.debug("[Standard Mode] Entering Monitor Mode")
-            self.PanelMode = AlPanelMode.MONITOR_ONLY
+        if self.DisableAllCommands:
+            log.debug("[Standard Mode] Entering MINIMAL ONLY Mode")
+            self.PanelMode = AlPanelMode.MINIMAL_ONLY
         elif self.pmDownloadComplete and not self.ForceStandardMode and self.pmGotUserCode:
             log.debug("[Standard Mode] Entering Standard Plus Mode as we got the pin codes from the EEPROM (You can still manually Enroll your Panel)")
             self.PanelMode = AlPanelMode.STANDARD_PLUS
@@ -1664,8 +1654,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         # Only attempt to auto enroll powerlink for newer panels but not the 360 or 360R.
         #       Older panels need the user to manually enroll
         #       360 and 360R can get to Standard Plus but not Powerlink as (I assume that) they already have this hardware and panel will not support 2 powerlink connections
-        if self.PanelType is not None:  # By the time EEPROM download is complete, this should be set but just check to make sure
-            self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
         if force or (self.PanelType is not None and self.AutoEnroll):
             # Only attempt to auto enroll powerlink for newer panels. Older panels need the user to manually enroll, we should be in Standard Plus by now.
             log.debug("[_triggerEnroll] Trigger Powerlink Attempt")
@@ -1720,7 +1708,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         image_delay_counter = 0
         log_sensor_state_counter = 0
         
-        while not self.suspendAllOperations and not self.CompleteReadOnly:
+        while not self.suspendAllOperations:
             try:
                 if self.loopbackTest:
                     # This supports the loopback test
@@ -1812,7 +1800,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         # Third, when download has completed successfully, and not ForceStandard from the user, then attempt to connect in powerlink
                         if self.PanelType is not None:  # By the time EEPROM download is complete, this should be set but just check to make sure
                             # Attempt to enter powerlink mode
-                            self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
                             self._reset_watchdog_timeout()
                             self.powerlink_counter = self.powerlink_counter + 1
                             #log.debug("[Controller] Powerlink Counter {0}".format(self.powerlink_counter))
@@ -1945,7 +1932,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     # TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      
                     # TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      
 
-                    if self.PanelMode == AlPanelMode.STANDARD or self.PanelMode == AlPanelMode.STANDARD_PLUS or self.PanelMode == AlPanelMode.POWERLINK or self.PanelMode == AlPanelMode.MONITOR_ONLY or self.PanelMode == AlPanelMode.COMPLETE_READONLY:
+                    if self.PanelMode == AlPanelMode.STANDARD or self.PanelMode == AlPanelMode.STANDARD_PLUS or self.PanelMode == AlPanelMode.POWERLINK or self.PanelMode == AlPanelMode.MINIMAL_ONLY or self.PanelMode == AlPanelMode.COMPLETE_READONLY:
                         # Dump all sensors to the file every 300 seconds (5 minutes)
                         log_sensor_state_counter = log_sensor_state_counter + 1
                         if log_sensor_state_counter >= 300:
@@ -2006,7 +1993,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             # log.debug("Checking last receive time {0}".format(interval))
                             if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
                                 log.error(
-                                    "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + " seconds)"
+                                    "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + ")"
                                 )
                                 self.StopAndSuspend("disconnected")
 
@@ -2272,11 +2259,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     # Function to send all PDU messages to the panel, using a mutex lock to combine acknowledges and other message sends
     async def _sendPdu(self, instruction: VisonicListEntry):
         """Encode and put packet string onto write buffer."""
-
-        if self.CompleteReadOnly:
-            self._clearList()
-            self.firstCmdSent = True
-            return
 
         if self.suspendAllOperations:
             log.debug("[sendPdu] Suspended all operations, not sending PDU")
@@ -2583,7 +2565,7 @@ class PacketHandling(ProtocolBase):
             if self.PostponeEventTimer == 0:
                 self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
 
-    # For the sensors that have been triggered, turn them off after self.MotionOffDelay seconds or self.MagnetClosedDelay depending on the type
+    # For the sensors that have been triggered, turn them off after self.MotionOffDelay seconds
     async def _resetTriggeredStateTimer(self):
         """ reset triggered state"""
         counter = 0
@@ -2962,6 +2944,26 @@ class PacketHandling(ProtocolBase):
                     else:
                         log.debug( "[Process Settings]   ************************** NOTHING DONE ************************     {0:<18}  {1}  {2}".format(key, DecodePanelSettings[key].name, result))
 
+    def _setDataFromPanelType(self, p) -> bool:
+        if p in pmPanelType_t:
+            self.PanelType = p
+            if 0 <= self.PanelType <= len(pmPanelConfig_t["CFG_SUPPORTED"]) - 1:
+                isSupported = pmPanelConfig_t["CFG_SUPPORTED"][self.PanelType]
+                if isSupported:
+                    self.PanelModel = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
+                    self.PowerMaster = pmPanelConfig_t["CFG_POWERMASTER"][self.PanelType]
+                    self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
+                    self.AutoSyncTime = pmPanelConfig_t["CFG_AUTO_SYNCTIME"][self.PanelType]
+                    self.KeepAlivePeriod = pmPanelConfig_t["CFG_KEEPALIVE"][self.PanelType]
+                    self.pmInitSupportedByPanel = pmPanelConfig_t["CFG_INIT_SUPPORT"][self.PanelType]
+                    return True
+                # Panel 0 i.e original PowerMax
+                log.error(f"Lookup of Visonic Panel type reveals that this seems to be a PowerMax Panel and supports EEPROM Download only with no capability, this Panel cannot be used with this Integration")
+                return False
+        # Then it is an unknown panel type
+        log.error(f"Lookup of Visonic Panel type {p} reveals that this is a new Panel Type that is unknown to this Software. Please contact the Author of this software")
+        return False
+        
     # _processEPROMSettings
     #    Decode the EEPROM and the various settings to determine
     #       The general state of the panel
@@ -2984,55 +2986,17 @@ class PacketHandling(ProtocolBase):
 
             pmPanelTypeNr = self._lookupEpromSingle("panelTypeCode")    
             
-            if pmPanelTypeNr is not None and pmPanelTypeNr == 0xFF:
+            if pmPanelTypeNr is None or (pmPanelTypeNr is not None and pmPanelTypeNr == 0xFF):
                 log.error(f"[Process Settings] Lookup of panel type string and model from the EEPROM failed, assuming EEPROM download failed {pmPanelTypeNr=}, going to Standard Mode")
                 self._gotoStandardMode()
                 return
-            
-            elif pmPanelTypeNr is not None:
-                # Assume download success, so test if it is a supported panel type
-                self.PanelType = pmPanelTypeNr
-                if 0 <= self.PanelType <= len(pmPanelConfig_t["CFG_SUPPORTED"]) - 1:
-                    isSupported = pmPanelConfig_t["CFG_SUPPORTED"][self.PanelType]
-                    if isSupported:
-                        self.PanelModel = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
-                        self.PowerMaster = pmPanelConfig_t["CFG_POWERMASTER"][self.PanelType]
-                        self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
-                        self.KeepAlivePeriod = pmPanelConfig_t["CFG_KEEPALIVE"][self.PanelType]
-                        self.pmInitSupportedByPanel = pmPanelConfig_t["CFG_INIT_SUPPORT"][self.PanelType]
-                        if self.PanelType not in pmPanelType_t:
-                            log.error(f"This Visonic Panel type {self.PanelType} is not fully supported and you need to report it to the Author of this software")
-                        #else:
-                        #    log.debug("[Process Settings] new Panel Type: {0}    Model: {1}".format(self.PanelType, self.PanelModel))
-                    else:
-                        # Panel 0 i.e original PowerMax
-                        log.error(f"Lookup of Visonic Panel type reveals that this seems to be a PowerMax Panel and supports EEPROM Download only with no capability, going to Standard Mode but this Panel cannot be used with this Integration")
-                        self._gotoStandardMode()
-                        return
-                else:
-                    # Then it is an unknown panel type i.e. not in range 0 to 16
-                    log.error(f"Lookup of Visonic Panel type {self.PanelType} reveals that this is a new Panel Type that is unknown to this Software. Going to Standard Mode for basic capability only, please contact the Author of this software")
-                    # Goto standard Mode to provide basic capability
-                    self._gotoStandardMode()
-                    return
-
-            elif self.PanelType is not None:             # Set by the receipt of a 3C message, in that case the other vars should also be set
-                if self.PanelType in pmPanelType_t:
-                    log.debug("[Process Settings] old Panel Type {0}    Model {1}".format(self.PanelType, self.PanelModel))
-                else:
-                    log.error(f"This Visonic panel type {self.PanelType} is not fully supported and you need to report it to the Author of this software")
-                return # This would allow the download to be tried again
-
-            elif self.PanelType is None or self.PanelType == 0xFF:  # Not set by the receipt of a 3C message or it is invalid
-                log.error(f"[Process Settings] Lookup of panel type string and model from the EEPROM failed, assuming EEPROM download failed {pmPanelTypeNr=}, going to Standard Mode")
-                # Assume here that the 3C has not been received and the download has failed, go to standard mode
+            elif not self._setDataFromPanelType(pmPanelTypeNr):
                 self._gotoStandardMode()
                 return
 
-            else:
-                # Some kind of error or the EEPROM hasn't downloaded. We should only get here if the EEPROM has been downloaded and it doesn't look like that it has been
-                log.error(f"[Process Settings] Lookup of panel type string and model from the EEPROM failed, assuming EEPROM download failed {pmPanelTypeNr=}, going to Standard Mode")
-                # Assume here that the 3C has not been received and the download has failed, go to standard mode
+            if self.PanelType is None:  # Not set by this EPROM download
+                log.error(f"[Process Settings] Panel Type not set from EEPROM, assuming EEPROM download failed {pmPanelTypeNr=}, going to Standard Mode")
+                # Assume here that the download has failed, go to standard mode
                 self._gotoStandardMode()
                 return
 
@@ -3311,10 +3275,10 @@ class PacketHandling(ProtocolBase):
         
         if self.PanelMode == AlPanelMode.PROBLEM:
             # A PROBLEM indicates that there has been a response timeout (either normal or trying to get to powerlink)
-            # However, we have clearly received a packet so put the panel mode back to MONITOR_ONLY, Standard or StandardPlus and wait for a powerlink response from the panel
+            # However, we have clearly received a packet so put the panel mode back to MINIMAL_ONLY, Standard or StandardPlus and wait for a powerlink response from the panel
             if self.DisableAllCommands:
-                log.debug("[Standard Mode] Entering MONITOR_ONLY Mode")
-                self.PanelMode = AlPanelMode.MONITOR_ONLY
+                log.debug("[Standard Mode] Entering MINIMAL_ONLY Mode")
+                self.PanelMode = AlPanelMode.MINIMAL_ONLY
             elif self.pmDownloadComplete and not self.ForceStandardMode and self.pmGotUserCode:
                 log.debug("[_processReceivedPacket] Had a response timeout PROBLEM but received a data packet so entering Standard Plus Mode")
                 self.PanelMode = AlPanelMode.STANDARD_PLUS
@@ -3516,7 +3480,7 @@ class PacketHandling(ProtocolBase):
         if self.ForceStandardMode:
             self.GiveupTryingDownload = True
         elif self.DisableAllCommands:
-            self.PanelMode = AlPanelMode.MONITOR_ONLY
+            self.PanelMode = AlPanelMode.MINIMAL_ONLY
             self.GiveupTryingDownload = True
         else:
             self.GiveupTryingDownload = False
@@ -3575,7 +3539,6 @@ class PacketHandling(ProtocolBase):
                     #    self._sendCommand("MSG_BUMP")
 
                     if self.PanelType is not None:  # By the time EEPROM download is complete, this should be set but just check to make sure
-                        self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
                         # We should be in Standard Plus by now.
                         # Only attempt to auto enroll powerlink for newer panels but not the 360 or 360R.
                         #       Older panels need the user to manually enroll
@@ -3586,7 +3549,7 @@ class PacketHandling(ProtocolBase):
                             self._sendMsgENROLL(True)  # Auto enroll, trigger download.  The panel type indicates that it can auto enroll
                     
                     elif self.AutoEnroll: # We do not know the panel type
-                        log.debug("[handle_msgtype08]                   Auto enroll (panel type unknown but user settings say to autoenroll)")
+                        log.debug("[handle_msgtype08]                   Auto enroll (panel type unknown but default settings say to autoenroll)")
                         self._sendMsgENROLL(True)  #  Auto enroll, retrigger download
                 
                 elif lastCommandData[0] != 0xAB and lastCommandData[0] != 0x0B:  # Powerlink command and the Stop Command
@@ -3647,13 +3610,10 @@ class PacketHandling(ProtocolBase):
         firsttime = self.PowerMaster is None
         
         self.ModelType = data[4]
-        self.PanelType = data[5]
+        #self.PanelType = data[5]
 
-        self.PowerMaster = pmPanelConfig_t["CFG_POWERMASTER"][self.PanelType]
-        self.PanelModel = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
-        self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
-        self.pmInitSupportedByPanel = pmPanelConfig_t["CFG_INIT_SUPPORT"][self.PanelType]
-        self.KeepAlivePeriod = pmPanelConfig_t["CFG_KEEPALIVE"][self.PanelType]
+        self._setDataFromPanelType(data[5])
+
         if self.DownloadCode == DEFAULT_DL_CODE:
             # If the panel still has its startup default Download Code, or if it hasn't been set by the user to something different
             self.DownloadCode = pmPanelConfig_t["CFG_DLCODE_1"][self.PanelType][:2] + " " + pmPanelConfig_t["CFG_DLCODE_1"][self.PanelType][2:]
@@ -3866,9 +3826,9 @@ class PacketHandling(ProtocolBase):
                 self.SensorList[sensor].triggertime = self._getTimeFunction()
                 self.SensorList[sensor].utctriggertime = self._getUTCTimeFunction()
                 self.SensorList[sensor].pushChange(AlSensorCondition.STATE)
-            elif self.SensorList[sensor].status != status:
+            elif status is not None and self.SensorList[sensor].status != status:
                 # The current setting is different
-                if status:
+                if status is not None and status:
                     log.debug("[UpdateContactSensor]   Sensor {0}   triggered to True".format(sensor))
                     self.SensorList[sensor].triggered = True
                     self.SensorList[sensor].triggertime = self._getTimeFunction()
@@ -3877,9 +3837,9 @@ class PacketHandling(ProtocolBase):
                     # Not a motion or camera to set status
                     log.debug("[UpdateContactSensor]   Sensor {0}   status from {1} to {2}".format(sensor, self.SensorList[sensor].status, status))
                     self.SensorList[sensor].status = status
-                    if not status:
+                    if status is not None and not status:
                         self.SensorList[sensor].pushChange(AlSensorCondition.RESET)
-                if status:
+                if status is not None and status:
                     self.SensorList[sensor].pushChange(AlSensorCondition.STATE)
                     
             #log.debug("[UpdateContactSensor]   Sensor {0}   after".format(sensor))
@@ -4743,7 +4703,7 @@ class PacketHandling(ProtocolBase):
 
             # Nothing in the 03 24 messsage tells us which sensor might have been triggered (it may not be any and the panel is just sending an update)
             if self.PanelMode == AlPanelMode.POWERLINK or \
-               self.PanelMode == AlPanelMode.MONITOR_ONLY or \
+               self.PanelMode == AlPanelMode.MINIMAL_ONLY or \
                self.PanelMode == AlPanelMode.STANDARD or \
                self.PanelMode == AlPanelMode.STANDARD_PLUS: 
                 log.debug("[handle_msgtypeB0]       Requesting sensor messages from the panel")
@@ -4868,7 +4828,7 @@ class PacketHandling(ProtocolBase):
         
             # Panel state change ??????
 #            if self.PanelMode == AlPanelMode.POWERLINK or \
-#               self.PanelMode == AlPanelMode.MONITOR_ONLY or \
+#               self.PanelMode == AlPanelMode.MINIMAL_ONLY or \
 #               self.PanelMode == AlPanelMode.STANDARD or \
 #               self.PanelMode == AlPanelMode.STANDARD_PLUS: 
 #                log.debug("[handle_msgtypeB0]       Requesting sensor messages from the panel")
@@ -5035,9 +4995,9 @@ class PacketHandling(ProtocolBase):
 
             elif zone - 1 in self.SensorList and self.SensorList[zone-1].getSensorType() == AlSensorType.CAMERA:
                 log.debug(f"[handle_msgtypeF4]        Processing")
-                # Here when PanelMode is COMPLETE_READONLY, MONITOR_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
+                # Here when PanelMode is COMPLETE_READONLY, MINIMAL_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
 
-                if self.PanelMode == AlPanelMode.MONITOR_ONLY or self.PanelMode == AlPanelMode.COMPLETE_READONLY:
+                if self.PanelMode == AlPanelMode.MINIMAL_ONLY or self.PanelMode == AlPanelMode.COMPLETE_READONLY:
                     # Support externally requested images, from a real PowerLink Hardware device for example
                     if not self.ImageManager.isValidZone(zone):
                         self.ImageManager.create(zone, 11)   # This makes sure that there isn't an ongoing image retrieval for this sensor
@@ -5072,7 +5032,7 @@ class PacketHandling(ProtocolBase):
                 log.debug(f"[handle_msgtypeF4]        Not processing F4 0x05 data")
             elif self.ImageManager.hasStartedSequence():
                 # Image receipt has been initialised by self.ImageManager.setCurrent
-                #     Therefore we only get here when PanelMode is COMPLETE_READONLY, MONITOR_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
+                #     Therefore we only get here when PanelMode is COMPLETE_READONLY, MINIMAL_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
                 datastart = 4
                 inSequence = self.ImageManager.addData(data[datastart:datastart+datalen], sequence)
                 if inSequence:
@@ -5242,7 +5202,7 @@ class VisonicProtocol(PacketHandling):
                     baudrate = 38400
                     br = hexify(baudrate)
                     log.debug(f"[requestPanelCommand] Changing Baud Rate, *************** {bpin} ********* {br} ***")
-
+                    self._addMessageToSendList("MSG_PM_SETBAUD", options=[ [4, bpin], [13, "9600"] ])  #
                     return AlCommandStatus.SUCCESS
                 else:
                     return AlCommandStatus.FAIL_INVALID_STATE
@@ -5300,7 +5260,7 @@ class VisonicProtocol(PacketHandling):
                     if device - 1 in self.SensorList and self.SensorList[device-1].getSensorType() == AlSensorType.CAMERA:
                         if device not in self.image_ignore:
                             if self.ImageManager.create(device, count):   # This makes sure that there isn't an ongoing image retrieval for this sensor
-                                #self._addMessageToSendList("MSG_GET_IMAGE", options=[ [1, count], [2, device] ])  #  
+                                self._addMessageToSendList("MSG_GET_IMAGE", options=[ [1, count], [2, device] ])  #  
                                 return AlCommandStatus.SUCCESS
             return AlCommandStatus.FAIL_INVALID_STATE
         else:

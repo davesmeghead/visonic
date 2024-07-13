@@ -35,12 +35,18 @@ from .const import (
     ALARM_SENSOR_IMAGE,
     ATTR_BYPASS,
     CONF_PANEL_NUMBER,
+    CONF_ALARM_NOTIFICATIONS,
+    CONF_MOTION_OFF_DELAY,
+    CONF_MAGNET_CLOSED_DELAY,
+    CONF_EMER_OFF_DELAY,
     PANEL_ATTRIBUTE_NAME,
     NOTIFICATION_ID,
     NOTIFICATION_TITLE,
     CONF_EMULATION_MODE,
+    CONF_SENSOR_EVENTS,
     CONF_COMMAND,
     available_emulation_modes,
+    AvailableNotifications
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -88,6 +94,7 @@ type VisonicConfigEntry = ConfigEntry[VisonicConfigData]
 @dataclass
 class VisonicConfigData:
     client: VisonicClient
+    sensors: list()
     # Made it a class just in case I want to include more parameters in future
 
 def findClient(hass, panel : int):
@@ -123,7 +130,7 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         persistent_notification.create(hass, message, title=NOTIFICATION_TITLE, notification_id=NOTIFICATION_ID)
 
     def getClient(call):
-        _LOGGER.debug(f"getClient called")        
+        #_LOGGER.debug(f"getClient called")        
         if isinstance(call.data, dict):
             #_LOGGER.debug(f"getClient called {call}")
             if ATTR_ENTITY_ID in call.data:
@@ -135,7 +142,7 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
                             panel = mybpstate.attributes[PANEL_ATTRIBUTE_NAME]
                             client = findClient(hass, panel)
                             if client is not None:
-                                _LOGGER.debug(f"getClient success for panel {panel}")
+                                #_LOGGER.debug(f"getClient success for panel {panel}")
                                 return client, panel
                             else:
                                 _LOGGER.warning(f"getClient - Panel found {panel} but Client Not Found")
@@ -237,12 +244,12 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         service_sensor_bypass,
         schema=ALARM_SCHEMA_BYPASS,
     )
-    hass.services.async_register(
-        DOMAIN,
-        ALARM_SENSOR_IMAGE,
-        service_sensor_image,
-        schema=ALARM_SCHEMA_IMAGE,
-    )
+#    hass.services.async_register(
+#        DOMAIN,
+#        ALARM_SENSOR_IMAGE,
+#        service_sensor_image,
+#        schema=ALARM_SCHEMA_IMAGE,
+#    )
     
     # Install the reload handler
     #    commented out as it reloads all panels, the default in the frontend only reloads the instance
@@ -260,7 +267,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
     def configured_hosts(hass):
         """Return a set of the configured hosts."""
         return len(hass.config_entries.async_entries(DOMAIN))
-    
+
     _LOGGER.debug(f"[Visonic Setup] ************************************ create connection ************************************")
     #_LOGGER.debug(f"[Visonic Setup]       Entry data={entry.data}   options={entry.options}")
     _LOGGER.debug(f"[Visonic Setup]       Entry id={entry.entry_id} in a total of {configured_hosts(hass)} previously configured panels")
@@ -272,7 +279,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
     if CONF_PANEL_NUMBER in conf:
         panel_id = int(conf[CONF_PANEL_NUMBER])
         #_LOGGER.debug(f"[Visonic Setup] Panel Config has panel number {panel_id}")
-    else: 
+    else:
         _LOGGER.debug("[Visonic Setup] CONF_PANEL_NUMBER not in configuration, stopping configuration with an error")
         return False
 
@@ -293,7 +300,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
         client = VisonicClient(hass, panel_id, conf, entry)
 
         # save the client and its task
-        hass.data.setdefault(VisonicConfigKey, {})[entry.entry_id] = entry.runtime_data = VisonicConfigData(client)
+        hass.data.setdefault(VisonicConfigKey, {})[entry.entry_id] = entry.runtime_data = VisonicConfigData(client, list())
 
         # make the client connection to the panel        
         await client.connect()
@@ -318,7 +325,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEn
     # If the config schema ever changes then use this function to convert from old to new config parameters
     version = config_entry.version
 
-    _LOGGER.debug(f"Migrating from version {version}")
+    _LOGGER.info(f"Migrating from version {version}")
 
     if version == 1:
         # Leave CONF_FORCE_STANDARD in place but use it to add CONF_EMULATION_MODE
@@ -339,6 +346,33 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEn
         #del new[CONF_FORCE_STANDARD]  # decided to keep it
         hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
         _LOGGER.info(f"   Emulation mode set to {config_entry.data[CONF_EMULATION_MODE]}")
+
+    if version == 2:
+        version = 3
+        new = config_entry.data.copy()
+        
+        CONF_FORCE_STANDARD = "force_standard"
+        CONF_FORCE_AUTOENROLL = "force_autoenroll"
+        CONF_AUTO_SYNC_TIME = "sync_time"
+        if CONF_FORCE_STANDARD in new:
+            del new[CONF_FORCE_STANDARD]       # decided to remove it
+        if CONF_FORCE_AUTOENROLL in new:
+            del new[CONF_FORCE_AUTOENROLL]
+        if CONF_AUTO_SYNC_TIME in new:
+            del new[CONF_AUTO_SYNC_TIME]
+        _LOGGER.debug("   Updated config settings to remove unused data")
+        
+        if CONF_MOTION_OFF_DELAY in new:
+            new[CONF_MAGNET_CLOSED_DELAY] = new[CONF_MOTION_OFF_DELAY]
+            new[CONF_EMER_OFF_DELAY] = new[CONF_MOTION_OFF_DELAY]
+            _LOGGER.debug("   Added additional trigger delay settings")
+
+        new[CONF_SENSOR_EVENTS] = list()
+        _LOGGER.debug("   Sensor Event List created and set to default")
+
+        new[CONF_ALARM_NOTIFICATIONS] = [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]
+        hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
+        _LOGGER.debug("   Alarm Notification list set to default")
 
     _LOGGER.info("Migration to version %s successful", config_entry.version)
     return True

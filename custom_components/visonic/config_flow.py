@@ -9,6 +9,7 @@ from .const import (
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_X10,
     CONF_SIREN_SOUNDING,
+    CONF_SENSOR_EVENTS,
     CONF_PANEL_NUMBER,
     CONF_EMULATION_MODE,
     available_emulation_modes,
@@ -41,7 +42,6 @@ class MyHandlers(data_entry_flow.FlowHandler):
     def __init__(self, config_entry = None):
         """Initialize the config flow."""
         # Do not call the parents init function
-        _LOGGER.debug("MyHandlers init")
         self.myschema = VisonicSchema()
         self.config = {}
         self.step_sequence = []
@@ -57,7 +57,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
             step_sequence = [2,10,11,12]       
         elif s == available_emulation_modes[1]:
             step_sequence = [10,11] 
-        elif s == available_emulation_modes[2] or s == available_emulation_modes[3]:
+        elif s == available_emulation_modes[2]:
             step_sequence = [10] 
         return step_sequence
 
@@ -84,7 +84,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
 
     async def _show_form(self, step: str = "device", placeholders=None, errors=None):
         """Show the form to the user."""
-        _LOGGER.debug(f"show_form start {step} {placeholders} {errors}")
+        #_LOGGER.debug(f"show_form start {step} {placeholders} {errors}")
 
         ds = None
 
@@ -112,7 +112,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
             _LOGGER.debug("show_form ds is None, step is %s", step)
             return self.async_abort(reason="device_error")
 
-        _LOGGER.debug(f"doing show_form step = {step}   ds = {ds}")
+        #_LOGGER.debug(f"doing show_form step = {step}   ds = {ds}")
         return self.async_show_form(
             step_id=step,
             data_schema=ds,
@@ -164,6 +164,9 @@ class MyHandlers(data_entry_flow.FlowHandler):
                 if CONF_SIREN_SOUNDING in self.config:
                     self.toList(self.config, CONF_SIREN_SOUNDING)
 
+                if CONF_SENSOR_EVENTS in self.config:
+                    self.toList(self.config, CONF_SENSOR_EVENTS)
+
                 if CONF_ALARM_NOTIFICATIONS in self.config:
                     self.toList(self.config, CONF_ALARM_NOTIFICATIONS)
 
@@ -192,7 +195,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
 class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
     """Handle a Visonic flow."""
 
-    VERSION = 2
+    VERSION = 3
     CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     def __init__(self):
@@ -220,13 +223,13 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry : ConfigEntry):
         """Get the options flow for this handler."""
-        _LOGGER.debug("Visonic async_get_options_flow")
+        #_LOGGER.debug("Visonic async_get_options_flow")
         return VisonicOptionsFlowHandler(config_entry)
 
     # ask the user, ethernet or usb
     async def async_step_device(self, user_input=None):
         """Handle the input processing of the config flow."""
-        _LOGGER.debug("async_step_device %s", user_input)
+        #_LOGGER.debug("async_step_device %s", user_input)
         #self.dumpMyState()
         if user_input is not None and CONF_DEVICE_TYPE in user_input and CONF_PANEL_NUMBER in user_input:
             panel_num = max(0, int(user_input[CONF_PANEL_NUMBER]))
@@ -260,7 +263,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
 
     async def async_step_parameters1(self, user_input=None):
         """Config flow step 1."""
-        _LOGGER.debug(f"async_step_parameters1,  step is 1 - {self.current_pos}")
+        #_LOGGER.debug(f"async_step_parameters1,  step is 1 - {self.current_pos}")
         self.config.update(user_input)
         
         self.current_pos = -1
@@ -273,7 +276,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         else:
             _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE not in user_input **********************************")
             return self.async_abort(reason="emulation_mode_error")
-        _LOGGER.debug(f"async_step_parameters1 {user_input}")
+        #_LOGGER.debug(f"async_step_parameters1 {user_input}")
         return await self.gotonext(user_input)
 
 
@@ -287,10 +290,10 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
 
         # is this a raw configuration (not called from importing yaml)
         if not user_input:
-            _LOGGER.debug("Visonic in async_step_user - trigger user input")
+            #_LOGGER.debug("Visonic in async_step_user - trigger user input")
             return await self._show_form(step="device")
 
-        _LOGGER.debug("Visonic async_step_user - importing a yaml config setup")
+        #_LOGGER.debug("Visonic async_step_user - importing a yaml config setup")
 
         # importing a yaml config setup
         info = await self.validate_input(user_input)
@@ -357,11 +360,11 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
     async def async_step_init(self, user_input=None):
         """Manage the options."""
         
-        _LOGGER.debug(f"Edit config option settings, data = {user_input}")
+        #_LOGGER.debug(f"Edit config option settings, data = {user_input}")
 
         if self.config is not None and CONF_DEVICE_TYPE in self.config:
             t = self.config[CONF_DEVICE_TYPE].lower()
-            _LOGGER.debug(f"type = {type(t)}   t = {t}")
+            #_LOGGER.debug(f"type = {type(t)}   t = {t}")
             if t == "ethernet" or t == "usb":
 
                 self.current_pos = -1
