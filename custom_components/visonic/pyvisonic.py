@@ -1071,6 +1071,7 @@ pmZoneSensorMax_t = {
    0x7A : ZoneSensorType("MCT-550", AlSensorType.FLOOD ),          # fguerzoni, Joao-Sousa
    0x86 : ZoneSensorType("MCT-302", AlSensorType.MAGNET ),         # Joao-Sousa
    0x8A : ZoneSensorType("MCT-550", AlSensorType.FLOOD ),          # Joao-Sousa
+   0x93 : ZoneSensorType("Next MCW", AlSensorType.MOTION ),        # Tomas-Corral
    0x95 : ZoneSensorType("MCT-302", AlSensorType.MAGNET ),         # me, fguerzoni
    0x96 : ZoneSensorType("MCT-302", AlSensorType.MAGNET ),         # me, g4seb, rogerthn2019
    0x97 : ZoneSensorType("MCT-302", AlSensorType.MAGNET ),         # christopheVia
