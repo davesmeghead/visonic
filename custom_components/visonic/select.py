@@ -22,6 +22,15 @@ _LOGGER = logging.getLogger(__name__)
 BYPASS = "Bypass"
 ARMED = "Armed"
 
+messageDict = {
+    AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS   : "Sensor Bypass: EPROM Download is in progress, please try again after this is complete",
+    AlCommandStatus.FAIL_INVALID_CODE           : "Sensor Bypass: Invalid PIN",
+    AlCommandStatus.FAIL_USER_CONFIG_PREVENTED  : "Sensor Bypass: Please check your HA Configuration settings for this Integration and enable sensor bypass",
+    AlCommandStatus.FAIL_INVALID_STATE          : "Sensor Bypass: Invalid state requested",
+    AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED : "Sensor Bypass: Please check your panel settings and enable sensor bypass"
+}
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: VisonicConfigEntry,
@@ -144,16 +153,10 @@ class VisonicSelect(SelectEntity):
                 self._pending_state_is_armed = (option == ARMED)
             else:
                 # Command not sent to panel
-                _LOGGER.debug("Sensor Bypass: Command not sent to panel")
-                message = "Command not sent to panel"
-                if result == AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED:
-                    message = "Sensor Bypass: Please check your panel settings and enable sensor bypass"
-                elif result == AlCommandStatus.FAIL_USER_CONFIG_PREVENTED:
-                    message = "Sensor Bypass: Please check your HA Configuration settings for this Integration and enable sensor bypass"
-                elif result == AlCommandStatus.FAIL_INVALID_CODE:
-                    message = "Sensor Bypass: Invalid PIN"
-                elif result == AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
-                    message = "Sensor Bypass: EPROM Download is in progress, please try again after this is complete"
+                _LOGGER.debug(f"Sensor Bypass: Command not sent to panel {result}")
+                message = "Sensor Bypass: Command not sent to panel"
+                if result in messageDict:
+                    message = messageDict[result]
                 self._client.sendHANotification(AvailableNotifications.ALWAYS, message)
         else:
             raise HomeAssistantError(f"Can't set the armed state to {option}. Allowed states are: {self.options}")

@@ -113,7 +113,6 @@ messageDict = {
     AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED : "Disabled by panel settings",
 }
 
-
 #BASE_PRELOAD_PLATFORMS = [
 #    "config",
 #    "config_flow",
@@ -136,7 +135,7 @@ class PanelCondition(IntEnum):
     CHECK_EVENT_LOG_COMMAND = 13
     CHECK_X10_COMMAND = 14
 
-CLIENT_VERSION = "0.9.5.0"
+CLIENT_VERSION = "0.9.5.1"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -895,12 +894,8 @@ class VisonicClient:
             AlConfiguration.MotionOffDelay: self.config.get(CONF_MOTION_OFF_DELAY, 120),
             AlConfiguration.MagnetClosedDelay: self.config.get(CONF_MAGNET_CLOSED_DELAY, 5),
             AlConfiguration.EmergencyOffDelay: self.config.get(CONF_EMER_OFF_DELAY, 120),
-            AlConfiguration.SirenTriggerList: self.config.get(
-                CONF_SIREN_SOUNDING, ["Intruder"]
-            ),
-            AlConfiguration.EEPROMAttributes: self.toBool(
-                self.config.get(CONF_EEPROM_ATTRIBUTES, False)
-            ),
+            AlConfiguration.SirenTriggerList: self.config.get(CONF_SIREN_SOUNDING, ["Intruder"]),
+            AlConfiguration.EEPROMAttributes: self.toBool(self.config.get(CONF_EEPROM_ATTRIBUTES, False))
         }
 
     async def _checkUserPermission(self, call, perm, entity):

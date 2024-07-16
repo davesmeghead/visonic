@@ -23,6 +23,7 @@ from .client import VisonicClient
 from . import VisonicConfigEntry
 from .const import (
     DOMAIN,
+    map_panel_status_to_ha_status,
     PANEL_ATTRIBUTE_NAME,
 )
 
@@ -74,7 +75,6 @@ class VisonicSensor(Entity):
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
-        await super().async_will_remove_from_hass()
         self._client = None
         _LOGGER.debug(f"Removing alarm panel sensor {self._myname} panel {self._panel}")
 
@@ -128,7 +128,7 @@ class VisonicSensor(Entity):
             # "model": "Alarm Panel",
             # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
         }
-
+        
     def update(self):
         """Get the state of the device."""
         self._mystate = STATE_UNKNOWN
@@ -139,18 +139,10 @@ class VisonicSensor(Entity):
                 self._mystate = STATE_ALARM_TRIGGERED
             else:
                 armcode = self._client.getPanelStatus()
+                if armcode is not None and armcode in map_panel_status_to_ha_status:
+                    self._mystate = map_panel_status_to_ha_status[armcode]
 
                 # _LOGGER.debug("alarm armcode is %s", str(armcode))
-                if armcode == AlPanelStatus.DISARMED or armcode == AlPanelStatus.SPECIAL or armcode == AlPanelStatus.DOWNLOADING:
-                    self._mystate = STATE_ALARM_DISARMED
-                elif armcode == AlPanelStatus.ENTRY_DELAY:
-                    self._mystate = STATE_ALARM_PENDING
-                elif armcode == AlPanelStatus.ARMING_HOME or armcode == AlPanelStatus.ARMING_AWAY:
-                    self._mystate = STATE_ALARM_ARMING
-                elif armcode == AlPanelStatus.ARMED_HOME:
-                    self._mystate = STATE_ALARM_ARMED_HOME
-                elif armcode == AlPanelStatus.ARMED_AWAY:
-                    self._mystate = STATE_ALARM_ARMED_AWAY
 
             # Currently may only contain Exception Count"
             data = self._client.getClientStatusDict()

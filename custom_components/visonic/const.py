@@ -1,5 +1,17 @@
 """Constants for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 from enum import Enum, IntFlag
+from .pyconst import AlPanelStatus
+
+from homeassistant.const import (
+    STATE_ALARM_ARMED_AWAY,
+    STATE_ALARM_ARMED_HOME,
+    STATE_ALARM_ARMING,
+    STATE_ALARM_DISARMED,
+    STATE_ALARM_PENDING,
+    STATE_ALARM_TRIGGERED,
+    STATE_UNKNOWN,
+)
+
 
 # The domain for the integration
 DOMAIN = "visonic"
@@ -110,4 +122,17 @@ available_emulation_modes = [
     "Standard",
     "Minimal Interaction (data only sent to obtain panel state)"
 ]
+
+# For alarm_control_panel and sensor, map the alarm panel states across to the Home Assistant states
+map_panel_status_to_ha_status = {
+    AlPanelStatus.UNKNOWN     : STATE_UNKNOWN,
+    AlPanelStatus.DISARMED    : STATE_ALARM_DISARMED,
+    AlPanelStatus.SPECIAL     : STATE_ALARM_DISARMED,
+    AlPanelStatus.DOWNLOADING : STATE_ALARM_DISARMED,
+    AlPanelStatus.ENTRY_DELAY : STATE_ALARM_PENDING,
+    AlPanelStatus.ARMING_HOME : STATE_ALARM_ARMING,
+    AlPanelStatus.ARMING_AWAY : STATE_ALARM_ARMING,
+    AlPanelStatus.ARMED_HOME  : STATE_ALARM_ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY  : STATE_ALARM_ARMED_AWAY    
+}
 

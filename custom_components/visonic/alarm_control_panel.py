@@ -32,6 +32,7 @@ from .client import VisonicClient
 from .pyconst import AlPanelCommand, AlPanelStatus
 from .const import (
     DOMAIN,
+    map_panel_status_to_ha_status,
     PANEL_ATTRIBUTE_NAME,
 )
 
@@ -86,7 +87,6 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
-        #await super().async_will_remove_from_hass()
         self._client = None
         _LOGGER.debug(f"Removing alarm control panel {self._myname} panel {self._panel}")
 
@@ -174,18 +174,8 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
                 self._mystate = STATE_ALARM_TRIGGERED
             else:
                 armcode = self._client.getPanelStatus()
-
-                # _LOGGER.debug("alarm armcode is %s", str(armcode))
-                if armcode == AlPanelStatus.DISARMED or armcode == AlPanelStatus.SPECIAL or armcode == AlPanelStatus.DOWNLOADING:
-                    self._mystate = STATE_ALARM_DISARMED
-                elif armcode == AlPanelStatus.ENTRY_DELAY:
-                    self._mystate = STATE_ALARM_PENDING
-                elif armcode == AlPanelStatus.ARMING_HOME or armcode == AlPanelStatus.ARMING_AWAY:
-                    self._mystate = STATE_ALARM_ARMING
-                elif armcode == AlPanelStatus.ARMED_HOME:
-                    self._mystate = STATE_ALARM_ARMED_HOME
-                elif armcode == AlPanelStatus.ARMED_AWAY:
-                    self._mystate = STATE_ALARM_ARMED_AWAY
+                if armcode is not None and armcode in map_panel_status_to_ha_status:
+                    self._mystate = map_panel_status_to_ha_status[armcode]
 
             # Currently may only contain "Exception Count"
             data = self._client.getClientStatusDict()

@@ -363,12 +363,13 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEn
         _LOGGER.debug("   Updated config settings to remove unused data")
         
         if CONF_MOTION_OFF_DELAY in new:
+            # Add the 2 new timeouts with the same values as the old setting
             new[CONF_MAGNET_CLOSED_DELAY] = new[CONF_MOTION_OFF_DELAY]
             new[CONF_EMER_OFF_DELAY] = new[CONF_MOTION_OFF_DELAY]
             _LOGGER.debug("   Added additional trigger delay settings")
 
         new[CONF_SENSOR_EVENTS] = list()
-        _LOGGER.debug("   Sensor Event List created and set to default")
+        _LOGGER.debug("   Sensor Event List created and set to empty")
 
         new[CONF_ALARM_NOTIFICATIONS] = [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]
         hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
