@@ -235,7 +235,7 @@ class AlCondition(AlEnum):
     PUSH_CHANGE = AlIntEnum(0)               # This causes the client to update the frontend etc but it does not send out an HA Event
     ZONE_UPDATE = AlIntEnum(1)
     PANEL_UPDATE = AlIntEnum(2)
-    PANEL_UPDATE_ALARM_ACTIVE = AlIntEnum(3)
+#    PANEL_UPDATE_ALARM_ACTIVE = AlIntEnum(3)
     PANEL_RESET = AlIntEnum(4)
     PIN_REJECTED = AlIntEnum(5)
     PANEL_TAMPER_ALARM = AlIntEnum(6)
@@ -386,7 +386,7 @@ class AlSensorDevice(ABC):
     def createFriendlyName(self) -> str:
         return "Z{0:0>2}".format(self.getDeviceID())
 
-    # Return the sensor mode.  This is a string such as "Visonic MTT-302" to show in the HA frontend
+    # Return the sensor model.  This is a string such as "Visonic MTT-302" to show in the HA frontend
     def getSensorModel(self) -> str:
         return "Unknown"
 

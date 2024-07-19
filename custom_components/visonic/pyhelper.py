@@ -87,7 +87,8 @@ pmPanelAlarmType_t = {
 }
 
 pmPanelTroubleType_t = {
-   0x00 : AlTroubleType.NONE,          0x01 : AlTroubleType.GENERAL,   0x0A : AlTroubleType.COMMUNICATION, 0x0F : AlTroubleType.GENERAL,
+#   0x00 : AlTroubleType.NONE,          0x01 : AlTroubleType.GENERAL,   0x0A : AlTroubleType.COMMUNICATION, 0x0F : AlTroubleType.GENERAL,   0x01 is already in AlarmType, it is not a General Trouble indication
+   0x00 : AlTroubleType.NONE,          0x0A : AlTroubleType.COMMUNICATION, 0x0F : AlTroubleType.GENERAL,
    0x29 : AlTroubleType.BATTERY,       0x2B : AlTroubleType.POWER,     0x2D : AlTroubleType.BATTERY,       0x2F : AlTroubleType.JAMMING,
    0x31 : AlTroubleType.COMMUNICATION, 0x33 : AlTroubleType.TELEPHONE, 0x36 : AlTroubleType.POWER,         0x38 : AlTroubleType.BATTERY,
    0x3B : AlTroubleType.BATTERY,       0x3C : AlTroubleType.BATTERY,   0x40 : AlTroubleType.BATTERY,       0x43 : AlTroubleType.BATTERY
@@ -707,7 +708,6 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         #self.log = vloggerclass(panel_id=panel_id)
         self.suspendAllOperations = False
         self._initVars()
-        self.PanelLastEventData = self.setLastEventData()
 
     def _initVars(self):
         # set the event callback handlers to None
@@ -733,6 +733,8 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         self.PanelTroubleStatus = AlTroubleType.NONE
         self.PanelLastEvent = "Unknown"
         self.PanelStatusText = "Unknown"
+        self.SendPanelEventData = None
+        self.LastPanelEventData = {}
 
         # Keep a dict of the sensors so we know if its new or existing
         self.SensorList = {}
@@ -855,7 +857,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         datadict = {}
         datadict["event_count"] = count
         if count > 0:
-            datadict["event_time"] = self._getTimeFunction().isoformat()
+            datadict["event_time"] = self._getTimeFunction()
         else:
             datadict["event_time"] = ""
         datadict["event_type"] = type
@@ -863,14 +865,15 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         datadict["event_mode"] = zonemode
         datadict["event_name"] = name
         self.LastPanelEventData = datadict
+        self.SendPanelEventData = datadict
 
         if count > 0:
-            self.PanelLastEvent = zonemode[0] + "/" + name[0]
+            self.PanelLastEvent = name[0] + "/" + zonemode[0]
 
         #log.debug(f"Last event {datadict}")
         return datadict
 
-    def setLastEventData(self, reset : bool = False) -> dict:
+    def setLastEventData(self) -> dict:
         datadict = {}
         datadict["mode"] = titlecase(self.PanelMode.name.replace("_"," ").lower())
         datadict["state"] = "Triggered" if self.SirenActive else titlecase(self.PanelState.name.replace("_"," ").lower())
@@ -879,10 +882,8 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         datadict["memory"] = self.PanelAlertInMemory
         datadict["siren"] = self.SirenActive
         datadict["bypass"] = self.PanelBypass
-        datadict["reset"] = reset
-        datadict["alarm"] = titlecase(self.PanelAlarmStatus.name.replace("_"," "))
-        datadict["trouble"] = titlecase(self.PanelTroubleStatus.name.replace("_"," "))
-        datadict.update(self.LastPanelEventData)
+        datadict["alarm"] = titlecase(self.PanelAlarmStatus.name.replace("_"," ").lower())
+        datadict["trouble"] = titlecase(self.PanelTroubleStatus.name.replace("_"," ").lower())
         return datadict
 
     # Set the onDisconnect callback handlers
@@ -907,8 +908,21 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
     def sendPanelUpdate(self, ev : AlCondition):
         if self.onPanelChangeHandler is not None:
-            if ev == AlCondition.PANEL_UPDATE or ev == AlCondition.PANEL_UPDATE_ALARM_ACTIVE or ev == AlCondition.PANEL_RESET:
-                self.onPanelChangeHandler(ev, self.setLastEventData())
+            if ev == AlCondition.PANEL_UPDATE:
+                
+                a = self.setLastEventData()
+                
+                if self.SendPanelEventData is None:
+                    a["event"] = "None"
+                    log.debug(f"[sendPanelUpdate]  {a}")
+                    self.onPanelChangeHandler(ev, a)
+                else:
+                    for i in range(0, self.SendPanelEventData["event_count"]):
+                        em = str(self.SendPanelEventData["event_name"][i]) + "/" + str(self.SendPanelEventData["event_mode"][i])
+                        a["event"] = titlecase(em.replace("_"," ").lower())
+                        log.debug(f"[sendPanelUpdate]  {a}")
+                        self.onPanelChangeHandler(ev, a)
+                    self.SendPanelEventData = None    
             else:
                 self.onPanelChangeHandler(ev, {})
 
@@ -1020,7 +1034,6 @@ class AlPanelInterfaceHelper(AlPanelInterface):
             log.debug("[Controller] ****************************** Operations Suspended ****************************")
             log.debug("[Controller] ********************************************************************************")
             log.debug("[Controller] ********************************************************************************")
-        self.PanelLastEventData = self.setLastEventData()
 
     def dumpSensorsToStringList(self) -> list:
         retval = list()

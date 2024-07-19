@@ -13,6 +13,7 @@ from enum import IntEnum
 from requests import ConnectTimeout, HTTPError
 
 from homeassistant.core import HomeAssistant, valid_entity_id
+from homeassistant.util import slugify
 from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUser
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
@@ -135,7 +136,7 @@ class PanelCondition(IntEnum):
     CHECK_EVENT_LOG_COMMAND = 13
     CHECK_X10_COMMAND = 14
 
-CLIENT_VERSION = "0.9.5.1"
+CLIENT_VERSION = "0.9.5.2"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -532,11 +533,10 @@ class VisonicClient:
         if (
             self.toBool(self.config.get(CONF_LOG_EVENT))
             and entry.current <= total
-        ):        
-            self.hass.bus.fire(
+        ):  
+            self.fireHAEvent(
                 ALARM_PANEL_LOG_FILE_ENTRY,
                 {
-                    PANEL_ATTRIBUTE_NAME: self.getPanelID(),
                     "current": current,
                     "total": total,
                     "date": entry.date,
@@ -590,10 +590,7 @@ class VisonicClient:
 
                 if self.toBool(self.config.get(CONF_LOG_DONE)):
                     self.logstate_debug("Panel Event Log - Firing Completion Event")
-                    self.hass.bus.fire(
-                        ALARM_PANEL_LOG_FILE_COMPLETE,
-                        {PANEL_ATTRIBUTE_NAME: self.getPanelID(), "total": total, "available": available},
-                    )
+                    self.fireHAEvent(ALARM_PANEL_LOG_FILE_COMPLETE, {"total": total, "available": available})
                 self.logstate_debug("Panel Event Log - Complete")
 
     # This is not called from anywhere, use it for debug purposes and/or to clear all entities from HA
@@ -716,7 +713,8 @@ class VisonicClient:
                 await self._setupVisonicEntity(Platform.IMAGE, IMAGE_DOMAIN, sensor)
 
     def fireHAEvent(self, name: str, ev: dict):
-        ev[PANEL_ATTRIBUTE_NAME] = self.getPanelID()
+        ev[PANEL_ATTRIBUTE_NAME] = self.getPanelID() 
+        ev["panel_id"] = Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent())
         self.logstate_debug(f"Client: Sending HA Event {name}  {ev}")
         #self.logstate_debug("Firing HA event, panel={0}  event={1}".format(self.getPanelID(),ev)
         self.hass.bus.fire(name, ev)
@@ -757,23 +755,9 @@ class VisonicClient:
                 a["action"] = ActionList[tmp]
 
             if datadictionary is not None:
-                if 'event_count' in datadictionary:
-                    b = {k:v for k,v in datadictionary.items() if k in ("mode", "state", "ready", "tamper", "memory", "siren", "bypass", "reset", "alarm", "trouble" )}
-                    if datadictionary["event_count"] > 0:
-                        b["event_valid"] = True
-                        for i in range(0, datadictionary["event_count"]):
-                            c = {k:v[i] for k,v in datadictionary.items() if k in ("event_time", "event_type", "event_event", "event_mode", "event_name" )}
-                            dd = {**a, **b, **c}
-                            self.fireHAEvent( name, dd )
-                    else:
-                        b["event_valid"] = False
-                        dd = {**a, **b}
-                        self.fireHAEvent( name, dd )
-
-                else:
-                    b = datadictionary.copy()
-                    dd = {**a, **b}
-                    self.fireHAEvent( name, dd )
+                b = datadictionary.copy()
+                dd = {**a, **b}
+                self.fireHAEvent( name, dd )
             else:
                 self.fireHAEvent( name, a )
 
@@ -827,7 +811,7 @@ class VisonicClient:
         #    # Powerlink Mode
         #    self.printAllEntities()
 
-        if event_id == AlCondition.PANEL_UPDATE_ALARM_ACTIVE: 
+        if event_id == AlCondition.PANEL_UPDATE and self.visonicProtocol is not None and self.visonicProtocol.isSirenActive():
             self.createNotification(AvailableNotifications.SIREN, "Siren is Sounding, Alarm has been Activated" )
         elif event_id == AlCondition.PANEL_RESET:
             self.createNotification(AvailableNotifications.RESET, "The Panel has been Reset" )
@@ -1114,7 +1098,7 @@ class VisonicClient:
                 if call.context.user_id:
                     #self.logstate_debug(f"Checking user information for permissions: {call.context.user_id}")
                     # Check security permissions (that this user has access to the alarm panel entity)
-                    await self._checkUserPermission(call, POLICY_READ, Platform.ALARM_CONTROL_PANEL + "." + self.getAlarmPanelUniqueIdent())
+                    await self._checkUserPermission(call, POLICY_READ, Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent()))
                 self.logstate_debug(f"Received {message} request - user approved")
                 if isinstance(call.data, dict):
                     # call data is a dictionary
@@ -1578,7 +1562,7 @@ class VisonicClient:
         if call.context.user_id:
             #self.logstate_debug(f"Checking user information for permissions: {call.context.user_id}")
             # Check security permissions (that this user has access to the alarm panel entity)
-            await self._checkUserPermission(call, POLICY_CONTROL, Platform.ALARM_CONTROL_PANEL + "." + self.getAlarmPanelUniqueIdent())
+            await self._checkUserPermission(call, POLICY_CONTROL, Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent()))
 
         self.logstate_debug("User has requested visonic panel reconnection")
         await self.service_panel_stop()

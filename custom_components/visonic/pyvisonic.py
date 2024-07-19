@@ -100,7 +100,7 @@ except:
     from pyhelper import (MyChecksumCalc, AlImageManager, ImageRecord, titlecase, pmPanelTroubleType_t, pmPanelAlarmType_t, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.3.4.0"
+PLUGIN_VERSION = "1.3.4.1"
 
 # Some constants to help readability of the code
 
@@ -1571,7 +1571,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.GiveupTryingDownload = True
         self.pmPowerlinkModePending = False
         self.pmPowerlinkMode = False
-        self.PanelLastEventData = self.setLastEventData()
         self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
         if self.DisableAllCommands:
             # Clear the send list and empty the expected response list
@@ -1821,7 +1820,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                     self.PanelMode = AlPanelMode.PROBLEM
                                     # Remember that PowerlinkMode is False here anyway
                                 self.PanelReady = False
-                                self.PanelLastEventData = self.setLastEventData()
                                 self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
                                 self.pmExpectedResponse = []
                                 self.expectedResponseTimeout = 0
@@ -1884,7 +1882,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             self._reset_powerlink_counter()
                             self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
                         self.PanelReady = False
-                        self.PanelLastEventData = self.setLastEventData()
                         self._triggerRestoreStatus()     # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
 
                     
@@ -2469,7 +2466,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             self.PanelMode = AlPanelMode.DOWNLOAD
             self.PanelState = AlPanelStatus.DOWNLOADING  # Downloading
             self.triggeredDownload = True
-            self.PanelLastEventData = self.setLastEventData()
             self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
         elif self.pmDownloadComplete:
             log.debug("[StartDownload] Download has already completed (so not doing anything)")
@@ -2580,10 +2576,10 @@ class PacketHandling(ProtocolBase):
                     # at least self.MotionOffDelay seconds as it also depends on the frequency the panel sends messages
 
                     # Get what delay to use with sensor type
-                    td = self.TriggerOffDelayList.get(self.SensorList[key].stype, None)
+                    td = self.TriggerOffDelayList.get(self.SensorList[key].getSensorType(), None)
                     if td is None: # In case some sensor type is added to the integration but not mapped, use no delay and warn in console
                         td = timedelta(seconds=0)
-                        log.warning("[_resetTriggeredStateTimer] Sensor {0} of type {1} does not have a delay assigned, using 0s".format(key, self.SensorList[key].stype))
+                        log.warning("[_resetTriggeredStateTimer] Sensor {0} of type {1} does not have a delay assigned, using 0s".format(key, self.SensorList[key].getSensorType()))
 
                     #log.debug("[_debug]  Sensor {0}: using {1} for delay".format(key, td))
                     #log.debug("[_debug]  Sensor {0}: current interval: {1}".format(key, interval))
@@ -2592,8 +2588,6 @@ class PacketHandling(ProtocolBase):
                         log.debug("[_resetTriggeredStateTimer]   Sensor {0}   triggered to False".format(key))
                         self.SensorList[key].triggered = False
                         self.SensorList[key].pushChange(AlSensorCondition.RESET)
-
-
 
             # check every 0.5 seconds
             self.checkPostponeTimer()
@@ -3236,7 +3230,6 @@ class PacketHandling(ProtocolBase):
             self.PanelMode = AlPanelMode.STANDARD_PLUS
         else:
             self.PanelMode = AlPanelMode.STANDARD
-        self.PanelLastEventData = self.setLastEventData()
         self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
 
 
@@ -3335,7 +3328,7 @@ class PacketHandling(ProtocolBase):
                 #   do not reset the oldSirenActive just in case self.SirenActive is set to True
                 oldPanelState = self.PanelState
                 oldPanelMode = self.PanelMode
-                oldPowerMaster = self.PowerMaster
+                #oldPowerMaster = self.PowerMaster
                 oldPanelReady = self.PanelReady
                 oldPanelTrouble = self.PanelTroubleStatus
                 oldPanelAlarm = self.PanelAlarmStatus
@@ -3381,11 +3374,7 @@ class PacketHandling(ProtocolBase):
         else:
             log.debug("[_processReceivedPacket] Unknown/Unhandled packet type " + self._toString(packet))
 
-        self.PanelLastEventData = self.setLastEventData()
-
-        if oldSirenActive != self.SirenActive and self.SirenActive:
-            self.sendPanelUpdate(AlCondition.PANEL_UPDATE_ALARM_ACTIVE)  # push changes through to the host to get it to update, alarm is active!!!!!!!!!
-        elif oldSirenActive != self.SirenActive or \
+        if oldSirenActive != self.SirenActive or \
                 oldPanelState != self.PanelState or \
                 oldPanelMode != self.PanelMode or \
                 oldPanelReady != self.PanelReady or \
@@ -3838,9 +3827,9 @@ class PacketHandling(ProtocolBase):
                     # Not a motion or camera to set status
                     log.debug("[UpdateContactSensor]   Sensor {0}   status from {1} to {2}".format(sensor, self.SensorList[sensor].status, status))
                     self.SensorList[sensor].status = status
-                    if status is not None and not status:
-                        self.SensorList[sensor].pushChange(AlSensorCondition.RESET)
-                if status is not None and status:
+                    #if status is not None and not status:
+                    #    self.SensorList[sensor].pushChange(AlSensorCondition.RESET)
+                if status is not None:
                     self.SensorList[sensor].pushChange(AlSensorCondition.STATE)
                     
             #log.debug("[UpdateContactSensor]   Sensor {0}   after".format(sensor))
@@ -3915,7 +3904,8 @@ class PacketHandling(ProtocolBase):
         self.PanelAlertInMemory = sysFlags & 0x02 != 0
 
         if (sysFlags & 0x04 != 0):                   # Trouble
-            self.PanelTroubleStatus = AlTroubleType.GENERAL
+            if self.PanelTroubleStatus == AlTroubleType.NONE:       # if set to NONE then set it to GENERAL, if it's already set from A& then that is more specific
+                self.PanelTroubleStatus = AlTroubleType.GENERAL
         else:
             self.PanelTroubleStatus = AlTroubleType.NONE
 
@@ -3934,9 +3924,6 @@ class PacketHandling(ProtocolBase):
                 log.debug("[ProcessPanelStateUpdate]      Alarm Event Assumed while in Standard Mode")
                 # Alarm Event
                 self.SirenActive = True
-                #self.PanelLastEventData = self.setLastEventData(siren=True)
-                #self.sendPanelUpdate(AlCondition.PANEL_UPDATE_ALARM_ACTIVE)  # Alarm Event
-                # As we have just pushed a change through there's no need to do it again
 
         # Clear any alarm event if the panel alarm has been triggered before (while armed) but now that the panel is disarmed (in all modes)
         if self.SirenActive and sarm == "Disarmed":
@@ -4237,33 +4224,13 @@ class PacketHandling(ProtocolBase):
             dictEvent = []
             dictName = []
 
+            log.debug("[handle_msgtypeA7]         self.SirenTriggerList = {0}".format(self.SirenTriggerList))
+
             # 03 00 01 03 08 0e 01 13
             # 03 00 2f 55 2f 1b 00 1c
             for i in range(0, msgCnt):
                 eventZone = int(data[2 + (2 * i)])
                 eventType = int(data[3 + (2 * i)])
-
-                zoneStr = "Unknown"
-                if self.PowerMaster is not None:
-                    if self.PowerMaster:
-                        zoneStr = pmLogPowerMasterUser_t[self.pmLang][eventZone] or "Unknown"
-                    else:
-                        eventZone = int(eventZone & 0x7F)
-                        zoneStr = pmLogPowerMaxUser_t[self.pmLang][eventZone] or "Unknown"
-                else:
-                    log.debug("[handle_msgtypeA7]         Got an A7 message and the self.PowerMaster variable is not set")
-
-                modeStr = pmLogEvent_t[self.pmLang][eventType] or "Unknown"
-
-                dictType.insert(0, eventType)
-                dictMode.insert(0, modeStr)
-                dictEvent.insert(0, eventZone)
-                dictName.insert(0, zoneStr)
-
-                # set the sensor data
-                #if eventZone >= 1 and eventZone <= zoneCnt:
-                #    if eventZone-1 in self.SensorList:
-                #        dasdfasdfasdfda
 
                 if eventType == EVENT_TYPE_SYSTEM_RESET: # system restart
                     log.info("[handle_msgtypeA7]          Panel has been reset.")
@@ -4271,22 +4238,43 @@ class PacketHandling(ProtocolBase):
                     # Force an update in the Zone Names and Types
                     self._updateSensorNamesAndTypes(True)
                 else:
+                    zoneStr = "Unknown"
+                    if self.PowerMaster is not None:
+                        if self.PowerMaster:
+                            zoneStr = pmLogPowerMasterUser_t[self.pmLang][eventZone] or "Unknown"
+                        else:
+                            eventZone = int(eventZone & 0x7F)
+                            zoneStr = pmLogPowerMaxUser_t[self.pmLang][eventZone] or "Unknown"
+                    else:
+                        log.debug("[handle_msgtypeA7]         Got an A7 message and the self.PowerMaster variable is not set")
+
+                    modeStr = pmLogEvent_t[self.pmLang][eventType] or "Unknown"
+
+                    dictType.insert(0, eventType)
+                    dictMode.insert(0, modeStr)
+                    dictEvent.insert(0, eventZone)
+                    dictName.insert(0, zoneStr)
+
+                    # set the sensor data
+                    #if eventZone >= 1 and eventZone <= zoneCnt:
+                    #    if eventZone-1 in self.SensorList:
+                    #        dasdfasdfasdfda
                     # ---------------------------------------------------------------------------------------
-                    log.debug("[handle_msgtypeA7]         self.SirenTriggerList = {0}".format(self.SirenTriggerList))
 
                     # Siren state
                     siren = False
-                    if eventType in pmPanelAlarmType_t:
+                    if eventType == 0:
+                        self.PanelAlarmStatus = AlAlarmType.NONE
+                        self.PanelTroubleStatus = AlTroubleType.NONE
+                    elif eventType in pmPanelAlarmType_t:
                         self.PanelAlarmStatus = pmPanelAlarmType_t[eventType]
-                        alarmStatus = self.PanelAlarmStatus
-                        log.debug("[handle_msgtypeA7]         Checking if {0} is in the siren trigger list {1}".format(str(alarmStatus).lower(), self.SirenTriggerList))
-                        if str(alarmStatus).lower() in self.SirenTriggerList:
+                        #alarmStatus = self.PanelAlarmStatus
+                        log.debug("[handle_msgtypeA7]         Checking if {0} is in the siren trigger list {1}".format(str(self.PanelAlarmStatus).lower(), self.SirenTriggerList))
+                        if str(self.PanelAlarmStatus).lower() in self.SirenTriggerList:
                             # If any of the A7 messages are in the SirenTriggerList then assume the Siren is triggered
                             log.debug("[handle_msgtypeA7]             And it is, setting siren to True")
                             siren = True
-
-                    # Trouble state
-                    if eventType in pmPanelTroubleType_t:
+                    elif eventType in pmPanelTroubleType_t:     # Trouble state
                         self.PanelTroubleStatus = pmPanelTroubleType_t[eventType]
 
                     log.debug("[handle_msgtypeA7]         System message " + modeStr + " / " + zoneStr + "  alarmStatus " + str(self.PanelAlarmStatus) + "   troubleStatus " + str(self.PanelTroubleStatus))
@@ -4348,9 +4336,8 @@ class PacketHandling(ProtocolBase):
                 # count=0, type=[], event=[], mode=[], name=[]
                 self.setLastPanelEventData(count=len(dictType), type=dictType, zonemode=dictMode, event=dictEvent, name=dictName)
 
+            self.PanelTamper = PanelTamper
             # reset=False
-            self.PanelLastEventData = self.setLastEventData()
-
             if PanelTamper:
                 log.debug("[handle_msgtypeA7] ******************** Tamper Triggered *******************")
                 self.sendPanelUpdate(AlCondition.PANEL_TAMPER_ALARM)  # push changes through to the host to get it to update, tamper is active!
@@ -5165,6 +5152,7 @@ class VisonicProtocol(PacketHandling):
     def getPanelStatusDict(self) -> dict:
         """ Get a dictionary representing the panel status. """
         a = self.setLastEventData()
+        #a.update(self.LastPanelEventData)
         b = { "Protocol Version" : PLUGIN_VERSION }
         self.merge(a,b)
         #log.debug("[getPanelStatusDict]  getPanelStatusDict a = {0}".format(a))

@@ -266,7 +266,10 @@ class VisonicClient:
         """ This is a callback function, called from the visonic library. """
         if type(e) == AlIntEnum:
             if self.process_event is not None:
-                self.process_event(e, self.visonicProtocol.setLastEventData())
+                datadict = self.visonicProtocol.setLastEventData()
+                #datadict.update(self.LastPanelEventData)
+
+                self.process_event(e, datadict)
         else:
             print(f"Visonic attempt to call onPanelChangeHandler type {type(e)}  device is {e}")
 
