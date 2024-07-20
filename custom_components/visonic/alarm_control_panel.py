@@ -74,7 +74,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         """Initialize a Visonic security alarm."""
         self.hass = hass
         self._client = client
-        client.onChange(self.onChange)
+        client.onChange(self.onClientChange)
         self._partition_id = partition_id
         self._mystate = STATE_UNKNOWN
         self._myname = client.getAlarmPanelUniqueIdent()
@@ -99,7 +99,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         return self._client.isPanelConnected()
 
     # The callback handler from the client. All we need to do is schedule an update.
-    def onChange(self, event_id: IntEnum, datadictionary: dict):
+    def onClientChange(self):
         """HA Event Callback."""
         #_LOGGER.debug(f"alarm control panel onChange {self.entity_id=}   {self.available=}")
         if self.entity_id is not None:

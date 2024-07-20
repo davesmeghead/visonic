@@ -64,7 +64,7 @@ class VisonicSensor(Entity):
         """Initialize a Visonic security alarm."""
         self._client = client
         self.hass = hass
-        client.onChange(self.onChange)
+        client.onChange(self.onClientChange)
         self._partition_id = partition_id
         self._mystate = STATE_UNKNOWN
         self._myname = client.getAlarmPanelUniqueIdent()
@@ -86,7 +86,7 @@ class VisonicSensor(Entity):
         return self._client.isPanelConnected()
 
     # The callback handler from the client. All we need to do is schedule an update.
-    def onChange(self, event_id: IntEnum, datadictionary: dict):
+    def onClientChange(self):
         """HA Event Callback."""
         if self.entity_id is not None:
             self.schedule_update_ha_state(False)

@@ -31,7 +31,7 @@ NOTIFICATION_TITLE = "Visonic Alarm Panel"
 # The HA bus events that this integration can generate
 ALARM_PANEL_CHANGE_EVENT = f"{DOMAIN}_alarm_panel_state"
 ALARM_SENSOR_CHANGE_EVENT = f"{DOMAIN}_alarm_sensor_state"
-ALARM_COMMAND_EVENT = f"{DOMAIN}_alarm_command"
+ALARM_COMMAND_EVENT = f"{DOMAIN}_alarm_command_to_panel"
 ALARM_PANEL_LOG_FILE_COMPLETE = f"{DOMAIN}_alarm_panel_event_log_complete"
 ALARM_PANEL_LOG_FILE_ENTRY = f"{DOMAIN}_alarm_panel_event_log_entry"
 
@@ -107,7 +107,7 @@ PIN_REGEX = "^[0-9]{4}$"
 class AvailableNotifications(str, Enum):
     ALWAYS = 'always'
     SIREN = 'siren_sounding'
-    TAMPER = 'panel_tamper'
+#    TAMPER = 'panel_tamper'
     RESET = 'panel_reset'
     INVALID_PIN = 'invalid_pin'
     PANEL_OPERATION = 'panel_operation'

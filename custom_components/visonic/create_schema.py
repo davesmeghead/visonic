@@ -69,16 +69,16 @@ from .pyconst import AlSensorCondition
 
 # These need to match the "sensor_event_list" selector in the language json file
 AvailableSensorEvents = {
-    "state" : AlSensorCondition.STATE,
-    "tamper" : AlSensorCondition.TAMPER,
-    "battery" : AlSensorCondition.BATTERY,
-    "bypass" : AlSensorCondition.BYPASS,
+#    "state" : AlSensorCondition.STATE,
+#    "tamper" : AlSensorCondition.TAMPER,
+#    "battery" : AlSensorCondition.BATTERY,
+#    "bypass" : AlSensorCondition.BYPASS,
+#    "enrolled" : AlSensorCondition.ENROLLED,
     "problem" : AlSensorCondition.PROBLEM,
-    "enrolled" : AlSensorCondition.ENROLLED,
     "fire" : AlSensorCondition.FIRE,
     "emergency" : AlSensorCondition.EMERGENCY,
-    "panic" : AlSensorCondition.PANIC,
-    "camera" : AlSensorCondition.CAMERA
+    "panic" : AlSensorCondition.PANIC
+#    "camera" : AlSensorCondition.CAMERA
 }
 
 TIME_UNITS = [
@@ -231,13 +231,13 @@ class VisonicSchema:
                 default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
             ): selector.SelectSelector(selector.SelectSelectorConfig(options=available_siren_values, multiple=True, sort=True, translation_key=CONF_SIREN_SOUNDING)),
             vol.Optional(
-                CONF_SENSOR_EVENTS, 
-                default=self.create_default(options, CONF_SENSOR_EVENTS, ["problem"]),
-            ): selector.SelectSelector(selector.SelectSelectorConfig(options=list(AvailableSensorEvents.keys()).copy(), multiple=True, sort=True, translation_key=CONF_SENSOR_EVENTS)),
-            vol.Optional(
                 CONF_ALARM_NOTIFICATIONS,
                 default=self.create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
             ): selector.SelectSelector(selector.SelectSelectorConfig(options=strlist, multiple=True, sort=True, translation_key=CONF_ALARM_NOTIFICATIONS)),
+            vol.Optional(
+                CONF_SENSOR_EVENTS, 
+                default=self.create_default(options, CONF_SENSOR_EVENTS, ["problem"]),
+            ): selector.SelectSelector(selector.SelectSelectorConfig(options=list(AvailableSensorEvents.keys()).copy(), multiple=True, sort=True, translation_key=CONF_SENSOR_EVENTS)),
             #): cv.multi_select(AvailableNotificationConfig),
             # https://developers.home-assistant.io/docs/data_entry_flow_index/#show-form
             vol.Optional(

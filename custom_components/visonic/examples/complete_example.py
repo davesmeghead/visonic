@@ -32,16 +32,9 @@ except:
 
 # config parameters for myconfig, just to make the defaults easier
 CONF_DOWNLOAD_CODE = "download_code"
-#CONF_FORCE_AUTOENROLL = "force_autoenroll"
-#CONF_AUTO_SYNC_TIME = "sync_time"
 CONF_LANGUAGE = "language"
 CONF_EMULATION_MODE = "emulation_mode"
-
-CONF_MOTION_OFF_DELAY = "motion_off_delay"
-CONF_MAGNET_CLOSED_DELAY = "magnet_closed_delay"
-CONF_EMER_OFF_DELAY = "emergency_off_delay"
 CONF_SIREN_SOUNDING = "siren_sounding"
-CONF_EEPROM_ATTRIBUTES = "show_eeprom_attributes"
 
 class ConnectionMode(Enum):
     POWERLINK = 1
@@ -58,14 +51,8 @@ class PrintMode(Enum):
 myconfig = { 
     CONF_DOWNLOAD_CODE: "",
     CONF_EMULATION_MODE: ConnectionMode.POWERLINK,
-#    CONF_FORCE_AUTOENROLL: True,
-#    CONF_AUTO_SYNC_TIME : True,
     CONF_LANGUAGE: "EN",
-    CONF_MOTION_OFF_DELAY: 10,
-    CONF_MAGNET_CLOSED_DELAY: 10,
-    CONF_EMER_OFF_DELAY: 10,
-    CONF_SIREN_SOUNDING: ["Intruder"],
-    CONF_EEPROM_ATTRIBUTES: False
+    CONF_SIREN_SOUNDING: ["Intruder"]
 }
 
 string_type="string"
@@ -266,7 +253,7 @@ class VisonicClient:
         """ This is a callback function, called from the visonic library. """
         if type(e) == AlIntEnum:
             if self.process_event is not None:
-                datadict = self.visonicProtocol.setLastEventData()
+                datadict = self.visonicProtocol.getEventData()
                 #datadict.update(self.LastPanelEventData)
 
                 self.process_event(e, datadict)
@@ -312,22 +299,8 @@ class VisonicClient:
             AlConfiguration.DownloadCode: self.config.get(CONF_DOWNLOAD_CODE, ""),
             AlConfiguration.ForceStandard: self.ForceStandardMode,
             AlConfiguration.DisableAllCommands: self.DisableAllCommands,
-            #AlConfiguration.AutoEnroll: self.toBool(
-            #    self.config.get(CONF_FORCE_AUTOENROLL, True)
-            #),
-            #AlConfiguration.AutoSyncTime: self.toBool(
-            #    self.config.get(CONF_AUTO_SYNC_TIME, True)
-            #),
             AlConfiguration.PluginLanguage: self.config.get(CONF_LANGUAGE, "EN"),
-            AlConfiguration.MotionOffDelay: self.config.get(CONF_MOTION_OFF_DELAY, 120),
-            AlConfiguration.MagnetClosedDelay: self.config.get(CONF_MAGNET_CLOSED_DELAY, 5),
-            AlConfiguration.EmergencyOffDelay: self.config.get(CONF_EMER_OFF_DELAY, 120),
-            AlConfiguration.SirenTriggerList: self.config.get(
-                CONF_SIREN_SOUNDING, ["Intruder"]
-            ),
-            AlConfiguration.EEPROMAttributes: self.toBool(
-                self.config.get(CONF_EEPROM_ATTRIBUTES, False)
-            ),
+            AlConfiguration.SirenTriggerList: self.config.get(CONF_SIREN_SOUNDING, ["Intruder"])
         }
 
     def onDisconnect(self, excep, another_parameter):

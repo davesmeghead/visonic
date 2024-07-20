@@ -54,11 +54,11 @@ import inspect
 from inspect import currentframe, getframeinfo, stack
 
 try:
-    from .pyconst import (AlIntEnum, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, 
+    from .pyconst import (AlIntEnum, NO_DELAY_SET, PanelConfig, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, 
                           AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlPanelInterface, AlSensorDevice, 
                           AlLogPanelEvent, AlSensorType, AlSwitchDevice)
 except:
-    from pyconst import (AlIntEnum, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, 
+    from pyconst import (AlIntEnum, NO_DELAY_SET, PanelConfig, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, 
                          AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlPanelInterface, AlSensorDevice, 
                          AlLogPanelEvent, AlSensorType, AlSwitchDevice)
 
@@ -733,7 +733,6 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         self.PanelTroubleStatus = AlTroubleType.NONE
         self.PanelLastEvent = "Unknown"
         self.PanelStatusText = "Unknown"
-        self.SendPanelEventData = None
         self.LastPanelEventData = {}
 
         # Keep a dict of the sensors so we know if its new or existing
@@ -865,15 +864,20 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         datadict["event_mode"] = zonemode
         datadict["event_name"] = name
         self.LastPanelEventData = datadict
-        self.SendPanelEventData = datadict
 
         if count > 0:
-            self.PanelLastEvent = name[0] + "/" + zonemode[0]
+            self.PanelLastEvent = name[count-1] + "/" + zonemode[count-1]
+            for i in range(0, count):
+                a = {}
+                a["name"] = titlecase(name[i].replace("_"," ").lower())
+                a["event"] = titlecase(zonemode[i].replace("_"," ").lower())
+                log.debug(f"[PanelUpdate]  {a}")
+                self.onPanelChangeHandler(AlCondition.PANEL_UPDATE, a)
 
         #log.debug(f"Last event {datadict}")
         return datadict
 
-    def setLastEventData(self) -> dict:
+    def getEventData(self) -> dict:
         datadict = {}
         datadict["mode"] = titlecase(self.PanelMode.name.replace("_"," ").lower())
         datadict["state"] = "Triggered" if self.SirenActive else titlecase(self.PanelState.name.replace("_"," ").lower())
@@ -909,20 +913,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
     def sendPanelUpdate(self, ev : AlCondition):
         if self.onPanelChangeHandler is not None:
             if ev == AlCondition.PANEL_UPDATE:
-                
-                a = self.setLastEventData()
-                
-                if self.SendPanelEventData is None:
-                    a["event"] = "None"
-                    log.debug(f"[sendPanelUpdate]  {a}")
-                    self.onPanelChangeHandler(ev, a)
-                else:
-                    for i in range(0, self.SendPanelEventData["event_count"]):
-                        em = str(self.SendPanelEventData["event_name"][i]) + "/" + str(self.SendPanelEventData["event_mode"][i])
-                        a["event"] = titlecase(em.replace("_"," ").lower())
-                        log.debug(f"[sendPanelUpdate]  {a}")
-                        self.onPanelChangeHandler(ev, a)
-                    self.SendPanelEventData = None    
+                self.onPanelChangeHandler(AlCondition.PUSH_CHANGE, {})                
             else:
                 self.onPanelChangeHandler(ev, {})
 

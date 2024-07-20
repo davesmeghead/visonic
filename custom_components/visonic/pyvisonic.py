@@ -1201,7 +1201,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.PowerMaster = None              # Set to None to represent unknown until we know True or False
         self.ModelType = None
         self.PanelType = None                # We do not yet know the paneltype
-        self.PanelStatus = {}
         
         self.KeepAlivePeriod = KEEP_ALIVE_PERIOD
 
@@ -1211,39 +1210,16 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
         # determine when MSG_ENROLL is sent to the panel
         self.doneAutoEnroll = False
+        self.AutoEnroll = True
+        self.AutoSyncTime = False
 
         # Configured from the client INTERFACE
         #   These are the default values
         self.ForceStandardMode = False        # INTERFACE : Get user variable from HA to force standard mode or try for PowerLink
         self.DisableAllCommands = False       # INTERFACE : Get user variable from HA to allow or disable all commands to the panel 
-        self.AutoEnroll = True                # INTERFACE : Auto Enroll when don't know panel type. Set to true as default as most panels can do this
-        self.AutoSyncTime = False             # INTERFACE : sync time with the panel, assume no until we get the panel type
         self.DownloadCode = DEFAULT_DL_CODE   # INTERFACE : Set the Download Code
         self.pmLang = 'EN'                    # INTERFACE : Get the plugin language from HA, either "EN", "FR" or "NL"
-        self.MotionOffDelay = 120             # INTERFACE : Get the motion sensor off delay time (between subsequent triggers)
-        self.MagnetClosedDelay = 5            # INTERFACE : Get the magnet sensor closed delay time (between subsequent triggers)
-        self.EmergencyOffDelay = 120          # INTERFACE : Get the emergency sensors off delay time (between subsequent triggers)
         self.SirenTriggerList = ["intruder"]  # INTERFACE : This is the trigger list that we can assume is making the siren sound
-        self.IncludeEEPROMAttributes = False  # INTERFACE : Whether to include the EEPROM attributes in the alarm panel HA attributes list
-
-
-        # Trigger Off delays to apply for each sensor type
-        self.TriggerOffDelayList = {
-            AlSensorType.MAGNET: timedelta(seconds=self.MagnetClosedDelay),
-            AlSensorType.WIRED: timedelta(seconds=self.MagnetClosedDelay),
-            AlSensorType.MOTION: timedelta(seconds=self.MotionOffDelay),
-            AlSensorType.CAMERA: timedelta(seconds=self.MotionOffDelay),
-            AlSensorType.VIBRATION: timedelta(seconds=self.EmergencyOffDelay),
-            AlSensorType.SHOCK: timedelta(seconds=self.EmergencyOffDelay),
-            AlSensorType.SMOKE: timedelta(seconds=self.EmergencyOffDelay),
-            AlSensorType.GAS: timedelta(seconds=self.EmergencyOffDelay),
-            AlSensorType.FLOOD: timedelta(seconds=self.EmergencyOffDelay),
-            AlSensorType.TEMPERATURE: timedelta(seconds=self.EmergencyOffDelay),
-            AlSensorType.SOUND: timedelta(seconds=self.EmergencyOffDelay),
-            AlSensorType.UNKNOWN: timedelta(seconds=0),
-            AlSensorType.IGNORED: timedelta(seconds=0)
-        }
-
 
         # Now that the defaults have been set, update them from the panel config dictionary (that may not have all settings in)
         self.updateSettings(panelConfig)
@@ -1419,33 +1395,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 tmpList = newdata[AlConfiguration.SirenTriggerList]
                 self.SirenTriggerList = [x.lower() for x in tmpList]
                 log.debug("[Settings] Siren Trigger List set to {0}".format(self.SirenTriggerList))
-            if AlConfiguration.EEPROMAttributes in newdata:
-                self.IncludeEEPROMAttributes = newdata[AlConfiguration.EEPROMAttributes]
-                log.debug("[Settings] Include EEPROM Attributes set to {0}".format(self.IncludeEEPROMAttributes))
-            if AlConfiguration.MotionOffDelay in newdata:
-                # Get the motion sensor off delay time (between subsequent triggers)
-                self.MotionOffDelay =  newdata[AlConfiguration.MotionOffDelay]
-                self.TriggerOffDelayList[AlSensorType.MOTION] = timedelta(seconds=self.MotionOffDelay)
-                self.TriggerOffDelayList[AlSensorType.CAMERA] = timedelta(seconds=self.MotionOffDelay)
-                log.debug("[Settings] Motion Off Delay set to {0}".format(self.MotionOffDelay))
-            if AlConfiguration.MagnetClosedDelay in newdata:
-                # Get the magnet sensor closed delay time (between subsequent triggers)
-                self.MagnetClosedDelay =  newdata[AlConfiguration.MagnetClosedDelay]
-                self.TriggerOffDelayList[AlSensorType.MAGNET] = timedelta(seconds=self.MagnetClosedDelay)
-                self.TriggerOffDelayList[AlSensorType.WIRED] = timedelta(seconds=self.MagnetClosedDelay)
-                log.debug("[Settings] Magnet closed Delay set to {0}".format(self.MagnetClosedDelay))
-            if AlConfiguration.EmergencyOffDelay in newdata:
-                # Get the emergency sensors sensor off delay time (between subsequent triggers)
-                self.EmergencyOffDelay =  newdata[AlConfiguration.EmergencyOffDelay]
-                self.TriggerOffDelayList[AlSensorType.VIBRATION] = timedelta(seconds=self.EmergencyOffDelay)
-                self.TriggerOffDelayList[AlSensorType.SHOCK] = timedelta(seconds=self.EmergencyOffDelay)
-                self.TriggerOffDelayList[AlSensorType.SMOKE] = timedelta(seconds=self.EmergencyOffDelay)
-                self.TriggerOffDelayList[AlSensorType.GAS] = timedelta(seconds=self.EmergencyOffDelay)
-                self.TriggerOffDelayList[AlSensorType.FLOOD] = timedelta(seconds=self.EmergencyOffDelay)
-                self.TriggerOffDelayList[AlSensorType.TEMPERATURE] = timedelta(seconds=self.EmergencyOffDelay)
-                self.TriggerOffDelayList[AlSensorType.SOUND] = timedelta(seconds=self.EmergencyOffDelay)
-                log.debug("[Settings] Emergency Off Delay set to {0}".format(self.EmergencyOffDelay))
-                
 
         if self.DisableAllCommands:
             self.ForceStandardMode = True
@@ -2543,6 +2492,8 @@ class PacketHandling(ProtocolBase):
 
         self.pmForceArmSetInPanel = False          # If the Panel is using "Force Arm" then sensors may be automatically armed and bypassed by the panel when it is armed and disarmed
 
+        self.PostponeEventCounter = 0
+        
         self.lastPacketCounter = 0
         self.sensorsCreated = False  # Have the sensors been created. Either from an A5 message or the EEPROM data
 
@@ -2550,50 +2501,6 @@ class PacketHandling(ProtocolBase):
         # The PowerMaster "B0" Messages
         self.save0306 = None
         self.beezero_024B_sensorcount = None
-
-        self.PostponeEventTimer = 0
-        
-        # Task to cancel the trigger status of sensors after the timer expires
-        asyncio.create_task(self._resetTriggeredStateTimer())
-
-    def checkPostponeTimer(self):
-        if self.PostponeEventTimer > 0:
-            self.PostponeEventTimer = self.PostponeEventTimer - 1
-            if self.PostponeEventTimer == 0:
-                self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
-
-    # For the sensors that have been triggered, turn them off after self.MotionOffDelay seconds
-    async def _resetTriggeredStateTimer(self):
-        """ reset triggered state"""
-        counter = 0
-        while not self.suspendAllOperations:
-            counter = counter + 1
-            # cycle through the sensors and set the triggered value back to False after the timeout duration
-            #    get it here so if it gets updated then we use the new value
-            for key in self.SensorList:
-                if self.SensorList[key].triggered:
-                    interval = self._getUTCTimeFunction() - self.SensorList[key].utctriggertime
-                    # at least self.MotionOffDelay seconds as it also depends on the frequency the panel sends messages
-
-                    # Get what delay to use with sensor type
-                    td = self.TriggerOffDelayList.get(self.SensorList[key].getSensorType(), None)
-                    if td is None: # In case some sensor type is added to the integration but not mapped, use no delay and warn in console
-                        td = timedelta(seconds=0)
-                        log.warning("[_resetTriggeredStateTimer] Sensor {0} of type {1} does not have a delay assigned, using 0s".format(key, self.SensorList[key].getSensorType()))
-
-                    #log.debug("[_debug]  Sensor {0}: using {1} for delay".format(key, td))
-                    #log.debug("[_debug]  Sensor {0}: current interval: {1}".format(key, interval))
-
-                    if interval > td:
-                        log.debug("[_resetTriggeredStateTimer]   Sensor {0}   triggered to False".format(key))
-                        self.SensorList[key].triggered = False
-                        self.SensorList[key].pushChange(AlSensorCondition.RESET)
-
-            # check every 0.5 seconds
-            self.checkPostponeTimer()
-            await asyncio.sleep(0.25)  # must be less than 5 seconds for self.suspendAllOperations:
-            self.checkPostponeTimer()
-            await asyncio.sleep(0.25)  # must be less than 5 seconds for self.suspendAllOperations:
 
     # _writeEPROMSettings: add a certain setting to the settings table
     #      When we send a MSG_DL and insert the 4 bytes from pmDownloadItem_t, what we're doing is setting the page, index and len
@@ -3233,6 +3140,14 @@ class PacketHandling(ProtocolBase):
         self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
 
 
+    async def _postponeEventTimer(self):
+        while self.PostponeEventCounter > 0:
+            await asyncio.sleep(0.25)  # must be less than 5 seconds for self.suspendAllOperations:
+            self.PostponeEventCounter = self.PostponeEventCounter - 1
+            #log.debug(f"[_postponeEventTimer] timer at {self.PostponeEventCounter}")
+            if self.PostponeEventCounter == 0:
+                self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
+
     # This function handles a received message packet and processes it
     def _processReceivedPacket(self, packet):
         """Handle one raw incoming packet."""
@@ -3333,8 +3248,12 @@ class PacketHandling(ProtocolBase):
                 oldPanelTrouble = self.PanelTroubleStatus
                 oldPanelAlarm = self.PanelAlarmStatus
                 oldPanelBypass = self.PanelBypass
-                log.debug("[_processReceivedPacket] Diff on PanelState but not pushing through yet, setting timer to 2")
-                self.PostponeEventTimer = 2
+                log.debug("[_processReceivedPacket] Diff on PanelState but not pushing through yet, waiting for A7 data, setting timer to 0.5 seconds")
+                
+                # Kick off the postpone timer
+                self.PostponeEventCounter = 2
+                asyncio.create_task(self._postponeEventTimer())
+
                 # need to let it fallthrough just in case the siren is sounding
             #pushchange = True
         elif packet[1] == 0xA6:  # General Event
@@ -3342,9 +3261,9 @@ class PacketHandling(ProtocolBase):
             pushchange = True
         elif packet[1] == 0xA7:  # General Event
             self.handle_msgtypeA7(packet[2:-2])
-            if self.PostponeEventTimer > 0:
+            if self.PostponeEventCounter > 0:
                 # stop the time sending it as we've received an A7 before the timer triggered
-                self.PostponeEventTimer = 0
+                self.PostponeEventCounter = 0
                 log.debug("[_processReceivedPacket] processed A7 and timer set so setting timer to 0")
                 # just set 2 of the variables to unknown so it triggers the sending of an AlCondition.PANEL_UPDATE further down
                 oldPanelMode = AlPanelMode.UNKNOWN
@@ -3818,7 +3737,7 @@ class PacketHandling(ProtocolBase):
                 self.SensorList[sensor].pushChange(AlSensorCondition.STATE)
             elif status is not None and self.SensorList[sensor].status != status:
                 # The current setting is different
-                if status is not None and status:
+                if status:
                     log.debug("[UpdateContactSensor]   Sensor {0}   triggered to True".format(sensor))
                     self.SensorList[sensor].triggered = True
                     self.SensorList[sensor].triggertime = self._getTimeFunction()
@@ -3829,8 +3748,10 @@ class PacketHandling(ProtocolBase):
                     self.SensorList[sensor].status = status
                     #if status is not None and not status:
                     #    self.SensorList[sensor].pushChange(AlSensorCondition.RESET)
-                if status is not None:
-                    self.SensorList[sensor].pushChange(AlSensorCondition.STATE)
+                # Push change as status has toggled
+                self.SensorList[sensor].pushChange(AlSensorCondition.STATE)
+
+            self.SensorList[sensor].triggered = False
                     
             #log.debug("[UpdateContactSensor]   Sensor {0}   after".format(sensor))
             #self._dumpSensorsToLogFile()
@@ -5149,9 +5070,9 @@ class VisonicProtocol(PacketHandling):
 
     # A dictionary that is used to add to the attribute list of the Alarm Control Panel
     #     If this is overridden then please include the items in the dictionary defined here by using super()
-    def getPanelStatusDict(self) -> dict:
+    def getPanelStatusDict(self, include_extended_status : bool) -> dict:
         """ Get a dictionary representing the panel status. """
-        a = self.setLastEventData()
+        a = self.getEventData()
         #a.update(self.LastPanelEventData)
         b = { "Protocol Version" : PLUGIN_VERSION }
         self.merge(a,b)
@@ -5170,7 +5091,7 @@ class VisonicProtocol(PacketHandling):
         }
         #log.debug("[getPanelStatusDict A] type a={0} type c={1}".format(type(a), type(c)))
         self.merge(a,c)
-        if self.IncludeEEPROMAttributes and len(self.PanelStatus) > 0:
+        if include_extended_status and len(self.PanelStatus) > 0:
             # r = {**d, **self.PanelStatus}
             self.merge(a,self.PanelStatus)
         #log.debug("[getPanelStatusDict]  getPanelStatusDict d = {0} {1}".format(type(d),d))

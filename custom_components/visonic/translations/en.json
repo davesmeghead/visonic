@@ -253,22 +253,15 @@
         },
         "sensor_event_list": {
             "options": {
-				"state":     "State",
-				"tamper":    "Tamper",
-				"battery":   "Battery",
-				"bypass":    "Bypass",
 				"problem":   "Problem",
-				"enrolled":  "Enrolled",
 				"fire":      "Fire",
 				"emergency": "Emergency",
-				"panic":     "Panic",
-				"camera":    "Camera"
+				"panic":     "Panic"
             }
         },
 		"panel_state_notifications": {
             "options": {
 				"siren_sounding": "Siren Sounding",
-				"panel_tamper": "Panel Tamper",
 				"panel_reset":  "Panel System Reset",
 				"invalid_pin": "Code Rejected By Panel",
 				"panel_operation": "Panel Operation",

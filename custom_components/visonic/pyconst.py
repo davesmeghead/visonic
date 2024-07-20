@@ -143,17 +143,10 @@ a = AlAlarmType()
 # the set of configuration parameters in to this client class
 class AlConfiguration(AlEnum):
     DownloadCode = AlIntEnum(0)           # 4 digit string or ""
-#    AutoEnroll = AlIntEnum(1)             # Boolean
-#    AutoSyncTime = AlIntEnum(2)           # Boolean
     PluginLanguage = AlIntEnum(3)         # String "EN", "FR", "NL"
-    MotionOffDelay = AlIntEnum(4)         # Integer (seconds)
     SirenTriggerList = AlIntEnum(5)       # A list of strings
     ForceStandard = AlIntEnum(6)          # Boolean
-    EEPROMAttributes = AlIntEnum(10)      # Boolean
     DisableAllCommands = AlIntEnum(11)    # Boolean
-#    CompleteReadOnly = AlIntEnum(12)      # Boolean
-    MagnetClosedDelay = AlIntEnum(13)         # Integer (seconds)
-    EmergencyOffDelay = AlIntEnum(14)         # Integer (seconds)
 a = AlConfiguration()
 
 # The set of panel modes
@@ -235,10 +228,8 @@ class AlCondition(AlEnum):
     PUSH_CHANGE = AlIntEnum(0)               # This causes the client to update the frontend etc but it does not send out an HA Event
     ZONE_UPDATE = AlIntEnum(1)
     PANEL_UPDATE = AlIntEnum(2)
-#    PANEL_UPDATE_ALARM_ACTIVE = AlIntEnum(3)
     PANEL_RESET = AlIntEnum(4)
     PIN_REJECTED = AlIntEnum(5)
-    PANEL_TAMPER_ALARM = AlIntEnum(6)
     DOWNLOAD_TIMEOUT = AlIntEnum(7)
     WATCHDOG_TIMEOUT_GIVINGUP = AlIntEnum(8)
     WATCHDOG_TIMEOUT_RETRYING = AlIntEnum(9)
@@ -435,17 +426,10 @@ class AlSwitchDevice(ABC):
 
 class PanelConfig(TypedDict):
     AlConfiguration.ForceStandard:        bool
-#    AlConfiguration.AutoEnroll:           bool
-#    AlConfiguration.AutoSyncTime:         bool
     AlConfiguration.DisableAllCommands:   bool
-#    AlConfiguration.CompleteReadOnly:     bool
     AlConfiguration.DownloadCode:         str
     AlConfiguration.PluginLanguage:       str
-    AlConfiguration.MotionOffDelay:       int
-    AlConfiguration.MagnetClosedDelay:    int
-    AlConfiguration.EmergencyOffDelay:    int
     AlConfiguration.SirenTriggerList:     list[str]
-    AlConfiguration.EEPROMAttributes:     bool
 
 
 class AlTransport(ABC):
@@ -537,7 +521,7 @@ class AlPanelInterface(ABC):
     # A dictionary that is used to add to the attribute list of the Alarm Control Panel
     #     If this is overridden then please include the items in the dictionary defined here by using super()
     @abstractmethod
-    def getPanelStatusDict(self) -> dict:
+    def getPanelStatusDict(self, include_extended_status : bool) -> dict:
         """ Get a dictionary representing the panel status. """
         return {}
 

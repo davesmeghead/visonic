@@ -25,35 +25,20 @@ CONF_PATH = "path"
 
 # config parameters for myconfig, just to make the defaults easier
 CONF_DOWNLOAD_CODE = "download_code"
-#CONF_FORCE_AUTOENROLL = "force_autoenroll"
-#CONF_AUTO_SYNC_TIME = "sync_time"
 CONF_LANGUAGE = "language"
-#CONF_FORCE_STANDARD = "force_standard"
 CONF_EMULATION_MODE = "emulation_mode"
-
-CONF_MOTION_OFF_DELAY = "motion_off_delay"
-CONF_MAGNET_CLOSED_DELAY = "magnet_closed_delay"
-CONF_EMER_OFF_DELAY = "emergency_off_delay"
 CONF_SIREN_SOUNDING = "siren_sounding"
-CONF_EEPROM_ATTRIBUTES = "show_eeprom_attributes"
 
-available_emulation_modes = [
-    "Powerlink Emulation",
-    "Force Standard Mode",
-    "Minimal Interaction (data only sent to obtain panel state)",
-]
+class ConnectionMode(Enum):
+    POWERLINK = 1
+    STANDARD = 2
+    DATAONLY = 3
 
 myconfig = { 
     CONF_DOWNLOAD_CODE: "",
-    CONF_EMULATION_MODE: available_emulation_modes[0],
-#    CONF_FORCE_AUTOENROLL: True,
-#    CONF_AUTO_SYNC_TIME : True,
+    CONF_EMULATION_MODE: ConnectionMode.POWERLINK,
     CONF_LANGUAGE: "EN",
-    CONF_MOTION_OFF_DELAY: 10,
-    CONF_MAGNET_CLOSED_DELAY: 10,
-    CONF_EMER_OFF_DELAY: 10,
-    CONF_SIREN_SOUNDING: ["Intruder"],
-    CONF_EEPROM_ATTRIBUTES: False
+    CONF_SIREN_SOUNDING: ["Intruder"]
 }
 
 def toBool(val) -> bool:
@@ -106,9 +91,9 @@ class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 
 def getConfigData() -> PanelConfig:
     """ Create a dictionary full of the configuration data. """
-    v = myconfig.get(CONF_EMULATION_MODE, available_emulation_modes[0])        
-    ForceStandardMode = v == available_emulation_modes[1]
-    DisableAllCommands = v == available_emulation_modes[2]
+    v = self.config.get(CONF_EMULATION_MODE, ConnectionMode.POWERLINK)        
+    self.ForceStandardMode = v == ConnectionMode.STANDARD
+    self.DisableAllCommands = v == ConnectionMode.DATAONLY
 
     if DisableAllCommands:
         ForceStandardMode = True
@@ -124,23 +109,8 @@ def getConfigData() -> PanelConfig:
         AlConfiguration.DownloadCode: myconfig.get(CONF_DOWNLOAD_CODE, ""),
         AlConfiguration.ForceStandard: ForceStandardMode,
         AlConfiguration.DisableAllCommands: DisableAllCommands,
-#        AlConfiguration.CompleteReadOnly: CompleteReadOnly,
-#        AlConfiguration.AutoEnroll: toBool(
-#            myconfig.get(CONF_FORCE_AUTOENROLL, True)
-#        ),
-#        AlConfiguration.AutoSyncTime: toBool(
-#            myconfig.get(CONF_AUTO_SYNC_TIME, True)
-#        ),
         AlConfiguration.PluginLanguage: myconfig.get(CONF_LANGUAGE, "EN"),
-        AlConfiguration.MotionOffDelay: myconfig.get(CONF_MOTION_OFF_DELAY, 120),
-        AlConfiguration.MagnetClosedDelay: myconfig.get(CONF_MAGNET_CLOSED_DELAY, 5),
-        AlConfiguration.EmergencyOffDelay: myconfig.get(CONF_EMER_OFF_DELAY, 120),
-        AlConfiguration.SirenTriggerList: myconfig.get(
-            CONF_SIREN_SOUNDING, ["Intruder"]
-        ),
-        AlConfiguration.EEPROMAttributes: toBool(
-            myconfig.get(CONF_EEPROM_ATTRIBUTES, False)
-        )
+        AlConfiguration.SirenTriggerList: myconfig.get(CONF_SIREN_SOUNDING, ["Intruder"])
     }
 
 def callback_handler(visonic_devices, dict={}):
