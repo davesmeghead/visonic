@@ -100,7 +100,7 @@ except:
     from pyhelper import (MyChecksumCalc, AlImageManager, ImageRecord, titlecase, pmPanelTroubleType_t, pmPanelAlarmType_t, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.3.4.1"
+PLUGIN_VERSION = "1.3.4.5"
 
 # Some constants to help readability of the code
 
@@ -166,7 +166,7 @@ PACKET_HEADER = 0x0D
 PACKET_FOOTER = 0x0A
 PACKET_MAX_SIZE = 0xF0
 ACK_MESSAGE = 0x02
-REDIRECT_POWERLINK_DATA = 0xC0
+REDIRECT = 0xC0
 
 log = mylog
 #from .pyhelper import vloggerclass
@@ -381,7 +381,7 @@ pmReceiveMsg_t = {
    0xAC : PanelCallBack( 15,  True, False,  0, 0, False,  True ),   # 15 X10 Names ???
    0xAD : PanelCallBack( 15,  True, False,  0, 0, False,  True ),   # 15 Panel responds with this when we ask for JPG images
    0xB0 : PanelCallBack(  8,  True,  True,  4, 2, False,  True ),   # The B0 message comes in varying lengths, sometimes it is shorter than what it states and the CRC is sometimes wrong
-   REDIRECT_POWERLINK_DATA : PanelCallBack(  5, False,  True,  2, 0, False, False ),   # TESTING: These are redirected Powerlink messages. 0D C0 len <data> cs 0A   so 5 plus the original data length
+   REDIRECT : PanelCallBack(  5, False,  True,  2, 0, False, False ),   # TESTING: These are redirected Powerlink messages. 0D C0 len <data> cs 0A   so 5 plus the original data length
    # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it. Assume a minimum length of 9, a variable length and ignore the checksum calculation.
    0xF1 : PanelCallBack(  9,  True,  True,  0, 0,  True, False ),   # Ignore checksum on all F1 messages
    # The F4 message comes in varying lengths. It is the image data from a PIR camera. Ignore checksum on all F4 messages
@@ -1480,12 +1480,12 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         # Define powerlink seconds timer and start it for PowerLink communication
         self._reset_watchdog_timeout()
         self._reset_keep_alive_messages()
-        if not self.ForceStandardMode:
+        if self.ForceStandardMode:
+            self._gotoStandardMode()
+        else:
             self.triggeredDownload = False
             self._sendInterfaceResetCommand()
             self._startDownload()
-        else:
-            self._gotoStandardMode()
         asyncio.create_task(self._keep_alive_and_watchdog_timer())
 
     def _sendInterfaceResetCommand(self):
@@ -1588,12 +1588,12 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             altDownloadCode = pmPanelConfig_t["CFG_DLCODE_2"][self.PanelType][:2] + " " + pmPanelConfig_t["CFG_DLCODE_2"][self.PanelType][2:]
         if not self.doneAutoEnroll:
             self.doneAutoEnroll = True
-            log.debug("[_sendMsgENROLL] Sending message enrol with the Download Code")
+            log.debug("[_sendMsgENROLL] Sending message enroll with the Download Code")
             self._sendCommand("MSG_ENROLL", options=[ [4, convertByteArray(self.DownloadCode)] ])
             if triggerdownload:
                 self._startDownload()
         elif self.DownloadCode == altDownloadCode:
-            log.warning("[_sendMsgENROLL] Warning: Trying to re enroll, already tried BBBB and still not successful")
+            log.warning(f"[_sendMsgENROLL] Warning: Trying to re enroll, already tried {altDownloadCode} and still not successful")
         else:
             log.debug("[_sendMsgENROLL] Warning: Trying to re enroll but not triggering download")
             self.DownloadCode = altDownloadCode  # Force the Download code to be something different and try again ?????
@@ -2502,10 +2502,10 @@ class PacketHandling(ProtocolBase):
         self.save0306 = None
         self.beezero_024B_sensorcount = None
 
-    # _writeEPROMSettings: add a certain setting to the settings table
+    # _saveEPROMSettings: add a certain setting to the settings table
     #      When we send a MSG_DL and insert the 4 bytes from pmDownloadItem_t, what we're doing is setting the page, index and len
     # This function stores the downloaded status and EEPROM data
-    def _writeEPROMSettings(self, page, index, setting):
+    def _saveEPROMSettings(self, page, index, setting):
         settings_len = len(setting)
         wrap = index + settings_len - 0x100
         sett = [bytearray(b""), bytearray(b"")]
@@ -2882,8 +2882,7 @@ class PacketHandling(ProtocolBase):
             # Panel type and serial number
             #     This checks whether the EEPROM settings have been downloaded OK
             
-            pmDisplayName = self._lookupEpromSingle("displayName")    
-
+            #pmDisplayName = self._lookupEpromSingle("displayName")    
             #log.debug("[Process Settings] old Panel Type: {0}    Model: {1}    Panels Displayed Name: {2}".format(self.PanelType, self.PanelModel, pmDisplayName))
 
             pmPanelTypeNr = self._lookupEpromSingle("panelTypeCode")    
@@ -3152,6 +3151,9 @@ class PacketHandling(ProtocolBase):
     def _processReceivedPacket(self, packet):
         """Handle one raw incoming packet."""
 
+        def statelist():
+            return [self.SirenActive, self.PanelState, self.PanelMode, self.PanelReady, self.PanelTroubleStatus, self.PanelAlarmStatus, self.PanelBypass]
+
         if self.suspendAllOperations:
             # log.debug('[Disconnection] Suspended. Sorry but all operations have been suspended, please recreate connection')
             return
@@ -3172,14 +3174,8 @@ class PacketHandling(ProtocolBase):
         #    log.debug("[_processReceivedPacket] Parsing complete valid packet: %s", self._toString(packet))
 
         # Record all main variables to see if the message content changes any
-        oldSirenActive = self.SirenActive
-        oldPanelState = self.PanelState
-        oldPanelMode = self.PanelMode
+        oldState = statelist() # make it a function so if it's changed it remains consistent
         oldPowerMaster = self.PowerMaster
-        oldPanelReady = self.PanelReady
-        oldPanelTrouble = self.PanelTroubleStatus
-        oldPanelAlarm = self.PanelAlarmStatus
-        oldPanelBypass = self.PanelBypass
         pushchange = False
         
         if self.PanelMode == AlPanelMode.PROBLEM:
@@ -3198,38 +3194,43 @@ class PacketHandling(ProtocolBase):
                 log.debug("[_processReceivedPacket] Had a response timeout PROBLEM but received a data packet and entering Standard Mode")
                 self.PanelMode = AlPanelMode.STANDARD
 
+        DecodeMessage = collections.namedtuple('DecodeMessage', 'condition, func, pushchange, message')
+        _decodeMessageFunction = {
+            ACK_MESSAGE : DecodeMessage(  True                      , self.handle_msgtype02, False, None ),  # ACK
+            0x06        : DecodeMessage(  True                      , self.handle_msgtype06, False, None ),  # Timeout
+            0x07        : DecodeMessage(  True                      , self.handle_msgtype07, False, None ),  # No idea what this means
+            0x08        : DecodeMessage(  True                      , self.handle_msgtype08, False, None ),  # Access Denied
+            0x0B        : DecodeMessage(  True                      , self.handle_msgtype0B, False, None ),  # Stopped   # LOOPBACK TEST, EXIT (0x0F) IS THE FIRST COMMAND SENT TO THE PANEL WHEN THIS INTEGRATION STARTS
+            0x0F        : DecodeMessage(  True                      , self.handle_msgtype0F, False, None ),  # Exit
+            0x22        : DecodeMessage( False                      , None                 , False, "WARNING: Message 0x22 is not decoded, are you using an old Powermax Panel as this is not supported?" ),
+            0x25        : DecodeMessage(  True                      , self.handle_msgtype25, False, None ),  # Download retry
+            0x33        : DecodeMessage(  True                      , self.handle_msgtype33, False, None ),  # Settings send after a MSGV_START
+            0x3C        : DecodeMessage(  True                      , self.handle_msgtype3C, False, None ),  # Message when start the download
+            0x3F        : DecodeMessage(  True                      , self.handle_msgtype3F, False, None ),  # Download information
+            0xA0        : DecodeMessage( not self.pmDownloadMode    , self.handle_msgtypeA0, False, None ),  # Event log
+            0xA3        : DecodeMessage(  True                      , self.handle_msgtypeA3,  True, None ),  # Zone Names
+            0xA6        : DecodeMessage(  True                      , self.handle_msgtypeA6,  True, None ),  # Zone Types
+            0xAB        : DecodeMessage( not self.ForceStandardMode , self.handle_msgtypeAB,  True, f"Received AB Message but we are in {self.PanelMode.name} mode (so I'm ignoring the message), data: {self._toString(packet)}"),  # 
+            0xAC        : DecodeMessage(  True                      , self.handle_msgtypeAC,  True, None ),  # X10 Names
+            0xAD        : DecodeMessage(  True                      , self.handle_msgtypeAD,  True, None ),  # No idea what this means, it might ...  send it just before transferring F4 video data ?????
+            0xB0        : DecodeMessage( not self.pmDownloadMode    , self.handle_msgtypeB0,  True, None ),  # 
+            0xF4        : DecodeMessage( not self.pmDownloadMode    , self.handle_msgtypeF4,  None, None ),  # F4 Message from a Powermaster, can't decode it yet but this will accept it and ignore it
+            REDIRECT    : DecodeMessage(  True                      , self.handle_msgtypeC0, False, None )
+        }
+
         if len(packet) < 4:  # there must at least be a header, command, checksum and footer
             log.warning("[_processReceivedPacket] Received invalid packet structure, not processing it " + self._toString(packet))
-        elif packet[1] == ACK_MESSAGE:  # ACK
-            # remove the header and command bytes as the start. remove the footer and the checksum at the end
-            self.handle_msgtype02(packet[2:-2])
-        elif packet[1] == 0x06:  # Timeout
-            self.handle_msgtype06(packet[2:-2])
-        elif packet[1] == 0x07:  # No idea what this means
-            self.handle_msgtype07(packet[2:-2])
-        elif packet[1] == 0x08:  # Access Denied
-            self.handle_msgtype08(packet[2:-2])
-        elif packet[1] == 0x0B:  # Stopped   # LOOPBACK TEST, EXIT (0x0F) IS THE FIRST COMMAND SENT TO THE PANEL WHEN THIS INTEGRATION STARTS
-            self.handle_msgtype0B(packet[2:-2])
-        elif packet[1] == 0x0F:  # Exit
-            self.handle_msgtype0F(packet[2:-2])
-        elif packet[1] == 0x22:
-            # Message from Powermax Panel when starting the download. Seems to be similar to a 3C message.
-            log.warning("[_processReceivedPacket] WARNING: Message 0x22 is not decoded, are you using an old Powermax Panel?")
-        elif packet[1] == 0x25:  # Download retry
-            self.handle_msgtype25(packet[2:-2])
-        elif packet[1] == 0x33:  # Settings send after a MSGV_START
-            self.handle_msgtype33(packet[2:-2])
-        elif packet[1] == 0x3C:  # Message when start the download
-            self.handle_msgtype3C(packet[2:-2])
-        elif packet[1] == 0x3F:  # Download information
-            self.handle_msgtype3F(packet[2:-2])
-        elif packet[1] == 0xA0:  # Event log
-            self.handle_msgtypeA0(packet[2:-2])
-        elif packet[1] == 0xA3:  # Zone Names
-            self.handle_msgtypeA3(packet[2:-2])
-            pushchange = True
+        elif packet[1] in _decodeMessageFunction:
+            dm = _decodeMessageFunction[packet[1]]
+            if dm.condition:
+                pushchange = dm.func(packet[2:-2])    # Use the return value if the function returns
+                if pushchange is None:
+                    pushchange = dm.pushchange        # If the function does not return a value then use the dm value
+            elif dm.message is not None:
+                log.info(f"[_processReceivedPacket] {dm.message}")
         elif packet[1] == 0xA5:  # General Event
+            oldSirenActive = self.SirenActive
+            oldPanelState = self.PanelState
             self.handle_msgtypeA5(packet[2:-2])
             disarmlist = [AlPanelStatus.DISARMED, AlPanelStatus.ARMING_HOME, AlPanelStatus.ARMING_AWAY]
             alarmlist = [AlPanelStatus.ENTRY_DELAY, AlPanelStatus.ARMED_HOME, AlPanelStatus.ARMED_AWAY]
@@ -3239,83 +3240,19 @@ class PacketHandling(ProtocolBase):
             elif (oldPanelState in alarmlist and self.PanelState in disarmlist) or (oldPanelState in disarmlist and self.PanelState in alarmlist):
                 # postpone sending the event to HA for up to 0.5 seconds to wait for an A7 message with detailed information about the change
                 #   push through the change to the frontend, just do not create the event as well
-                #   to do that reset all old variables so it doesnt trigger a AlCondition.PANEL_UPDATE
-                #   do not reset the oldSirenActive just in case self.SirenActive is set to True
-                oldPanelState = self.PanelState
-                oldPanelMode = self.PanelMode
-                #oldPowerMaster = self.PowerMaster
-                oldPanelReady = self.PanelReady
-                oldPanelTrouble = self.PanelTroubleStatus
-                oldPanelAlarm = self.PanelAlarmStatus
-                oldPanelBypass = self.PanelBypass
                 log.debug("[_processReceivedPacket] Diff on PanelState but not pushing through yet, waiting for A7 data, setting timer to 0.5 seconds")
-                
-                # Kick off the postpone timer
-                self.PostponeEventCounter = 2
+                self.PostponeEventCounter = 2  # Kick off the postpone timer ( 2 * 0.25 = 0.5 )
                 asyncio.create_task(self._postponeEventTimer())
-
-                # need to let it fallthrough just in case the siren is sounding
-            #pushchange = True
-        elif packet[1] == 0xA6:  # General Event
-            self.handle_msgtypeA6(packet[2:-2])
-            pushchange = True
         elif packet[1] == 0xA7:  # General Event
             self.handle_msgtypeA7(packet[2:-2])
             if self.PostponeEventCounter > 0:
                 # stop the time sending it as we've received an A7 before the timer triggered
                 self.PostponeEventCounter = 0
-                log.debug("[_processReceivedPacket] processed A7 and timer set so setting timer to 0")
-                # just set 2 of the variables to unknown so it triggers the sending of an AlCondition.PANEL_UPDATE further down
-                oldPanelMode = AlPanelMode.UNKNOWN
-                oldPanelState = AlPanelStatus.UNKNOWN
-                # need to let it fallthrough just in case the siren is sounding
-            #pushchange = True
-        elif packet[1] == 0xAB and not self.ForceStandardMode:
-            # PowerLink Event. Only process AB if not forced standard
-            self.handle_msgtypeAB(packet[2:-2])
-            #pushchange = True
-        elif packet[1] == 0xAB:  # PowerLink Event. Only process AB if not forced standard
-            log.debug(f"[_processReceivedPacket] Received AB Message but we are in {self.PanelMode.name} mode (so I'm ignoring the message), data: {self._toString(packet)}")
-        elif packet[1] == 0xAC:  # X10 Names
-            self.handle_msgtypeAC(packet[2:-2])
-            pushchange = True
-        elif packet[1] == 0xAD:  # No idea what this means, it might ...  send it just before transferring F4 video data ?????
-            self.handle_msgtypeAD(packet[2:-2])
-            pushchange = True
-        elif packet[1] == 0xB0:  # PowerMaster Event
-            if not self.pmDownloadMode:  # only process when not downloading EEPROM
-                self.handle_msgtypeB0(packet[2:-2])
-                #pushchange = True
-        elif packet[1] == REDIRECT_POWERLINK_DATA:  # Redirected Powerlink Data
-            self.handle_msgtypeC0(packet[2:-2])
-        elif packet[1] == 0xF4:  # F4 Message from a Powermaster, can't decode it yet but this will accept it and ignore it
-            pushchange = self.handle_msgtypeF4(packet[2:-2])
+                oldState = [False]   # Force the sending of a AlCondition.PANEL_UPDATE further down
         else:
             log.debug("[_processReceivedPacket] Unknown/Unhandled packet type " + self._toString(packet))
 
-        if oldSirenActive != self.SirenActive or \
-                oldPanelState != self.PanelState or \
-                oldPanelMode != self.PanelMode or \
-                oldPanelReady != self.PanelReady or \
-                oldPanelTrouble != self.PanelTroubleStatus or \
-                oldPanelAlarm != self.PanelAlarmStatus or \
-                oldPanelBypass != self.PanelBypass:
-
-            if oldSirenActive != self.SirenActive:
-                log.debug("[_processReceivedPacket] Diff on SirenActive")
-            if oldPanelAlarm != self.PanelAlarmStatus:
-                log.debug("[_processReceivedPacket] Diff on PanelAlarmStatus")
-            if oldPanelState != self.PanelState:
-                log.debug("[_processReceivedPacket] Diff on PanelState")
-            if oldPanelMode != self.PanelMode:
-                log.debug("[_processReceivedPacket] Diff on PanelMode")
-            if oldPanelReady != self.PanelReady:
-                log.debug("[_processReceivedPacket] Diff on PanelReady")
-            if oldPanelTrouble != self.PanelTroubleStatus:
-                log.debug("[_processReceivedPacket] Diff on PanelTroubleStatus")
-            if oldPanelBypass != self.PanelBypass:
-                log.debug("[_processReceivedPacket] Diff on PanelBypass")
-
+        if self.PostponeEventCounter == 0 and oldState != statelist():   # make statelist a function so if it's changed it remains consistent
             self.sendPanelUpdate(AlCondition.PANEL_UPDATE)  # push through a panel update to the HA Frontend
         elif oldPowerMaster != self.PowerMaster or pushchange:
             self.sendPanelUpdate(AlCondition.PUSH_CHANGE)
@@ -3507,7 +3444,7 @@ class PacketHandling(ProtocolBase):
         # log.debug("[handle_msgtype33] Getting Data " + self._toString(data) + "   page " + hex(iPage) + "    index " + hex(iIndex))
 
         # Write to memory map structure, but remove the first 2 bytes from the data
-        self._writeEPROMSettings(iPage, iIndex, data[2:])
+        self._saveEPROMSettings(iPage, iIndex, data[2:])
 
     def handle_msgtype3C(self, data):  # Panel Info Messsage when start the download
         """The panel information is in 4 & 5
@@ -3578,7 +3515,7 @@ class PacketHandling(ProtocolBase):
         #        log.debug("[handle_msgtype3F] Not checking data length as it could be incorrect.  We requested {0} and received {1}".format(iLength, len(data) - 3))
         #        log.debug("[handle_msgtype3F]                            " + self._toString(data))
         #    # Write to memory map structure, but remove the first 3 bytes (index/page/length) from the data
-        #    self._writeEPROMSettings(iPage, iIndex, data[3:])
+        #    self._saveEPROMSettings(iPage, iIndex, data[3:])
 
         if self.pmDownloadRetryCount < DOWNLOAD_RETRY_COUNT and iLength != len(data) - 3:  # 3 because -->   index & page & length
             log.warning("[handle_msgtype3F] Invalid data block length, Received: {0}, Expected: {1}    Adding page {2} Index {3} to the end of the list".format(len(data)-3, iLength, iPage, iIndex))
@@ -3594,7 +3531,7 @@ class PacketHandling(ProtocolBase):
             self.pmDownloadRetryCount = self.pmDownloadRetryCount + 1
 
         # Write to memory map structure, but remove the first 3 bytes (index/page/length) from the data
-        self._writeEPROMSettings(iPage, iIndex, data[3:])
+        self._saveEPROMSettings(iPage, iIndex, data[3:])
 
         if len(self.myDownloadList) > 0:
             self._sendCommand("MSG_DL", options=[ [1, self.myDownloadList.pop(0)] ])  # Read the next block of EEPROM data
@@ -3936,7 +3873,7 @@ class PacketHandling(ProtocolBase):
 
 
     def handle_msgtypeA5(self, data):  # Status Message
-        """ MsgType=A3 - Zone Data Update """
+        """ MsgType=A5 - Zone Data Update """
 
         # msgTot = data[0]
         eventType = data[1]
@@ -4090,7 +4027,7 @@ class PacketHandling(ProtocolBase):
         #    log.debug("[handle_msgtypeA5]      Unknown A5 Message: " + self._toString(data))
 
     def handle_msgtypeA6(self, data):
-        """ MsgType=A6 - Zone Types I think """
+        """ MsgType=A6 - Zone Types """
         log.debug("[handle_MsgTypeA6] Packet = {0}".format(self._toString(data)))
         msgCnt = int(data[0])
         offset = 8 * (int(data[1]) - 1)
@@ -4473,33 +4410,6 @@ class PacketHandling(ProtocolBase):
                         log.debug("                            Zone {0}  State {1}".format(i, status))
                         self.UpdateContactSensor(sensor = i, status = status)
 
-        elif experimental and msgType == 0x02 and subType == 0x20:
-            # There are between 1 to 3 arrays and they are all filled with ones (1s)
-            #     e.g. 02 20 b4 ff 08 00 04 01 01 01 01 ff 08 01 0f 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 ff 08 02 08 01 01 01 01 01 01 01 01 ff 08 03 40 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 ff 08 04 20 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 ff 08 05 20 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 69 43
-            if msgLen == 69:
-                start = 5
-                zoneLen = data[start]
-                log.debug("[handle_msgtypeB0]       Received message, dont know what this is at all, length = {0}".format(zoneLen))
-            elif msgLen == 0xb4:
-                if beezerodebug:
-                    start = 45
-                    zoneLen = data[start]
-                    diff = self._checkallsame(1, data[start+1:start+1+zoneLen])
-                    log.debug("[handle_msgtypeB0]       Received message, dont know what this is at all, length = {0}  It's all ones apart from {1}".format(zoneLen, diff))
-                    
-                    start = 113
-                    zoneLen = data[start]
-                    diff = self._checkallsame(1, data[start+1:start+1+zoneLen])
-                    log.debug("[handle_msgtypeB0]       Received message, dont know what this is at all, length = {0}  It's all ones apart from {1}".format(zoneLen, diff))
-
-                    start = 149
-                    zoneLen = data[start]
-                    diff = self._checkallsame(1, data[start+1:start+1+zoneLen])
-                    log.debug("[handle_msgtypeB0]       Received message, dont know what this is at all, length = {0}  It's all ones apart from {1}".format(zoneLen, diff))
-
-            else:
-                log.debug("[handle_msgtypeB0]       Received message, length = {0}".format(zoneLen))
-
         elif msgType == 0x03 and subType == 0x1F:
             # I'm 100% sure this is correct
             #      However, I've found 3 message formats for this so there could be more that I don't know about
@@ -4532,6 +4442,33 @@ class PacketHandling(ProtocolBase):
                     else:
                         self._dynamicallyAddSensor(i)
                         log.debug("[handle_msgtypeB0]                 Found unknown sensor type " + hex(v))
+
+        elif experimental and msgType == 0x02 and subType == 0x20:
+            # There are between 1 to 3 arrays and they are all filled with ones (1s)
+            #     e.g. 02 20 b4 ff 08 00 04 01 01 01 01 ff 08 01 0f 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 ff 08 02 08 01 01 01 01 01 01 01 01 ff 08 03 40 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 ff 08 04 20 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 ff 08 05 20 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 69 43
+            if msgLen == 69:
+                start = 5
+                zoneLen = data[start]
+                log.debug("[handle_msgtypeB0]       Received message, dont know what this is at all, length = {0}".format(zoneLen))
+            elif msgLen == 0xb4:
+                if beezerodebug:
+                    start = 45
+                    zoneLen = data[start]
+                    diff = self._checkallsame(1, data[start+1:start+1+zoneLen])
+                    log.debug("[handle_msgtypeB0]       Received message, dont know what this is at all, length = {0}  It's all ones apart from {1}".format(zoneLen, diff))
+                    
+                    start = 113
+                    zoneLen = data[start]
+                    diff = self._checkallsame(1, data[start+1:start+1+zoneLen])
+                    log.debug("[handle_msgtypeB0]       Received message, dont know what this is at all, length = {0}  It's all ones apart from {1}".format(zoneLen, diff))
+
+                    start = 149
+                    zoneLen = data[start]
+                    diff = self._checkallsame(1, data[start+1:start+1+zoneLen])
+                    log.debug("[handle_msgtypeB0]       Received message, dont know what this is at all, length = {0}  It's all ones apart from {1}".format(zoneLen, diff))
+
+            else:
+                log.debug("[handle_msgtypeB0]       Received message, length = {0}".format(zoneLen))
 
         elif msgType == 0x03 and subType == 0x21:
             # I'm 100% sure this is correct
@@ -4566,10 +4503,20 @@ class PacketHandling(ProtocolBase):
             iDay = data[18]
             iMonth = data[19]
             iYear = data[20]
-
+            
+            unknown1 = data[21]
+            unknown2 = data[22]
+            
+            partitionCount = data[23]
+            sysStatus = data[24]
+            sysFlags = data[25]
+            unknown3 = data[26]
+            unknown4 = data[27]
+            # Repeat 4 bytes (24 to 27) for more than 1 partition
+            
             messagedate = "{0:0>2}/{1:0>2}/{2}   {3:0>2}:{4:0>2}:{5:0>2}".format(iDay, iMonth, iYear, iHour, iMin, iSec)
             log.debug("[handle_msgtypeB0]       Received message, 03 24 information  date={0}".format(messagedate))
-            log.debug("[handle_msgtypeB0]                    data (hex) 21={0}  22={1}  23={2}  status={3}  flags={4}  26={5}  27={6}".format(hex(data[21]).upper(), hex(data[22]).upper(), hex(data[23]).upper(), hex(data[24]).upper(), hex(data[25]).upper(), hex(data[26]).upper(), hex(data[27]).upper()))
+            log.debug("[handle_msgtypeB0]                    data (hex) 21={0}  22={1}  PartitionCount={2}  Status={3}  System={4}  26={5}  27={6}".format(hex(data[21]).upper(), hex(data[22]).upper(), hex(data[23]).upper(), hex(data[24]).upper(), hex(data[25]).upper(), hex(data[26]).upper(), hex(data[27]).upper()))
  
             #######################################################################################################################################
             #######################################################################################################################################
@@ -4577,26 +4524,13 @@ class PacketHandling(ProtocolBase):
             #######################################################################################################################################
             #######################################################################################################################################
             if beezerodebug:
-                d = data[2:15]
+                d = data[2:15] # include the data length @2 in case it changes
                 if self.saved_A is not None:
                     if self.saved_A != d:
-                        log.debug(f"[handle_msgtypeB0]             First bit different to last time {self._toString(self.saved_A)}")
-                        log.debug(f"                                                           now  {self._toString(d)}")
+                        log.debug(f"[handle_msgtypeB0]               03 24 information - First bit different to last time {self._toString(self.saved_A)}")
+                        log.debug(f"                                                                                 now  {self._toString(d)}")
                 self.saved_A = d
                     
-                d = data[21:24]
-                if self.saved_B is not None:
-                    if self.saved_B != d:
-                        log.debug(f"[handle_msgtypeB0]             Middle bit different to last time {self._toString(self.saved_B)}")
-                        log.debug(f"                                                            now  {self._toString(d)}")
-                self.saved_B = d
-                    
-                d = data[26:28]
-                if self.saved_C is not None:
-                    if self.saved_C != d:
-                        log.debug(f"[handle_msgtypeB0]             Last bit different to last time {self._toString(self.saved_C)}")
-                        log.debug(f"                                                          now  {self._toString(d)}")
-                self.saved_C = d
             #######################################################################################################################################
             #######################################################################################################################################
             #######################################################################################################################################
@@ -4653,36 +4587,37 @@ class PacketHandling(ProtocolBase):
         elif experimental and msgType == 0x03 and subType == 0x35:   # process B0 configuration data
             # I can decode some of this data, related to panel user/installer codes
             dataLen = data[6]
-            dataTypeA = data[7]
-            dataTypeB = data[8]
-            dataType = (dataTypeB << 8) | dataTypeA
+            dataContentA = data[7]
+            dataContentB = data[8]
+            dataType = data[9]        # 6 is a String
+            dataContent = (dataContentA << 8) | dataContentB
             if beezerodebug:
-                if dataType == 0x0054 and dataLen == 5:
+                if dataContent == 0x5400 and dataLen == 5:
                     # Installer Panel Code
                     code = (data[10] << 8) | data[11]
                     #log.debug("[handle_msgtypeB0]           Installer Panel Code {0}".format(hex(code)))
-                elif dataType == 0x0055 and dataLen == 5:
+                elif dataContent == 0x5500 and dataLen == 5:
                     # Master Panel Code
                     code = (data[10] << 8) | data[11]
                     #log.debug("[handle_msgtypeB0]           Master Panel Code {0}".format(hex(code)))
-                elif dataType == 0x000F and dataLen == 5:
+                elif dataContent == 0x0F00 and dataLen == 5:
                     # Download Panel Code
                     code = (data[10] << 8) | data[11]
                     #log.debug("[handle_msgtypeB0]           Download Panel Code {0}".format(hex(code)))
-                elif dataType == 0x0008:
+                elif dataContent == 0x0800:
                     # First User Panel Code
                     code = (data[10] << 8) | data[11]
                     #log.debug("[handle_msgtypeB0]           First User Code {0}".format(hex(code)))                
-                #elif dataType == 0x002C and dataLen == 19:
+                #elif dataContent == 0x2C00 and dataLen == 19:
                 #    s = data[10:26]
                 #    log.debug("[handle_msgtypeB0]           Data 2C {0}".format(s.decode()))                
-                #elif dataType == 0x002D and dataLen == 19:
+                #elif dataContent == 0x2D00 and dataLen == 19:
                 #    s = data[10:26]
                 #    log.debug("[handle_msgtypeB0]           Data 2D {0}".format(s.decode()))                
-                #elif dataType == 0x003D and dataLen == 19:
+                #elif dataContent == 0x3D00 and dataLen == 19:
                 #    s = data[10:26]
                 #    log.debug("[handle_msgtypeB0]           Data 3D {0}".format(s.decode()))                
-                #elif dataType == 0x003E and dataLen == 19:
+                #elif dataContent == 0x3E00 and dataLen == 19:
                 #    s = data[10:26]
                 #    log.debug("[handle_msgtypeB0]           Data 3E {0}".format(s.decode()))                
                 else:
@@ -4743,7 +4678,21 @@ class PacketHandling(ProtocolBase):
 #                log.debug("[handle_msgtypeB0]       Requesting sensor messages from the panel")
 #                self._sendCommand("MSG_PM_SENSORS")
 
+        elif experimental and msgType == 0x03 and subType == 0x42:
+            log.debug("[handle_msgtypeB0]       Received 03 42 message")
+            
+            if data[2] == 0x15 and data[6] == 0x10:
+                # Just create local variables, dont alter the global self. variables
+                ModelType = data[21]
+                PanelType = data[22]
+
+                PowerMaster = (PanelType >= 7)
+                PanelModel = pmPanelType_t[PanelType] if PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
+
+                log.debug("[handle_msgtypeB0] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(PanelType, ModelType, PanelModel, PowerMaster))
+
         elif msgType == 0x02 and subType == 0x4B:
+            # Zone Last Event
             # I think that this represents sensors Z01 to Z36.  Each sensor is 5 bytes.
             # 0d b0 02 4b b9 01 28 03 b4 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 d0 28 6e 38 03 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 2a 43 62 0a
             #     For the PM30 with 64 sensors this comes out as 180 / 5 = 36
@@ -4787,19 +4736,6 @@ class PacketHandling(ProtocolBase):
                                     #log.debug(f"[handle_msgtypeB0]                  Sensor Triggered open={open}    closed={closed}")
                             self.SensorList[sensor].statuslog = data[o:o+5]
                 self.beezero_024B_sensorcount = None   # If theres a next time so they are coordinated
-
-        elif experimental and msgType == 0x03 and subType == 0x42:
-            log.debug("[handle_msgtypeB0]       Received 03 42 message")
-            
-            if data[2] == 0x15 and data[6] == 0x10:
-                # Just create local variables, dont alter the global self. variables
-                ModelType = data[21]
-                PanelType = data[22]
-
-                PowerMaster = (PanelType >= 7)
-                PanelModel = pmPanelType_t[PanelType] if PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
-
-                log.debug("[handle_msgtypeB0] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(PanelType, ModelType, PanelModel, PowerMaster))
 
         elif experimental and msgType == 0x03 and subType == 0x51:
             # 03 51 08 ff 08 ff 03 18 24 4b 9c 43
