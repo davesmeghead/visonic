@@ -291,44 +291,46 @@ pmSendMsg = {
    "MSG_ACK_PLINK"    : VisonicCommand(convertByteArray('02 43')                              , None   , False, False,  NONE, 0.0, "Ack Powerlink" ),
  
    # PowerMaster specific
-   "MSG_PM_SETBAUD"   : VisonicCommand(convertByteArray('B0 00 41 0D AA AA 01 FF 28 0C 05 01 00 BB BB 00 05 43'),                None   ,  True, False,   CMD, 2.5, "Powermaster Set Serial Baud Rate" ),
+#   "MSG_PM_SETBAUD"   : VisonicCommand(convertByteArray('B0 00 41 0D AA AA 01 FF 28 0C 05 01 00 BB BB 00 05 43'),                None   ,  True, False,   CMD, 2.5, "Powermaster Set Serial Baud Rate" ),
 
-   "MSG_PM_SPECIAL1"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 00 00 19 21 68 00 00 20 7C 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 1" ),
-   "MSG_PM_SPECIAL2"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 01 00 25 52 55 25 50 00 7D 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 2" ),
-   "MSG_PM_SPECIAL3"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 02 00 19 21 68 00 00 01 7E 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 3" ),
-   "MSG_PM_SPECIAL4"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 02 00 19 21 68 00 00 01 7F 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 4" ),
+#   "MSG_PM_SPECIAL1"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 00 00 19 21 68 00 00 20 7C 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 1" ),
+#   "MSG_PM_SPECIAL2"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 01 00 25 52 55 25 50 00 7D 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 2" ),
+#   "MSG_PM_SPECIAL3"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 02 00 19 21 68 00 00 01 7E 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 3" ),
+#   "MSG_PM_SPECIAL4"  : VisonicCommand(convertByteArray('B0 00 42 12 AA AA 01 FF 00 0C 0A 54 01 02 00 19 21 68 00 00 01 7F 43'), None   ,  True, False,  FULL, 0.5, "Powermaster Special 4" ),
 
    "MSG_PM_SIREN_MODE": VisonicCommand(convertByteArray('B0 00 47 09 99 99 00 FF 08 0C 02 99 07 43')   , None   ,  True, False,   CMD, 0.0, "Powermaster Trigger Siren Mode" ),   # Trigger Siren, the 99 99 needs to be the usercode, other 99 is Siren Type
    "MSG_PM_SIREN"     : VisonicCommand(convertByteArray('B0 00 3E 0A 99 99 05 FF 08 02 03 00 00 01 43'), None   ,  True, False,   CMD, 0.0, "Powermaster Trigger Siren" ),        # Trigger Siren, the 99 99 needs to be the usercode
    "MSG_PM_SENSORS"   : VisonicCommand(convertByteArray('B0 01 17 08 01 FF 08 FF 02 18 4B 00 43')      , [0xB0] ,  True, False,  FULL, 0.0, "Powermaster Get Sensor Status" ),        # This should return 3 B0 messages "02 4B", "03 4B" and "03 18"
-   "MSG_POWERMASTER"  : VisonicCommand(convertByteArray('B0 01 00 00 00 00 00 00 00 00 43')            , [0xB0] ,  True, False,  FULL, 0.5, "Powermaster Command Original" )
+   "MSG_POWERMASTER"  : VisonicCommand(convertByteArray('B0 01 99 06 02 FF 08 03 00 00 43')            , [0xB0] ,  True, False,  FULL, 0.5, "Powermaster Command Original" ),
+   "MSG_POWERMASTER_S": VisonicCommand(convertByteArray('B0 01 99 01 05 43')                           , None   , False, False,  FULL, 0.0, "Powermaster Command Original - Short" )
 }
 
 # B0 Messages subset that we can send to a Powermaster, embed within MSG_POWERMASTER to use
 pmSendMsgB0_t = {
-   "ZONE_STAT04" : convertByteArray('04 06 02 FF 08 03 00'),
-   "ZONE_STAT07" : convertByteArray('07 06 02 FF 08 03 00'),
-   "ZONE_STAT18" : convertByteArray('18 06 02 FF 08 03 00'),      # Sensor Open/Close State
-   "ZONE_STAT1F" : convertByteArray('1F 06 02 FF 08 03 00'),      # Sensors
-   "ZONE_STAT21" : convertByteArray('21 06 02 FF 08 03 00'),      # Zone Names
-   "ZONE_STAT2D" : convertByteArray('2D 06 02 FF 08 03 00'),      # Zone Types
-   "ZONE_STAT30" : convertByteArray('30 06 02 FF 08 03 00'),
-   "ZONE_STAT31" : convertByteArray('31 06 02 FF 08 03 00'),
-   "ZONE_STAT32" : convertByteArray('32 06 02 FF 08 03 00'),
-   "ZONE_STAT33" : convertByteArray('33 06 02 FF 08 03 00'),
-   "ZONE_STAT34" : convertByteArray('34 06 02 FF 08 03 00'),
-   "ZONE_STAT35" : convertByteArray('35 06 02 FF 08 03 00'),
-   "ZONE_STAT36" : convertByteArray('36 06 02 FF 08 03 00'),
-   "ZONE_STAT37" : convertByteArray('37 06 02 FF 08 03 00'),
-   "ZONE_STAT38" : convertByteArray('38 06 02 FF 08 03 00'),
-   "ZONE_STAT39" : convertByteArray('39 06 02 FF 08 03 00'),
-   "ZONE_STAT3A" : convertByteArray('3A 06 02 FF 08 03 00'),
-   "ZONE_STAT3B" : convertByteArray('3B 06 02 FF 08 03 00'),
-   "ZONE_STAT3C" : convertByteArray('3C 06 02 FF 08 03 00'),
-   "ZONE_STAT3D" : convertByteArray('3D 06 02 FF 08 03 00'),
-   "ZONE_STAT3E" : convertByteArray('3E 06 02 FF 08 03 00'),
-   "ZONE_STAT3F" : convertByteArray('3F 06 02 FF 08 03 00'),
-   "ZONE_STAT24" : convertByteArray('24 06 02 FF 08 03 00')
+   "ZONE_STAT04" : convertByteArray('04'),
+   "ZONE_STAT07" : convertByteArray('07'),
+   "ZONE_STAT18" : convertByteArray('18'),      # Sensor Open/Close State
+   "ZONE_STAT1F" : convertByteArray('1F'),      # Sensors
+   "ZONE_STAT21" : convertByteArray('21'),      # Zone Names
+   "ZONE_STAT24" : convertByteArray('24'),      # 
+   "ZONE_STAT2D" : convertByteArray('2D'),      # Zone Types
+   "ZONE_STAT30" : convertByteArray('30'),
+   "ZONE_STAT31" : convertByteArray('31'),
+   "ZONE_STAT32" : convertByteArray('32'),
+   "ZONE_STAT33" : convertByteArray('33'),
+   "ZONE_STAT34" : convertByteArray('34'),
+   "ZONE_STAT35" : convertByteArray('35'),
+   "ZONE_STAT36" : convertByteArray('36'),
+   "ZONE_STAT37" : convertByteArray('37'),
+   "ZONE_STAT38" : convertByteArray('38'),
+   "ZONE_STAT39" : convertByteArray('39'),
+   "ZONE_STAT3A" : convertByteArray('3A'),
+   "ZONE_STAT3B" : convertByteArray('3B'),
+   "ZONE_STAT3C" : convertByteArray('3C'),
+   "ZONE_STAT3D" : convertByteArray('3D'),
+   "ZONE_STAT3E" : convertByteArray('3E'),
+   "ZONE_STAT3F" : convertByteArray('3F'),
+   "ZONE_STAT24" : convertByteArray('24')
 }
 
 # Data to embed in the MSG_ARM message
@@ -358,37 +360,40 @@ pmX10State_t = {
 #    flexiblelength provides support for messages that have a variable length
 #    ignorechecksum is for messages that do not have a checksum.  These are F1 and F4 messages (so far)
 #    When length is 0 then we stop processing the message on the first PACKET_FOOTER. This is only used for the short messages (4 or 5 bytes long) like ack, stop, denied and timeout
+DebugC = False  # Debug incoming control
+DebugM = False  # Debug incoming message data
+DebugI = False  # Debug incoming image data
 PanelCallBack = collections.namedtuple("PanelCallBack", 'length ackneeded isvariablelength varlenbytepos flexiblelength ignorechecksum debugprint' )
 pmReceiveMsg_t = {
-   0x00 : PanelCallBack(  0,  True, False, -1, 0, False, False ),   # Dummy message used in the algorithm when the message type is unknown. The -1 is used to indicate an unknown message in the algorithm
-   0x02 : PanelCallBack(  0, False, False,  0, 0, False, False ),   # Ack
-   0x06 : PanelCallBack(  0, False, False,  0, 0, False, False ),   # Timeout. See the receiver function for ACK handling
-   0x07 : PanelCallBack(  0, False, False,  0, 0, False, False ),   # No idea what this means but decode it anyway
-   0x08 : PanelCallBack(  0, False, False,  0, 0, False, False ),   # Access Denied
-   0x0B : PanelCallBack(  0,  True, False,  0, 0, False, False ),   # Stop --> Download Complete
-   0x0F : PanelCallBack(  0, False, False,  0, 0, False, False ),   # THE PANEL DOES NOT SEND THIS. THIS IS USED FOR A LOOP BACK TEST
-   0x22 : PanelCallBack( 14,  True, False,  0, 0, False, False ),   # 14 Panel Info (older visonic powermax panels)
-   0x25 : PanelCallBack( 14,  True, False,  0, 0, False, False ),   # 14 Download Retry
-   0x33 : PanelCallBack( 14,  True, False,  0, 0, False, False ),   # 14 Download Settings
-   0x3C : PanelCallBack( 14,  True, False,  0, 0, False, False ),   # 14 Panel Info
-   0x3F : PanelCallBack(  7,  True,  True,  4, 5, False, False ),   # Download Info in varying lengths  (For variable length, the length is the fixed number of bytes).
-   0xA0 : PanelCallBack( 15,  True, False,  0, 0, False, False ),   # 15 Event Log
-   0xA3 : PanelCallBack( 15,  True, False,  0, 0, False, False ),   # 15 Zone Names
-   0xA5 : PanelCallBack( 15,  True, False,  0, 0, False, False ),   # 15 Status Update       Length was 15 but panel seems to send different lengths
-   0xA6 : PanelCallBack( 15,  True, False,  0, 0, False, False ),   # 15 Zone Types I think!!!!
-   0xA7 : PanelCallBack( 15,  True, False,  0, 0, False, False ),   # 15 Panel Status Change
-   0xAB : PanelCallBack( 15,  True, False,  0, 0, False,  True ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
-   0xAC : PanelCallBack( 15,  True, False,  0, 0, False,  True ),   # 15 X10 Names ???
-   0xAD : PanelCallBack( 15,  True, False,  0, 0, False,  True ),   # 15 Panel responds with this when we ask for JPG images
-   0xB0 : PanelCallBack(  8,  True,  True,  4, 2, False,  True ),   # The B0 message comes in varying lengths, sometimes it is shorter than what it states and the CRC is sometimes wrong
+   0x00 : PanelCallBack(  0,  True, False, -1, 0, False, DebugC ),   # Dummy message used in the algorithm when the message type is unknown. The -1 is used to indicate an unknown message in the algorithm
+   0x02 : PanelCallBack(  0, False, False,  0, 0, False, DebugC ),   # Ack
+   0x06 : PanelCallBack(  0, False, False,  0, 0, False, DebugC ),   # Timeout. See the receiver function for ACK handling
+   0x07 : PanelCallBack(  0, False, False,  0, 0, False, DebugC ),   # No idea what this means but decode it anyway
+   0x08 : PanelCallBack(  0, False, False,  0, 0, False, DebugC ),   # Access Denied
+   0x0B : PanelCallBack(  0,  True, False,  0, 0, False, DebugC ),   # Stop --> Download Complete
+   0x0F : PanelCallBack(  0, False, False,  0, 0, False, DebugC ),   # THE PANEL DOES NOT SEND THIS. THIS IS USED FOR A LOOP BACK TEST
+   0x22 : PanelCallBack( 14,  True, False,  0, 0, False, DebugC ),   # 14 Panel Info (older visonic powermax panels)
+   0x25 : PanelCallBack( 14,  True, False,  0, 0, False, DebugC ),   # 14 Download Retry
+   0x33 : PanelCallBack( 14,  True, False,  0, 0, False, DebugC ),   # 14 Download Settings
+   0x3C : PanelCallBack( 14,  True, False,  0, 0, False, DebugC ),   # 14 Panel Info
+   0x3F : PanelCallBack(  7,  True,  True,  4, 5, False, DebugM ),   # Download Info in varying lengths  (For variable length, the length is the fixed number of bytes).
+   0xA0 : PanelCallBack( 15,  True, False,  0, 0, False, DebugM ),   # 15 Event Log
+   0xA3 : PanelCallBack( 15,  True, False,  0, 0, False, DebugM ),   # 15 Zone Names
+   0xA5 : PanelCallBack( 15,  True, False,  0, 0, False, DebugM ),   # 15 Status Update       Length was 15 but panel seems to send different lengths
+   0xA6 : PanelCallBack( 15,  True, False,  0, 0, False, DebugM ),   # 15 Zone Types I think!!!!
+   0xA7 : PanelCallBack( 15,  True, False,  0, 0, False, DebugM ),   # 15 Panel Status Change
+   0xAB : PanelCallBack( 15,  True, False,  0, 0, False,   True ),   # 15 Enroll Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
+   0xAC : PanelCallBack( 15,  True, False,  0, 0, False,   True ),   # 15 X10 Names ???
+   0xAD : PanelCallBack( 15,  True, False,  0, 0, False,   True ),   # 15 Panel responds with this when we ask for JPG images
+   0xB0 : PanelCallBack(  8, False,  True,  4, 2, False,   True ),   # The B0 message comes in varying lengths, sometimes it is shorter than what it states and the CRC is sometimes wrong
    REDIRECT : PanelCallBack(  5, False,  True,  2, 0, False, False ),   # TESTING: These are redirected Powerlink messages. 0D C0 len <data> cs 0A   so 5 plus the original data length
    # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it. Assume a minimum length of 9, a variable length and ignore the checksum calculation.
-   0xF1 : PanelCallBack(  9,  True,  True,  0, 0,  True, False ),   # Ignore checksum on all F1 messages
+   0xF1 : PanelCallBack(  9,  True,  True,  0, 0,  True, DebugC ),   # Ignore checksum on all F1 messages
    # The F4 message comes in varying lengths. It is the image data from a PIR camera. Ignore checksum on all F4 messages
-   0xF4 : { 0x01 : PanelCallBack(  9, False, False,  0, 0,  True, False ),     # 
-            0x03 : PanelCallBack(  9, False,  True,  5, 0,  True, False ),     #
-            0x05 : PanelCallBack(  9, False,  True,  5, 0,  True, False ),     # 
-            0x15 : PanelCallBack( 13, False, False,  0, 0,  True, False ) }    # 
+   0xF4 : { 0x01 : PanelCallBack(  9, False, False,  0, 0,  True, DebugI ),     # 
+            0x03 : PanelCallBack(  9, False,  True,  5, 0,  True, DebugI ),     # Image Header
+            0x05 : PanelCallBack(  9, False,  True,  5, 0,  True, DebugI ),     # Image Data Sequence
+            0x15 : PanelCallBack( 13, False, False,  0, 0,  True, DebugI ) }    # 
 }
 
 ##############################################################################################################################################################################################################################################
@@ -1346,30 +1351,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.ignoreF4DataMessages = False
         self.image_ignore = set()
 
-        ##############################################################################################################################################################
-        ##############################################################################################################################################################
-        ##############################################################################################################################################################
-        ##############################################################################################################################################################
-        ##############################################################################################################################################################
-        self.saved_A = None
-        self.saved_B = None
-        self.saved_C = None
-        self.saved_D = None
-        self.saved_E = None
-        self.saved_F = None
-        self.saved_G = None
-        self.saved_H = None
-        self.saved_I = None
-        self.saved_J = None
-        self.saved_K = None
-        self.saved_L = None
-        self.saved_M = None
-        self.saved_N = None
-        ##############################################################################################################################################################
-        ##############################################################################################################################################################
-        ##############################################################################################################################################################
-        ##############################################################################################################################################################
-        ##############################################################################################################################################################
 
     def updateSettings(self, newdata: PanelConfig):
         if newdata is not None:
@@ -1926,26 +1907,27 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 )
                                 self.StopAndSuspend("neverconnected")
 
-                        if not self.suspendAllOperations and self.lastRecvOfPanelData is None:  ## has any data been received from the panel yet?
-                            no_data_received_counter = no_data_received_counter + 1
-                            # log.debug(f"[Controller] no_data_received_counter {no_data_received_counter}")
-                            if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
-                                log.error(
-                                    "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)"
-                                )
-                                self.StopAndSuspend("neverconnected")
-                        else:  # Data has been received from the panel but check when it was last received
-                            # calc time difference between now and when data was last received
-                            interval = self._getUTCTimeFunction() - self.lastRecvOfPanelData
-                            # log.debug("Checking last receive time {0}".format(interval))
-                            if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
-                                log.error(
-                                    "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + ")"
-                                )
-                                self.StopAndSuspend("disconnected")
+                        if self.transport is not None:   # if the call was made to self.StopAndSuspend("neverconnected") above then transport will be None
+                            if not self.suspendAllOperations and self.lastRecvOfPanelData is None:  ## has any data been received from the panel yet?
+                                no_data_received_counter = no_data_received_counter + 1
+                                # log.debug(f"[Controller] no_data_received_counter {no_data_received_counter}")
+                                if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
+                                    log.error(
+                                        "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)"
+                                    )
+                                    self.StopAndSuspend("neverconnected")
+                            else:  # Data has been received from the panel but check when it was last received
+                                # calc time difference between now and when data was last received
+                                interval = self._getUTCTimeFunction() - self.lastRecvOfPanelData
+                                # log.debug("Checking last receive time {0}".format(interval))
+                                if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
+                                    log.error(
+                                        "[Controller] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + ")"
+                                    )
+                                    self.StopAndSuspend("disconnected")
 
             except Exception as ex:
-                log.error("[Controller] Visonic Executor loop has caused an exception, reinitialising variables and restarting loop")
+                log.error("[Controller] Visonic Executor loop has caused an exception")
                 log.error(f"             {ex}")
                 self._reset_watchdog_timeout()
                 self._reset_keep_alive_messages()
@@ -4518,25 +4500,6 @@ class PacketHandling(ProtocolBase):
             log.debug("[handle_msgtypeB0]       Received message, 03 24 information  date={0}".format(messagedate))
             log.debug("[handle_msgtypeB0]                    data (hex) 21={0}  22={1}  PartitionCount={2}  Status={3}  System={4}  26={5}  27={6}".format(hex(data[21]).upper(), hex(data[22]).upper(), hex(data[23]).upper(), hex(data[24]).upper(), hex(data[25]).upper(), hex(data[26]).upper(), hex(data[27]).upper()))
  
-            #######################################################################################################################################
-            #######################################################################################################################################
-            #######################################################################################################################################
-            #######################################################################################################################################
-            #######################################################################################################################################
-            if beezerodebug:
-                d = data[2:15] # include the data length @2 in case it changes
-                if self.saved_A is not None:
-                    if self.saved_A != d:
-                        log.debug(f"[handle_msgtypeB0]               03 24 information - First bit different to last time {self._toString(self.saved_A)}")
-                        log.debug(f"                                                                                 now  {self._toString(d)}")
-                self.saved_A = d
-                    
-            #######################################################################################################################################
-            #######################################################################################################################################
-            #######################################################################################################################################
-            #######################################################################################################################################
-            #######################################################################################################################################
-                
             self.ProcessPanelStateUpdate(sysStatus=data[24], sysFlags=data[25])
             if data[24] > 0:
                 log.debug(f"[handle_msgtypeB0]             Zone Event **************************************************************")
@@ -4545,12 +4508,12 @@ class PacketHandling(ProtocolBase):
             #    self.ProcessZoneEvent(eventZone=eventZone, eventType=eventType)
 
             # Nothing in the 03 24 messsage tells us which sensor might have been triggered (it may not be any and the panel is just sending an update)
-            if self.PanelMode == AlPanelMode.POWERLINK or \
-               self.PanelMode == AlPanelMode.MINIMAL_ONLY or \
-               self.PanelMode == AlPanelMode.STANDARD or \
-               self.PanelMode == AlPanelMode.STANDARD_PLUS: 
-                log.debug("[handle_msgtypeB0]       Requesting sensor messages from the panel")
-                self._sendCommand("MSG_PM_SENSORS")
+            #if self.PanelMode == AlPanelMode.POWERLINK or \
+            #   self.PanelMode == AlPanelMode.MINIMAL_ONLY or \
+            #   self.PanelMode == AlPanelMode.STANDARD or \
+            #   self.PanelMode == AlPanelMode.STANDARD_PLUS: 
+            #    log.debug("[handle_msgtypeB0]       Requesting sensor messages from the panel")
+            #    self._sendCommand("MSG_PM_SENSORS")
             
         elif msgType == 0x03 and subType == 0x2d:
             # I'm 100% sure this is correct
@@ -4629,47 +4592,15 @@ class PacketHandling(ProtocolBase):
             # 03 39 08 ff 08 ff 03 18 24 4b 3e 43
             # 03 39 09 ff 08 ff 04 09 18 24 4b 1f 43
             # 03 39 0c ff 08 ff 07 0b 13 1c 24 30 32 34 3d 43
+
             msglen = data[2]
-            if beezerodebug:
-                if msglen == 6:
-                    d = data[3:8]
-                    if self.saved_H is not None:
-                        if self.saved_H != d:
-                            log.debug(f"[handle_msgtypeB0]             03 39 06 bit different to last time {self._toString(self.saved_H)}")
-                            log.debug(f"                                                              now  {self._toString(d)}")
-                    self.saved_H = d
-                elif msglen == 7:
-                    d = data[3:9]
-                    if self.saved_K is not None:
-                        if self.saved_K != d:
-                            log.debug(f"[handle_msgtypeB0]             03 39 07 bit different to last time {self._toString(self.saved_K)}")
-                            log.debug(f"                                                              now  {self._toString(d)}")
-                    self.saved_K = d
-                elif msglen == 8:
-                    d = data[3:10]
-                    if self.saved_G is not None:
-                        if self.saved_G != d:
-                            log.debug(f"[handle_msgtypeB0]             03 39 08 bit different to last time {self._toString(self.saved_G)}")
-                            log.debug(f"                                                              now  {self._toString(d)}")
-                    self.saved_G = d
-                elif msglen == 9:
-                    d = data[3:11]
-                    if self.saved_J is not None:
-                        if self.saved_J != d:
-                            log.debug(f"[handle_msgtypeB0]             03 39 09 bit different to last time {self._toString(self.saved_J)}")
-                            log.debug(f"                                                              now  {self._toString(d)}")
-                    self.saved_J = d
-                elif msglen == 12:
-                    d = data[3:14]
-                    if self.saved_L is not None:
-                        if self.saved_L != d:
-                            log.debug(f"[handle_msgtypeB0]             03 39 0C bit different to last time {self._toString(self.saved_L)}")
-                            log.debug(f"                                                              now  {self._toString(d)}")
-                    self.saved_L = d
-                else:
-                    log.debug("[handle_msgtypeB0]         Not seen this size before")
-               
-        
+            number_of_pops = data[6]
+            log.debug(f"[handle_msgtypeB0]       Received pop message   {number_of_pops=}")
+
+            if data[5] == 0xFF and msglen - 5 == number_of_pops:    # start of data marker and number_of_pops is 5 less than length
+                for i in range(0, number_of_pops):
+                    self._sendCommand("MSG_POWERMASTER_S", options=[[2, int(data[i+7])]])  # This asks the panel to send the pop messages
+
             # Panel state change ??????
 #            if self.PanelMode == AlPanelMode.POWERLINK or \
 #               self.PanelMode == AlPanelMode.MINIMAL_ONLY or \
@@ -4716,7 +4647,8 @@ class PacketHandling(ProtocolBase):
                         self.SensorList[i].statuslog = data[o:o+5]
 
         elif msgType == 0x03 and subType == 0x4B:
-            # I think that this represents sensors Z37 to Z64.  Each sensor is 5 bytes.   With a PM10 I'm not sure that we'll get this message.
+            # Zone Last Event
+            # I think that this represents sensors Z37 to Z64.  Each sensor is 5 bytes.   With a PM10 I'm not sure that we'll get this message, or maybe we get this message and not the other one.
             # 0d b0 03 4b 91 ff 28 03 8c 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 c4 18 6e 38 02 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 d3 f9 6d 38 03 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 2b 43 ca 0a
             #     For the PM30 with 64 sensors this comes out as 140 / 5 = 28
             if self.beezero_024B_sensorcount is not None:
@@ -4738,54 +4670,16 @@ class PacketHandling(ProtocolBase):
                 self.beezero_024B_sensorcount = None   # If theres a next time so they are coordinated
 
         elif experimental and msgType == 0x03 and subType == 0x51:
-            # 03 51 08 ff 08 ff 03 18 24 4b 9c 43
-            # 03 51 08 ff 08 ff 03 18 24 4b 9f 43
-            # 03 51 08 ff 08 ff 03 18 24 4b a2 43
-            # 03 51 0c ff 08 ff 07 02 09 0b 13 18 24 4b 37 43
-            # 03 51 06 ff 08 ff 01 24 a8 43
-            # 03 51 09 ff 08 ff 04 02 0b 13 24 45 43
-            # 03 51 0b ff 08 ff 06 02 0b 13 18 24 4b 55 43
+            # The panel telling us the messages that might be of interest to us
             #log.debug("[handle_msgtypeB0]       Received message")
             
             msglen = data[2]
-            if beezerodebug:
-                if msglen == 8:
-                    d = data[3:10]
-                    if self.saved_D is not None:
-                        if self.saved_D != d:
-                            log.debug(f"[handle_msgtypeB0]             0x08 bit different to last time {self._toString(self.saved_D)}")
-                            log.debug(f"                                                          now  {self._toString(d)}")
-                    self.saved_D = d
-                elif msglen == 12:
-                    d = data[3:14]
-                    if self.saved_E is not None:
-                        if self.saved_E != d:
-                            log.debug(f"[handle_msgtypeB0]             0x0C bit different to last time {self._toString(self.saved_E)}")
-                            log.debug(f"                                                          now  {self._toString(d)}")
-                    self.saved_E = d
-                elif msglen == 6:
-                    d = data[3:8]
-                    if self.saved_F is not None:
-                        if self.saved_F != d:
-                            log.debug(f"[handle_msgtypeB0]             0x06 bit different to last time {self._toString(self.saved_F)}")
-                            log.debug(f"                                                          now  {self._toString(d)}")
-                    self.saved_F = d
-                elif msglen == 9:
-                    d = data[3:11]
-                    if self.saved_M is not None:
-                        if self.saved_M != d:
-                            log.debug(f"[handle_msgtypeB0]             0x09 bit different to last time {self._toString(self.saved_M)}")
-                            log.debug(f"                                                          now  {self._toString(d)}")
-                    self.saved_M = d
-                elif msglen == 11:
-                    d = data[3:13]
-                    if self.saved_I is not None:
-                        if self.saved_I != d:
-                            log.debug(f"[handle_msgtypeB0]             0x0B bit different to last time {self._toString(self.saved_I)}")
-                            log.debug(f"                                                          now  {self._toString(d)}")
-                    self.saved_I = d
-                else:
-                    log.debug("[handle_msgtypeB0]         Not seen this size before")
+            number_of_pops = data[6]
+            log.debug(f"[handle_msgtypeB0]       Received pop message   {number_of_pops=}")
+
+            if data[5] == 0xFF and msglen - 5 == number_of_pops:    # start of data marker and number_of_pops is 5 less than length
+                for i in range(0, number_of_pops):
+                    self._sendCommand("MSG_POWERMASTER_S", options=[ [ 2, int(data[i+7]) ] ] )  # This asks the panel to send the pop messages
             
         elif experimental and msgType == 0x03 and subType == 0x54:
             pass
@@ -5039,19 +4933,20 @@ class VisonicProtocol(PacketHandling):
     def requestPanelCommand(self, state : AlPanelCommand, code : str = "") -> AlCommandStatus:
         """ Send a request to the panel to Arm/Disarm """
         if not self.pmDownloadMode:
-            if state == AlPanelCommand.CHANGE_BAUD:
-                if self.PanelMode == AlPanelMode.POWERLINK and self.pmGotUserCode:
-                    log.debug(f"[requestPanelCommand] Changing Baud Rate")
-                    bpin = self._createPin(None)
-                    self._clearList()
-                    #
-                    baudrate = 38400
-                    br = hexify(baudrate)
-                    log.debug(f"[requestPanelCommand] Changing Baud Rate, *************** {bpin} ********* {br} ***")
-                    self._addMessageToSendList("MSG_PM_SETBAUD", options=[ [4, bpin], [13, "9600"] ])  #
-                    return AlCommandStatus.SUCCESS
-                else:
-                    return AlCommandStatus.FAIL_INVALID_STATE
+            if False: # state == AlPanelCommand.CHANGE_BAUD:
+                pass
+                #if self.PanelMode == AlPanelMode.POWERLINK and self.pmGotUserCode:
+                #    log.debug(f"[requestPanelCommand] Changing Baud Rate")
+                #    bpin = self._createPin(None)
+                #    self._clearList()
+                #    #
+                #    baudrate = 38400
+                #    br = hexify(baudrate)
+                #    log.debug(f"[requestPanelCommand] Changing Baud Rate, *************** {bpin} ********* {br} ***")
+                #    self._addMessageToSendList("MSG_PM_SETBAUD", options=[ [4, bpin], [13, "9600"] ])  #
+                #    return AlCommandStatus.SUCCESS
+                #else:
+                #    return AlCommandStatus.FAIL_INVALID_STATE
             else:
                 bpin = self._createPin(code)
                 # Ensure that the state is valid
