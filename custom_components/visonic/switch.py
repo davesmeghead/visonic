@@ -3,80 +3,89 @@
 import logging
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
-from .pconst import PyX10Command, PySwitchDevice
+from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+from . import VisonicConfigEntry
+from .pyconst import AlX10Command, AlSwitchDevice
 from .client import VisonicClient
 from .const import (
     DOMAIN,
-    DOMAINCLIENT,
     PANEL_ATTRIBUTE_NAME,
     DEVICE_ATTRIBUTE_NAME,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
+    hass: HomeAssistant,
+    entry: VisonicConfigEntry,
+    async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up the Visonic Alarm Binary Sensors."""
-    if DOMAIN in hass.data:
-        client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        devices = [
-            VisonicSwitch(client, device) for device in hass.data[DOMAIN]["switch"]
-        ]
-        hass.data[DOMAIN]["switch"] = list()
-        async_add_entities(devices, True)
+    """Set up the Visonic X10 Switch."""
+    #_LOGGER.debug(f"switch async_setup_entry start")
+    client: VisonicClient = entry.runtime_data.client
+
+    @callback
+    def async_add_switch(device: AlSwitchDevice) -> None:
+        """Add Visonic Switch."""
+        entities: list[SwitchEntity] = []
+        entities.append(VisonicSwitch(hass, client, device))
+        #_LOGGER.debug(f"switch adding {device.getDeviceID()}")
+        async_add_entities(entities)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"{DOMAIN}_{entry.entry_id}_add_{SWITCH_DOMAIN}",
+            async_add_switch,
+        )
+    )
+    #_LOGGER.debug("switch async_setup_entry exit")
 
 
 class VisonicSwitch(SwitchEntity):
     """Representation of a Visonic X10 Switch."""
 
-    def __init__(self, client: VisonicClient, visonic_device: PySwitchDevice):
+    def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSwitchDevice):
         """Initialise a Visonic X10 Device."""
-        # _LOGGER.debug("Creating X10 Switch %s", visonic_device.name)
+        #_LOGGER.debug("Creating X10 Switch %s", visonic_device.id)
         self._client = client
-        self.visonic_device = visonic_device
-        self._x10id = self.visonic_device.getDeviceID()
-
+        self._visonic_device = visonic_device
+        self._visonic_device.onChange(self.onChange)
+        self._x10id = self._visonic_device.getDeviceID()
+        self._dname = self._visonic_device.createFriendlyName()
+        pname = client.getMyString()
+        self._name = pname.lower() + self._dname.lower()
         self._panel = client.getPanelID()
-        if self._panel > 0:
-            self._name = "visonic_p" + str(self._panel) + "_" + self.visonic_device.getName().lower()
-        else:
-            self._name = "visonic_" + self.visonic_device.getName().lower()
-        
-        # VISONIC_ID_FORMAT.format( slugify(self._name), visonic_device.getDeviceID())
-        # self._entity_id = ENTITY_ID_FORMAT.format(slugify(self._name))
-        self._current_value = self.visonic_device.isOn()
-        self._dispatcher = client.getDispatcher()
-
-
-    async def async_added_to_hass(self):
-        """Register callbacks."""
-        # Register for dispatcher calls to update the state
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass, self._dispatcher, self.onChange
-            )
-        )
-        # self.visonic_device.install_change_handler(self.onChange)
+        self._current_value = self._visonic_device.isOn()
+        self._is_available = True
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
         await super().async_will_remove_from_hass()
-        self.visonic_device = None
+        self._visonic_device = None
+        self._is_available = False
         self._client = None
         _LOGGER.debug("switch async_will_remove_from_hass")
 
-    def onChange(self, event_id: int, datadictionary: dict):
+    def onChange(self, switch : AlSwitchDevice):
         """Switch state has changed."""
-        # _LOGGER.debug("Switch onchange %s", str(self._name))
-        self._current_value = self.visonic_device.isOn()
-        self.schedule_update_ha_state()
+        # the switch parameter is the same as self._visonic_device, but it's a generic callback handler that cals this function
+        _LOGGER.debug("Switch changeHandler %s", str(self._name))
+        self._current_value = self._visonic_device.isOn()
+        if self.entity_id is not None:
+            self.schedule_update_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        #_LOGGER.debug(f"   In binary sensor VisonicSensor available self._is_available = {self._is_available}    self._current_value = {self._current_value}")
+        return self._is_available
 
     @property
     def should_poll(self):
@@ -105,31 +114,29 @@ class VisonicSwitch(SwitchEntity):
 
     def turn_on(self, **kwargs):
         """Turn the device on."""
-        self.turnmeonandoff(PyX10Command.ON)
+        self.turnmeonandoff(AlX10Command.ON)
 
     def turn_off(self, **kwargs):
         """Turn the device off."""
-        self.turnmeonandoff(PyX10Command.OFF)
+        self.turnmeonandoff(AlX10Command.OFF)
 
     @property
     def device_info(self):
         """Return information about the device."""
-        if self.visonic_device is not None:
+        if self._visonic_device is not None:
             return {
                 "manufacturer": "Visonic",
                 "identifiers": {(DOMAIN, self._name)},
-                "name": f"Visonic X10 ({self.visonic_device.getName()})",
-                "model": self.visonic_device.getType(),
-                #"via_device": (DOMAIN, self._uniqueName),
+                "name": f"Visonic X10 ({self._dname})",
+                "model": self._visonic_device.getType(),
                 # "sw_version": self._api.information.version_string,
             }
         return { 
                  "manufacturer": "Visonic", 
-                 #"via_device": (DOMAIN, self._uniqueName),
             }
 
     # "off"  "on"  "dim"  "brighten"
-    def turnmeonandoff(self, state : PyX10Command):
+    def turnmeonandoff(self, state : AlX10Command):
         """Send disarm command."""
         self._client.setX10(self._x10id, state)
 
@@ -138,10 +145,10 @@ class VisonicSwitch(SwitchEntity):
         """Return the state attributes of the device."""
         attr = {}
 
-        attr["location"] = self.visonic_device.getLocation()
-        attr["name"] = self.visonic_device.getName()
-        attr["type"] = self.visonic_device.getType()
-        attr[DEVICE_ATTRIBUTE_NAME] = self.visonic_device.getDeviceID()
+        attr["location"] = self._visonic_device.getLocation()
+        attr["name"] = self._dname
+        attr["type"] = self._visonic_device.getType()
+        attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()
         attr[PANEL_ATTRIBUTE_NAME] = self._panel
         #        attr["State"] = "on" if self.is_on() else "off"
         return attr

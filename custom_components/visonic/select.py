@@ -1,21 +1,20 @@
-"""Support for Visonic Sensros Armed Select."""
+"""Support for Visonic Sensors Armed Select."""
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
+
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import slugify
-from homeassistant.const import (
-    ATTR_ARMED,
-)
-
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import Entity
-from .pconst import PySensorDevice, PySensorType, PyCommandStatus
-from .const import DOMAIN, DOMAINCLIENT, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, AvailableNotifications
 
+from . import VisonicConfigEntry
+from .pyconst import AlSensorDevice, AlCommandStatus, AlSensorCondition
+from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, AvailableNotifications
 from .client import VisonicClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,65 +22,71 @@ _LOGGER = logging.getLogger(__name__)
 BYPASS = "Bypass"
 ARMED = "Armed"
 
+messageDict = {
+    AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS   : "Sensor Bypass: EPROM Download is in progress, please try again after this is complete",
+    AlCommandStatus.FAIL_INVALID_CODE           : "Sensor Bypass: Invalid PIN",
+    AlCommandStatus.FAIL_USER_CONFIG_PREVENTED  : "Sensor Bypass: Please check your HA Configuration settings for this Integration and enable sensor bypass",
+    AlCommandStatus.FAIL_INVALID_STATE          : "Sensor Bypass: Invalid state requested",
+    AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED : "Sensor Bypass: Please check your panel settings and enable sensor bypass"
+}
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: Callable[[List[Entity], bool], None],
+    entry: VisonicConfigEntry,
+    async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Visonic Alarm Bypass/Arm Select"""
+    #_LOGGER.debug(f"select async_setup_entry start")
+    client: VisonicClient = entry.runtime_data.client
 
-    _LOGGER.debug("************* select async_setup_entry **************")
+    @callback
+    def async_add_select(device: AlSensorDevice) -> None:
+        """Add Visonic Select Sensor."""
+        entities: list[SelectEntity] = []
+        entities.append(VisonicSelect(hass, client, device))
+        #_LOGGER.debug(f"select adding {device.getDeviceID()}")
+        async_add_entities(entities)
 
-    if DOMAIN in hass.data:
-        _LOGGER.debug("   In select async_setup_entry")
-        client = hass.data[DOMAIN][DOMAINCLIENT][entry.entry_id]
-        sensors = [
-            VisonicSelect(hass, client, device) for device in hass.data[DOMAIN]["select"]
-        ]
-        # empty the list as we have copied the entries so far in to sensors
-        hass.data[DOMAIN]["select"] = list()
-        async_add_entities(sensors, True)
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"{DOMAIN}_{entry.entry_id}_add_{SELECT_DOMAIN}",
+            async_add_select,
+        )
+    )
+    #_LOGGER.debug("select async_setup_entry exit")
 
 
 class VisonicSelect(SelectEntity):
     """Representation of a visonic arm/bypass select entity."""
 
-    def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: PySensorDevice):
+    def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSensorDevice):
         """Initialize the visonic binary sensor arm/bypass select entity."""
         SelectEntity.__init__(self)
-        #_LOGGER.debug("Creating select entity for %s",visonic_device.getDeviceName())
         self.hass = hass
         self._client = client
         self._visonic_device = visonic_device
+        self._visonic_device.onChange(self.onChange)
+        dname = visonic_device.createFriendlyName()
+        pname = client.getMyString()
+        self._name = pname.lower() + dname.lower()
         self._panel = client.getPanelID()
-        if self._panel > 0:
-            self._name = "visonic_p" + str(self._panel) + "_" + visonic_device.getDeviceName().lower()
-        else:
-            self._name = "visonic_" + visonic_device.getDeviceName().lower()
         self._is_available = self._visonic_device.isEnrolled()
         self._is_armed = not self._visonic_device.isBypass()
         self._pending_state_is_armed = None
-        self._dispatcher = client.getDispatcher()
-
-    async def async_added_to_hass(self):
-        """Register callbacks."""
-        # Register for dispatcher calls to update the state
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass, self._dispatcher, self.onChange
-            )
-        )
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
         await super().async_will_remove_from_hass()
         self._visonic_device = None
+        self._client = None
+        self._is_available = False
         _LOGGER.debug("select async_will_remove_from_hass")
 
-    def onChange(self, event_id: int, datadictionary: dict):
+    def onChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
         """Call on any change to the sensor."""
-        #_LOGGER.debug("Select Sensor onchange %s", str(self._name))
         # Update the current value based on the device state
         if self._visonic_device is not None:
             self._is_available = self._visonic_device.isEnrolled()
@@ -90,11 +95,12 @@ class VisonicSelect(SelectEntity):
             _LOGGER.debug("Select on change called but sensor is not defined")
 
         if self._pending_state_is_armed is not None and self._pending_state_is_armed == self._is_armed:
-            _LOGGER.debug("Change Implemented in panel")
+            #_LOGGER.debug("Change Implemented in panel")
             self._pending_state_is_armed = None
 
         # Ask HA to schedule an update
-        self.schedule_update_ha_state(True)
+        if self.entity_id is not None:
+            self.schedule_update_ha_state(True)
 
     @property
     def options(self) -> list[str]:
@@ -143,30 +149,24 @@ class VisonicSelect(SelectEntity):
         elif option in self.options:
             #_LOGGER.debug("Sending Option {0} to {1}".format(option, self.unique_id))
             result = self._client.sendBypass(self._visonic_device.getDeviceID(), option == BYPASS, "") # pin code to "" to use default if set
-            if result == PyCommandStatus.SUCCESS:
+            if result == AlCommandStatus.SUCCESS:
                 self._pending_state_is_armed = (option == ARMED)
             else:
                 # Command not sent to panel
-                _LOGGER.debug("Sensor Bypass: Command not sent to panel")
-                message = "Command not sent to panel"
-                if result == PyCommandStatus.FAIL_PANEL_CONFIG_PREVENTED:
-                    message = "Sensor Bypass: Please check your panel settings and enable sensor bypass"
-                elif result == PyCommandStatus.FAIL_USER_CONFIG_PREVENTED:
-                    message = "Sensor Bypass: Please check your HA Configuration settings for this Integration and enable sensor bypass"
-                elif result == PyCommandStatus.FAIL_INVALID_PIN:
-                    message = "Sensor Bypass: Invalid PIN"
-                elif result == PyCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
-                    message = "Sensor Bypass: EPROM Download is in progress, please try again after this is complete"
+                _LOGGER.debug(f"Sensor Bypass: Command not sent to panel {result}")
+                message = "Sensor Bypass: Command not sent to panel"
+                if result in messageDict:
+                    message = messageDict[result]
                 self._client.sendHANotification(AvailableNotifications.ALWAYS, message)
         else:
-            raise ValueError(f"Can't set the armed state to {option}. Allowed states are: {self.options}")
-        self.schedule_update_ha_state(True)
+            raise HomeAssistantError(f"Can't set the armed state to {option}. Allowed states are: {self.options}")
+        if self.entity_id is not None:
+            self.schedule_update_ha_state(True)
 
     @property
     def extra_state_attributes(self):
         """Return the state attributes of the device."""
         attr = {}
-        #attr["name"] = self._visonic_device.getDeviceName()
         attr[PANEL_ATTRIBUTE_NAME] = self._panel
         attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()
         return attr

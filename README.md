@@ -1,4 +1,5 @@
-[![](https://img.shields.io/github/release/davesmeghead/visonic/all.svg?style=for-the-badge)](https://github.com/davesmeghead/visonic/releases)
+[![](https://img.shields.io/github/release/davesmeghead/visonic/all.svg?style=for-the-badge)](https://github.com/davesmeghead/visonic/releases) 
+![installation_badge](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.visonic.total)
 [![](https://img.shields.io/badge/MAINTAINER-%40Davesmeghead-green?style=for-the-badge)](https://github.com/Davesmeghead)
 [![Buy me a coffee][buymeacoffee-shield]][buymeacoffee]
 

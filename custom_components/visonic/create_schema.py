@@ -2,8 +2,6 @@
 
 import logging
 
-#from .pconst import (
-#)
 import voluptuous as vol
 from typing import Any
 
@@ -11,6 +9,16 @@ from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT, CO
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util.yaml.objects import NodeListClass
 from homeassistant.helpers import selector
+from homeassistant.const import CONF_NAME, CONF_SOURCE, UnitOfTime
+
+from homeassistant.helpers.selector import (
+    ObjectSelector,
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+    validate_selector,
+)
 
 from .const import (
     CONF_EXCLUDE_SENSOR,
@@ -19,25 +27,25 @@ from .const import (
     CONF_ENABLE_REMOTE_DISARM,
     CONF_ENABLE_SENSOR_BYPASS,
     CONF_ARM_CODE_AUTO,
-    CONF_OVERRIDE_CODE,
     CONF_FORCE_KEYPAD,
     CONF_ARM_HOME_ENABLED,
     CONF_ARM_NIGHT_ENABLED,
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
-    CONF_AUTO_SYNC_TIME,
-    CONF_B0_ENABLE_MOTION_PROCESSING,
-    CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,
-    CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
+#    CONF_AUTO_SYNC_TIME,
+    CONF_EEPROM_ATTRIBUTES,
     CONF_DEVICE_BAUD,
     CONF_PANEL_NUMBER,
     CONF_DEVICE_TYPE,
     CONF_DOWNLOAD_CODE,
-    CONF_FORCE_AUTOENROLL,
-    CONF_FORCE_STANDARD,
+#    CONF_FORCE_AUTOENROLL,
+    CONF_EMULATION_MODE,
     CONF_LANGUAGE,
     CONF_MOTION_OFF_DELAY,
+    CONF_MAGNET_CLOSED_DELAY,
+    CONF_EMER_OFF_DELAY,
     CONF_SIREN_SOUNDING,
+    CONF_SENSOR_EVENTS,
     CONF_LOG_CSV_FN,
     CONF_LOG_CSV_TITLE,
     CONF_LOG_DONE,
@@ -51,26 +59,48 @@ from .const import (
     DEFAULT_DEVICE_BAUD,
     DEFAULT_DEVICE_HOST,
     DEFAULT_DEVICE_PORT,
+    DEFAULT_DEVICE_TOPIC,
     DEFAULT_DEVICE_USB,
     AvailableNotifications,
-    AvailableNotificationConfig,
+    available_emulation_modes,
 )
+
+from .pyconst import AlSensorCondition
+
+# These need to match the "sensor_event_list" selector in the language json file
+AvailableSensorEvents = {
+#    "state" : AlSensorCondition.STATE,
+#    "tamper" : AlSensorCondition.TAMPER,
+#    "battery" : AlSensorCondition.BATTERY,
+#    "bypass" : AlSensorCondition.BYPASS,
+#    "enrolled" : AlSensorCondition.ENROLLED,
+    "problem" : AlSensorCondition.PROBLEM,
+    "fire" : AlSensorCondition.FIRE,
+    "emergency" : AlSensorCondition.EMERGENCY,
+    "panic" : AlSensorCondition.PANIC
+#    "camera" : AlSensorCondition.CAMERA
+}
+
+TIME_UNITS = [
+    UnitOfTime.SECONDS,
+    UnitOfTime.MINUTES,
+    UnitOfTime.HOURS,
+    UnitOfTime.DAYS,
+]
 
 _LOGGER = logging.getLogger(__name__)
 
-available_siren_values = {
-    "intruder": "Intruder",
-    "tamper": "Tamper",
-    "fire": "Fire",
-    "emergency": "Emergency",
-    "gas": "Gas",
-    "flood": "Flood",
-    "x10": "X10",
-    "panic": "Panic",
-}
-
-#VISONIC_ID_LIST_SCHEMA = vol.Schema([int])
-#VISONIC_STRING_LIST_SCHEMA = vol.Schema([str])
+# These need to match the "siren_sounding" selector in the language json file
+available_siren_values = [
+    "intruder",
+    "tamper",
+    "fire",
+    "emergency",
+    "gas",
+    "flood",
+    "x10",
+    "panic"
+]
 
 class VisonicSchema:
 
@@ -79,12 +109,10 @@ class VisonicSchema:
             vol.Required(CONF_DEVICE_TYPE, default="Ethernet"): vol.In(["Ethernet", "USB"]),
             vol.Optional(CONF_PANEL_NUMBER, default=0): cv.positive_int,
         }
-
         self.CONFIG_SCHEMA_ETHERNET = {
             vol.Required(CONF_HOST, default=DEFAULT_DEVICE_HOST): str,
             vol.Required(CONF_PORT, default=DEFAULT_DEVICE_PORT): str,
         }
-
         self.CONFIG_SCHEMA_USB = {
             vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB): str,
             vol.Optional(CONF_DEVICE_BAUD, default=DEFAULT_DEVICE_BAUD): str,
@@ -100,27 +128,24 @@ class VisonicSchema:
             **self.CONFIG_SCHEMA_USB,
             **self.create_parameters1(self.options),
             **self.create_parameters2(self.options),
-            **self.create_parameters3(self.options),
-            **self.create_parameters4(self.options),
-            **self.create_parameters5(self.options),
+            **self.create_parameters10(self.options),
+            **self.create_parameters11(self.options),
+            **self.create_parameters12(self.options),
         }
-
         for key in initialise:
             d = key.default()
             self.options[key] = d
-
 
     def create_default(self, options: dict, key: str, default: Any):
         """Create a default value for the parameter using the previous value that the user entered."""
         if options is not None and key in options:
             # if type(options[key]) is not type(default):
             # # create_default types are different for = siren_sounding <class 'list'> <class 'set'> ['intruder', 'panic', 'gas'] {'intruder'}
-            # _LOGGER.debug(
-            #    "create_default types are different for = %s %s %s %s %s", key, type(options[key]), options[key], type(default), default
-            # )
             if isinstance(options[key], list) or isinstance(options[key], NodeListClass):
-                # _LOGGER.debug("      its a list")
+                #_LOGGER.debug("      its a list")
                 if CONF_SIREN_SOUNDING == key:
+                    return list(options[key])
+                if CONF_SENSOR_EVENTS == key:
                     return list(options[key])
                 if CONF_ALARM_NOTIFICATIONS == key:
                     return list(options[key])
@@ -131,8 +156,8 @@ class VisonicSchema:
                     return ""
             else:
                 return options[key]
-        else:
-            return default
+        #_LOGGER.debug(f"    returning {default=}")
+        return default
 
 
     # These are only used on creation of the component
@@ -151,46 +176,70 @@ class VisonicSchema:
                 CONF_EXCLUDE_X10, default=self.create_default(options, CONF_EXCLUDE_X10, "")
             ): str,
             vol.Optional(
-                CONF_DOWNLOAD_CODE, default=self.create_default(options, CONF_DOWNLOAD_CODE, "")
+                CONF_EMULATION_MODE,
+                default=self.create_default(options, CONF_EMULATION_MODE, available_emulation_modes[0]),
+            ): vol.In(available_emulation_modes),
+        }
+
+    # These are only used on creation of the component and only for Powerlink
+    def create_parameters2(self, options: dict):
+        """Create parameter set 2."""
+        # Panel settings - can only be set on creation
+        return {
+            vol.Optional(
+                CONF_DOWNLOAD_CODE, 
+                default=self.create_default(options, CONF_DOWNLOAD_CODE, "")
             ): str,
+#            vol.Optional(
+#                CONF_FORCE_AUTOENROLL,
+#                default=self.create_default(options, CONF_FORCE_AUTOENROLL, False),
+#            ): bool,
+#            vol.Optional(
+#                CONF_AUTO_SYNC_TIME,
+#                default=self.create_default(options, CONF_AUTO_SYNC_TIME, True),
+#            ): bool,
             vol.Optional(
-                CONF_FORCE_STANDARD,
-                default=self.create_default(options, CONF_FORCE_STANDARD, False),
-            ): bool,
-            vol.Optional(
-                CONF_FORCE_AUTOENROLL,
-                default=self.create_default(options, CONF_FORCE_AUTOENROLL, False),
-            ): bool,
-            vol.Optional(
-                CONF_AUTO_SYNC_TIME,
-                default=self.create_default(options, CONF_AUTO_SYNC_TIME, True),
+                CONF_EEPROM_ATTRIBUTES,
+                default=self.create_default(options, CONF_EEPROM_ATTRIBUTES, False),
             ): bool,
         }
 
-
-
-    def create_parameters2(self, options: dict):
-        """Create parameter set 2."""
+    def create_parameters10(self, options: dict):
+        """Create parameter set 10."""
         # Panel settings - can be modified/edited
-        # _LOGGER.debug(f'Create 2A {options.get(CONF_OVERRIDE_CODE, "")}')
-        tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
+        #_LOGGER.debug(f"create_parameters10 {options=}")
+        # options=AvailableSensorEvents.keys()   needs to be immutable so made it a list and copied it
+        strlist = [el.value 
+                   for el in AvailableNotifications 
+                   if el != AvailableNotifications.ALWAYS]
+        #_LOGGER.debug(f"create_parameters10 {strlist=}")
         return {
             vol.Optional(
                 CONF_MOTION_OFF_DELAY,
                 default=self.create_default(options, CONF_MOTION_OFF_DELAY, 120),
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
             vol.Optional(
-                CONF_SIREN_SOUNDING,
+                CONF_MAGNET_CLOSED_DELAY,
+                default=self.create_default(options, CONF_MAGNET_CLOSED_DELAY, 5),
+            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
+            vol.Optional(
+                CONF_EMER_OFF_DELAY,
+                default=self.create_default(options, CONF_EMER_OFF_DELAY, 120),
+            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
+            vol.Optional(
+                CONF_SIREN_SOUNDING, 
                 default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
-            ): cv.multi_select(available_siren_values),
+            ): selector.SelectSelector(selector.SelectSelectorConfig(options=available_siren_values, multiple=True, sort=True, translation_key=CONF_SIREN_SOUNDING)),
             vol.Optional(
                 CONF_ALARM_NOTIFICATIONS,
                 default=self.create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
-            ): cv.multi_select(AvailableNotificationConfig),
-            # https://developers.home-assistant.io/docs/data_entry_flow_index/#show-form
+            ): selector.SelectSelector(selector.SelectSelectorConfig(options=strlist, multiple=True, sort=True, translation_key=CONF_ALARM_NOTIFICATIONS)),
             vol.Optional(
-                CONF_OVERRIDE_CODE, default = 0, description={"suggested_value": (0 if tmp == "" else int(tmp))}
-            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=9999, mode=selector.NumberSelectorMode.BOX)), #vol.All (cv.string, cv.matches_regex("(^[0-9]{4}$|^$)")), #("(^[0-9][0-9][0-9][0-9]$|^$)")
+                CONF_SENSOR_EVENTS, 
+                default=self.create_default(options, CONF_SENSOR_EVENTS, ["problem"]),
+            ): selector.SelectSelector(selector.SelectSelectorConfig(options=list(AvailableSensorEvents.keys()).copy(), multiple=True, sort=True, translation_key=CONF_SENSOR_EVENTS)),
+            #): cv.multi_select(AvailableNotificationConfig),
+            # https://developers.home-assistant.io/docs/data_entry_flow_index/#show-form
             vol.Optional(
                 CONF_RETRY_CONNECTION_COUNT,
                 default=self.create_default(options, CONF_RETRY_CONNECTION_COUNT, 1),
@@ -201,12 +250,9 @@ class VisonicSchema:
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=5, max=1000, mode=selector.NumberSelectorMode.BOX)),
         }
 
-
-    def create_parameters3(self, options: dict):
-        """Create parameter set 3."""
+    def create_parameters11(self, options: dict):
+        """Create parameter set 11."""
         # Panel settings - can be modified/edited
-        # _LOGGER.debug(f'Create 2B {options.get(CONF_OVERRIDE_CODE, "")}')
-        tmp : str = self.create_default(options, CONF_OVERRIDE_CODE, "")
         return {
             vol.Optional(
                 CONF_ARM_CODE_AUTO,
@@ -245,9 +291,8 @@ class VisonicSchema:
             ): bool,
         }
 
-
-    def create_parameters4(self, options: dict):
-        """Create parameter set 4."""
+    def create_parameters12(self, options: dict):
+        """Create parameter set 12."""
         # Log file parameters
         return {
             vol.Optional(
@@ -277,63 +322,37 @@ class VisonicSchema:
             ): int,
         }
 
-
-    def create_parameters5(self, options: dict):
-        """Create parameter set 5."""
-        # B0 related parameters (PowerMaster only)
-        return {
-            vol.Optional(
-                CONF_B0_ENABLE_MOTION_PROCESSING,
-                default=self.create_default(options, CONF_B0_ENABLE_MOTION_PROCESSING, False),
-            ): bool,
-            vol.Optional(
-                CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT,
-                default=self.create_default(options, CONF_B0_MAX_TIME_FOR_TRIGGER_EVENT, 5),
-            ): int,
-            vol.Optional(
-                CONF_B0_MIN_TIME_BETWEEN_TRIGGERS,
-                default=self.create_default(options, CONF_B0_MIN_TIME_BETWEEN_TRIGGERS, 30),
-            ): int,
-        }
-
     def create_schema_device(self):
         """Create schema device."""
         return vol.Schema(self.CONFIG_SCHEMA_DEVICE)
-
 
     def create_schema_ethernet(self):
         """Create schema ethernet."""
         return vol.Schema(self.CONFIG_SCHEMA_ETHERNET)
 
-
     def create_schema_usb(self):
         """Create schema usb."""
         return vol.Schema(self.CONFIG_SCHEMA_USB)
-
 
     def create_schema_parameters1(self):
         """Create schema parameters 1."""
         return vol.Schema(self.create_parameters1(self.options))
 
-
     def create_schema_parameters2(self):
         """Create schema parameters 2."""
         return vol.Schema(self.create_parameters2(self.options))
 
+    def create_schema_parameters10(self):
+        """Create schema parameters 10."""
+        return vol.Schema(self.create_parameters10(self.options))
 
-    def create_schema_parameters3(self):
-        """Create schema parameters 3."""
-        return vol.Schema(self.create_parameters3(self.options))
+    def create_schema_parameters11(self):
+        """Create schema parameters 11."""
+        return vol.Schema(self.create_parameters11(self.options))
 
-
-    def create_schema_parameters4(self):
-        """Create schema parameters 4."""
-        return vol.Schema(self.create_parameters4(self.options))
-
-
-    def create_schema_parameters5(self):
-        """Create schema parameters 5."""
-        return vol.Schema(self.create_parameters5(self.options))
+    def create_schema_parameters12(self):
+        """Create schema parameters 12."""
+        return vol.Schema(self.create_parameters12(self.options))
 
     def set_default_options(self, options: dict):
         """Set schema defaults."""
