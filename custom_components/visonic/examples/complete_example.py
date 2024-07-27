@@ -249,7 +249,7 @@ class VisonicClient:
                 self.process_sensor(sensor)
                 sensor.onChange(self.onSensorChange)
 
-    def onPanelChangeHandler(self, e):
+    def onPanelChangeHandler(self, e: AlCondition, data : dict):
         """ This is a callback function, called from the visonic library. """
         if type(e) == AlIntEnum:
             if self.process_event is not None:
@@ -338,7 +338,6 @@ class VisonicClient:
             sock.settimeout(1.0)  # set timeout to 1 second to flush the receive buffer
             sock.connect((address, port))
 
-            pl_sock = None
             # Flush the buffer, receive any data and dump it
             try:
                 dummy = sock.recv(10000)  # try to receive 100 bytes
@@ -350,7 +349,7 @@ class VisonicClient:
             # set the timeout to infinite
             sock.settimeout(None)
 
-            vp = ClientVisonicProtocol(serial_connection = False, panelConfig=panelConfig, pl_sock = pl_sock, loop=loop)
+            vp = ClientVisonicProtocol(serial_connection = False, panelConfig=panelConfig, loop=loop)
 
             #print("The vp " + str(type(vp)) + "   with value " + str(vp))
             # create the connection to the panel as an asyncio protocol handler and then set it up in a task

@@ -153,7 +153,7 @@ def onNewSensor(sensor: AlSensorDevice):
     else:
         print("Sensor ", str(sensor))
 
-def onPanelChangeHandler(e):
+def onPanelChangeHandler(self, e: AlCondition, data : dict):
     """ This is a callback function, called from the visonic library. """
     print(f"onPanelChangeHandler {type(e)}  value {e}")
 
