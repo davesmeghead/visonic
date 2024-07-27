@@ -863,8 +863,8 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
         print("Here ZZZZZZZ")
         
     except Exception as e:
-        print("Got an exception")
-        print(e.message)
+        #print("Got an exception")
+        #print(e.message)
         # Get current system exception
         ex_type, ex_value, ex_traceback = sys.exc_info()
 
@@ -887,8 +887,8 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
 def handle_exception(loop, context):
     # context["message"] will always be there; but context["exception"] may not
     msg = context.get("exception", context["message"])
-    print(f"Caught exception: {msg}")
-    print(f"                  {context}")
+    #print(f"Caught exception: {msg}")
+    #print(f"                  {context}")
     asyncio.create_task(shutdown(loop))
 
 async def shutdown(loop, signal=None):
