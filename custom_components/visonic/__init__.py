@@ -51,6 +51,8 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 # the 5 schemas for the HA service calls
 ALARM_SCHEMA_EVENTLOG = vol.Schema(
     {
