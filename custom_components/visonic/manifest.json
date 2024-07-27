@@ -1,15 +1,15 @@
 {
-  "domain": "visonic",
-  "name": "Visonic Intruder Alarm",
   "codeowners": ["@davesmeghead"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/davesmeghead/visonic/wiki",
+  "domain": "visonic",
   "integration_type": "hub",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/davesmeghead/visonic/issues",
-  "requirements": ["Pillow", "pyserial_asyncio"],
   "loggers": ["visonic"],
+  "name": "Visonic Intruder Alarm",
+  "requirements": ["Pillow", "pyserial_asyncio"],
   "single_config_entry": false,
   "version": "0.9.6.4"
 }
