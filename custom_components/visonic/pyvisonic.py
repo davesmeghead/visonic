@@ -100,7 +100,7 @@ except:
     from pyhelper import (MyChecksumCalc, AlImageManager, ImageRecord, titlecase, pmPanelTroubleType_t, pmPanelAlarmType_t, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.3.5.1"
+PLUGIN_VERSION = "1.3.5.2"
 
 # Some constants to help readability of the code
 
@@ -1484,7 +1484,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         while not self.suspendAllOperations and len(self.SendList) > 0:
             log.debug("[_sendInterfaceResetCommand]       Waiting to empty send command queue")
             self._sendCommand(None)  # Check send queue
-        if self.ForceStandardMode and not self.pmGotPanelDetails:
+        #if self.ForceStandardMode and not self.pmGotPanelDetails:
+        if not self.pmGotPanelDetails:
             self._sendCommand("MSG_BUMP")
 
     def _gotoStandardMode(self):
@@ -1860,7 +1861,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     # TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      
                     # TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      TESTING TO HERE      
 
-                    if self.PanelMode == AlPanelMode.STANDARD or self.PanelMode == AlPanelMode.STANDARD_PLUS or self.PanelMode == AlPanelMode.POWERLINK or self.PanelMode == AlPanelMode.MINIMAL_ONLY or self.PanelMode == AlPanelMode.COMPLETE_READONLY:
+                    if self.PanelMode == AlPanelMode.STANDARD or self.PanelMode == AlPanelMode.STANDARD_PLUS or self.PanelMode == AlPanelMode.POWERLINK or self.PanelMode == AlPanelMode.MINIMAL_ONLY:
                         # Dump all sensors to the file every 300 seconds (5 minutes)
                         log_sensor_state_counter = log_sensor_state_counter + 1
                         if log_sensor_state_counter >= 300:
@@ -2732,6 +2733,8 @@ class PacketHandling(ProtocolBase):
                 self.onNewSensorHandler(self.SensorList[i])
             # Only enrolled once
             self.SensorList[i].pushChange(AlSensorCondition.ENROLLED)
+        
+        return sensorType
     
     def _processKeypadsAndSirens(self, pmPanelTypeNr) -> str:
         sirenCnt = pmPanelConfig_t["CFG_SIRENS"][pmPanelTypeNr]
@@ -2914,12 +2917,12 @@ class PacketHandling(ProtocolBase):
 
             pmPanelTypeCodeStr = self._lookupEpromSingle("panelModelCode")
             idx = "{0:0>2}{1:0>2}".format(hex(self.PanelType).upper()[2:], hex(int(pmPanelTypeCodeStr)).upper()[2:])
-            pmPanelName = pmPanelName_t[idx] if idx in pmPanelName_t else "Unknown"
+            pmPanelName = pmPanelName_t[idx] if idx in pmPanelName_t else "Unknown_" + idx
 
             #log.debug("[Process Settings]   Processing settings - panel code index {0}".format(idx))
 
             #  INTERFACE : Add this param to the status panel first
-            self.PanelStatus["Panel Name"] = pmPanelName
+            #self.PanelStatus["Panel Name"] = pmPanelName
 
             # ------------------------------------------------------------------------------------------------------------------------------------------------
             # Process Panel Settings to display in the user interface
@@ -4750,9 +4753,9 @@ class PacketHandling(ProtocolBase):
 
             elif zone - 1 in self.SensorList and self.SensorList[zone-1].getSensorType() == AlSensorType.CAMERA:
                 log.debug(f"[handle_msgtypeF4]        Processing")
-                # Here when PanelMode is COMPLETE_READONLY, MINIMAL_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
+                # Here when PanelMode is MINIMAL_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
 
-                if self.PanelMode == AlPanelMode.MINIMAL_ONLY or self.PanelMode == AlPanelMode.COMPLETE_READONLY:
+                if self.PanelMode == AlPanelMode.MINIMAL_ONLY:
                     # Support externally requested images, from a real PowerLink Hardware device for example
                     if not self.ImageManager.isValidZone(zone):
                         self.ImageManager.create(zone, 11)   # This makes sure that there isn't an ongoing image retrieval for this sensor
@@ -4787,7 +4790,7 @@ class PacketHandling(ProtocolBase):
                 log.debug(f"[handle_msgtypeF4]        Not processing F4 0x05 data")
             elif self.ImageManager.hasStartedSequence():
                 # Image receipt has been initialised by self.ImageManager.setCurrent
-                #     Therefore we only get here when PanelMode is COMPLETE_READONLY, MINIMAL_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
+                #     Therefore we only get here when PanelMode is MINIMAL_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
                 datastart = 4
                 inSequence = self.ImageManager.addData(data[datastart:datastart+datalen], sequence)
                 if inSequence:
@@ -4933,7 +4936,7 @@ class VisonicProtocol(PacketHandling):
             "Download Timeout": self.DownloadTimeout,
             "Download Retries": self.pmDownloadRetryCount,
             "Panel Problem Count": self.PanelProblemCount,
-            "Panel Problem Time": self.LastPanelProblemTime if self.LastPanelProblemTime else ""
+            "Last Panel Problem Time": self.LastPanelProblemTime if self.LastPanelProblemTime else ""
         }
         #log.debug("[getPanelStatusDict A] type a={0} type c={1}".format(type(a), type(c)))
         self.merge(a,c)

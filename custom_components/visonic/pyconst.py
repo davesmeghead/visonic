@@ -160,7 +160,7 @@ class AlPanelMode(AlEnum):
     DOWNLOAD = AlIntEnum(6)
     STOPPED = AlIntEnum(7)
     MINIMAL_ONLY = AlIntEnum(8)
-    COMPLETE_READONLY = AlIntEnum(9)
+#    COMPLETE_READONLY = AlIntEnum(9)
 a = AlPanelMode()
 
 # The set of panel states
