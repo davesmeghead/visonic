@@ -100,7 +100,7 @@ except:
     from pyhelper import (MyChecksumCalc, AlImageManager, ImageRecord, titlecase, pmPanelTroubleType_t, pmPanelAlarmType_t, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.3.5.0"
+PLUGIN_VERSION = "1.3.5.1"
 
 # Some constants to help readability of the code
 
@@ -4179,9 +4179,9 @@ class PacketHandling(ProtocolBase):
 
             self.PanelTamper = PanelTamper
             # reset=False
-            if PanelTamper:
-                log.debug("[handle_msgtypeA7] ******************** Tamper Triggered *******************")
-                self.sendPanelUpdate(AlCondition.PANEL_TAMPER_ALARM)  # push changes through to the host to get it to update, tamper is active!
+            #if PanelTamper:
+            #    log.debug("[handle_msgtypeA7] ******************** Tamper Triggered *******************")
+            #    self.sendPanelUpdate(AlCondition.PANEL_TAMPER_ALARM)  # push changes through to the host to get it to update, tamper is active!
 
 
     # pmHandlePowerlink (0xAB)
@@ -4667,7 +4667,8 @@ class PacketHandling(ProtocolBase):
             # Zone Last Event
             # PM10: With a PM10 I'm not sure that we'll get this message but I assume that we do and not the other one.
             # PM30: I think that this represents sensors Z37 to Z64.  Each sensor is 5 bytes.   
-            #       For the PM30 with 64 sensors this comes out as 140 / 5 = 28
+            #       For the PM10 with 30 sensors this comes out as 150 / 5 = 30
+            #       For the PM30 with 64 sensors this comes out as 140 / 5 = 28     (64-36=28)
             sensortotalbytes = int(data[6])
             if sensortotalbytes % 5 == 0:         # Divisible by 5, each sensors data is 5 bytes
                 if self.beezero_024B_sensorcount is not None: 
