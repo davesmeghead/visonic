@@ -184,7 +184,6 @@ class AlSensorDeviceHelper(AlSensorDevice):
         self.ztrip = kwargs.get("ztrip", False)  # bool  zone trip, as returned by the A5 message
         self.enrolled = kwargs.get("enrolled", False)  # bool  enrolled, as returned by the A5 message
         self.triggered = kwargs.get("triggered", False)  # bool  triggered, as returned by the A5 message
-        self.utctriggertime = None  # datetime  This is used to time out the triggered value and set it back to false
         self.triggertime = None     # datetime  This is used to time stamp in local time the occurance of the trigger
         self.model = kwargs.get("model", None)  # str   device model
         self.motiondelaytime = kwargs.get("motiondelaytime", None)  # int   device model
@@ -251,7 +250,6 @@ class AlSensorDeviceHelper(AlSensorDevice):
             and self.enrolled == other.enrolled
             and self.triggered == other.triggered
             and self.hasJPG == other.hasJPG
-            #and self.utctriggertime == other.utctriggertime
             #and self.triggertime == other.triggertime
             and self.motiondelaytime == other.motiondelaytime
         )
@@ -346,7 +344,7 @@ class AlSensorDeviceHelper(AlSensorDevice):
             st = decode["sensor_type"]
             self.stype = AlSensorType.value_of(st.upper())
         if "trigger_time" in decode:
-            self.utctriggertime = datetime.fromisoformat(decode["trigger_time"]) if str(decode["trigger_time"]) != "" else None
+            self.triggertime = datetime.fromisoformat(decode["trigger_time"]) if str(decode["trigger_time"]) != "" else None
         if "location" in decode:
             self.zname = titlecase(decode["location"])
         if "zone_type" in decode:

@@ -100,7 +100,7 @@ except:
     from pyhelper import (MyChecksumCalc, AlImageManager, ImageRecord, titlecase, pmPanelTroubleType_t, pmPanelAlarmType_t, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.3.4.5"
+PLUGIN_VERSION = "1.3.5.0"
 
 # Some constants to help readability of the code
 
@@ -3643,7 +3643,7 @@ class PacketHandling(ProtocolBase):
                 self.setZoneName(offset+i)
                 self.SensorList[offset+i].pushChange(AlSensorCondition.RESET)
 
-    def UpdateContactSensor(self, sensor, status = None, trigger = None):
+    def UpdateContactSensor(self, sensor, status = None, trigger = None, time = None):
         if sensor in self.SensorList:
             #log.debug("[UpdateContactSensor]   Sensor {0}   before".format(sensor))
             #self._dumpSensorsToLogFile()
@@ -3652,7 +3652,7 @@ class PacketHandling(ProtocolBase):
                 log.debug("[UpdateContactSensor]   Sensor {0}   triggered to True".format(sensor))
                 self.SensorList[sensor].triggered = True
                 self.SensorList[sensor].triggertime = self._getTimeFunction()
-                self.SensorList[sensor].utctriggertime = self._getUTCTimeFunction()
+                #self.SensorList[sensor].triggertime = self._getTimeFunction() if time is None else time
                 self.SensorList[sensor].pushChange(AlSensorCondition.STATE)
             elif status is not None and self.SensorList[sensor].status != status:
                 # The current setting is different
@@ -3660,7 +3660,7 @@ class PacketHandling(ProtocolBase):
                     log.debug("[UpdateContactSensor]   Sensor {0}   triggered to True".format(sensor))
                     self.SensorList[sensor].triggered = True
                     self.SensorList[sensor].triggertime = self._getTimeFunction()
-                    self.SensorList[sensor].utctriggertime = self._getUTCTimeFunction()
+                    #self.SensorList[sensor].triggertime = self._getTimeFunction() if time is None else time
                 if self.SensorList[sensor].getSensorType() != AlSensorType.MOTION and self.SensorList[sensor].getSensorType() != AlSensorType.CAMERA:
                     # Not a motion or camera to set status
                     log.debug("[UpdateContactSensor]   Sensor {0}   status from {1} to {2}".format(sensor, self.SensorList[sensor].status, status))
@@ -3669,7 +3669,8 @@ class PacketHandling(ProtocolBase):
                     #    self.SensorList[sensor].pushChange(AlSensorCondition.RESET)
                 # Push change as status has toggled
                 self.SensorList[sensor].pushChange(AlSensorCondition.STATE)
-
+            
+            # The pushchange function calls the sensors onchange function so it should have already seen triggered and status values, so we can reset triggered
             self.SensorList[sensor].triggered = False
                     
             #log.debug("[UpdateContactSensor]   Sensor {0}   after".format(sensor))
@@ -4293,6 +4294,34 @@ class PacketHandling(ProtocolBase):
                 retval.append(i)
         return retval
 
+    def _decode_4B(self, sensor, data):
+        hs = self._makeInt(data[0:4])
+        pmtime = datetime.fromtimestamp(hs)
+        code = int(data[4])
+        # 00 - Not a zone
+        # 01 - Open (need to check timestamp)
+        # 02 - Closed (need to check timestamp)
+        # 03 - Motion (need to check timestamp)
+        # 04 - CheckedIn?  As in device checked in.     
+        if sensor in self.SensorList and code >= 1:
+            if self.SensorList[sensor].statuslog is None or (self.SensorList[sensor].statuslog - pmtime) >= timedelta(milliseconds=10):
+                log.debug(f"[handle_msgtypeB0]           Sensor Updated = {sensor:>2}  code {code}     time {pmtime}")
+                if code == 1:
+                    self.UpdateContactSensor(sensor = sensor, status = True, time = pmtime)
+                elif code == 2:
+                    self.UpdateContactSensor(sensor = sensor, status = False, time = pmtime)
+                elif code == 3:
+                    self.UpdateContactSensor(sensor = sensor, trigger = True, time = pmtime)
+                else:
+                    log.debug("[handle_msgtypeB0]          ***************************** Sensor Updated with an unused code *****************************")
+                log.debug(f"[handle_msgtypeB0]                  my time {self.SensorList[sensor].triggertime}    panels time {pmtime}")
+                
+                self.SensorList[sensor].statuslog = pmtime
+            else:
+                log.debug(f"[handle_msgtypeB0]           Sensor Not Updated as Timestamp the same = {sensor:>2}  code {code}     time {pmtime}")
+        
+
+
     # Only Powermasters send this message
     def handle_msgtypeB0(self, data):  # PowerMaster Message
         """ MsgType=B0 - Panel PowerMaster Message """
@@ -4624,50 +4653,36 @@ class PacketHandling(ProtocolBase):
 
         elif msgType == 0x02 and subType == 0x4B:
             # Zone Last Event
-            # I think that this represents sensors Z01 to Z36.  Each sensor is 5 bytes.
-            # 0d b0 02 4b b9 01 28 03 b4 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 d0 28 6e 38 03 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 2a 43 62 0a
-            #     For the PM30 with 64 sensors this comes out as 180 / 5 = 36
-            #log.debug(f"[handle_msgtypeB0]             Here here                {self.beezero_024B_sensorcount}")
+            # PM10: I assume this does not get sent by the panel.
+            # PM30: I think that this represents sensors Z01 to Z36.  Each sensor is 5 bytes.
+            #       For the PM30 with 64 sensors this comes out as 180 / 5 = 36
             sensortotalbytes = int(data[6])
-            if sensortotalbytes % 5 == 0:             # Divisible by 5, each sensors data is 5 bytes
-                #log.debug(f"[handle_msgtypeB0]       {sensortotalbytes}    {self.beezero_024B_sensorcount}")
+            if self.beezero_024B_sensorcount is None and sensortotalbytes % 5 == 0:             # Divisible by 5, each sensors data is 5 bytes
                 self.beezero_024B_sensorcount = int(sensortotalbytes / 5)
-                #log.debug(f"[handle_msgtypeB0]       {sensortotalbytes}    {self.beezero_024B_sensorcount}")
                 for i in range(0, self.beezero_024B_sensorcount):
-                    if i in self.SensorList:
-                        o = 7 + (i * 5)
-                        log.debug("[handle_msgtypeB0]           Sensor = {0:>2}  data (hex) = {1} {2} {3} {4} {5}".format(i, hex(data[o]).upper(), hex(data[o+1]).upper(), hex(data[o+2]).upper(), hex(data[o+3]).upper(), hex(data[o+4]).upper()))
-                        if self.SensorList[i].statuslog is not None:
-                            if self.SensorList[i].statuslog != data[o:o+5]:
-                                self.UpdateContactSensor(sensor = i, trigger = True)
-                                # I'm pretty sure that this is the open / close state of contact sensors but motion sensors return 0x03 all the time, I'm not sure
-                                #open = data[o+4] == 0x01
-                                #closed = data[o+4] == 0x02
-                                #log.debug(f"[handle_msgtypeB0]                  Sensor Triggered open={open}    closed={closed}")
-                        self.SensorList[i].statuslog = data[o:o+5]
+                    o = 7 + (i * 5)
+                    self._decode_4B(i, data[o:o+5])
 
         elif msgType == 0x03 and subType == 0x4B:
             # Zone Last Event
-            # I think that this represents sensors Z37 to Z64.  Each sensor is 5 bytes.   With a PM10 I'm not sure that we'll get this message, or maybe we get this message and not the other one.
-            # 0d b0 03 4b 91 ff 28 03 8c 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 c4 18 6e 38 02 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 d3 f9 6d 38 03 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 41 ec 6d 38 00 2b 43 ca 0a
-            #     For the PM30 with 64 sensors this comes out as 140 / 5 = 28
-            if self.beezero_024B_sensorcount is not None:
-                sensortotalbytes = int(data[6])
-                if sensortotalbytes % 5 == 0:          # Divisible by 5, each sensors data is 5 bytes
+            # PM10: With a PM10 I'm not sure that we'll get this message but I assume that we do and not the other one.
+            # PM30: I think that this represents sensors Z37 to Z64.  Each sensor is 5 bytes.   
+            #       For the PM30 with 64 sensors this comes out as 140 / 5 = 28
+            sensortotalbytes = int(data[6])
+            if sensortotalbytes % 5 == 0:         # Divisible by 5, each sensors data is 5 bytes
+                if self.beezero_024B_sensorcount is not None: 
                     sensorcount = int(sensortotalbytes / 5)
                     for i in range(0, sensorcount):
-                        sensor = i + self.beezero_024B_sensorcount # The 36 comes from the above message
-                        if sensor in self.SensorList:
-                            o = 7 + (i * 5)
-                            log.debug("[handle_msgtypeB0]           Sensor = {0:>2}  data (hex) = {1} {2} {3} {4} {5}".format(sensor, hex(data[o]).upper(), hex(data[o+1]).upper(), hex(data[o+2]).upper(), hex(data[o+3]).upper(), hex(data[o+4]).upper()))
-                            if self.SensorList[sensor].statuslog is not None:
-                                if self.SensorList[sensor].statuslog != data[o:o+5]:
-                                    self.UpdateContactSensor(sensor = sensor, trigger = True)
-                                    #open = data[o+4] == 0x01
-                                    #closed = data[o+4] == 0x02
-                                    #log.debug(f"[handle_msgtypeB0]                  Sensor Triggered open={open}    closed={closed}")
-                            self.SensorList[sensor].statuslog = data[o:o+5]
-                self.beezero_024B_sensorcount = None   # If theres a next time so they are coordinated
+                        o = 7 + (i * 5)
+                        self._decode_4B(i + self.beezero_024B_sensorcount, data[o:o+5])
+                else: # Assume PM10
+                    # Assume that when the PowerMaster panel has less than 32 sensors then it just sends this and not msgType == 0x02 and subType == 0x4B
+                    sensorcount = int(sensortotalbytes / 5)
+                    for i in range(0, sensorcount):
+                        o = 7 + (i * 5)
+                        self._decode_4B(i, data[o:o+5])
+
+            self.beezero_024B_sensorcount = None   # If theres a next time so they are coordinated
 
         elif experimental and msgType == 0x03 and subType == 0x51:
             # The panel telling us the messages that might be of interest to us
