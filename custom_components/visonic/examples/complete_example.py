@@ -30,6 +30,8 @@ except:
     print("")
     sys.exit(0)
 
+terminating_clean = "terminating_clean"
+
 # config parameters for myconfig, just to make the defaults easier
 CONF_DOWNLOAD_CODE = "download_code"
 CONF_LANGUAGE = "language"
@@ -667,8 +669,11 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
             if dev not in sensors:
                 console.print("Adding Sensor " + str(dev))
                 sensors.append(dev)
-            #print("Sensor Update")
-            #self.sendSensor(dev)
+            if dev.isTriggered():
+                console.print(f"Device {dev.getDeviceID()} Triggered")
+            else:
+                console.print(f"Device {dev.getDeviceID()} Settings have been updated, open = {dev.isOpen()}")
+            
     
     def process_x10(dev):
         if dev.enabled:
@@ -826,7 +831,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                     elif command == 'q':
                         #  we are disconnected and so quit the program
                         #print("Terminating program")
-                        raise Exception('terminating_clean')
+                        raise Exception(terminating_clean)
                     elif not client.isSystemStarted() and command == 'c':
                         if len(ar) > 1:
                             mode=str(ar[1].strip()).lower()
@@ -868,8 +873,8 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
         # Get current system exception
         ex_type, ex_value, ex_traceback = sys.exc_info()
 
-        if str(ex_value) != "terminating_clean":
-            print("Exception {0} {1}".format(len("terminating_clean"),len(ex_value)))
+        if str(ex_value) != terminating_clean:
+            print("Exception {0} {1}".format(len(terminating_clean),len(ex_value)))
             print("Exception: ")
             print(f"  type : {ex_type.__name__}")
             print(f"  message : {ex_value}")
@@ -887,8 +892,9 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
 def handle_exception(loop, context):
     # context["message"] will always be there; but context["exception"] may not
     msg = context.get("exception", context["message"])
-    #print(f"Caught exception: {msg}")
-    #print(f"                  {context}")
+    if str(msg) != terminating_clean:
+        print(f"Caught exception: {msg}")
+        print(f"                  {context}")
     asyncio.create_task(shutdown(loop))
 
 async def shutdown(loop, signal=None):

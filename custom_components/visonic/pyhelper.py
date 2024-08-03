@@ -426,9 +426,9 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
         else:
             self._callback.append(callback)
 
-    def pushChange(self, s : AlSensorCondition):
+    def pushChange(self):
         for cb in self._callback:
-            cb(self, s)
+            cb(self)
 
     def getDeviceID(self):
         return self.id

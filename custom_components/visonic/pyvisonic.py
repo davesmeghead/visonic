@@ -215,7 +215,7 @@ pmPanelConfig_t = {    #      0       1       2       3       4       5       6 
    "CFG_1WKEYPADS"     : (      8,      8,      8,      8,      8,      8,      8,      0,      0,      0,      0,      0,      0,      0,      0,      0,      0 ),
    "CFG_2WKEYPADS"     : (      2,      2,      2,      2,      2,      2,      2,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
    "CFG_SIRENS"        : (      2,      2,      2,      2,      2,      2,      2,      4,      8,      8,      8,      8,      8,      8,      8,      8,      8 ),
-   "CFG_USERCODES"     : (      8,      8,      8,      8,      8,      8,      8,      8,     48,     48,     48,     48,     48,     48,     48,     48,     48 ),
+   "CFG_USERCODES"     : (      8,      8,      8,      8,      8,      8,      8,     48,     48,     48,     48,     48,     48,     48,     48,     48,     48 ),
    "CFG_PROXTAGS"      : (      0,      0,      8,      0,      8,      8,      0,      8,     32,     32,     32,     32,     32,     32,     32,     32,     32 ),
    "CFG_ZONECUSTOM"    : (      0,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5,      5 ),
    "CFG_WIRELESS"      : (     28,     28,     28,     28,     28,     28,     29,     29,     62,     62,     62,     62,     62,     64,     62,     62,     64 ), # Wireless + Wired total 30 or 64
@@ -1484,8 +1484,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         while not self.suspendAllOperations and len(self.SendList) > 0:
             log.debug("[_sendInterfaceResetCommand]       Waiting to empty send command queue")
             self._sendCommand(None)  # Check send queue
-        #if self.ForceStandardMode and not self.pmGotPanelDetails:
-        if not self.pmGotPanelDetails:
+        if self.ForceStandardMode and not self.pmGotPanelDetails:
+        #if not self.pmGotPanelDetails:
             self._sendCommand("MSG_BUMP")
 
     def _gotoStandardMode(self):
@@ -2238,10 +2238,10 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 # First add header (PACKET_HEADER), then the packet, then crc and footer (PACKET_FOOTER)
                 sData = b"\x0D"
                 sData += data
-                #if self.PowerMaster is not None and self.PowerMaster:
-                #    sData += self._calculateCRCAlt(data)
-                #else:
-                sData += self._calculateCRC(data)
+                if self.PowerMaster is not None and self.PowerMaster and data[0] == 0xB0:
+                    sData += self._calculateCRCAlt(data)
+                else:
+                    sData += self._calculateCRC(data)
                 sData += b"\x0A"
 
             interval = self._getUTCTimeFunction() - self.pmLastTransactionTime
@@ -4629,9 +4629,10 @@ class PacketHandling(ProtocolBase):
             number_of_pops = data[6]
             log.debug(f"[handle_msgtypeB0]       Received pop message   {number_of_pops=}")
 
-            if data[5] == 0xFF and msglen - 5 == number_of_pops:    # start of data marker and number_of_pops is 5 less than length
-                for i in range(0, number_of_pops):
-                    self._sendCommand("MSG_POWERMASTER_S", options=[[2, int(data[i+7])]])  # This asks the panel to send the pop messages
+            if self.PanelMode == AlPanelMode.POWERLINK or self.PanelMode == AlPanelMode.STANDARD_PLUS:
+                if data[5] == 0xFF and msglen - 5 == number_of_pops:    # start of data marker and number_of_pops is 5 less than length
+                    for i in range(0, number_of_pops):
+                        self._sendCommand("MSG_POWERMASTER_S", options=[[2, int(data[i+7])]])  # This asks the panel to send the pop messages
 
             # Panel state change ??????
 #            if self.PanelMode == AlPanelMode.POWERLINK or \
@@ -4680,7 +4681,7 @@ class PacketHandling(ProtocolBase):
                         o = 7 + (i * 5)
                         self._decode_4B(i + self.beezero_024B_sensorcount, data[o:o+5])
                 else: # Assume PM10
-                    # Assume that when the PowerMaster panel has less than 32 sensors then it just sends this and not msgType == 0x02 and subType == 0x4B
+                    # Assume that when the PowerMaster panel has less than 32 sensors then it just sends this and not msgType == 0x02, subType == 0x4B
                     sensorcount = int(sensortotalbytes / 5)
                     for i in range(0, sensorcount):
                         o = 7 + (i * 5)
@@ -4696,9 +4697,10 @@ class PacketHandling(ProtocolBase):
             number_of_pops = data[6]
             log.debug(f"[handle_msgtypeB0]       Received pop message   {number_of_pops=}")
 
-            if data[5] == 0xFF and msglen - 5 == number_of_pops:    # start of data marker and number_of_pops is 5 less than length
-                for i in range(0, number_of_pops):
-                    self._sendCommand("MSG_POWERMASTER_S", options=[ [ 2, int(data[i+7]) ] ] )  # This asks the panel to send the pop messages
+            if self.PanelMode == AlPanelMode.POWERLINK or self.PanelMode == AlPanelMode.STANDARD_PLUS:
+                if data[5] == 0xFF and msglen - 5 == number_of_pops:    # start of data marker and number_of_pops is 5 less than length
+                    for i in range(0, number_of_pops):
+                        self._sendCommand("MSG_POWERMASTER_S", options=[ [ 2, int(data[i+7]) ] ] )  # This asks the panel to send the pop messages
             
         elif experimental and msgType == 0x03 and subType == 0x54:
             pass
