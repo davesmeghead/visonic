@@ -11,5 +11,5 @@
   "loggers": ["visonic"],
   "requirements": ["Pillow", "pyserial_asyncio"],
   "single_config_entry": false,
-  "version": "0.9.6.7"
+  "version": "0.9.6.9"
 }
