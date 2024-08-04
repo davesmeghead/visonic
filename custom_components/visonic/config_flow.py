@@ -195,7 +195,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
 class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
     """Handle a Visonic flow."""
 
-    VERSION = 3
+    VERSION = 4
     CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     def __init__(self):
@@ -345,7 +345,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
 class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
     """Handle options."""
 
-    VERSION = 1
+    VERSION = 4
     CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     def __init__(self, config_entry : ConfigEntry):

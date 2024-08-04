@@ -89,6 +89,8 @@ ALARM_SCHEMA_IMAGE = vol.Schema(
     }
 )
 
+update_version_panel_number = 0
+
 # Create the types for the Configuration Parameter Entry
 VisonicConfigKey: HassEntryKey["VisonicConfigData"] = HassEntryKey(DOMAIN)
 type VisonicConfigEntry = ConfigEntry[VisonicConfigData]
@@ -376,6 +378,20 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEn
         new[CONF_ALARM_NOTIFICATIONS] = [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]
         hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
         _LOGGER.debug("   Alarm Notification list set to default")
+
+    if version == 3:
+        version = 4
+        new = config_entry.data.copy()
+        
+        if CONF_PANEL_NUMBER not in new:
+            # We have to assume that multiple panels will be updated at the same time, otherwise it gets complicated
+            _LOGGER.debug(f"   Migrating Panel Number, using {update_version_panel_number}")
+            new[CONF_PANEL_NUMBER] = update_version_panel_number
+            update_version_panel_number = update_version_panel_number + 1
+        else:
+            _LOGGER.debug(f"   Panel Number already set to {new[CONF_PANEL_NUMBER]} so updating config version number only")
+            
+        hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
 
     _LOGGER.info("Migration to version %s successful", config_entry.version)
     return True

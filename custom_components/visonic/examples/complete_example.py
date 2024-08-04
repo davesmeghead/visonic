@@ -18,6 +18,7 @@ import re
 from enum import Enum
 from pyvisonic import VisonicProtocol
 import socket
+from inspect import currentframe, getframeinfo, stack
 
 # Try to import aconsole, if it fails then print an error message
 try:
@@ -906,17 +907,18 @@ async def shutdown(loop, signal=None):
     await asyncio.gather(*tasks, return_exceptions=True)
     loop.stop()
 
-   
-
 if __name__ == '__main__':
+    # Set up the asyncio first and then we don't get the debug data messages
+    testloop = asyncio.new_event_loop()
+    asyncio.set_event_loop(testloop)
+    testloop.set_exception_handler(handle_exception)
+
     setupLocalLogger("ERROR", empty = True)   # one of "WARNING"  "INFO"  "ERROR"   "DEBUG"
     ConfigureLogger(str(args.print).lower(), None)
     setConnectionMode(str(args.connect).lower())
 
-    testloop = asyncio.get_event_loop()
-    testloop.set_exception_handler(handle_exception)
-
     client = VisonicClient(loop = testloop, config = myconfig)
+
     if client is not None:
         success = True #client.connect(wait_sleep=False, wait_loop=True)
         if success:
