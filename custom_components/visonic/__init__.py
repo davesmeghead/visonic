@@ -325,6 +325,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
  
 async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEntry) -> bool:
     """Migrate old schema configuration entry to new."""
+    global update_version_panel_number
     # This function is called when I change VERSION in the ConfigFlow
     # If the config schema ever changes then use this function to convert from old to new config parameters
     version = config_entry.version
