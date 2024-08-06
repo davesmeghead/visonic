@@ -94,6 +94,10 @@ pmPanelTroubleType_t = {
    0x3B : AlTroubleType.BATTERY,       0x3C : AlTroubleType.BATTERY,   0x40 : AlTroubleType.BATTERY,       0x43 : AlTroubleType.BATTERY
 }
 
+# Convert byte array to a string of hex values
+def toString(array_alpha: bytearray, gap = " "):
+    return ("".join(("%02x"+gap) % b for b in array_alpha))[:-len(gap)] if len(gap) > 0 else ("".join("%02x" % b for b in array_alpha))
+
 class vloggerclass:
     def __init__(self, loggy, panel_id : int = -1, detail : bool = False):
         self.detail = detail
@@ -654,11 +658,11 @@ class MyChecksumCalc:
             return True
 
         if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] + 1:
-            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {0} and {1} alt calc is {2}".format(self._toString(packet), hex(self._calculateCRC(packet[1:-2])[0]).upper(), hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()))
+            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {0} and {1} alt calc is {2}".format(toString(packet), hex(self._calculateCRC(packet[1:-2])[0]).upper(), hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()))
             return True
 
         if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] - 1:
-            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {0} and {1} alt calc is {2}".format(self._toString(packet), hex(self._calculateCRC(packet[1:-2])[0]).upper(), hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()))
+            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {0} and {1} alt calc is {2}".format(toString(packet), hex(self._calculateCRC(packet[1:-2])[0]).upper(), hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()))
             return True
 
         log.debug("[_validatePDU] Not valid packet, CRC failed, may be ongoing and not final 0A")
@@ -667,7 +671,7 @@ class MyChecksumCalc:
     # alternative to calculate the checksum for sending and receiving messages
     def _calculateCRCAlt(self, msg: bytearray):
         """ Calculate CRC Checksum """
-        # log.debug("[_calculateCRC] Calculating for: %s", self._toString(msg))
+        # log.debug("[_calculateCRC] Calculating for: %s", toString(msg))
         # Calculate the checksum
         checksum = 0
         for char in msg[0 : len(msg)]:
@@ -678,13 +682,13 @@ class MyChecksumCalc:
         checksum = 256 - (checksum % 255)
         if checksum == 256:
             checksum = 1
-        # log.debug("[_calculateCRC] Calculating for: {self._toString(msg)}     calculated CRC is: {self._toString(bytearray([checksum]))}")
+        # log.debug("[_calculateCRC] Calculating for: {toString(msg)}     calculated CRC is: {toString(bytearray([checksum]))}")
         return bytearray([checksum])
 
     # calculate the checksum for sending and receiving messages
     def _calculateCRC(self, msg: bytearray):
         """ Calculate CRC Checksum """
-        # log.debug("[_calculateCRC] Calculating for: %s", self._toString(msg))
+        # log.debug("[_calculateCRC] Calculating for: %s", toString(msg))
         # Calculate the checksum
         checksum = 0
         for char in msg[0 : len(msg)]:
@@ -692,7 +696,7 @@ class MyChecksumCalc:
         checksum = 0xFF - (checksum % 0xFF)
         if checksum == 0xFF:
             checksum = 0x00
-        # log.debug("[_calculateCRC] Calculating for: {self._toString(msg)}     calculated CRC is: {self._toString(bytearray([checksum]))}")
+        # log.debug("[_calculateCRC] Calculating for: {toString(msg)}     calculated CRC is: {toString(bytearray([checksum]))}")
         return bytearray([checksum])
 
 
@@ -729,7 +733,8 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
         self.PanelAlarmStatus = AlAlarmType.NONE
         self.PanelTroubleStatus = AlTroubleType.NONE
-        self.PanelLastEvent = "Unknown"
+        self.PanelLastEvent = "Startup/Startup"
+        self.PanelLastEventTime = self._getTimeFunction().strftime("%d/%m/%Y, %H:%M:%S")
         self.PanelStatusText = "Unknown"
         self.LastPanelEventData = {}
 
@@ -755,7 +760,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
                 log.debug("     key {0:<2} X10    {1}".format(key, device))
         
         log.debug("   Model {: <18}     PowerMaster {: <18}     LastEvent {: <18}     Ready   {: <13}".format(self.PanelModel,
-                                        'Yes' if self.PowerMaster else 'No', self.getPanelLastEvent(), 'Yes' if self.PanelReady else 'No'))
+                                        'Yes' if self.PowerMaster else 'No', self.getPanelLastEvent()[0], 'Yes' if self.PanelReady else 'No'))
         pm = titlecase(self.PanelMode.name.replace("_"," ")) # str(AlPanelMode()[self.PanelMode]).replace("_"," ")
         ts = titlecase(self.PanelTroubleStatus.name.replace("_"," ")) # str(AlTroubleType()[self.PanelTroubleStatus]).replace("_"," ")
         al = titlecase(self.PanelAlarmStatus.name.replace("_"," ")) # str(AlAlarmType()[self.PanelAlarmStatus]).replace("_"," ")
@@ -802,8 +807,8 @@ class AlPanelInterfaceHelper(AlPanelInterface):
             return self.PanelBypass
         return False
 
-    def getPanelLastEvent(self) -> str:
-        return self.PanelLastEvent
+    def getPanelLastEvent(self) -> (str, str):
+        return (self.PanelLastEvent, self.PanelLastEventTime)
 
     def requestPanelCommand(self, state : AlPanelCommand, code : str = "") -> AlCommandStatus:
         """ Send a request to the panel to Arm/Disarm """
@@ -838,10 +843,6 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         """ Get Panel Event Log """
         return AlCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED
 
-    # Convert byte array to a string of hex values
-    def _toString(self, array_alpha: bytearray):
-        return ("".join("%02x " % b for b in array_alpha))[:-1]
-
     # get the current date and time
     def _getTimeFunction(self) -> datetime:
         return datetime.now()
@@ -865,12 +866,13 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
         if count > 0:
             self.PanelLastEvent = name[count-1] + "/" + zonemode[count-1]
+            self.PanelLastEventTime = self._getTimeFunction().strftime("%d/%m/%Y, %H:%M:%S")
             for i in range(0, count):
                 a = {}
                 a["name"] = titlecase(name[i].replace("_"," ").lower())
                 a["event"] = titlecase(zonemode[i].replace("_"," ").lower())
                 log.debug(f"[PanelUpdate]  {a}")
-                self.onPanelChangeHandler(AlCondition.PANEL_UPDATE, a)
+                self.sendPanelUpdate(AlCondition.PANEL_UPDATE, a)
 
         #log.debug(f"Last event {datadict}")
         return datadict
@@ -886,6 +888,8 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         datadict["bypass"] = self.PanelBypass
         datadict["alarm"] = titlecase(self.PanelAlarmStatus.name.replace("_"," ").lower())
         datadict["trouble"] = titlecase(self.PanelTroubleStatus.name.replace("_"," ").lower())
+        datadict["lastevent"] = titlecase(self.PanelLastEvent.replace("_"," ").lower())
+        datadict["lasteventtime"] = self.PanelLastEventTime
         return datadict
 
     # Set the onDisconnect callback handlers
@@ -908,12 +912,9 @@ class AlPanelInterfaceHelper(AlPanelInterface):
     def onPanelChange(self, fn : Callable):             # onPanelChange ( datadictionary : dict )
         self.onPanelChangeHandler = fn
 
-    def sendPanelUpdate(self, ev : AlCondition):
+    def sendPanelUpdate(self, ev : AlCondition, d : dict = {} ):
         if self.onPanelChangeHandler is not None:
-            if ev == AlCondition.PANEL_UPDATE:
-                self.onPanelChangeHandler(AlCondition.PUSH_CHANGE, {})                
-            else:
-                self.onPanelChangeHandler(ev, {})
+            self.onPanelChangeHandler(ev, d)
 
     def _searchDict(self, dict, v_search):
         for k, v in dict.items():

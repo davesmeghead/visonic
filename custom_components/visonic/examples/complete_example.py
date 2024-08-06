@@ -529,8 +529,8 @@ class VisonicClient:
             self.visonicProtocol.updateSettings(self.__getConfigData())
         #print("[updateConfig] exit")
 
-    def getPanelLastEvent(self) -> str:
-        """ Is the siren active. """
+    def getPanelLastEvent(self) -> (str, str):
+        """ Get Last Panel Event. """
         if self.visonicProtocol is not None:
             return self.visonicProtocol.getPanelLastEvent()
         return False
@@ -864,7 +864,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         for device in devices:
                             console.print("Device " + str(device))
                     else:
-                        console.print("ERROR: There must be a panel connection to perform command " + result)
+                        console.print("ERROR: invalid command " + result)
         
         print("Here ZZZZZZZ")
         
@@ -891,11 +891,36 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
         raise e   
 
 def handle_exception(loop, context):
+
+    def _createPrefix() -> str:
+        previous_frame = currentframe().f_back
+        (
+            filepath,
+            line_number,
+            function,
+            lines,
+            index,
+        ) = inspect.getframeinfo(previous_frame)
+        filename = filepath[filepath.rfind('/')+1:]
+        s = f"{filename} {line_number:<5} {function:<30} "
+        previous_frame = currentframe()
+        (
+            filepath,
+            line_number,
+            function,
+            lines,
+            index,
+        ) = inspect.getframeinfo(previous_frame)
+        filename = filepath[filepath.rfind('/')+1:]
+        
+        return s + f"{filename} {line_number:<5} {function:<30} "
+
     # context["message"] will always be there; but context["exception"] may not
     msg = context.get("exception", context["message"])
     if str(msg) != terminating_clean:
         print(f"Caught exception: {msg}")
         print(f"                  {context}")
+        #print(f"                  {_createPrefix()}")
     asyncio.create_task(shutdown(loop))
 
 async def shutdown(loop, signal=None):

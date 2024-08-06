@@ -510,9 +510,9 @@ class AlPanelInterface(ABC):
         return False
 
     @abstractmethod
-    def getPanelLastEvent(self) -> str:
+    def getPanelLastEvent(self) -> (str, str):
         """ Return the panels last event string """
-        return ""
+        return ("", "")
 
     # @abstractmethod
     # def getPanelTroubleStatus(self) -> str:
