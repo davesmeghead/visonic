@@ -100,7 +100,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, pmPanelTroubleType_t, pmPanelAlarmType_t, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.3.6.2"
+PLUGIN_VERSION = "1.3.6.3"
 
 # Some constants to help readability of the code
 
@@ -1243,7 +1243,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         ########################################################################
 
         # a list of message types we are expecting from the panel
-        self.pmExpectedResponse = []
+        self.pmExpectedResponse = set()
 
         # The last sent message
         self.pmLastSentMessage = None
@@ -1495,15 +1495,17 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         if self.DisableAllCommands:
             log.debug("[Standard Mode] Entering MINIMAL ONLY Mode")
             self.PanelMode = AlPanelMode.MINIMAL_ONLY
+            self.pmPowerlinkModePending = False
         elif self.pmDownloadComplete and not self.ForceStandardMode and self.pmGotUserCode:
             log.debug("[Standard Mode] Entering Standard Plus Mode as we got the pin codes from the EEPROM (You can still manually Enroll your Panel)")
             self.PanelMode = AlPanelMode.STANDARD_PLUS
+            self.pmPowerlinkModePending = True
         else:
             log.debug("[Standard Mode] Entering Standard Mode")
             self.PanelMode = AlPanelMode.STANDARD
             self.ForceStandardMode = True
+            self.pmPowerlinkModePending = False
         self.GiveupTryingDownload = True
-        self.pmPowerlinkModePending = False
         self.pmPowerlinkMode = False
         self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
         if self.DisableAllCommands:
@@ -1754,7 +1756,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                     # Remember that PowerlinkMode is False here anyway
                                 self.PanelReady = False
                                 self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
-                                self.pmExpectedResponse = []
+                                self.pmExpectedResponse = set()
                                 self.expectedResponseTimeout = 0
                             elif self.powerlink_counter >= POWERLINK_TIMEOUT:
                                 # give up on trying to get to powerlink and goto standard mode (could be either Standard Plus or Standard)
@@ -1802,20 +1804,23 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     elif len(self.pmExpectedResponse) > 0 and self.expectedResponseTimeout >= RESPONSE_TIMEOUT:
                         # Expected response timeouts are only a problem when in Powerlink Mode as we expect a response
                         #   But in all modes, give the panel a _triggerRestoreStatus
-                        if not self.ForceStandardMode and self.PanelMode != AlPanelMode.PROBLEM:
+                        if len(self.pmExpectedResponse) == 1 and self.pmExpectedResponse[0] == ACK_MESSAGE:   
+                            pass    # If it's only for an acknowledge response then ignore it
+                        else:
                             st = '[{}]'.format(', '.join(hex(x) for x in self.pmExpectedResponse))
                             log.debug("[Controller] ****************************** Response Timer Expired ********************************")
                             log.debug("[Controller]                                While Waiting for: {0}".format(st))
-                            # If it does come here multiple times then only count once
-                            self.PanelProblemCount = self.PanelProblemCount + 1
-                            self.LastPanelProblemTime = self._getTimeFunction()   # local time as its for the user
-                            self.PanelMode = AlPanelMode.PROBLEM
-                            # Drop out of Powerlink mode if there are problems with the panel connection (it is no longer reliable)
-                            self.pmPowerlinkMode = False
-                            self._reset_powerlink_counter()
-                            self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
-                        self.PanelReady = False
-                        self._triggerRestoreStatus()     # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
+                            #if self.pmPowerlinkMode:
+                            #    # If it does come here multiple times then only count once
+                            #    self.PanelProblemCount = self.PanelProblemCount + 1
+                            #    self.LastPanelProblemTime = self._getTimeFunction()   # local time as its for the user
+                            #    self.PanelMode = AlPanelMode.PROBLEM
+                            #    # Drop out of Powerlink mode if there are problems with the panel connection (it is no longer reliable)
+                            #    self.pmPowerlinkMode = False
+                            #    self._reset_powerlink_counter()
+                            #    self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
+                            #self.PanelReady = False
+                            self._triggerRestoreStatus()     # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
 
                     
                     # TESTING FROM HERE        TESTING FROM HERE        TESTING FROM HERE        TESTING FROM HERE        TESTING FROM HERE        TESTING FROM HERE        TESTING FROM HERE        TESTING FROM HERE        
@@ -2145,7 +2150,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             self._sendAck(data=data)
 
         # Check response
-        tmplength = len(self.pmExpectedResponse)
+        #tmplength = len(self.pmExpectedResponse)
         if len(self.pmExpectedResponse) > 0:  # and msgType != 2:   # 2 is a simple acknowledge from the panel so ignore those
             # We've sent something and are waiting for a reponse - this is it
             # log.debug("[data receiver] msgType {0}  expected one of {1}".format(hex(msgType).upper(), [hex(no).upper() for no in self.pmExpectedResponse]))
@@ -2371,7 +2376,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     #log.debug("[sendPdu] Resetting expected response counter, it got to {0}   Response list is now {1}".format(self.expectedResponseTimeout, len(instruction.response)))
                     self.expectedResponseTimeout = 0
                     # update the expected response list straight away (without having to wait for it to be actually sent) to make sure protocol is followed
-                    self.pmExpectedResponse.extend(instruction.response)
+                    self.pmExpectedResponse.update(instruction.response)
 
                 await self._sendPdu(instruction)
 
@@ -2382,7 +2387,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         log.debug("[_clearList] Setting queue empty")
         self.SendList = []
         self.pmLastSentMessage = None
-        self.pmExpectedResponse = []
+        self.pmExpectedResponse = set()
 
     def _getLastSentMessage(self):
         return self.pmLastSentMessage
@@ -2392,7 +2397,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         """ Start download mode """
         if not self.pmDownloadComplete and not self.pmDownloadMode and not self.triggeredDownload:
             # self.pmWaitingForAckFromPanel = False
-            self.pmExpectedResponse = []
+            self.pmExpectedResponse = set()
             log.debug("[StartDownload] Triggering EEPROM download sequence")
             self._sendCommand("MSG_DOWNLOAD", options=[ [3, convertByteArray(self.DownloadCode)] ])  #
             #self._sendCommand("MSG_BUMP")
@@ -3334,7 +3339,7 @@ class PacketHandling(ProtocolBase):
         log.debug("[handle_msgtype06] Timeout Received")
 
         # Clear the expected response to ensure that pending messages are sent
-        self.pmExpectedResponse = []
+        self.pmExpectedResponse = set()
 
         if self.pmDownloadMode:
             self._delayDownload()
@@ -3346,7 +3351,7 @@ class PacketHandling(ProtocolBase):
         """MsgType=07 - No idea what this means"""
         log.debug("[handle_msgtype07] No idea what this message means, data = {0}".format(toString(data)))
         # Clear the expected response to ensure that pending messages are sent
-        self.pmExpectedResponse = []
+        self.pmExpectedResponse = set()
         # Assume that we need to send an ack
         if not self.pmDownloadMode:
             self._sendAck()
@@ -3359,7 +3364,7 @@ class PacketHandling(ProtocolBase):
             log.debug("[handle_msgtype08]                last command {0}".format(toString(lastCommandData)))
             self._reset_watchdog_timeout()
             if lastCommandData is not None:
-                self.pmExpectedResponse = []  ## really we should look at the response from the last command and only remove the appropriate responses from this list
+                self.pmExpectedResponse = set()  ## really we should look at the response from the last command and only remove the appropriate responses from this list
                 if lastCommandData[0] != 0xAB and lastCommandData[0] & 0xA0 == 0xA0:  # this will match A0, A1, A2, A3 etc but not 0xAB
                     log.debug("[handle_msgtype08] Attempt to send a command message to the panel that has been denied, wrong pin code used")
                     # INTERFACE : tell user that wrong pin has been used
@@ -3566,13 +3571,17 @@ class PacketHandling(ProtocolBase):
             self.sendPanelUpdate(AlCondition.DOWNLOAD_SUCCESS)   # download completed successfully
 
     def _makeInt(self, data) -> int:
-        if len(data) == 4:
-            val = data[0]
-            val = val + (0x100 * data[1])
-            val = val + (0x10000 * data[2])
-            val = val + (0x1000000 * data[3])
-            return int(val)
-        return 0
+        val = data[0]
+        for i in range(1, len(data)):
+            val = val + ( pow(256, i) * data[i] )
+        #if len(data) == 4:
+        #    t = data[0]
+        #    t = t + (0x100 * data[1])
+        #    t = t + (0x10000 * data[2])
+        #    t = t + (0x1000000 * data[3])
+        #    if t != val:
+        #        log.debug(f"[_makeInt] **************************************** Not the same ***************************************** {t} {val}")
+        return val
 
     def handle_msgtypeA0(self, data):
         """ MsgType=A0 - Event Log """
@@ -4024,8 +4033,7 @@ class PacketHandling(ProtocolBase):
                             else:
                                 self.SensorList[i].pushChange(AlSensorCondition.RESET)
 
-        # else:
-        #    log.debug("[handle_msgtypeA5]      Unknown A5 Message: " + toString(data))
+        self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
 
     def handle_msgtypeA6(self, data):
         """ MsgType=A6 - Zone Types """
