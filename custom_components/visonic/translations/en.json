@@ -255,10 +255,10 @@
         },
         "x10command": {
             "options": {
-                "Off": "Off",
-                "On": "On",
-                "Dimmer": "Decrease Brightness",
-                "Brighten": "Increase Brightness"
+                "off": "Off",
+                "on": "On",
+                "dimmer": "Decrease Brightness",
+                "brighten": "Increase Brightness"
             }
         },
         "siren_sounding": {
