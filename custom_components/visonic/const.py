@@ -37,6 +37,7 @@ ALARM_PANEL_LOG_FILE_ENTRY = f"{DOMAIN}_alarm_panel_event_log_entry"
 
 # The HA Services.  These strings match the content of the services.yaml file
 ALARM_PANEL_COMMAND = "alarm_panel_command"
+ALARM_PANEL_X10 = "alarm_panel_x10"
 ALARM_PANEL_EVENTLOG = "alarm_panel_eventlog"
 ALARM_PANEL_RECONNECT = "alarm_panel_reconnect"
 ALARM_SENSOR_BYPASS = "alarm_sensor_bypass"
@@ -82,6 +83,7 @@ CONF_DOWNLOAD_CODE = "download_code"
 CONF_LANGUAGE = "language"
 CONF_EMULATION_MODE = "emulation_mode"
 CONF_COMMAND = "command"
+CONF_X10_COMMAND = "x10command"
 
 # settings than can be modified
 CONF_ENABLE_REMOTE_ARM = "allow_remote_arm"
@@ -116,6 +118,7 @@ class AvailableNotifications(str, Enum):
     IMAGE_PROBLEM = 'image_problem'
     EVENTLOG_PROBLEM = 'eventlog_problem'
     COMMAND_NOT_SENT = 'command_not_sent'
+    X10_PROBLEM = 'x10_problem'
 
 available_emulation_modes = [
     "Powerlink Emulation",

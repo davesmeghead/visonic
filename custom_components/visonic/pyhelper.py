@@ -458,7 +458,7 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
             self.location = titlecase(decode["location"])
         if "state" in decode:
             s = AlX10Command.value_of(decode["state"].upper())
-            self.state = (s == AlX10Command.ON or s == AlX10Command.BRIGHTEN or s == AlX10Command.DIM)
+            self.state = (s == AlX10Command.ON or s == AlX10Command.BRIGHTEN or s == AlX10Command.DIMMER)
 
     def toJSON(self) -> dict:
         dd=json.dumps({

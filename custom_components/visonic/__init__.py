@@ -24,13 +24,14 @@ from homeassistant.const import (
     SERVICE_RELOAD,
 )
 
-from .pyconst import AlPanelCommand
+from .pyconst import AlPanelCommand, AlX10Command
 from .client import VisonicClient
 from .const import (
     DOMAIN,
     ALARM_PANEL_EVENTLOG,
     ALARM_PANEL_RECONNECT,
     ALARM_PANEL_COMMAND,
+    ALARM_PANEL_X10,
     ALARM_SENSOR_BYPASS,
     ALARM_SENSOR_IMAGE,
     ATTR_BYPASS,
@@ -45,6 +46,7 @@ from .const import (
     CONF_EMULATION_MODE,
     CONF_SENSOR_EVENTS,
     CONF_COMMAND,
+    CONF_X10_COMMAND,
     available_emulation_modes,
     AvailableNotifications
 )
@@ -53,7 +55,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-# the 5 schemas for the HA service calls
+# the 6 schemas for the HA service calls
 ALARM_SCHEMA_EVENTLOG = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
@@ -66,6 +68,13 @@ ALARM_SCHEMA_COMMAND = vol.Schema(
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
         vol.Required(CONF_COMMAND) : vol.In([x.lower().replace("_"," ").title() for x in list(AlPanelCommand.get_variables().keys())]),
         vol.Optional(ATTR_CODE, default=""): cv.string,
+    }
+)
+
+ALARM_SCHEMA_X10 = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Required(CONF_X10_COMMAND) : vol.In([x.lower().replace("_"," ").title() for x in list(AlX10Command.get_variables().keys())]),
     }
 )
 
@@ -187,6 +196,17 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
             sendHANotification(f"Service Panel command failed - Panel {panel} not found")
         else:
             sendHANotification(f"Service Panel command failed - Panel not found")
+
+    async def service_panel_x10(call):
+        """Handler for panel command service"""
+        _LOGGER.info(f"Service Panel x10 called")
+        client, panel = getClient(call)
+        if client is not None:
+            await client.service_panel_x10(call)
+        elif panel is not None:
+            sendHANotification(f"Service Panel x10 failed - Panel {panel} not found")
+        else:
+            sendHANotification(f"Service Panel x10 failed - Panel not found")
     
     async def service_sensor_bypass(call):
         """Handler for sensor bypass service"""
@@ -244,10 +264,18 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
     )
     hass.services.async_register(
         DOMAIN,
+        ALARM_PANEL_X10,
+        service_panel_x10,
+        schema=ALARM_SCHEMA_X10,
+    )
+    hass.services.async_register(
+        DOMAIN,
         ALARM_SENSOR_BYPASS,
         service_sensor_bypass,
         schema=ALARM_SCHEMA_BYPASS,
     )
+    
+    
 #    hass.services.async_register(
 #        DOMAIN,
 #        ALARM_SENSOR_IMAGE,

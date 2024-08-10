@@ -55,6 +55,28 @@ alarm_panel_reconnect:
           integration: visonic
           domain: alarm_control_panel
 
+
+alarm_panel_x10:
+  fields:
+    entity_id:
+      required: true
+      example: 'switch.visonic_x02'
+      selector:
+        entity:
+          integration: visonic
+          domain: switch
+    x10command:
+      required: true
+      example: "Off"
+      default: "Off"
+      selector:
+        select:
+          options:
+            - "Off"
+            - "On"
+            - "Dimmer"
+            - "Brighten"
+
 alarm_sensor_bypass:
   fields:
     entity_id:

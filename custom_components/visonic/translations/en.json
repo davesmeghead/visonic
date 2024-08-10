@@ -190,6 +190,20 @@
                 }
             }
         },
+        "alarm_panel_x10": {
+            "name": "Command X10",
+            "description": "Send an X10 Command to an X10 Device.",
+            "fields": {
+                "entity_id": {
+                    "name": "Visonic X10 Switch",
+                    "description": "Name of the visonic x10 switch. This is case sensitive and a mandatory setting. The 'switch.' text is optional."
+                },
+                "x10command": {
+                    "name": "X10 Command",
+                    "description": "X10 Command: Off, On, Dimmer, Brighten."
+                }
+            }
+        },
         "alarm_panel_reconnect": {
             "name": "Panel Reconnection",
             "description": "Reconnect to the Alarm Panel following a previous problem.",
@@ -237,6 +251,14 @@
                 "arm_home_instant": "Arm Home Instant",
                 "arm_away": "Arm Away",
                 "arm_away_instant": "Arm Away Instant"
+            }
+        },
+        "x10command": {
+            "options": {
+                "Off": "Off",
+                "On": "On",
+                "Dimmer": "Decrease Brightness",
+                "Brighten": "Increase Brightness"
             }
         },
         "siren_sounding": {

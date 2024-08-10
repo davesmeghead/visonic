@@ -135,7 +135,7 @@ class VisonicSwitch(SwitchEntity):
                  "manufacturer": "Visonic", 
             }
 
-    # "off"  "on"  "dim"  "brighten"
+    # "off"  "on"  "dimmer"  "brighten"
     def turnmeonandoff(self, state : AlX10Command):
         """Send disarm command."""
         self._client.setX10(self._x10id, state)

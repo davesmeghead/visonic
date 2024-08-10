@@ -96,6 +96,7 @@ from .const import (
     CONF_RETRY_CONNECTION_COUNT,
     CONF_RETRY_CONNECTION_DELAY,
     CONF_COMMAND,
+    CONF_X10_COMMAND,
     DOMAIN,
     NOTIFICATION_ID,
     NOTIFICATION_TITLE,
@@ -122,7 +123,7 @@ from .const import (
 #    "trigger",
 #]
 
-CLIENT_VERSION = "0.9.6.20"
+CLIENT_VERSION = "0.9.6.21"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -913,7 +914,7 @@ class VisonicClient:
 
     async def _checkUserPermission(self, call, perm, entity):
         user = await self.hass.auth.async_get_user(call.context.user_id)
-        self.logstate_debug(f"User check {call.context.user_id=} user={user=}")
+        #self.logstate_debug(f"User check {call.context.user_id=} user={user=}")
 
         if user is None:
             raise UnknownUser(
@@ -1051,7 +1052,7 @@ class VisonicClient:
     def setX10(self, ident: int, state: AlX10Command):
         """Send an X10 command to the panel."""
         if not self.DisableAllCommands:
-            # ident in range 0 to 15, state can be one of "off", "on", "dim", "brighten"
+            # ident in range 0 to 15, state can be one of "off", "on", "dimmer", "brighten"
             if self.visonicProtocol is not None:
                 retval = self.visonicProtocol.setX10(ident, state)
                 self._generateBusEventReason(PanelCondition.CHECK_X10_COMMAND, retval, "X10", "Send X10 Command")
@@ -1259,6 +1260,19 @@ class VisonicClient:
             self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
         return AlCommandStatus.FAIL_USER_CONFIG_PREVENTED
 
+    def sendX10(self, devid: int, command : AlX10Command) -> AlCommandStatus:
+        """Send the x10 command to the panel."""
+        if not self.DisableAllCommands:
+            if self.visonicProtocol is not None:
+                retval = self.visonicProtocol.setX10(devid, command)
+            else:
+                retval = AlCommandStatus.FAIL_PANEL_NO_CONNECTION
+            self._generateBusEventReason(PanelCondition.CHECK_X10_COMMAND, retval, "X10", "X10 Request")
+            return retval
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+        return AlCommandStatus.FAIL_USER_CONFIG_PREVENTED
+
     async def service_sensor_bypass(self, call):
         """Service call to bypass a sensor in the panel."""
         if await self.check_the_basics(call, "sensor bypass"):
@@ -1333,6 +1347,27 @@ class VisonicClient:
                 except Exception as ex:
                     self.logstate_warning(f"Not making command request. Exception {ex}")
 
+    def sendX10Command(self, devid: int, command : AlX10Command):
+        """Send a request to set the X10 device """
+        if not self.DisableAllCommands:
+            self.sendX10(devid, command)
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+
+    async def service_panel_x10(self, call):
+        """Service call to set an x10 device in the panel."""
+        if await self.check_the_basics(call, "x10 command"):
+            devid, eid = await self.decode_entity(call, Platform.SWITCH, "x10 switch command", AvailableNotifications.X10_PROBLEM) # ************************************************************************************************
+            if devid is not None and devid >= 1 and devid <= 16:
+                if CONF_X10_COMMAND in call.data:
+                    command = call.data[CONF_X10_COMMAND]
+                    command_x = AlX10Command.value_of(command.upper());
+                    self.logstate_debug(f"   X10 Command {command}   {command_x}")
+                    self.sendX10Command(devid, command_x)
+                else:
+                    self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Attempt to set X10 device for panel {self.getPanelID()}, command not set for entity {eid}")
+            else:
+                self.createNotification(AvailableNotifications.X10_PROBLEM, f"Attempt to set X10 device for panel {self.getPanelID()}, incorrect device {devid} for entity {eid}")
 
     # =======================================================================================================
     # =======================================================================================================

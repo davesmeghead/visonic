@@ -100,7 +100,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, pmPanelTroubleType_t, pmPanelAlarmType_t, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.3.6.5"
+PLUGIN_VERSION = "1.3.6.6"
 
 # Some constants to help readability of the code
 
@@ -346,7 +346,7 @@ pmSirenMode_t = {
 
 # Data to embed in the MSG_X10PGM message
 pmX10State_t = {
-   AlX10Command.OFF : 0x00, AlX10Command.ON : 0x01, AlX10Command.DIM : 0x0A, AlX10Command.BRIGHTEN : 0x0B
+   AlX10Command.OFF : 0x00, AlX10Command.ON : 0x01, AlX10Command.DIMMER : 0x0A, AlX10Command.BRIGHTEN : 0x0B
 }
 
 ##############################################################################################################################################################################################################################################

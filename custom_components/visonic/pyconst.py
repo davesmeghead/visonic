@@ -204,7 +204,7 @@ a = AlPanelCommand()
 class AlX10Command(AlEnum):
     OFF = AlIntEnum(0)
     ON = AlIntEnum(1)
-    DIM = AlIntEnum(2)
+    DIMMER = AlIntEnum(2)
     BRIGHTEN = AlIntEnum(3)
 a = AlX10Command()
 
