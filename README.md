@@ -1,11 +1,11 @@
 [![](https://img.shields.io/github/release/davesmeghead/visonic/all.svg?style=for-the-badge)](https://github.com/davesmeghead/visonic/releases) 
-![installation_badge](https://img.shields.io/badge/dynamic/json?style=for-the-badge?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.visonic.total)
 [![](https://img.shields.io/badge/MAINTAINER-%40Davesmeghead-green?style=for-the-badge)](https://github.com/Davesmeghead)
 [![Buy me a coffee][buymeacoffee-shield]][buymeacoffee]
 
 [buymeacoffee]: https://www.buymeacoffee.com/davesmeghead
 [buymeacoffee-shield]: https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png
 
+![installation_badge](https://img.shields.io/badge/dynamic/json?style=for-the-badge?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.visonic.total)
 [![Validated with HACS](https://github.com/davesmeghead/visonic/actions/workflows/validate.yaml/badge.svg)](https://github.com/davesmeghead/visonic/actions/workflows/validate.yaml)
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
 ![GitHub all releases](https://img.shields.io/github/downloads/davesmeghead/visonic/total)
