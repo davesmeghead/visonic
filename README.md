@@ -9,9 +9,6 @@
 [![Validated with HACS](https://github.com/davesmeghead/visonic/actions/workflows/validate.yaml/badge.svg)](https://github.com/davesmeghead/visonic/actions/workflows/validate.yaml)
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
 
-# ![GitHub all releases](https://img.shields.io/github/downloads/davesmeghead/visonic/total)
-# ![GitHub release (latest by SemVer)](https://img.shields.io/github/downloads/davesmeghead/visonic/latest/total)
-
 # Visonic Alarm Panel for Home Assistant
 
 This is a *custom integration* for [Home Assistant](https://www.home-assistant.io/).
