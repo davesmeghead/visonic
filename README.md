@@ -7,7 +7,7 @@
 [buymeacoffee-shield]: https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png
 
 [![Validated with HACS](https://github.com/davesmeghead/visonic/actions/workflows/validate.yaml/badge.svg)](https://github.com/davesmeghead/visonic/actions/workflows/validate.yaml)
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge)](https://github.com/custom-components/hacs)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
 ![GitHub all releases](https://img.shields.io/github/downloads/davesmeghead/visonic/total)
 ![GitHub release (latest by SemVer)](https://img.shields.io/github/downloads/davesmeghead/visonic/latest/total)
 
