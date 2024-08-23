@@ -8,8 +8,9 @@
 ![installation_badge](https://img.shields.io/badge/dynamic/json?style=for-the-badge?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.visonic.total)
 [![Validated with HACS](https://github.com/davesmeghead/visonic/actions/workflows/validate.yaml/badge.svg)](https://github.com/davesmeghead/visonic/actions/workflows/validate.yaml)
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
-![GitHub all releases](https://img.shields.io/github/downloads/davesmeghead/visonic/total)
-![GitHub release (latest by SemVer)](https://img.shields.io/github/downloads/davesmeghead/visonic/latest/total)
+
+# ![GitHub all releases](https://img.shields.io/github/downloads/davesmeghead/visonic/total)
+# ![GitHub release (latest by SemVer)](https://img.shields.io/github/downloads/davesmeghead/visonic/latest/total)
 
 # Visonic Alarm Panel for Home Assistant
 
