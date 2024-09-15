@@ -122,7 +122,7 @@ from .const import (
 #    "trigger",
 #]
 
-CLIENT_VERSION = "0.9.7.10"
+CLIENT_VERSION = "0.9.8.0"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -176,43 +176,51 @@ pmLogEvent_t = [
    # 1
    "Interior Alarm", "Perimeter Alarm", "Delay Alarm", "24h Silent Alarm", "24h Audible Alarm",
    "Tamper", "Control Panel Tamper", "Tamper Alarm", "Tamper Alarm", "Communication Loss",
+   # 11
    "Panic From Keyfob", "Panic From Control Panel", "Duress", "Confirm Alarm", "General Trouble",
    "General Trouble Restore", "Interior Restore", "Perimeter Restore", "Delay Restore", "24h Silent Restore",
    # 21
    "24h Audible Restore", "Tamper Restore", "Control Panel Tamper Restore", "Tamper Restore", "Tamper Restore",
    "Communication Restore", "General Restore", "Cancel Alarm", "Trouble Restore", "Not used",
+   # 31
    "Recent Close", "Fire", "Fire Restore", "Not Active", "Emergency",
    "Remove User", "Disarm Latchkey", "Confirm Alarm Emergency", "Supervision (Inactive)", "Supervision Restore (Active)",
+   # 41
    "Low Battery", "Low Battery Restore", "AC Fail", "AC Restore", "Control Panel Low Battery",
    "Control Panel Low Battery Restore", "RF Jamming", "RF Jamming Restore", "Communications Failure", "Communications Restore",
    # 51
    "Telephone Line Failure", "Telephone Line Restore", "Auto Test", "Fuse Failure", "Fuse Restore",
    "Keyfob Low Battery", "Keyfob Low Battery Restore", "Engineer Reset", "Battery Disconnect", "1-Way Keypad Low Battery",
+   # 61
    "1-Way Keypad Low Battery Restore", "1-Way Keypad Inactive", "1-Way Keypad Restore Active", "Low Battery Ack", "Clean Me",
    "Fire Trouble", "Low Battery", "Battery Restore", "AC Fail", "AC Restore",
+   # 71
    "Supervision (Inactive)", "Supervision Restore (Active)", "Gas Alert", "Gas Alert Restore", "Gas Trouble",
    "Gas Trouble Restore", "Flood Alert", "Flood Alert Restore", "X-10 Trouble", "X-10 Trouble Restore",
    # 81
    "Armed Home", "Armed Away", "Quick Armed Home", "Quick Armed Away", "Disarmed",
    "Fail To Auto-Arm", "Enter To Test Mode", "Exit From Test Mode", "Force Arm", "Auto Arm",
+   # 91
    "Instant Arm", "Bypass", "Fail To Arm", "Door Open", "Communication Established By Control Panel",
    "System Reset", "Installer Programming", "Wrong Password", "Not Sys Event", "Not Sys Event",
    # 101
    "Extreme Hot Alert", "Extreme Hot Alert Restore", "Freeze Alert", "Freeze Alert Restore", "Human Cold Alert",
    "Human Cold Alert Restore", "Human Hot Alert", "Human Hot Alert Restore", "Temperature Sensor Trouble", "Temperature Sensor Trouble Restore",
-
+   # 111
    # New values for PowerMaster and models with partitions
    "PIR Mask", "PIR Mask Restore", "Repeater low battery", "Repeater low battery restore", "Repeater inactive",
    "Repeater inactive restore", "Repeater tamper", "Repeater tamper restore", "Siren test end", "Devices test end",
    # 121
    "One way comm. trouble", "One way comm. trouble restore", "Sensor outdoor alarm", "Sensor outdoor restore", "Guard sensor alarmed",
    "Guard sensor alarmed restore", "Date time change", "System shutdown", "System power up", "Missed Reminder",
+   # 131
    "Pendant test fail", "Basic KP inactive", "Basic KP inactive restore", "Basic KP tamper", "Basic KP tamper Restore",
    "Heat", "Heat restore", "LE Heat Trouble", "CO alarm", "CO alarm restore",
    # 141
    "CO trouble", "CO trouble restore", "Exit Installer", "Enter Installer", "Self test trouble",
    "Self test restore", "Confirm panic event", "", "Soak test fail", "Fire Soak test fail",
-   "Gas Soak test fail", "", "", "", "", "", "", "", "", 
+   # 151
+   "Gas Soak test fail"  
 ]
 
 # TODO:  Populate the 2 "stop" columns by using pmPanelConfig_t
@@ -246,6 +254,99 @@ for v in pmLogPower:
         pmLogPowerMaxUser_t.extend([f"{v.name} {i:>02}" if v.pmax_autonumber else v.name for i in range(v.pmax_start, v.pmax_stop+1)])
     if v.pmas_include:
         pmLogPowerMasterUser_t.extend([f"{v.name} {i:>02}" if v.pmas_autonumber else v.name for i in range(v.pmas_start, v.pmas_stop+1)])
+
+
+class PanelEventCoordinator:
+    
+    def __init__(self, loop, ispm : bool, callbackSender, logstate_debug):
+        self.callbackSender = callbackSender
+        self.logstate_debug = logstate_debug
+        self.logstate_debug(f"[EC] Starting")
+        self.loop = loop
+        self.isPowerMaster = ispm
+        self.EventTime = 0
+        self.EventName = 0
+        self.EventAction = -100
+        self.mytimerTask = None
+        self.timerAlreadySent = True
+
+    def setIsPowerMaster(self, pm):
+        self.isPowerMaster = pm
+
+    def sendData(self):
+        if self.EventAction >= 0:
+            self.logstate_debug(f"[EC] sending panel update {self.EventName=} {self.EventAction=}")
+            d = self.convert()
+            self.logstate_debug(f"[EC] sending panel update {d}")
+            self.callbackSender(AlCondition.PANEL_UPDATE, d)
+        else:
+            self.logstate_debug(f"[EC] sendData wont send blank data")
+
+    def convert(self) -> dict:
+        d = {}
+        # Set the name
+        d["name"] = "Unknown"
+        if self.isPowerMaster:
+            d["name"] = pmLogPowerMasterUser_t[self.EventName] or "Unknown"
+        else:
+            d["name"] = pmLogPowerMaxUser_t[int(self.EventName & 0x7F)] or "Unknown"
+        # Set the event
+        d["event"] = "Unknown"
+        if 0 <= self.EventAction <= 151:
+            if len(pmLogEvent_t[self.EventAction]) > 0:
+                d["event"] = pmLogEvent_t[self.EventAction]
+        # Set the time
+        d["time"] = self.EventTime
+        return d
+
+    async def mytimer(self):
+        self.timerAlreadySent = False
+        self.logstate_debug(f"[EC] timer started")
+        await asyncio.sleep(0.8)
+        self.logstate_debug(f"[EC] timer expired")
+        self.sendData()
+        self.timerAlreadySent = True
+    
+    def flushandreplace(self, data : dict):
+        self.logstate_debug(f"[EC] flushandreplace {data}")
+        if self.mytimerTask is not None:
+            self.logstate_debug("[EC] Cancelling mytimerTask")
+            self.mytimerTask.cancel()
+        # send existing data
+        if not self.timerAlreadySent:
+            self.sendData()
+        # save new data
+        self.EventName = data["name"]
+        self.EventAction = data["event"]
+        self.EventTime = data["time"]
+        self.mytimerTask = self.loop.create_task(self.mytimer())
+    
+    def addEvent(self, data : dict):
+        if data is not None:
+            self.logstate_debug(f"[EC] addEvent {data}")
+            
+            if self.EventAction != data["event"]:
+                # If the action is not the same
+                self.flushandreplace(data)
+            else:
+                # If the action is the same
+                if self.EventName == data["name"]:   # exactly the same event as last time then do not send it
+                    # Name is exactly the same as what we already have
+                    self.logstate_debug(f"[EC] Panel event data {data} is the same as last time so not sending event")
+                    return
+                if self.EventName != 0 and data["name"] == 0:
+                    # Existing Name is better than new one
+                    self.logstate_debug(f"[EC] Panel event data {data} is the same Event but I already have a better name")
+                    return
+                if self.EventName == 0:
+                    # The existing name is 0 (i.e. system) so replace it
+                    self.logstate_debug(f"[EC] Replacing 'system' with {data["name"]} but keeping original time {self.EventTime}")
+                    self.EventName = data["name"]
+                    #self.EventTime = data["time"]
+                    return
+                # Here when the existing name and the new name are different and both non-zero
+                self.flushandreplace(data)
+                
 
 class MyTransport(AlTransport):
 
@@ -355,6 +456,7 @@ class VisonicClient:
 
         self._setupSensorDelays()
 
+        self.myPanelEventCoordinator = None
         self.PanelLastEventName = "Startup"
         self.PanelLastEventAction = "Startup"
         self.PanelLastEventTime = self._getTimeFunction().strftime("%d/%m/%Y, %H:%M:%S")
@@ -672,7 +774,7 @@ class VisonicClient:
             and entry.current <= total
         ):  
             eventStr = "Unknown"
-            if 0 <= entry.event <= 159:
+            if 0 <= entry.event <= 151:
                 if len(pmLogEvent_t[entry.event]) > 0:
                     eventStr = pmLogEvent_t[entry.event]
                 else:
@@ -929,35 +1031,13 @@ class VisonicClient:
         #_LOGGER.debug("onSwitchChange {0}".format(switch))
         pass
 
+    def sendEvent(self, event_id: AlCondition | PanelCondition, data : dict):
 
-    # This can be called from this module but it is also the callback handler for the connection
-    def onPanelChangeHandler(self, event_id: AlCondition | PanelCondition, data : dict):
-        """Generate HA Bus Event and Send Notification to Frontend."""
-        
         if event_id == AlCondition.PANEL_UPDATE and data is not None and len(data) == 3:
-            if data["name"] >= 0:
-                d = {}
-                d["name"] = "Unknown"
-                d["event"] = "Unknown"
-                if self.isPowerMaster():
-                    d["name"] = pmLogPowerMasterUser_t[data["name"]] or "Unknown"
-                else:
-                    d["name"] = pmLogPowerMaxUser_t[int(data["name"] & 0x7F)] or "Unknown"
-                if 0 <= data["event"] <= 159:
-                    if len(pmLogEvent_t[data["event"]]) > 0:
-                        d["event"] = pmLogEvent_t[data["event"]]
-                if self.PanelLastEventName == d["name"] and self.PanelLastEventAction == d["event"]:   # exactly the same event as last time then do not send it
-                    self.logstate_debug(f"[onPanelChangeHandler] Translated panel event log data {data} to {d} is the same as last time so not sending event")
-                    return
-                self.PanelLastEventName = d["name"]
-                self.PanelLastEventAction = d["event"]
-                self.PanelLastEventTime = data["time"]
-                self.logstate_debug(f"[onPanelChangeHandler] Translated panel event log data {data} to {d}")
-                data = d
-            else:
-                self.logstate_warning(f"[onPanelChangeHandler] Cannot translate panel event log data {data}")
-                return
-        
+            self.PanelLastEventName = data["name"]
+            self.PanelLastEventAction = data["event"]
+            self.PanelLastEventTime = data["time"]
+            
         self._fireHAEvent(event_id = event_id, datadictionary = data if data is not None else {} )
 
         if event_id == AlCondition.DOWNLOAD_SUCCESS:        # download success        
@@ -993,6 +1073,22 @@ class VisonicClient:
             asyncio.ensure_future(self.service_panel_stop(), loop=self.hass.loop)
         elif event_id == AlCondition.COMMAND_REJECTED:
             self.createNotification(AvailableNotifications.ALWAYS, "Operation Rejected By Panel (tell the Integration Author and upload a debug log file if you're able to)" )
+
+    # This can be called from this module but it is also the callback handler for the connection
+    def onPanelChangeHandler(self, event_id: AlCondition | PanelCondition, data : dict):
+        """Generate HA Bus Event and Send Notification to Frontend."""
+        
+        if self.myPanelEventCoordinator is None:
+            self.myPanelEventCoordinator = PanelEventCoordinator(loop = self.hass.loop, ispm = self.isPowerMaster(), callbackSender = self.sendEvent, logstate_debug = self.logstate_debug)
+        
+        if event_id == AlCondition.PANEL_UPDATE:
+            if data is not None and len(data) == 3 and data["name"] >= 0:
+                self.myPanelEventCoordinator.setIsPowerMaster(self.isPowerMaster())
+                self.myPanelEventCoordinator.addEvent(data)
+            else:
+                self.logstate_warning(f"[onPanelChangeHandler] Cannot translate panel event log data {data}")
+        else:
+            self.sendEvent(event_id, data)
 
     def toBool(self, val: Any) -> bool:
         """Convert value to boolean."""

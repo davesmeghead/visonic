@@ -81,7 +81,7 @@ class VisonicSwitch(SwitchEntity):
         # the switch parameter is the same as self._visonic_device, but it's a generic callback handler that cals this function
         _LOGGER.debug("Switch changeHandler %s", str(self._name))
         self._current_value = self._visonic_device.isOn()
-        if self.entity_id is not None:
+        if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state()
 
     @property

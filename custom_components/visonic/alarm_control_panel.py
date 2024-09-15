@@ -109,7 +109,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     def onClientChange(self):
         """HA Event Callback."""
         #_LOGGER.debug(f"alarm control panel onChange {self.entity_id=}   {self.available=}")
-        if self.entity_id is not None:
+        if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state(True)
 
     @property

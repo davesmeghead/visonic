@@ -105,7 +105,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.4.1.3"
+PLUGIN_VERSION = "1.4.2.0"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
@@ -200,6 +200,12 @@ LAST_RECEIVE_DATA_TIMEOUT = 240  # 4 minutes
 
 # Whether to download all the EEPROM from the panel or to just download the parts that we gete usable data from
 EEPROM_DOWNLOAD_ALL = False
+
+# Interval (in seconds) to get the time and for most panels to try and set it if it's out by more than TIME_INTERVAL_ERROR seconds
+#     PowerMaster uses time interval for checking motion triggers so more critical to keep it updated
+POWERMASTER_CHECK_TIME_INTERVAL =   300  # 5 minutes  (this uses B0 messages and not DOWNLOAD panel state)
+POWERMAX_CHECK_TIME_INTERVAL    = 14400  # 4 hours    (this uses the DOWNLOAD panel state
+TIME_INTERVAL_ERROR = 3
 
 # Message/Packet Constants to make the code easier to read
 PACKET_HEADER = 0x0D
@@ -301,7 +307,21 @@ pmPanelConfig_t = {    #      0       1       2       3       4       5       6 
 #    waittime    a number of seconds after sending the command to wait before sending the next command
 VisonicCommand = collections.namedtuple('VisonicCommand', 'data replytype waitforack download debugprint waittime msg')
 pmSendMsg = {
-   "MSG_EVENTLOG"     : VisonicCommand(convertByteArray('A0 00 00 00 99 99 00 00 00 00 00 43'), [0xA0] , False, False, DebugLevel.NONE, 0.0, "Retrieving Event Log" ),
+   # Quick command codes to start and stop download/powerlink are a single value                                      
+   "MSG_BUMP"         : VisonicCommand(convertByteArray('09')                                 , [0x3C] , False, False,      SendDebugM, 0.5, "Trigger Panel Data From Panel" ),  # Bump to try to get the panel to send a 3C
+   "MSG_START"        : VisonicCommand(convertByteArray('0A')                                 , [0x0B] , False, False,      SendDebugM, 0.0, "Start" ),                          # waiting for STOP from panel for download complete
+   "MSG_STOP"         : VisonicCommand(convertByteArray('0B')                                 , None   , False, False,      SendDebugM, 1.5, "Stop" ),     #
+   "MSG_EXIT"         : VisonicCommand(convertByteArray('0F')                                 , None   , False, False,      SendDebugM, 1.5, "Exit" ),
+
+   # Command codes do not have the 0x43 on the end and are only 11 values                                 
+   "MSG_DOWNLOAD_T"   : VisonicCommand(convertByteArray('24 00 00 99 99 00 00 00 00 00 00')   , None   , False,  True,      SendDebugD, 0.0, "Start Download Mode" ),            # This gets either an acknowledge OR an Access Denied response
+   "MSG_DOWNLOAD_F"   : VisonicCommand(convertByteArray('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C] , False, False,      SendDebugD, 0.5, "Trigger Panel Data From Panel" ),  # Use this instead of BUMP as can be used by all panels
+   "MSG_WRITE"        : VisonicCommand(convertByteArray('3D 00 00 00 00 00 00 00 00 00 00')   , None   , False, False,      SendDebugD, 0.0, "Write Data Set" ),
+   "MSG_DL"           : VisonicCommand(convertByteArray('3E 00 00 00 00 B0 00 00 00 00 00')   , [0x3F] ,  True, False,      SendDebugD, 0.0, "Download Data Set" ),
+   "MSG_SETTIME"      : VisonicCommand(convertByteArray('46 F8 00 01 02 03 04 05 06 FF FF')   , None   , False, False,      SendDebugM, 1.0, "Setting Time" ),                   # may not need an ack so I don't wait for 1 and just get on with it
+   "MSG_SER_TYPE"     : VisonicCommand(convertByteArray('5A 30 04 01 00 00 00 00 00 00 00')   , [0x33] , False, False,      SendDebugM, 0.0, "Get Serial Type" ),
+                                                                                                                      
+   "MSG_EVENTLOG"     : VisonicCommand(convertByteArray('A0 00 00 00 99 99 00 00 00 00 00 43'), [0xA0] , False, False,      SendDebugC, 0.0, "Retrieving Event Log" ),
    "MSG_ARM"          : VisonicCommand(convertByteArray('A1 00 00 99 99 99 07 00 00 00 00 43'), None   ,  True, False,      SendDebugC, 0.0, "(Dis)Arming System" ),             # Including 07
    "MSG_MUTE_SIREN"   : VisonicCommand(convertByteArray('A1 00 00 0B 99 99 00 00 00 00 00 43'), None   ,  True, False,      SendDebugC, 0.0, "Mute Siren" ),                     #
    "MSG_STATUS"       : VisonicCommand(convertByteArray('A2 00 00 3F 00 00 00 00 00 00 00 43'), [0xA5] ,  True, False,      SendDebugM, 0.0, "Getting Status" ),                 # Ask for A5 messages, the 0x3F asks for 01 02 03 04 05 06 messages
@@ -310,31 +330,20 @@ pmSendMsg = {
    "MSG_ZONENAME"     : VisonicCommand(convertByteArray('A3 00 00 00 00 00 00 00 00 00 00 43'), [0xA3] ,  True, False,      SendDebugM, 0.0, "Requesting Zone Names" ),          # We expect 4 or 8 (64 zones) A3 messages back but at least get 1
    "MSG_X10PGM"       : VisonicCommand(convertByteArray('A4 00 00 00 00 00 99 99 99 00 00 43'), None   , False, False,      SendDebugM, 0.0, "X10 Data" ),                       # Retrieve X10 data
    "MSG_ZONETYPE"     : VisonicCommand(convertByteArray('A6 00 00 00 00 00 00 00 00 00 00 43'), [0xA6] ,  True, False,      SendDebugM, 0.0, "Requesting Zone Types" ),          # We expect 4 or 8 (64 zones) A6 messages back but at least get 1
+
    "MSG_BYPASSEN"     : VisonicCommand(convertByteArray('AA 99 99 12 34 56 78 00 00 00 00 43'), None   , False, False,      SendDebugM, 0.0, "BYPASS Enable" ),                  # Bypass sensors
    "MSG_BYPASSDI"     : VisonicCommand(convertByteArray('AA 99 99 00 00 00 00 12 34 56 78 43'), None   , False, False,      SendDebugM, 0.0, "BYPASS Disable" ),                 # Arm Sensors (cancel bypass)
+
    "MSG_GETTIME"      : VisonicCommand(convertByteArray('AB 01 00 00 00 00 00 00 00 00 00 43'), [0xAB] ,  True, False,      SendDebugM, 0.0, "Get Panel Time" ),                 # Returns with an AB 01 message back
    "MSG_ALIVE"        : VisonicCommand(convertByteArray('AB 03 00 00 00 00 00 00 00 00 00 43'), None   ,  True, False,      SendDebugM, 0.0, "I'm Alive Message To Panel" ),
    "MSG_RESTORE"      : VisonicCommand(convertByteArray('AB 06 00 00 00 00 00 00 00 00 00 43'), None   ,  True, False,      SendDebugM, 0.0, "Restore Connection" ),             # It can take multiple of these to put the panel back in to powerlink
    "MSG_ENROLL"       : VisonicCommand(convertByteArray('AB 0A 00 00 99 99 00 00 00 00 00 43'), None   ,  True, False,      SendDebugM, 2.5, "Auto-Enroll PowerMax/Master" ),    # should get a reply of [0xAB] but its not guaranteed
    "MSG_NO_IDEA"      : VisonicCommand(convertByteArray('AB 0E 00 17 1E 00 00 03 01 05 00 43'), None   ,  True, False,      SendDebugM, 0.0, "PowerMaster after jpg feedback" ), # 
-                                                                                                                      
    "MSG_INIT"         : VisonicCommand(convertByteArray('AB 0A 00 01 00 00 00 00 00 00 00 43'), None   ,  True, False,      SendDebugM, 3.0, "Init PowerLink Connection" ),
+
    "MSG_X10NAMES"     : VisonicCommand(convertByteArray('AC 00 00 00 00 00 00 00 00 00 00 43'), [0xAC] , False, False,      SendDebugM, 0.0, "Requesting X10 Names" ),
    "MSG_GET_IMAGE"    : VisonicCommand(convertByteArray('AD 99 99 0A FF FF 00 00 00 00 00 43'), [0xAD] ,  True, False,      SendDebugI, 0.0, "Requesting JPG Image" ),           # The first 99 might be the number of images. Request a jpg image, second 99 is the zone.  
                                                                                                                       
-   # Command codes (powerlink) do not have the 0x43 on the end and are only 11 values                                 
-   "MSG_DOWNLOAD"     : VisonicCommand(convertByteArray('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C] , False,  True,      SendDebugD, 0.0, "Start Download Mode" ),            # This gets either an acknowledge OR an Access Denied response
-   "MSG_WRITE"        : VisonicCommand(convertByteArray('3D 00 00 00 00 00 00 00 00 00 00')   , None   , False, False,      SendDebugD, 0.0, "Write Data Set" ),
-   "MSG_DL"           : VisonicCommand(convertByteArray('3E 00 00 00 00 B0 00 00 00 00 00')   , [0x3F] ,  True, False,      SendDebugD, 0.0, "Download Data Set" ),
-   "MSG_SETTIME"      : VisonicCommand(convertByteArray('46 F8 00 01 02 03 04 05 06 FF FF')   , None   , False, False,      SendDebugM, 1.0, "Setting Time" ),                   # may not need an ack so I don't wait for 1 and just get on with it
-   "MSG_SER_TYPE"     : VisonicCommand(convertByteArray('5A 30 04 01 00 00 00 00 00 00 00')   , [0x33] , False, False,      SendDebugM, 0.0, "Get Serial Type" ),
-                                                                                                                      
-   # Quick command codes to start and stop download/powerlink are a single value                                      
-#   "MSG_BUMP"         : VisonicCommand(convertByteArray('09')                                 , [0x3C] , False, False,      SendDebugM, 0.0, "Bump" ),                           # Bump to try to get the panel to send a 3C
-   "MSG_START"        : VisonicCommand(convertByteArray('0A')                                 , [0x0B] , False, False,      SendDebugM, 0.0, "Start" ),                          # waiting for STOP from panel for download complete
-   "MSG_STOP"         : VisonicCommand(convertByteArray('0B')                                 , None   , False, False,      SendDebugM, 1.5, "Stop" ),     #
-   "MSG_EXIT"         : VisonicCommand(convertByteArray('0F')                                 , None   , False, False,      SendDebugM, 1.5, "Exit" ),
-
    # Not sure what these do to the panel. Panel replies with powerlink ack 0x43
 #   "MSG4"             : VisonicCommand(convertByteArray('04 43')                              , None   , False, False,      SendDebugM, 0.0, "Message 04 43. Not sure what this does to the panel. Panel replies with powerlink ack 0x43." ),
 #   "MSGC"             : VisonicCommand(convertByteArray('0C 43')                              , None   , False, False,      SendDebugM, 0.0, "Message 0C 43. Not sure what this does to the panel. Panel replies with powerlink ack 0x43." ),
@@ -904,32 +913,32 @@ pmZoneSensorMaster_t = {
 #           "Armé Total Instantané" )
 #}
 
-PanelArmedStatusCollection = collections.namedtuple('PanelArmedStatusCollection', 'disarmed armed state')
+PanelArmedStatusCollection = collections.namedtuple('PanelArmedStatusCollection', 'disarmed armed state eventmapping')
 PanelArmedStatus = {
-   0x00 : PanelArmedStatusCollection(  True, False, AlPanelStatus.DISARMED ),             # Disarmed
-   0x01 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMING_HOME ),          # Arming Home
-   0x02 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMING_AWAY ),          # Arming Away
-   0x03 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ENTRY_DELAY ),          # Entry Delay
-   0x04 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_HOME ),           # Armed Home
-   0x05 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_AWAY ),           # Armed Away
-   0x06 : PanelArmedStatusCollection(  True, False, AlPanelStatus.USER_TEST ),            # User Test  (assume can only be done when panel is disarmed)
-   
-   0x07 : PanelArmedStatusCollection(  None,  None, AlPanelStatus.DOWNLOADING ),          # Downloading
-   0x08 : PanelArmedStatusCollection(  None,  None, AlPanelStatus.INSTALLER ),            # Programming
-   0x09 : PanelArmedStatusCollection(  None,  None, AlPanelStatus.INSTALLER ),            # Installer
-   0x0A : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_HOME ),           # Armed Home Bypass
-   0x0B : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_AWAY ),           # Armed Away Bypass
-   0x0C : PanelArmedStatusCollection(  None,  None, AlPanelStatus.DISARMED ),             # Ready
-   0x0D : PanelArmedStatusCollection(  None,  None, AlPanelStatus.DISARMED ),             # Not Ready  (assume can only be done when panel is disarmed)
-   0x0E : PanelArmedStatusCollection(  None,  None, AlPanelStatus.UNKNOWN ),              # 
-   0x0F : PanelArmedStatusCollection(  None,  None, AlPanelStatus.UNKNOWN ),              # 
-   # I don't think that the B0 message can command higher than 15
-   0x10 : PanelArmedStatusCollection(  True, False, AlPanelStatus.DISARMED ),             # Disarmed Instant
-   0x11 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMING_HOME ),          # Arming Home Last 10 Seconds             ####### armed was False
-   0x12 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMING_AWAY ),          # Arming Away Last 10 Seconds             ####### armed was False
-   0x13 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ENTRY_DELAY ),          # Entry Delay Instant
-   0x14 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_HOME ),           # Armed Home Instant
-   0x15 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_AWAY )            # Armed Away Instant
+   0x00 : PanelArmedStatusCollection(  True, False, AlPanelStatus.DISARMED   , 85),  # Disarmed
+   0x01 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMING_HOME, -1),  # Arming Home
+   0x02 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMING_AWAY, -1),  # Arming Away
+   0x03 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ENTRY_DELAY, -1),  # Entry Delay
+   0x04 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_HOME , 81),  # Armed Home
+   0x05 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_AWAY , 82),  # Armed Away
+   0x06 : PanelArmedStatusCollection(  True, False, AlPanelStatus.USER_TEST  , -1),  # User Test  (assume can only be done when panel is disarmed)
+                                                                             
+   0x07 : PanelArmedStatusCollection(  None,  None, AlPanelStatus.DOWNLOADING, -1),  # Downloading
+   0x08 : PanelArmedStatusCollection(  None,  None, AlPanelStatus.INSTALLER  , -1),  # Programming
+   0x09 : PanelArmedStatusCollection(  None,  None, AlPanelStatus.INSTALLER  , -1),  # Installer
+   0x0A : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_HOME , 81),  # Armed Home Bypass
+   0x0B : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_AWAY , 82),  # Armed Away Bypass
+   0x0C : PanelArmedStatusCollection(  None,  None, AlPanelStatus.DISARMED   , 85),  # Ready
+   0x0D : PanelArmedStatusCollection(  None,  None, AlPanelStatus.DISARMED   , 85),  # Not Ready  (assume can only be done when panel is disarmed)
+   0x0E : PanelArmedStatusCollection(  None,  None, AlPanelStatus.UNKNOWN    , 85),  # 
+   0x0F : PanelArmedStatusCollection(  None,  None, AlPanelStatus.UNKNOWN    , 85),  # 
+   # I don't think that the B0 message can command higher than 15            
+   0x10 : PanelArmedStatusCollection(  True, False, AlPanelStatus.DISARMED   , 85),  # Disarmed Instant
+   0x11 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMING_HOME, -1),  # Arming Home Last 10 Seconds             ####### armed was False
+   0x12 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMING_AWAY, -1),  # Arming Away Last 10 Seconds             ####### armed was False
+   0x13 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ENTRY_DELAY, -1),  # Entry Delay Instant
+   0x14 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_HOME , 81),  # Armed Home Instant
+   0x15 : PanelArmedStatusCollection( False,  True, AlPanelStatus.ARMED_AWAY , 82)   # Armed Away Instant
 }
 
 #pmEventType_t = {
@@ -1013,11 +1022,11 @@ class chunky:
 
 # Entry in a queue of commands (and PDUs) to send to the panel
 class VisonicListEntry:
-    def __init__(self, command = None, options = None, raw = None, res = None):
+    def __init__(self, command = None, raw = None, options = None, response = None):
         self.command = command # kwargs.get("command", None)
         self.options = options # kwargs.get("options", None)
         self.raw = raw
-        self.response = [] if res is None else res
+        self.response = [] if response is None else response
         if command is not None:
             if self.command.replytype is not None:
                 self.response = self.command.replytype.copy()  # list of message reply needed
@@ -1038,6 +1047,25 @@ class VisonicListEntry:
         if not isinstance(other, VisonicListEntry):
             raise NotImplementedError
         return self.created < other.created
+
+    def insertOptions(self, data : bytearray) -> bytearray:
+        # push in the options in to the appropriate places in the message. Examples are the pin or the specific command
+        if self.options != None:
+            # the length of instruction.options has to be an even number
+            # it is a list of couples:  bitoffset , bytearray to insert
+            #op = int(len(instruction.options) / 2)
+            # log.debug("[sendPdu] Options {0} {1}".format(instruction.options, op))
+            for o in range(0, len(self.options)):
+                s = self.options[o][0] # [o * 2]      # bit offset as an integer
+                a = self.options[o][1] # [o * 2 + 1]  # the bytearray to insert
+                if isinstance(a, int):
+                    # log.debug("[sendPdu] Options {0} {1} {2} {3}".format(type(s), type(a), s, a))
+                    data[s] = a
+                else:
+                    # log.debug("[sendPdu] Options {0} {1} {2} {3} {4}".format(type(s), type(a), s, a, len(a)))
+                    for i in range(0, len(a)):
+                        data[s + i] = a[i]
+        return data
 
 
 class SensorDevice(AlSensorDeviceHelper):
@@ -1137,13 +1165,13 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.PowerLinkBridgeStealth = False
         
         self.despatcherTask = None
+        self.despatcherException = False
         # A queue of messages to send (i.e. VisonicListEntry)
         #self.SendList = []
         self.SendQueue = PriorityQueueWithPeek()
 
         self.resetGlobals()
 
-        #self.loop.run_in_executor(None, self._despatcher())
         self.loop.create_task(self._sequencer())
 
     def resetGlobals(self):
@@ -1433,23 +1461,25 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
     def setTimeInPanel(self, paneltime = None):
         # To set the time in the panel we need to be in DOWNLOAD Mode
-        thresh = 3
         t = self._getTimeFunction()
         settime = True
         if paneltime is not None and t.year > 2000:
-            diff = t - paneltime
-            self.Panel_Integration_Time_Difference = diff
-            log.debug("[setTimeInPanel]    Local time is {0}      time difference {1} seconds".format(t, diff.total_seconds()))   # 
-            if abs(diff.total_seconds()) < thresh:
-                log.debug(f"[setTimeInPanel]    Not Correcting Time in Panel as less than {thresh} seconds difference.")
+            self.Panel_Integration_Time_Difference = t - paneltime
+            d = self.Panel_Integration_Time_Difference.total_seconds()
+            log.debug("[setTimeInPanel]        Local time is {0}      time difference {1} seconds".format(t, d))   # 
+            if abs(d) < TIME_INTERVAL_ERROR:
+                log.debug(f"[setTimeInPanel]        Not Correcting Time in Panel as less than {TIME_INTERVAL_ERROR} seconds difference.")
                 settime = False
             #else:
-            #    log.debug("[setTimeInPanel]    Correcting Time in Panel.")
+            #    log.debug("[setTimeInPanel]        Correcting Time in Panel.")
         if settime:
             # Set these as urgent to get them to the panel asap (so the time is set asap to synchronise panel and local time)
-            self._addMessageToSendList("MSG_DOWNLOAD", urgent = True, options=[ [3, convertByteArray(self.DownloadCode)] ])  # Can only set the time in the panel in DOWNLOADING state
-            log.debug("[setTimeInPanel]    Setting time in panel {0}".format(t))
-            timePdu = bytearray([t.second + 2, t.minute, t.hour, t.day, t.month, t.year - 2000])   # add about 2 seconds on as it takes over 1 to get to the panel to set it
+            if self.isPowerMaster():
+                self._addMessageToSendList("MSG_BUMP", urgent = True)
+            else:
+                self._addMessageToSendList("MSG_DOWNLOAD_F", urgent = True, options=[ [3, convertByteArray(self.DownloadCode)] ])  # Can only set the time in the panel in DOWNLOADING state
+            log.debug("[setTimeInPanel]        Setting time in panel {0}".format(t))
+            timePdu = bytearray([t.second + 1, t.minute, t.hour, t.day, t.month, t.year - 2000])   # add about 2 seconds on as it takes over 1 to get to the panel to set it
             self._addMessageToSendList("MSG_SETTIME", urgent = True, options=[ [3, timePdu] ])
             self._addMessageToSendList("MSG_EXIT", urgent = True)
 
@@ -1526,86 +1556,91 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             return -1.0
 
         log.debug(f"[_despatcher]  Starting")
+        self.despatcherException = False
         await waitForTransport(20) # Wait up to 20 seconds for the transport to be setup, if it isn't then other functions set self.suspendAllOperations to True
         while not self.suspendAllOperations:
-            post_delay = 0.01
-            # calc the time interval between sending the last message and now
-            interval = self._getUTCTimeFunction() - self.pmLastTransactionTime
-            
-            if len(self.pmExpectedResponse) == 0 or (not self.SendQueue.empty() and checkQueuePriorityLevel() < 2):
-                # Here when either:
-                #     The expected response list is empty so we're not waiting for a specific message to be received before sending the next
-                #             in this case the get function will block waiting
-                #     The send queue is not empty and there is either an immediate pdu to send or an ack pdu
-                #             immediate pdu's are commanded by the user e.g. arm, disarm etc
-                # ensure that there is a minimum delay between sending messages to the panel
-                #log.debug(f"[_despatcher]  Loopy")
-                if (s := sleepytime(interval)) > 0.0:
-                    # If needed, create a minimum time delay between sending the panel messages as the panel can't cope (not enough CPU power and bandwidth on the serial link)
-                    #log.debug(f"[_despatcher]  {s}")
-                    await asyncio.sleep(s)
-                # since we might have been asleep, check it again :)
-                if not self.suspendAllOperations:
-                    #log.debug(f"[_despatcher] Start Get      queue size {self.SendQueue.qsize()}")
-                    # pop the highest priority and oldest item from the list, this could be the only item.
-                    d = await self.SendQueue.get()  # this blocks waiting for something to be added to the queue, nothing else is relevant as pmExpectedResponse is empty and can only be added to by calling _sendPdu
-                    #log.debug(f"[_despatcher] Get worked and got something priority={d[0]}          queue size {self.SendQueue.qsize()}")
-
-                    # since we might have been waiting for something to send, check it again :)
+            try:
+                post_delay = 0.01
+                # calc the time interval between sending the last message and now
+                interval = self._getUTCTimeFunction() - self.pmLastTransactionTime
+                
+                if len(self.pmExpectedResponse) == 0 or (not self.SendQueue.empty() and checkQueuePriorityLevel() < 2):
+                    # Here when either:
+                    #     The expected response list is empty so we're not waiting for a specific message to be received before sending the next
+                    #             in this case the get function will block waiting
+                    #     The send queue is not empty and there is either an immediate pdu to send or an ack pdu
+                    #             immediate pdu's are commanded by the user e.g. arm, disarm etc
+                    # ensure that there is a minimum delay between sending messages to the panel
+                    #log.debug(f"[_despatcher]  Loopy")
+                    if (s := sleepytime(interval)) > 0.0:
+                        # If needed, create a minimum time delay between sending the panel messages as the panel can't cope (not enough CPU power and bandwidth on the serial link)
+                        #log.debug(f"[_despatcher]  {s}")
+                        await asyncio.sleep(s)
+                    # since we might have been asleep, check it again :)
                     if not self.suspendAllOperations:
-                        instruction = d[1]   # PriorityQueue is put as a tuple (priority, viscommand), so get the viscommand
-                        if len(instruction.response) > 0:
-                            # update the expected response list straight away (without having to wait for it to be actually sent) to make sure protocol is followed
-                            self.pmExpectedResponse.update(instruction.response)
-                        self.SendQueue.task_done()
-                        #log.debug(f"[_despatcher] _despatcher sending it to sendPdu, instruction={instruction}          queue size {self.SendQueue.qsize()}")
-                        post_delay = self._sendPdu(instruction)
-                        #log.debug(f"[_despatcher] Nothing to do      queue size {self.SendQueue.qsize()}")
-            else: #elif not self.pmDownloadMode:
-                # We're waiting for a message back from the panel before continuing (and we're not downloading EPROM)
-                # Do not do the timeouts when getting EPROM, the sequencer sorts it all out
-                # self.pmExpectedResponse will prevent us sending another message to the panel
-                if interval > RESPONSE_TIMEOUT:
-                    # If the panel is lazy or we've got the timing wrong........
-                    # Expected response timeouts are only a problem when in Powerlink Mode as we expect a response
-                    #   But in all modes, give the panel a self._triggerRestoreStatus
-                    if len(self.pmExpectedResponse) == 1 and ACK_MESSAGE in self.pmExpectedResponse:
-                        self.pmExpectedResponse = set()  # If it's only for an acknowledge response then ignore it
-                    else:
-                        st = '[{}]'.format(', '.join(hex(x) for x in self.pmExpectedResponse))
-                        log.debug("[_despatcher] ****************************** Response Timer Expired ********************************")
-                        log.debug("[_despatcher]                While Waiting for: {0}".format(st))
-                        # Reset Send state (clear queue and reset flags)
-                        self._clearReceiveResponseList()
-                        #self._emptySendQueue(pri_level = 1)
-                        self._triggerRestoreStatus()     # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
-                elif interval > RESEND_MESSAGE_TIMEOUT:
-                    #   If there's a timeout then resend the previous message. If that doesn't work then dump the message and continue, but log the error
-                    if not self.pmLastSentMessage.triedResendingMessage:
-                        # resend the last message
-                        log.debug("[_despatcher] ****************************** Resend Timer Expired ********************************")
-                        log.debug("[_despatcher]                Re-Sending last message  {0}".format(self.pmLastSentMessage.command.msg))
-                        self.pmLastSentMessage.triedResendingMessage = True
-                        post_delay = self._sendPdu(self.pmLastSentMessage)
-                    else:
-                        # tried resending once, no point in trying again so reset settings, start from scratch
-                        log.debug("[_despatcher] ****************************** Resend Timer Expired ********************************")
-                        log.debug("[_despatcher]                Tried Re-Sending last message but didn't work. Message is dumped")
-                        # Reset Send state (clear queue and reset flags)
-                        self._clearReceiveResponseList()
-                        self._emptySendQueue(pri_level = 1)
-                        # restart the watchdog and keep-alive counters
-                        #self._triggerRestoreStatus()
-                    self._reset_watchdog_timeout()
-                    self._reset_keep_alive_messages()
+                        #log.debug(f"[_despatcher] Start Get      queue size {self.SendQueue.qsize()}")
+                        # pop the highest priority and oldest item from the list, this could be the only item.
+                        d = await self.SendQueue.get()  # this blocks waiting for something to be added to the queue, nothing else is relevant as pmExpectedResponse is empty and can only be added to by calling _sendPdu
+                        #log.debug(f"[_despatcher] Get worked and got something priority={d[0]}          queue size {self.SendQueue.qsize()}")
 
-            # implement any post delay for the message
-            if post_delay >= 0:  # Check send queue
-                #log.debug(f"[_despatcher]  Command has a post delay of {post_delay}")
-                await asyncio.sleep(post_delay)
+                        # since we might have been waiting for something to send, check it again :)
+                        if not self.suspendAllOperations:
+                            instruction = d[1]   # PriorityQueue is put as a tuple (priority, viscommand), so get the viscommand
+                            if len(instruction.response) > 0:
+                                # update the expected response list straight away (without having to wait for it to be actually sent) to make sure protocol is followed
+                                self.pmExpectedResponse.update(instruction.response)
+                            self.SendQueue.task_done()
+                            #log.debug(f"[_despatcher] _despatcher sending it to sendPdu, instruction={instruction}          queue size {self.SendQueue.qsize()}")
+                            post_delay = self._sendPdu(instruction)
+                            #log.debug(f"[_despatcher] Nothing to do      queue size {self.SendQueue.qsize()}")
+                else: #elif not self.pmDownloadMode:
+                    # We're waiting for a message back from the panel before continuing (and we're not downloading EPROM)
+                    # Do not do the timeouts when getting EPROM, the sequencer sorts it all out
+                    # self.pmExpectedResponse will prevent us sending another message to the panel
+                    if interval > RESPONSE_TIMEOUT:
+                        # If the panel is lazy or we've got the timing wrong........
+                        # Expected response timeouts are only a problem when in Powerlink Mode as we expect a response
+                        #   But in all modes, give the panel a self._triggerRestoreStatus
+                        if len(self.pmExpectedResponse) == 1 and ACK_MESSAGE in self.pmExpectedResponse:
+                            self.pmExpectedResponse = set()  # If it's only for an acknowledge response then ignore it
+                        else:
+                            st = '[{}]'.format(', '.join(hex(x) for x in self.pmExpectedResponse))
+                            log.debug("[_despatcher] ****************************** Response Timer Expired ********************************")
+                            log.debug("[_despatcher]                While Waiting for: {0}".format(st))
+                            # Reset Send state (clear queue and reset flags)
+                            self._clearReceiveResponseList()
+                            #self._emptySendQueue(pri_level = 1)
+                            self._triggerRestoreStatus()     # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
+                    elif interval > RESEND_MESSAGE_TIMEOUT:
+                        #   If there's a timeout then resend the previous message. If that doesn't work then dump the message and continue, but log the error
+                        if not self.pmLastSentMessage.triedResendingMessage:
+                            # resend the last message
+                            log.debug("[_despatcher] ****************************** Resend Timer Expired ********************************")
+                            log.debug("[_despatcher]                Re-Sending last message  {0}".format(self.pmLastSentMessage.command.msg))
+                            self.pmLastSentMessage.triedResendingMessage = True
+                            post_delay = self._sendPdu(self.pmLastSentMessage)
+                        else:
+                            # tried resending once, no point in trying again so reset settings, start from scratch
+                            log.debug("[_despatcher] ****************************** Resend Timer Expired ********************************")
+                            log.debug("[_despatcher]                Tried Re-Sending last message but didn't work. Message is dumped")
+                            # Reset Send state (clear queue and reset flags)
+                            self._clearReceiveResponseList()
+                            self._emptySendQueue(pri_level = 1)
+                            # restart the watchdog and keep-alive counters
+                            #self._triggerRestoreStatus()
+                        self._reset_watchdog_timeout()
+                        self._reset_keep_alive_messages()
 
+                # implement any post delay for the message
+                if post_delay >= 0:  # Check send queue
+                    #log.debug(f"[_despatcher]  Command has a post delay of {post_delay}")
+                    await asyncio.sleep(post_delay)
 
-
+            except Exception as ex:
+                log.error("[_despatcher] Visonic Executor loop has caused an exception")
+                log.error(f"             {ex}")
+                self.despatcherException = True
+                
     # There are 2 Tasks that manage the panel (despatcher and sequencer):
     #  This is the sequencer, it manages the state of the connection with the panel
     # Function to send I'm Alive and status request messages to the panel
@@ -1638,11 +1673,14 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
         class PanelErrorStates(IntEnum):
             AllGood               = 0
-            AccessDenied          = 1
-            Exit                  = 2
-            TimeoutReceived       = 3
-            DownloadRetryReceived = 4
-            PanelWantsToEnrol     = 5
+            AccessDeniedDownload  = 1
+            AccessDeniedPin       = 2
+            AccessDeniedStop      = 3
+            AccessDeniedCommand   = 4
+            Exit                  = 5
+            TimeoutReceived       = 6
+            DownloadRetryReceived = 7
+            DespatcherException   = 8
 
         async def waitForTransport(s : int):
             while s >= 0 and self.transport is None:
@@ -1663,9 +1701,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
             if self.pmInitSupportedByPanel:
                 self._addMessageToSendList("MSG_INIT")
-            
-            if not self.pmGotPanelDetails:
-                self._addMessageToSendList("MSG_DOWNLOAD", options=[ [3, convertByteArray(self.DownloadCode)] ])  # 
 
         def _gotoStandardModeStopDownload():
             if self.DisableAllCommands:
@@ -1692,28 +1727,55 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 _resetPanelInterface()
             self._addMessageToSendList("MSG_STATUS_SEN")
 
-        def StopAndSuspend(t : str):
+        def StopAndSuspend(t : str, log_mess : str):
+            log.error( log_mess )
             self.shutdownOperation()
             self.sendPanelUpdate(AlCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
             if self.transport is not None:
                 self.transport.close()
             self.transport = None
         
-        def processDownloadStateMessages() -> PanelErrorStates:
-            if self.ExitReceived:
-                self.ExitReceived = False
-                return PanelErrorStates.Exit
+        def clearPanelErrorMessages():
+            self.AccessDeniedReceived = False
+            self.AccessDeniedMessage = None
+            self.ExitReceived = False
+            self.DownloadRetryReceived = False
+            self.TimeoutReceived = False
+            
+        # Process the panel error messages, in order: Access Denied, Exit, DownloadRetry and Timeout
+        def processPanelErrorMessages() -> PanelErrorStates:
 
+            if self.despatcherException:
+                self.despatcherException = False
+                return PanelErrorStates.DespatcherException
+
+            # Make sure that the Access Denied is processed first
             if self.AccessDeniedReceived:
+                log.debug("[_sequencer] Access Denied")
                 self.AccessDeniedReceived = False
                 if self.AccessDeniedMessage is not None:
                     lastCommandData = self.AccessDeniedMessage.command.data
-                    log.debug("[_sequencer]                AccessDenied last command {0}".format(toString(lastCommandData)))
                     if lastCommandData is not None:
-                        self.pmExpectedResponse = set()  ## really we should look at the response from the last command and only remove the appropriate responses from this list
+                        log.debug("[_sequencer]     AccessDenied last command {0}".format(toString(lastCommandData[:3] if OBFUS else lastCommandData)))
+                        # Check download first, then pin, then stop
                         if lastCommandData[0] == 0x24:
-                            log.debug("[_sequencer] Got an Access Denied and we have sent a Bump or a Download command to the Panel")
-                            return PanelErrorStates.AccessDenied
+                            log.debug("[_sequencer]           Got an Access Denied and we have sent a Bump or a Download command to the Panel")
+                            return PanelErrorStates.AccessDeniedDownload
+                        elif lastCommandData[0] != 0xAB and lastCommandData[0] & 0xA0 == 0xA0:  # this will match A0, A1, A2, A3 etc but not 0xAB
+                            log.debug("[_sequencer]           Attempt to send a command message to the panel that has been denied, wrong pin code used")
+                            # INTERFACE : tell user that wrong pin has been used
+                            return PanelErrorStates.AccessDeniedPin
+                        elif lastCommandData[0] == 0x0B:  # Stop
+                            log.debug("[_sequencer]           Received a stop command from the panel")
+                            return PanelErrorStates.AccessDeniedStop
+                log.debug("[_sequencer]           AccessDenied, either no last command or not processed")
+                self.AccessDeniedMessage = None
+                return PanelErrorStates.AccessDeniedCommand
+
+            if self.ExitReceived:
+                log.debug("[_sequencer] Exit received")
+                self.ExitReceived = False
+                return PanelErrorStates.Exit
 
             if self.DownloadRetryReceived and not self.PowerLinkBridgeConnected:
                 log.debug("[_sequencer] DownloadRetryReceived")
@@ -1726,17 +1788,30 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 return PanelErrorStates.TimeoutReceived
             return PanelErrorStates.AllGood
 
-        def reset_vars():
-            self.resetGlobals()
-
+        def startDespatcher():
             # (re)start the PDU despatcher, the task that sends messages to the panel
             if self.despatcherTask is not None:
                 log.debug("[_sequencer] Cancelling _despatcher")
                 self.despatcherTask.cancel()
+            self._reset_watchdog_timeout()
+            self._reset_keep_alive_messages()
             self._clearReceiveResponseList()
             self._emptySendQueue(pri_level = -1)  # empty the list
             log.debug("[_sequencer] Starting _despatcher")
             self.despatcherTask = self.loop.create_task(self._despatcher())
+
+        def reset_vars():
+            self.resetGlobals()
+
+            _sequencerState = SequencerType.InitialisePanel
+            _sequencerStatePrev = SequencerType.Invalid
+
+            # declare a list and fill it with zeroes
+            watchdog_list = [0] * WATCHDOG_MAXIMUM_EVENTS
+            # The starting point doesn't really matter
+            watchdog_pos = WATCHDOG_MAXIMUM_EVENTS - 1
+
+            startDespatcher()
 
             counter = 0                     # create a generic counter that gets reset every state change, so it can be used in a single state
             no_data_received_counter = 0
@@ -1765,63 +1840,62 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 _sequencerStatePrev = _sequencerState
 
                 if not self.suspendAllOperations:  ## To make sure as it could have changed in the 1 second sleep
-                    
-                    # Check the global state of the connection
-                    if self.lastPacket is None:
+
+                    #############################################################################################################################################################
+                    ####### Check the global connection state of the panel, have we received data ###############################################################################
+                    #######       These 3 tests take drastic action, they stop the integration    ###############################################################################
+                    #############################################################################################################################################################
+                    if self.lastRecvTimeOfPanelData is None:  # has any data been received from the panel yet, even just a single byte?
+                        no_data_received_counter = no_data_received_counter + 1
+                        # log.debug(f"[_sequencer] no_data_received_counter {no_data_received_counter}")
+                        if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
+                            StopAndSuspend("neverconnected", "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)")
+                            continue   # just do the while loop, which will exit as self.suspendAllOperations will be True
+                    elif self.lastPacket is None: # have we been able to construct at least one full and crc checked message 
                         no_packet_received_counter = no_packet_received_counter + 1
                         #log.debug(f"[_sequencer] no_packet_received_counter {no_packet_received_counter}")
                         if no_packet_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
-                            log.error(
-                                "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no valid packet has been received from the panel)"
-                            )
-                            StopAndSuspend("neverconnected")
-                            continue   # just do the while loop
+                            StopAndSuspend("nomessagedata", "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no valid packet has been received from the panel)")
+                            continue   # just do the while loop, which will exit as self.suspendAllOperations will be True
+                    else:  # Data has been received from the panel but check when it was last received
+                        # calc time difference between now and when data was last received
+                        no_packet_received_counter = 0
+                        no_data_received_counter = 0
+                        # calculate the time interval back to the last receipt of any data
+                        interval = self._getUTCTimeFunction() - self.lastRecvTimeOfPanelData
+                        # log.debug("Checking last receive time {0}".format(interval))
+                        if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
+                            StopAndSuspend("disconnected", "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + ")")
+                            continue   # just do the while loop, which will exit as self.suspendAllOperations will be True
 
-                    if self.transport is not None:   # if the call was made to StopAndSuspend("neverconnected") above then transport will be None
-                        if self.lastRecvTimeOfPanelData is None:  ## has any data been received from the panel yet?
-                            no_data_received_counter = no_data_received_counter + 1
-                            # log.debug(f"[_sequencer] no_data_received_counter {no_data_received_counter}")
-                            if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
-                                log.error(
-                                    "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)"
-                                )
-                                StopAndSuspend("neverconnected")
-                                continue   # just do the while loop
-                        else:  # Data has been received from the panel but check when it was last received
-                            # calc time difference between now and when data was last received
-                            interval = self._getUTCTimeFunction() - self.lastRecvTimeOfPanelData
-                            # log.debug("Checking last receive time {0}".format(interval))
-                            if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
-                                log.error(
-                                    "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + ")"
-                                )
-                                StopAndSuspend("disconnected")
-                                continue   # just do the while loop
+                    #############################################################################################################################################################
+                    ####### Sequencer activities ################################################################################################################################
+                    #############################################################################################################################################################
 
                     if _sequencerState not in [SequencerType.DoingStandard, SequencerType.DoingStandardPlus, SequencerType.DoingPowerlink, SequencerType.DoingPowerlinkBridge] or changedState or counter % 120 == 0:
                         # When we reach 1 of the 3 final states then stop logging it, but then output every 2 minutes
                         log.debug(f"[_sequencer] Mode = {str(_sequencerState)}     counter={counter}")
 
-                    if self.loopbackTest:
+                    if delay_loops > 0:
+                        delay_loops = delay_loops - 1
+                        clearPanelErrorMessages() # Clear all panel reported errors for the duration of the delay
+                        continue   # do all the basic connection checks above and then just do the while loop
 
+                    if self.loopbackTest:
                         # This supports the loopback test
-                        await asyncio.sleep(2.0)
+                        #await asyncio.sleep(2.0)
                         self._clearReceiveResponseList()
                         self._emptySendQueue(pri_level = -1) # empty the list
                         self._addMessageToSendList("MSG_STOP")
                         continue   # just do the while loop
 
-                    elif delay_loops > 0:
-                        delay_loops = delay_loops - 1
-                        continue   # just do the while loop
-
-                    elif not self.ForceStandardMode and self.PanelWantsToEnrol:
-                        log.debug("[_sequencer] Panel wants to auto enroll so sending Auto Enroll")
+                    elif not self.pmDownloadMode and not self.ForceStandardMode and self.PanelWantsToEnrol:     #################################### PanelWantsToEnrol ####################################################
+                        log.debug("[_sequencer] Panel wants to auto enroll and not downloading so sending Auto Enroll")
                         self.PanelWantsToEnrol = False
                         self._sendMsgENROLL(True)
                         continue   # just do the while loop
 
-                    elif _sequencerState == SequencerType.LookForPowerlinkBridge:  ################################################################ LookForPowerlinkBridge ####################################################
+                    elif _sequencerState == SequencerType.LookForPowerlinkBridge:   ################################################################ LookForPowerlinkBridge ####################################################
                         reset_vars()
                         if not self.ForceStandardMode:
                             for i in range(0,2):
@@ -1835,37 +1909,41 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     elif _sequencerState == SequencerType.InitialisePanel:          ################################################################ Initialising ####################################################
                         await asyncio.sleep(1.0)
                         _resetPanelInterface()
+                        clearPanelErrorMessages()
+                        if not self.pmGotPanelDetails:
+                            self._addMessageToSendList("MSG_DOWNLOAD_F", options=[ [3, convertByteArray(self.DownloadCode)] ])  # 
                         _sequencerState = SequencerType.WaitingForPanelDetails
                         continue   # just do the while loop
 
-                    elif _sequencerState == SequencerType.WaitingForPanelDetails:  ################################################################ WaitingForPanelDetails ####################################################
+                    elif _sequencerState == SequencerType.WaitingForPanelDetails:   ################################################################ WaitingForPanelDetails ####################################################
 
                         # Take care of the first part of initialisation
                         if self.pmGotPanelDetails:          # Got 3C
                             log.debug("[_sequencer] Got panel details")
                             # ignore all possible errors etc, call the function and ignore the return value
-                            while processDownloadStateMessages() != PanelErrorStates.AllGood:
-                                pass
-                            #if self.AutoSyncTime:  # should we sync time between the HA and the Alarm Panel
-                            #    self.setTimeInPanel()
+                            clearPanelErrorMessages()
                             if self.ForceStandardMode:
                                 self._addMessageToSendList("MSG_EXIT")  # when we receive a 3C we know that the panel is in download mode, so exit download mode
                                 _sequencerState = SequencerType.AimingForStandard
                             else:
                                 self.firstSendOfDownloadEprom = self._getUTCTimeFunction()
                                 _sequencerState = SequencerType.InitialiseEPROMDownload
-                        elif (s := processDownloadStateMessages()) != PanelErrorStates.AllGood:
+                        elif (s := processPanelErrorMessages()) != PanelErrorStates.AllGood:
                             self._clearReceiveResponseList()
-                            if s == PanelErrorStates.AccessDenied:
+                            clearPanelErrorMessages()
+                            delay_loops = 4
+                            if s == PanelErrorStates.DespatcherException:
+                                # start again, restart the despatcher task
+                                _sequencerState = SequencerType.LookForPowerlinkBridge
+                            elif s in [PanelErrorStates.AccessDeniedDownload, PanelErrorStates.AccessDeniedStop]:
                                 _sequencerState = SequencerType.InitialisePanel
                                 self.setNextDownloadCode(self.PanelType if self.PanelType is not None else 1)
                                 log.debug("[_sequencer]    Moved on to next download code and going to init")
                             elif s == PanelErrorStates.Exit:
                                 _sequencerState = SequencerType.InitialisePanel
                             elif s == PanelErrorStates.TimeoutReceived:
-                                delay_loops = 4
                                 _sequencerState = SequencerType.InitialisePanel
-                                log.debug("[_sequencer]    TimeoutReceived loop = 4")
+                                log.debug("[_sequencer]    TimeoutReceived")
                             elif s == PanelErrorStates.DownloadRetryReceived:
                                 delay_loops = 10
                                 _sequencerState = SequencerType.InitialisePanel
@@ -1918,14 +1996,14 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             
                         continue   # just do the while loop
 
-                    elif _sequencerState == SequencerType.TriggerEPROMDownload:  ################################################################ TriggerEPROMDownload ##############################################
+                    elif _sequencerState == SequencerType.TriggerEPROMDownload:     ################################################################ TriggerEPROMDownload ##############################################
 
                         self._clearReceiveResponseList()
                         self._emptySendQueue(pri_level = 1)
                         self.DownloadCounter = self.DownloadCounter + 1
                         log.debug("[_sequencer] Asking for panel EEPROM")
                         #self.setNextDownloadCode(self.PanelType if self.PanelType is not None else 1) # Set the next self.DownloadCode to try
-                        self._addMessageToSendList("MSG_DOWNLOAD", options=[ [3, convertByteArray(self.DownloadCode)] ])  #
+                        self._addMessageToSendList("MSG_DOWNLOAD_T", options=[ [3, convertByteArray(self.DownloadCode)] ])  #
                         # We got a first response, now we can Download the panel EEPROM settings
                         self.lastSendOfDownloadEprom = self._getUTCTimeFunction()
                         # Kick off the download sequence and set associated variables
@@ -1942,12 +2020,16 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                         continue   # just do the while loop
 
-                    elif _sequencerState == SequencerType.StartedEPROMDownload:  ################################################################ StartedEPROMDownload ##############################################
+                    elif _sequencerState == SequencerType.StartedEPROMDownload:     ################################################################ StartedEPROMDownload ##############################################
                         
                         # We got a first response, now we can Download the panel EEPROM settings
-                        if (s := processDownloadStateMessages()) != PanelErrorStates.AllGood:
-                            if s in [PanelErrorStates.AccessDenied, PanelErrorStates.DownloadRetryReceived, PanelErrorStates.TimeoutReceived]:
+                        if (s := processPanelErrorMessages()) != PanelErrorStates.AllGood:
+                            if s in [PanelErrorStates.AccessDeniedDownload, PanelErrorStates.DownloadRetryReceived, PanelErrorStates.TimeoutReceived]:
+                                self.pmExpectedResponse = set()
                                 _sequencerState = SequencerType.InitialiseEPROMDownload
+                            elif s == PanelErrorStates.DespatcherException:
+                                # start again, restart the despatcher task
+                                _sequencerState = SequencerType.LookForPowerlinkBridge
                             else:
                                 _sequencerState = SequencerType.InitialisePanel
                         else:
@@ -1961,11 +2043,15 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 
                         continue   # just do the while loop
 
-                    elif _sequencerState == SequencerType.DoingEPROMDownload:  ################################################################ DoingEPROMDownload ##############################################
+                    elif _sequencerState == SequencerType.DoingEPROMDownload:       ################################################################ DoingEPROMDownload ##############################################
                         
-                        if (s := processDownloadStateMessages()) != PanelErrorStates.AllGood:
-                            if s in [PanelErrorStates.AccessDenied, PanelErrorStates.DownloadRetryReceived, PanelErrorStates.TimeoutReceived]:
+                        if (s := processPanelErrorMessages()) != PanelErrorStates.AllGood:
+                            if s in [PanelErrorStates.AccessDeniedDownload, PanelErrorStates.DownloadRetryReceived, PanelErrorStates.TimeoutReceived]:
+                                self.pmExpectedResponse = set()
                                 _sequencerState = SequencerType.InitialiseEPROMDownload
+                            elif s == PanelErrorStates.DespatcherException:
+                                # start again, restart the despatcher task
+                                _sequencerState = SequencerType.LookForPowerlinkBridge
                             else:
                                 _sequencerState = SequencerType.InitialisePanel
                         elif self.pmDownloadComplete:
@@ -1982,7 +2068,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                         continue   # just do the while loop
 
-                    elif _sequencerState == SequencerType.EPROMDownloadComplete:  ################################################################ EPROMDownloadComplete ##############################################
+                    elif _sequencerState == SequencerType.EPROMDownloadComplete:    ################################################################ EPROMDownloadComplete ##############################################
                         
                         # Check the panel type from EPROM against the panel type from the 3C message to give a basic test of the EPROM download
                         pmPanelTypeNr = self._lookupEpromSingle("panelTypeCode")    
@@ -2018,7 +2104,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
                         continue   # just do the while loop
 
-                    elif _sequencerState == SequencerType.EnrollingPowerlink:  ################################################################ EnrollingPowerlink ##############################################
+                    elif _sequencerState == SequencerType.EnrollingPowerlink:       ################################################################ EnrollingPowerlink ##############################################
                         
                         if self.PanelMode == AlPanelMode.POWERLINK:
                             _sequencerState = SequencerType.DoingPowerlink         # Very unlikely but possible
@@ -2038,9 +2124,14 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                     elif _sequencerState == SequencerType.WaitingForEnrollSuccess:  ################################################################ WaitingForEnrollSuccess ##############################################
                         
-                        if (s := processDownloadStateMessages()) != PanelErrorStates.AllGood:
+                        if (s := processPanelErrorMessages()) != PanelErrorStates.AllGood:
+                            clearPanelErrorMessages()
+                            self.pmExpectedResponse = set()
                             self.PanelMode = AlPanelMode.STANDARD_PLUS
                             _sequencerState = SequencerType.EnrollingPowerlink
+                        elif s == PanelErrorStates.DespatcherException:
+                            # start again, restart the despatcher task
+                            _sequencerState = SequencerType.LookForPowerlinkBridge
                         elif self.PanelMode == AlPanelMode.POWERLINK:
                             _sequencerState = SequencerType.DoingPowerlink
                         elif counter == (MAX_TIME_BETWEEN_POWERLINK_ALIVE if self.receivedPowerlinkAcknowledge else 3):   
@@ -2051,42 +2142,12 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                         continue   # just do the while loop
 
-                    elif _sequencerState == SequencerType.DoingPowerlinkBridge:  ################################################################ DoingPowerlinkBridge ##############################################
-
-                        if self.PowerLinkBridgeConnected:
-                            if self.PowerLinkBridgeStealth:
-                                log.debug("[_sequencer] Sending commands to Bridge to exit stealth and get status")
-                                command = 2   # Stealth command
-                                param = 0     # Exit it
-                                self._addMessageToSendList("MSG_PL_BRIDGE", urgent = True, options=[ [1, command], [2, param] ])  # Tell the Bridge to exit exclusive mode
-                                command = 1   # Get Status command
-                                param = 0     # Irrelevant
-                                self._addMessageToSendList("MSG_PL_BRIDGE", urgent = True, options=[ [1, command], [2, param] ])  # Tell the Bridge to send me the status
-                                self.PowerLinkBridgeStealth = False # To make certain it's disabled
-
-                        if counter % 30 == 0:  # approx every 30 seconds
-                            command = 1   # Get Status command
-                            param = 0     # Irrelevant
-                            self._addMessageToSendList("MSG_PL_BRIDGE", urgent = True, options=[ [1, command], [2, param] ])  # Tell the Bridge to send me the status
-
-                    elif _sequencerState == SequencerType.DoingStandardPlus:  ################################################################ DoingStandardPlus ##############################################
-                        
-                        # Put all the special standard plus mode things here
-                        # Keep alive functionality
-                        self.keep_alive_counter = self.keep_alive_counter + 1
-                        if self.SendQueue.empty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
-                            self._reset_keep_alive_messages()
-                            self._addMessageToSendList ("MSG_STATUS_SEN")
-
-                        if self.PanelMode == AlPanelMode.POWERLINK:
-                            _sequencerState = SequencerType.DoingPowerlink
-
-                    elif _sequencerState == SequencerType.AimingForStandard:  ############################################################ AimingForStandard ##############################################
+                    elif _sequencerState == SequencerType.AimingForStandard:        ################################################################ AimingForStandard ##############################################
                         
                         self.PanelMode = AlPanelMode.STANDARD
                         if self.isPowerMaster(): # PowerMaster so get B0 data
                             # Powerlink panel so ask the panel for B0 data to get panel details, as these can be asked for and received within download mode we can do it straight away
-                            log.debug("[_sequencer] Adding to wanted list")
+                            log.debug("[_sequencer] Adding lots of B0 requests to wanted list")
                             #self.B0_Message_Wanted.update([0x20, 0x21, 0x2d, 0x1f, 0x07, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x11, 0x13, 0x14, 0x15, 0x18, 0x1a, 0x19, 0x1b, 0x1d, 0x2f, 0x31, 0x33, 0x1e, 0x24, 0x02, 0x23, 0x3a, 0x4b])
 
                             # Request User Codes                
@@ -2104,10 +2165,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_OPENCLOSE"])     # 18
                             self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_TEMPS"])         # 3D  
                             self.B0_Message_Wanted.add(pmSendMsgB0_t["SENSOR_ENROL"])       # 1D
-                            s = self._create_B0_Data_Request(taglist = list(self.B0_Message_Wanted))
-                            # Added twice intentionally to try to make sure we get the messages back
-                            self._addMessageToSendList(s)
-                            self._addMessageToSendList(s)
                         else:    # PowerMax get ZONE_NAMES, ZONE_TYPES etc
                             self._addMessageToSendList("MSG_ZONENAME")
                             self._addMessageToSendList("MSG_ZONETYPE")
@@ -2116,7 +2173,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         _sequencerState = SequencerType.DoingStandard
                         continue   # just do the while loop
 
-                    elif _sequencerState == SequencerType.DoingStandard:  ################################################################ DoingStandard ##############################################
+                    elif _sequencerState == SequencerType.DoingStandard:            ################################################################ DoingStandard ##############################################
                         # Put all the special standard mode things here
                         # Keep alive functionality
                         self.keep_alive_counter = self.keep_alive_counter + 1
@@ -2141,7 +2198,19 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 # Subsequent calls make sure we have all zone names, zone types and the sensor list
                                 self._updateSensorNamesAndTypes()
 
-                    elif _sequencerState == SequencerType.DoingPowerlink:  ################################################################ DoingPowerlink ##############################################
+                    elif _sequencerState == SequencerType.DoingStandardPlus:        ################################################################ DoingStandardPlus ##############################################
+                        
+                        # Put all the special standard plus mode things here
+                        # Keep alive functionality
+                        self.keep_alive_counter = self.keep_alive_counter + 1
+                        if self.SendQueue.empty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
+                            self._reset_keep_alive_messages()
+                            self._addMessageToSendList ("MSG_STATUS_SEN")
+
+                        if self.PanelMode == AlPanelMode.POWERLINK:
+                            _sequencerState = SequencerType.DoingPowerlink
+
+                    elif _sequencerState == SequencerType.DoingPowerlink:           ################################################################ DoingPowerlink ##############################################
                         self.PanelMode = AlPanelMode.POWERLINK
                         # Put all the special powerlink mode things here
 
@@ -2163,68 +2232,87 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             # Send I'm Alive to the panel so it knows we're still here
                             self._addMessageToSendList ("MSG_ALIVE")
 
-                    if self.AutoSyncTime and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]:   # AlPanelMode.POWERLINK_BRIDGED cannot do GetTime as it's an 0xAB message
-                        #  We set the time and then check it periodically, and then set it again if different by more than 5 seconds
-                        if counter % 14400 == 0:      # every 4 hours (approx)
-                            # Get the time from the panel (this will compare to local time and set the panel time if different)
-                            self._addMessageToSendList("MSG_GETTIME")
-                        if counter == a_day - 1 or (counter % 10 == 0 and (self.Panel_Integration_Time_Difference is None or (self.Panel_Integration_Time_Difference is not None and abs(self.Panel_Integration_Time_Difference.total_seconds()) > 5))):
-                            #if counter == a_day - 1:
-                            #    log.debug("[_sequencer]    Auto sync time, counter = a_day - 1")
-                            #t = self._getTimeFunction()
-                            #if t.year > 2020:
-                            #    log.debug("[_sequencer]    Local time is {0}".format(t))
-                            #    year = t.year - 2000
-                            #    values = [t.second, t.minute, t.hour, t.day, t.month, year]
-                            #    timePdu = bytearray(values)
-                            #    log.debug("[_sequencer]        Setting Time " + toString(timePdu))
-                            #    self._addMessageToSendList("MSG_BUMP", urgent = True)    # by setting urgent on both this will get sent first
-                            #    self._addMessageToSendList("MSG_SETTIME", options=[ [3, timePdu] ], urgent = True)      # Set the time asap so it syncs as close as possible to my time
-                            #else:
-                            #    log.debug("[_sequencer] Please correct your local time.")
+                    elif _sequencerState == SequencerType.DoingPowerlinkBridge:     ################################################################ DoingPowerlinkBridge ##############################################
 
-                            # Get the time from the panel (this will compare to local time and set the panel time if different)
-                            self._addMessageToSendList("MSG_GETTIME", urgent = True)
-                            #if t.year > 2020:
-                            #    self._addMessageToSendList("MSG_EXIT", urgent = True)
+                        if self.PowerLinkBridgeConnected:
+                            if self.PowerLinkBridgeStealth:
+                                log.debug("[_sequencer] Sending commands to Bridge to exit stealth and get status")
+                                command = 2   # Stealth command
+                                param = 0     # Exit it
+                                self._addMessageToSendList("MSG_PL_BRIDGE", urgent = True, options=[ [1, command], [2, param] ])  # Tell the Bridge to exit exclusive mode
+                                command = 1   # Get Status command
+                                param = 0     # Irrelevant
+                                self._addMessageToSendList("MSG_PL_BRIDGE", urgent = True, options=[ [1, command], [2, param] ])  # Tell the Bridge to send me the status
+                                self.PowerLinkBridgeStealth = False # To make certain it's disabled
+
+                        if counter % 30 == 0:  # approx every 30 seconds
+                            command = 1   # Get Status command
+                            param = 0     # Irrelevant
+                            self._addMessageToSendList("MSG_PL_BRIDGE", urgent = True, options=[ [1, command], [2, param] ])  # Tell the Bridge to send me the status
 
                     #############################################################################################################################################################
                     ####### Drop through to here to do generic code for DoingStandard, DoingStandardPlus and DoingPowerlink #####################################################
                     #############################################################################################################################################################
 
-                    if self.AccessDeniedReceived:
-                        self.AccessDeniedReceived = False
-                        if self.AccessDeniedMessage is not None:
-                            lastCommandData = self.AccessDeniedMessage.command.data
-                            log.debug("[_sequencer]                AccessDenied last command {0}".format(toString(lastCommandData)))
+                    # If Std+ or PL then periodically check and then maybe update the time in the panel
+                    if self.AutoSyncTime:
+                        if self.isPowerMaster() and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
+                            if counter % POWERMASTER_CHECK_TIME_INTERVAL == 0 or (counter % 10 == 0 and (self.Panel_Integration_Time_Difference is None or (self.Panel_Integration_Time_Difference is not None and abs(self.Panel_Integration_Time_Difference.total_seconds()) > 5))):
+                                # Request Sensor Information and State
+                                #      remember that self.B0_Message_Wanted is a set so can only be added once
+                                log.debug("[_sequencer] Adding Panel and Sensor State requests")
+                                self.B0_Message_Wanted.add(pmSendMsgB0_t["SENSOR_STATUS"])      # 1F
+                                self.B0_Message_Wanted.add(pmSendMsgB0_t["PANEL_STATE"])        # 24
+                                self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_LAST_EVENT"])    # 4B
+                                self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_OPENCLOSE"])     # 18
+                                self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_TEMPS"])         # 3D  
+                                #self.B0_Message_Wanted.add(pmSendMsgB0_t["SENSOR_ENROL"])       # 1D
+                        elif self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]:   # Powermax panels
+                            # We set the time and then check it periodically, and then set it again if different by more than 5 seconds
+                            #     every 4 hours (approx) or if not set yet or a big difference (set from B0 data)
+                            if counter % POWERMAX_CHECK_TIME_INTERVAL == 0 or (counter % 10 == 0 and (self.Panel_Integration_Time_Difference is None or (self.Panel_Integration_Time_Difference is not None and abs(self.Panel_Integration_Time_Difference.total_seconds()) > 5))):
+                                # Get the time from the panel (this will compare to local time and set the panel time if different)
+                                self._addMessageToSendList("MSG_GETTIME", urgent = True)
+
+                    # Check all error conditions sent from the panel
+                    dotrigger = False
+                    while (s := processPanelErrorMessages()) != PanelErrorStates.AllGood: # An error state from the panel so process it
+                        if s == PanelErrorStates.AccessDeniedPin:
+                            log.debug("[_sequencer] Attempt to send a command message to the panel that has been denied, wrong pin code used")
+                            # INTERFACE : tell user that wrong pin has been used
                             self._reset_watchdog_timeout()
-                            if lastCommandData is not None:
-                                self.pmExpectedResponse = set()  ## really we should look at the response from the last command and only remove the appropriate responses from this list
-                                if lastCommandData[0] != 0xAB and lastCommandData[0] & 0xA0 == 0xA0:  # this will match A0, A1, A2, A3 etc but not 0xAB
-                                    log.debug("[_sequencer] Attempt to send a command message to the panel that has been denied, wrong pin code used")
-                                    # INTERFACE : tell user that wrong pin has been used
-                                    self.sendPanelUpdate(AlCondition.PIN_REJECTED)  # push changes through to the host, the pin has been rejected
-                                elif lastCommandData[0] != 0xAB and lastCommandData[0] != 0x0B:  # Powerlink command and the Stop Command
-                                    log.debug("[_sequencer] Attempt to send a command message to the panel that has been rejected")
-                                    self.sendPanelUpdate(AlCondition.COMMAND_REJECTED)  # push changes through to the host, something has been rejected (other than the pin)
-                    # Make sure that the Access Denied above is processed first
-                    elif (s := processDownloadStateMessages()) != PanelErrorStates.AllGood:
-                        if s in [PanelErrorStates.Exit]:
-                            log.debug(f"[_sequencer] Received a Exit state, we assume that BUMP was called and rejected by the panel")
-                            if 0x3C in self.pmExpectedResponse:    # We sent BUMP to the panel (probably to set the time) and it has responded with EXIT
+                            self.sendPanelUpdate(AlCondition.PIN_REJECTED)  # push changes through to the host, the pin has been rejected
+                        elif s == PanelErrorStates.DespatcherException:
+                            # restart the despatcher task
+                            startDespatcher()
+                        elif s == PanelErrorStates.AccessDeniedCommand:
+                            log.debug("[_sequencer] Attempt to send a command message to the panel that has been rejected")
+                            self._reset_watchdog_timeout()
+                            self.sendPanelUpdate(AlCondition.COMMAND_REJECTED)  # push changes through to the host, something has been rejected (other than the pin)
+                        elif s in [PanelErrorStates.AccessDeniedDownload, PanelErrorStates.AccessDeniedStop]:
+                            log.debug("[_sequencer] Attempt to download from the panel that has been rejected, assumed to be from get/set time")
+                            # reset the download params just in case it's not a get/set time
+                            self.pmDownloadInProgress = False
+                            self.pmDownloadMode = False
+                            dotrigger = True
+                        elif s == PanelErrorStates.Exit:
+                            log.debug(f"[_sequencer] Received a Exit state, we assume that DOWNLOAD was called and rejected by the panel")
+                            if 0x3C in self.pmExpectedResponse:    # We sent DOWNLOAD to the panel (probably to set the time) and it has responded with EXIT
                                 self.pmExpectedResponse.remove(0x3C)  #
-                        elif s in [PanelErrorStates.DownloadRetryReceived]:
+                        elif s == PanelErrorStates.DownloadRetryReceived:
                             log.debug(f"[_sequencer] Received a Download Retry and dont know why {str(s)}")
+                            dotrigger = True
                         elif s == PanelErrorStates.TimeoutReceived:
                             log.debug(f"[_sequencer] Received a Panel state Timeout")
                             # Reset Send state (clear queue and reset flags)
                             self._clearReceiveResponseList()
                             #self._emptySendQueue(pri_level = 1)
-                            self._triggerRestoreStatus() # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
+                            dotrigger = True
                         else:
-                            log.debug(f"[_sequencer] Received an unknown Panel state and dont know why {str(s)}")
+                            log.debug(f"[_sequencer] Received an unexpected panel error state and dont know why {str(s)}")
+                            dotrigger = True
 
-                    # Watchdog functionality
+                    # Do the Watchdog functionality
                     self.watchdog_counter = self.watchdog_counter + 1
                     # every iteration, decrement all WATCHDOG_MAXIMUM_EVENTS watchdog counters (loop time is 1 second approx, doesn't have to be accurate)
                     watchdog_list = [x - 1 if x > 0 else 0 for x in watchdog_list]
@@ -2247,16 +2335,23 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         # When watchdog_list[watchdog_pos] > 0 then the 24 hour period from the timeout WATCHDOG_MAXIMUM_EVENTS times ago hasn't decremented to 0.
                         #    So it's been less than 1 day for the previous WATCHDOG_MAXIMUM_EVENTS timeouts
                         if not self.StopTryingDownload and watchdog_list[watchdog_pos] > 0:
-                            log.debug("[_sequencer]               **************** Going to Standard (Plus) Mode and re-establish panel connection ***************")
-                            self.sendPanelUpdate(AlCondition.WATCHDOG_TIMEOUT_GIVINGUP)   # watchdog timer expired, going to standard (plus) mode
-                            _sequencerState = SequencerType.AimingForStandard
+                            self.pmExpectedResponse = set()
+                            if self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
+                                log.debug("[_sequencer]               **************** Going to Initialise EPROM Download and re-establish panel connection ***************")
+                                _sequencerState = SequencerType.InitialiseEPROMDownload
+                                self.sendPanelUpdate(AlCondition.WATCHDOG_TIMEOUT_RETRYING)   # watchdog timer expired, going to standard (plus) mode
+                                continue 
+                            else:
+                                log.debug("[_sequencer]               **************** Giving up and going to Standard Mode, too many watchdog timeouts with the connection ***************")
+                                self._gotoStandardModeStopDownload()
+                                self.sendPanelUpdate(AlCondition.WATCHDOG_TIMEOUT_GIVINGUP)   # watchdog timer expired, going to standard (plus) mode
                         else:
                             log.debug("[_sequencer]               ******************* Trigger Restore Status *******************")
                             self.sendPanelUpdate(AlCondition.WATCHDOG_TIMEOUT_RETRYING)   # watchdog timer expired, going to try again
                             # Reset Send state (clear queue and reset flags)
                             self._clearReceiveResponseList()
                             self._emptySendQueue(pri_level = 1)
-                            self._triggerRestoreStatus() # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
+                            dotrigger = True 
 
                         # Overwrite the oldest entry and set it to 1 day in seconds. Keep the stats going in all modes for the statistics
                         #    Note that the asyncio 1 second sleep does not create an accurate time and this may be slightly more than 24 hours.
@@ -2264,22 +2359,28 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         log.debug("[_sequencer]               Watchdog counter array, current=" + str(watchdog_pos))
                         log.debug("[_sequencer]                       " + str(watchdog_list))
 
-                    #elif self.ImageManager.isImageDataInProgress():
+                    if dotrigger:
+                        self._triggerRestoreStatus() # Clear message buffers and send a Restore (if in Powerlink) or Status (not in Powerlink) to the Panel
+
+                    #if self.ImageManager.isImageDataInProgress():
                     #    # Manage the download of the F4 messages for Camera PIRs
                     #    # As this does not use acknowledges or checksums then prevent the expected response timer from kicking in
                     #    self.ImageManager.terminateIfExceededTimeout(40)
                         
                     # log.debug("[_sequencer] is {0}".format(self.watchdog_counter))
-                        
-                    if self.isPowerMaster():
-                        if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
+
+                    # We create a B0 message to request other B0 messages from a PowerMaster panel.
+                    #    Wait 1 second per B0 request between sending again to give the panel a chance to send them
+                    if self.isPowerMaster() and self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
+                        if len(self.B0_Message_Wanted) > 0:
                             b0_send_wanted_counter = b0_send_wanted_counter + 1
-                            if b0_send_wanted_counter >= 3:
+                            if b0_send_wanted_counter >= 1 + len(self.B0_Message_Wanted):      # Wait 1 second per B0 request between sending again
                                 b0_send_wanted_counter = 0
-                                if len(self.B0_Message_Wanted) > 0:
-                                    log.debug(f"[_sequencer] ****************************** Asking For B0_Message_Wanted **************************** {self.B0_Message_Wanted}")
-                                    s = self._create_B0_Data_Request(taglist = list(self.B0_Message_Wanted))
-                                    self._addMessageToSendList(s)
+                                log.debug(f"[_sequencer] ****************************** Asking For B0_Message_Wanted **************************** {self.B0_Message_Wanted}")
+                                s = self._create_B0_Data_Request(taglist = list(self.B0_Message_Wanted))
+                                self._addMessageToSendList(s)
+                        else:
+                            b0_send_wanted_counter = 0
 
                     if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.MINIMAL_ONLY]:
                         # Dump all sensors to the file every 60 seconds (1 minute)
@@ -2297,15 +2398,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 #tree_class(ex)
                 reset_vars()
                 
-                _sequencerState = SequencerType.InitialisePanel
-                _sequencerStatePrev = SequencerType.Invalid
-                self._reset_watchdog_timeout()
-                self._reset_keep_alive_messages()
-
-                # declare a list and fill it with zeroes
-                watchdog_list = [0] * WATCHDOG_MAXIMUM_EVENTS
-                # The starting point doesn't really matter
-                watchdog_pos = WATCHDOG_MAXIMUM_EVENTS - 1
 
 
     # Process any received bytes (in data as a bytearray)
@@ -2557,30 +2649,13 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         command = None
 
         if instruction.raw is not None:
-            sData = instruction.raw
+            sData = instruction.insertOptions(instruction.raw)
         
         elif instruction.command is not None:
             # Send a command to the panel
             command = instruction.command
-            data = command.data
+            data = instruction.insertOptions(command.data)
             
-            # push in the options in to the appropriate places in the message. Examples are the pin or the specific command
-            if instruction.options != None:
-                # the length of instruction.options has to be an even number
-                # it is a list of couples:  bitoffset , bytearray to insert
-                #op = int(len(instruction.options) / 2)
-                # log.debug("[sendPdu] Options {0} {1}".format(instruction.options, op))
-                for o in range(0, len(instruction.options)):
-                    s = instruction.options[o][0] #   [o * 2]  # bit offset as an integer
-                    a = instruction.options[o][1] # [o * 2 + 1]  # the bytearray to insert
-                    if isinstance(a, int):
-                        # log.debug("[sendPdu] Options {0} {1} {2} {3}".format(type(s), type(a), s, a))
-                        data[s] = a
-                    else:
-                        # log.debug("[sendPdu] Options {0} {1} {2} {3} {4}".format(type(s), type(a), s, a, len(a)))
-                        for i in range(0, len(a)):
-                            data[s + i] = a[i]
-
             # log.debug('[sendPdu] input data: %s', toString(packet))
             # First add header (PACKET_HEADER), then the packet, then crc and footer (PACKET_FOOTER)
             sData = b"\x0D"
@@ -2593,14 +2668,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         else:
             log.warning("[sendPdu]      Invalid message data, not sending anything to the panel")
             return -1.0
-
-        # If needed, create a time delay between sending the panel messages as the panel can't cope (not enough CPU power and bandwidth on the serial link)
-        #gap = MINIMUM_PDU_TIME_INTERVAL_MILLISECS_POWERMASTER if self.isPowerMaster() else MINIMUM_PDU_TIME_INTERVAL_MILLISECS_POWERMAX
-        #interval = self._getUTCTimeFunction() - self.pmLastTransactionTime
-        #sleepytime = timedelta(milliseconds=gap) - interval
-        #if sleepytime > timedelta(milliseconds=0):
-        #    #log.debug("[sendPdu] Sleepytime {0}".format(sleepytime.total_seconds()))
-        #    await asyncio.sleep(sleepytime.total_seconds())
 
         # no need to send i'm alive message for a while as we're about to send a command anyway
         self._reset_keep_alive_messages()
@@ -2627,7 +2694,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             log.debug("[sendPdu] Sending Command ({0})    waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
         elif instruction.raw is not None:
             # Assume raw data to send is not obfuscated for now
-            log.debug("[sendPdu] Sending Raw Command      raw data {0}   waiting for message response {1}".format(toString(sData), [hex(no).upper() for no in self.pmExpectedResponse]))            
+            log.debug("[sendPdu] Sending Raw Command      raw data {0}   waiting for message response {1}".format(toString(sData[:4] if OBFUS else sData), [hex(no).upper() for no in self.pmExpectedResponse]))            
         #elif command is not None:
         #    # Do not log the full raw data as it may contain the user code
         #    log.debug("[sendPdu] Sending Command ({0})    <Obfuscated>   waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
@@ -2636,14 +2703,14 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             return command.waittime
         return -1.0           
 
-    def _addMessageToSendList(self, message : str | bytearray | VisonicListEntry, ack: bool = False, urgent: bool = False, immediate: bool = False, options : list = [], res : list = None):
+    def _addMessageToSendList(self, message : str | bytearray | VisonicListEntry, ack: bool = False, urgent: bool = False, immediate: bool = False, options : list = [], response : list = None):
         if message is not None:
             if isinstance(message, str):
                 m = pmSendMsg[message]
                 assert m is not None
                 e = VisonicListEntry(command = m, options = options)
             elif isinstance(message, bytearray):
-                e = VisonicListEntry(raw = message, res = res)
+                e = VisonicListEntry(raw = message, response = response, options = options)
             elif isinstance(message, VisonicListEntry):
                 e = message
             else:
@@ -3430,6 +3497,11 @@ class PacketHandling(ProtocolBase):
             disarmed = PanelArmedStatus[sysStatus].disarmed
             armed = PanelArmedStatus[sysStatus].armed
             self.PanelState = PanelArmedStatus[sysStatus].state
+
+            if PanelArmedStatus[sysStatus].eventmapping >= 0:
+                log.debug(f"[ProcessPanelStateUpdate]      self.PanelState is {self.PanelState}      using event mapping {PanelArmedStatus[sysStatus].eventmapping} for event data")
+                self.addPanelEventData(AlPanelEventData(0, PanelArmedStatus[sysStatus].eventmapping))
+                
         else:
             log.debug("[ProcessPanelStateUpdate]      Unknown state {0}, assuming Panel state of Unknown".format(sysStatus))
             disarmed = None
@@ -3459,13 +3531,23 @@ class PacketHandling(ProtocolBase):
             self.PanelTroubleStatus = AlTroubleType.NONE
 
         self.PanelBypass = sysFlags & 0x08 != 0
+        
+        if sysFlags & 0x10 != 0:
+            log.debug(f"[ProcessPanelStateUpdate]      sysFlags bit 4 set, last 10 seconds of entry/exit")
+            
+        if sysFlags & 0x20 != 0:
+            log.debug(f"[ProcessPanelStateUpdate]      sysFlags bit 5 set")
+            
+        if sysFlags & 0x40 != 0:
+            log.debug(f"[ProcessPanelStateUpdate]      sysFlags bit 6 set")
+            
         #if sysFlags & 0x10 != 0:  # last 10 seconds of entry/exit
         #    self.PanelArmed = sarm == "Arming"
         #else:
         #     self.PanelArmed = sarm == "Armed"
         PanelAlarmEvent = sysFlags & 0x80 != 0
 
-        if self.PanelMode != AlPanelMode.POWERLINK:
+        if self.PanelMode not in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
             # if the system status has the panel armed and there has been an alarm event, assume that the alarm is sounding
             #        and that the sensor that triggered it isn't an entry delay
             #   Normally this would only be directly available in Powerlink mode with A7 messages, but an assumption is made here
@@ -3566,7 +3648,8 @@ class PacketHandling(ProtocolBase):
                 log.debug("[_processReceivedPacket] Had a response timeout PROBLEM but received a data packet and entering Standard Mode")
                 self.PanelMode = AlPanelMode.STANDARD
 
-        processAB         = not self.pmDownloadMode and not self.ForceStandardMode # not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]
+        #processAB         = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]
+        processAB         = not self.pmDownloadMode and not self.ForceStandardMode
         processNormalData = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]
 
         #log.debug(f"[_processReceivedPacket] {processAB=} {processNormalData=}    {self.pmDownloadMode=}")
@@ -3590,7 +3673,7 @@ class PacketHandling(ProtocolBase):
             0xA5        : DecodeMessage(   processNormalData , self.handle_msgtypeA5,  True, None ),  # Zone Information/Update
             0xA6        : DecodeMessage(   processNormalData , self.handle_msgtypeA6,  True, None ),  # Zone Types
             0xA7        : DecodeMessage(   processNormalData , self.handle_msgtypeA7,  True, None ),  # Panel Information/Update
-            0xAB        : DecodeMessage(           processAB , self.handle_msgtypeAB,  True, f"Received AB Message but we are in {self.PanelMode.name} mode (so I'm ignoring the message), data: {toString(packet)}"),  # 
+            0xAB        : DecodeMessage(           processAB , self.handle_msgtypeAB,  True, f"Received AB Message, we are in {self.PanelMode.name} mode and Download is set to {self.pmDownloadMode} (so I'm ignoring the message), data: {toString(packet)}"),  # 
             0xAC        : DecodeMessage(   processNormalData , self.handle_msgtypeAC,  True, None ),  # X10 Names
             0xAD        : DecodeMessage(   processNormalData , self.handle_msgtypeAD,  True, None ),  # No idea what this means, it might ...  send it just before transferring F4 video data ?????
             0xB0        : DecodeMessage(   processNormalData , self.handle_msgtypeB0,  True, None ),  # 
@@ -4077,7 +4160,7 @@ class PacketHandling(ProtocolBase):
 
                     #---------------------------------------------------------------------------------------
                     if eventType == EVENT_TYPE_FORCE_ARM or (self.pmForceArmSetInPanel and eventType == EVENT_TYPE_DISARM): # Force Arm OR (ForceArm has been set and Disarm)
-                        self.pmForceArmSetInPanel = True                                 # When the panel uses ForceArm then sensors may be automatically armed and bypassed by the panel
+                        self.pmForceArmSetInPanel = eventType == EVENT_TYPE_FORCE_ARM                                 # When the panel uses ForceArm then sensors may be automatically armed and bypassed by the panel
                         log.debug("[handle_msgtypeA7]              Panel has been Armed using Force Arm, sensors may have been bypassed by the panel, asking panel for an update")
                         self._addMessageToSendList("MSG_BYPASSTAT")
 
@@ -4090,7 +4173,7 @@ class PacketHandling(ProtocolBase):
         self._reset_watchdog_timeout()
 
         subType = data[0]
-        if self.PanelMode == AlPanelMode.POWERLINK and subType == 1:
+        if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS] and subType == 1:
             # Panel Time
             log.debug("[handle_msgtypeAB] ***************************** Got Panel Time ****************************")
 
@@ -4119,8 +4202,8 @@ class PacketHandling(ProtocolBase):
                 # There is no point in setting the time here as we need to be in DOWNLOAD mode with the panel
                 #  We set the time at the end of download
                 # Get the time from the panel
-                if self.AutoSyncTime:
-                    self._addMessageToSendList("MSG_GETTIME")
+                #if self.AutoSyncTime:
+                #    self._addMessageToSendList("MSG_GETTIME")
 
         elif self.PanelMode == AlPanelMode.POWERLINK and subType == 5:  # -- phone message
             action = data[2]

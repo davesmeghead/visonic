@@ -945,11 +945,11 @@ class AlPanelInterfaceHelper(AlPanelInterface):
             a["name"] = ped.name_i
             a["event"] = ped.action_i
             a["time"] = ped.time
-            if self.lastPanelEvent != a:
-                log.debug(f"[PanelUpdate]  ped={ped}  event data  = {a}")
-                self.sendPanelUpdate(AlCondition.PANEL_UPDATE, a)
-            else:
-                log.debug(f"[PanelUpdate]  ped={ped}  event data  = {a} - Not sending event as this is the same as last time and we only send changes")
+            #if self.lastPanelEvent != a:
+            log.debug(f"[PanelUpdate]  ped={ped}  event data  = {a}")
+            self.sendPanelUpdate(AlCondition.PANEL_UPDATE, a)
+            #else:
+            #    log.debug(f"[PanelUpdate]  ped={ped}  event data  = {a} - Not sending event as this is the same as last time and we only send changes")
             self.lastPanelEvent = a
         self.panelEventData = [ ] # empty the list
         return retval
@@ -1099,8 +1099,8 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
     def shutdownOperation(self):
         if not self.suspendAllOperations:
-            self.suspendAllOperations = True
             self._initVars()
+            self.suspendAllOperations = True
             self.PanelMode = AlPanelMode.STOPPED
             self.PanelState = AlPanelStatus.UNKNOWN
             self.PanelStatus = {}

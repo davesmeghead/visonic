@@ -91,7 +91,7 @@ class VisonicSensor(Entity):
     # The callback handler from the client. All we need to do is schedule an update.
     def onClientChange(self):
         """HA Event Callback."""
-        if self.entity_id is not None:
+        if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state(False)
 
     @property

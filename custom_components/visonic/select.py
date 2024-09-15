@@ -102,7 +102,7 @@ class VisonicSelect(SelectEntity):
             self._pending_state_is_armed = None
 
         # Ask HA to schedule an update
-        if self.entity_id is not None:
+        if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state(True)
 
     @property
@@ -196,7 +196,7 @@ class VisonicSelect(SelectEntity):
                     }
                 )
 
-        if self.entity_id is not None:
+        if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state(True)
 
     @property

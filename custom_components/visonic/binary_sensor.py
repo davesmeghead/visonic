@@ -124,7 +124,7 @@ class VisonicBinarySensor(BinarySensorEntity):
         if self._visonic_device is not None:
             self._current_value = self._visonic_device.isTriggered() or self._visonic_device.isOpen()
             self._is_available = self._visonic_device.isEnrolled()
-        if self.entity_id is not None:
+        if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state()
         _LOGGER.debug(f"[binary sensor _retainStateTimout out]   unique_id = {self.unique_id}   timeout = {timeout}    current = {self._current_value}")
         self.doing_timeout = False
@@ -146,7 +146,7 @@ class VisonicBinarySensor(BinarySensorEntity):
             self._is_available = self._visonic_device.isEnrolled()
             #_LOGGER.debug(f"   In binary sensor VisonicSensor onchange self._is_available = {self._is_available}    self._current_value = {self._current_value}")
             # Ask HA to schedule an update
-            if self.entity_id is not None:
+            if self.hass is not None and self.entity_id is not None:
                 self.schedule_update_ha_state()
         else:
             _LOGGER.debug("changeHandler: binary sensor on change called but sensor is not defined")
@@ -270,9 +270,10 @@ class VisonicBinarySensor(BinarySensorEntity):
             if self._visonic_device.getLastTriggerTime() is None:
                 attr[ATTR_LAST_TRIP_TIME] = "unknown"
             else:
-                tm = self._visonic_device.getLastTriggerTime().isoformat()
+                tm = self._visonic_device.getLastTriggerTime().strftime("%d/%m/%Y, %H:%M:%S")
+                #tm = self._visonic_device.getLastTriggerTime().isoformat()
                 # miss off the decimal hundredths seconds onwards
-                tm = tm.replace("T", " ")[0:21]
+                #tm = tm.replace("T", " ")[0:21]
                 attr[ATTR_LAST_TRIP_TIME] = tm
                 # attr[ATTR_LAST_TRIP_TIME] = self.pmTimeFunctionStr(self.triggertime)
             attr[PANEL_ATTRIBUTE_NAME] = self._panel

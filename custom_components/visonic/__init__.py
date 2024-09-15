@@ -315,7 +315,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
 
     # Check for unique panel ids or HA gets really confused and we end up make a big mess in the config files.
     if findClient(hass, panel_id) is not None:
-        _LOGGER.warning(f"[Visonic Setup] The Panel Number {panel_id} is not Unique, you already have a Panel with this Number")
+        _LOGGER.error(f"[Visonic Setup] The Panel Number {panel_id} is not Unique, you already have a Panel with this Number")
         return False
 
     # When here, panel_id should be unique in the panels configured so far.
