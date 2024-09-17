@@ -1,0 +1,919 @@
+{
+    "title": "Visonic Alarm Panel",
+    "config": {
+        "abort": {
+            "already_configured": "Alarm Panel Connection Already Configured",
+            "device_error": "Device must be either Ethernet or USB",
+            "emulation_mode_error": "Incorrect Emulation Mode Setting",
+            "settings_missing": "Import setting from yaml file but essential settings are missing",
+            "editing": "Thankyou for your edits"
+        },
+        "error": {
+            "eth_or_usb": "Must be one of Ethernet or USB",
+            "emulation_mode_error": "Incorrect Emulation Mode Setting",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "device": {
+                "description": "Entrez votre type d'appareil et votre numéro de panneau",
+                "title": "Connection",
+                "data": {
+                    "type": "Ethernet or USB",
+                    "panel_number": "Panel Number"
+                }
+            },
+            "myethernet": {
+                "description": "Enter your Ethernet Settings",
+                "title": "Ethernet Configuration",
+                "data": {
+                    "host": "Host Address",
+                    "port": "Port"
+                }
+            },
+            "myusb": {
+                "description": "Enter your USB Settings",
+                "title": "USB Configuration",
+                "data": {
+                    "path": "USB Local Path",
+                    "baud": "Baud Rate"
+                }
+            },
+            "parameters1": {
+                "description": "",
+                "title": "Alarm Panel Settings",
+                "data": {
+                    "exclude_x10": "X10 Devices to Exclude (comma separated)",
+                    "exclude_sensor": "Sensor List to Exclude (comma separated)",
+                    "emulation_mode": "Emulation Mode",
+                    "download_code": "Download Code",
+                    "show_eeprom_attributes": "Show the EEPROM Data in the Alarm Attributes"
+                }
+            },
+            "parameters10": {
+                "description": "",
+                "title": "Alarm Panel Settings",
+                "data": {
+                    "siren_sounding": "List of triggers for the siren",
+                    "sensor_event_list": "List of Sensor changes to create an Event",
+                    "panel_state_notifications": "List of triggers for Home Assistant Notifications",
+                    "retry_connection_count": "Try this number of times to attempt the connection",
+                    "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
+                }
+            },
+            "parameters11": {
+                "description": "",
+                "title": "Alarm Panel Zone/Sensor Settings",
+                "data": {
+                    "motion_off_delay": "Motion/Camera off delay time (seconds)",
+                    "magnet_closed_delay": "Magnet/Wired closed delay time (seconds)",
+                    "emergency_off_delay": "Smoke/Fire off delay time (seconds)"
+                }
+            },
+            "parameters12": {
+                "description": "",
+                "title": "Alarm Panel Arm/Disarm Settings",
+                "data": {
+                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
+                    "force_numeric_keypad": "Force use of a Numeric Keypad",
+                    "arm_home_enabled": "Arm Home Enabled",
+                    "arm_night_enabled": "Arm Night Enabled",
+                    "arm_away_instant": "Arm Away performs an Arm Away Instant",
+                    "arm_home_instant": "Arm Home performs an Arm Home Instant",
+                    "allow_remote_arm": "Allow Panel Arm from Home Assistant",
+                    "allow_remote_disarm": "Allow Panel DisArm from Home Assistant",
+                    "allow_sensor_bypass": "Allow each sensor to be bypassed"
+                }
+            },
+            "parameters13": {
+                "description": "",
+                "title": "Alarm Panel Log File Settings",
+                "data": {
+                    "panellog_complete_event": "Generate an HA Event on Completion",
+                    "panellog_logentry_event": "Generate an HA Event for each Log entry",
+                    "panellog_csv_add_title_row": "Add a Title Row to the generated CSV file",
+                    "panellog_xml_filename": "The XML Filename (and path)",
+                    "panellog_csv_filename": "The CSV Filename (and path)",
+                    "panellog_reverse_order": "Reverse the output order",
+                    "panellog_max_entries": "Only output the most recent X log entries"
+                }
+            }
+        }
+    },
+    "options": {
+        "abort": {
+            "already_configured": "Alarm Panel Connection Already Configured",
+            "emulation_mode_error": "Incorrect Emulation Mode Setting",
+            "device_error": "Device must be either Ethernet or USB",
+            "editing": "Thankyou for your edits"
+        },
+        "error": {
+            "eth_or_usb": "Must be one of Ethernet or USB",
+            "emulation_mode_error": "Incorrect Emulation Mode Setting",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "parameters10": {
+                "description": "",
+                "title": "Alarm Panel Settings",
+                "data": {
+                    "siren_sounding": "List of triggers for the siren",
+                    "sensor_event_list": "List of Sensor changes to create an Event",
+                    "panel_state_notifications": "List of triggers for Home Assistant Notifications",
+                    "retry_connection_count": "Try this number of times to attempt the connection",
+                    "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
+                }
+            },
+            "parameters11": {
+                "description": "",
+                "title": "Alarm Panel Zone/Sensor Settings",
+                "data": {
+                    "motion_off_delay": "Motion/Camera off delay time (seconds)",
+                    "magnet_closed_delay": "Magnet/Wired closed delay time (seconds)",
+                    "emergency_off_delay": "Smoke/Fire off delay time (seconds)"
+                }
+            },
+            "parameters12": {
+                "description": "",
+                "title": "Alarm Panel Arm/Disarm Settings",
+                "data": {
+                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
+                    "force_numeric_keypad": "Force use of a Numeric Keypad",
+                    "arm_home_enabled": "Arm Home Enabled",
+                    "arm_night_enabled": "Arm Night Enabled",
+                    "arm_away_instant": "Arm Away performs an Arm Away Instant",
+                    "arm_home_instant": "Arm Home performs an Arm Home Instant",
+                    "allow_remote_arm": "Allow Panel Arm from Home Assistant",
+                    "allow_remote_disarm": "Allow Panel DisArm from Home Assistant",
+                    "allow_sensor_bypass": "Allow each sensor to be bypassed"
+                }
+            },
+            "parameters13": {
+                "description": "",
+                "title": "Alarm Panel Log File Settings",
+                "data": {
+                    "panellog_complete_event": "Generate an HA Event on Completion",
+                    "panellog_logentry_event": "Generate an HA Event for each Log entry",
+                    "panellog_csv_add_title_row": "Add a Title Row to the generated CSV file",
+                    "panellog_xml_filename": "The XML Filename (and path)",
+                    "panellog_csv_filename": "The CSV Filename (and path)",
+                    "panellog_reverse_order": "Reverse the output order",
+                    "panellog_max_entries": "Only output the most recent X log entries"
+                }
+            }
+        }
+    },    
+    "device_automation": {
+        "action_type": {
+            "arm_away": "Arm {entity_name} Away",
+            "arm_home": "Arm {entity_name} Home",
+            "arm_night": "Arm {entity_name} Night",
+            "arm_vacation": "Arm {entity_name} Vacation",
+            "disarm": "Disarm {entity_name}",
+            "trigger": "Trigger {entity_name}"
+        },
+        "condition_type": {
+            "is_triggered": "{entity_name} is Triggered",
+            "is_disarmed": "{entity_name} is Disarmed",
+            "is_armed_home": "{entity_name} is Armed Home",
+            "is_armed_away": "{entity_name} is Armed Away",
+            "is_armed_night": "{entity_name} is Armed Night",
+            "is_armed_vacation": "{entity_name} is Armed Vacation"
+        },
+        "extra_fields": {
+            "code": "Code",
+            "for": "[%key:common::device_automation::extra_fields::for%]"
+        },
+        "trigger_type": {
+            "triggered": "{entity_name} Triggered",
+            "disarmed": "{entity_name} Disarmed",
+            "armed_home": "{entity_name} Armed Home",
+            "armed_away": "{entity_name} Armed Away",
+            "armed_night": "{entity_name} Armed Night",
+            "armed_vacation": "{entity_name} Armed Vacation"
+        }
+    },
+    "services": {
+        "alarm_panel_eventlog": {
+            "name": "Retrieve Event Log",
+            "description": "Retrieve the Alarm Panel Event Log.",
+            "fields": {
+                "entity_id": {
+                    "name": "Visonic Panel",
+                    "description": "Name of the visonic panel."
+                },
+                "code": {
+                    "name": "User Code",
+                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
+                }
+            }
+        },
+        "alarm_panel_command": {
+            "name": "Send Command",
+            "description": "Send a command to the Alarm Panel.",
+            "fields": {
+                "entity_id": {
+                    "name": "Visonic Panel",
+                    "description": "Name (Entity ID) of the visonic panel."
+                },
+                "command": {
+                    "name": "Panel Command",
+                    "description": "The command to send to the panel ('Arm Away', 'Arm Away Instant', 'Arm Home', 'Arm Home Instant', 'Disarm', 'Trigger', 'Mute', 'Emergency', 'Panic', 'Fire')."
+                },
+                "code": {
+                    "name": "User Code",
+                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
+                }
+            }
+        },
+        "alarm_panel_x10": {
+            "name": "Command X10",
+            "description": "Send an X10 Command to an X10 Device.",
+            "fields": {
+                "entity_id": {
+                    "name": "Visonic X10 Switch",
+                    "description": "Name of the visonic x10 switch. This is case sensitive and a mandatory setting. The 'switch.' text is optional."
+                },
+                "x10command": {
+                    "name": "X10 Command",
+                    "description": "X10 Command: Off, On, Dimmer, Brighten."
+                }
+            }
+        },
+        "alarm_panel_reconnect": {
+            "name": "Panel Reconnection",
+            "description": "Reconnect to the Alarm Panel following a previous problem.",
+            "fields": {
+                "entity_id": {
+                    "name": "Visonic Panel",
+                    "description": "Name of the visonic panel."
+                }
+            }
+        },
+        "alarm_sensor_image": {
+            "name": "Retrieve Image from Sensor",
+            "description": "Retrieve Image from Sensor, this only works if the Sensor is a Camera PIR.",
+            "fields": {
+                "entity_id": {
+                    "name": "Visonic Sensor (Image)",
+                    "description": "Name of the visonic sensor."
+                }
+            }
+        },
+        "alarm_sensor_bypass": {
+            "name": "Sensor Bypass",
+            "description": "Bypass and Re-Arm a Visonic Sensor.",
+            "fields": {
+                "entity_id": {
+                    "name": "Visonic Sensor",
+                    "description": "Name of the visonic sensor to bypass. This is case sensitive and a mandatory setting. The 'binary_sensor.' text is optional."
+                },
+                "bypass": {
+                    "name": "Bypass Command",
+                    "description": "To bypass or re-arm a Sensor."
+                },
+                "code": {
+                    "name": "User Code",
+                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
+                }
+            }
+        }
+    },
+    "entity": {
+  	    "switch": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"panel": {
+						"name": "Panel ID"
+					},
+					"name": {
+						"name": "Name"
+					},
+					"type": {
+						"name": "Type",
+						"state": {
+							"Dimmer Switch" : "Dimmer Switch",
+							"OnOff Switch"  : "OnOff Switch"
+						}
+					},
+					"visonic_device": {
+						"name": "Zone Device ID"
+					},
+					"location": {
+						"name": "Location",
+						"state": {
+							"attic"           : "Loft",
+							"back_door"       : "Back Doorway",
+							"basement"        : "Basement",
+							"bathroom"        : "Bathroom",
+							"bedroom"         : "Bedroom",
+							"child_room"      : "Child Room",
+							"conservatory"    : "Conservatory",
+							"play_room"       : "Play Room",
+							"dining_room"     : "Dining Room",
+							"downstairs"      : "Downstairs",
+							"emergency"       : "Emergency",
+							"fire"            : "Fire",
+							"front_door"      : "Front Door",
+							"garage"          : "Garage",
+							"garage_door"     : "Garage Door",
+							"guest_room"      : "Guest Room",
+							"hall"            : "Hall",
+							"kitchen"         : "Kitchen",
+							"laundry_room"    : "Laundry Room",
+							"living_room"     : "Living Room",
+							"master_bathroom" : "Master Bathroom",
+							"master_bedroom"  : "Master Bedroom",
+							"office"          : "Office",
+							"upstairs"        : "Upstairs",
+							"utility_room"    : "Utility Room",
+							"yard"            : "Yard",
+							"custom_1"        : "Custom 1",
+							"custom_2"        : "Custom 2",
+							"custom_3"        : "Custom 3",
+							"custom_4"        : "Custom 4",
+							"custom_5"        : "Custom 5",
+							"not_installed"   : "Not Installed"
+						}
+					}
+   			    }
+			}
+		},
+  	    "select": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"panel": {
+						"name": "Panel ID"
+					},
+					"visonic_device": {
+						"name": "Zone Device ID"
+					}
+   			    }
+			}
+		},
+  	    "image": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"panel": {
+						"name": "Panel ID"
+					},
+					"visonic_device": {
+						"name": "Zone Device ID"
+					}
+   			    }
+			}
+		},
+  	    "sensor": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"panel": {
+						"name": "Panel ID"
+					}
+   			    }
+			}
+		},
+  	    "binary_sensor": {
+	        "alarm_panel_key": {
+				"state": {
+					"off": "off",
+					"on": "on"
+				},
+				"state_attributes": {
+					"device_name": {
+						"name": "Device Name"
+					},
+					"zone_name": {
+						"name": "Zone Name",
+						"state": {
+							"attic"           : "Loft",
+							"back_door"       : "Back Doorway",
+							"basement"        : "Basement",
+							"bathroom"        : "Bathroom",
+							"bedroom"         : "Bedroom",
+							"child_room"      : "Child Room",
+							"conservatory"    : "Conservatory",
+							"play_room"       : "Play Room",
+							"dining_room"     : "Dining Room",
+							"downstairs"      : "Downstairs",
+							"emergency"       : "Emergency",
+							"fire"            : "Fire",
+							"front_door"      : "Front Door",
+							"garage"          : "Garage",
+							"garage_door"     : "Garage Door",
+							"guest_room"      : "Guest Room",
+							"hall"            : "Hall",
+							"kitchen"         : "Kitchen",
+							"laundry_room"    : "Laundry Room",
+							"living_room"     : "Living Room",
+							"master_bathroom" : "Master Bathroom",
+							"master_bedroom"  : "Master Bedroom",
+							"office"          : "Office",
+							"upstairs"        : "Upstairs",
+							"utility_room"    : "Utility Room",
+							"yard"            : "Yard",
+							"custom_1"        : "Custom 1",
+							"custom_2"        : "Custom 2",
+							"custom_3"        : "Custom 3",
+							"custom_4"        : "Custom 4",
+							"custom_5"        : "Custom 5",
+							"not_installed"   : "Not Installed"
+						}
+					},
+					"zone_type": {
+						"name": "Zone Type",
+						"state": {
+							"non-alarm"        : "Non Alarme",
+							"emergency"        : "Urgence",
+							"flood"            : "Inondation",
+							"gas"              : "Gaz",
+							"delay_1"          : "Temporisée 1",
+							"delay_2"          : "Temporisée 2",
+							"interior_follow"  : "Interior-Follow",
+							"perimeter"        : "Voie Périphérique",
+							"perimeter_follow" : "Voie Périphérique d'Entrée",
+							"24_hours_silent"  : "24 Heures Silencieuse",
+							"24_hours_audible" : "24 Heures Audible",
+							"fire"             : "Incendie",
+							"interior"         : "Intérieure",
+							"home_delay"       : "Home Delay",
+							"temperature"      : "Température",
+							"outdoor"          : "Extérieure",
+							"undefined"        : "Undefined"
+						}
+					},
+					"zone_trouble": {
+						"name": "Zone Problem",
+						"state": {
+							"none"         : "Aucun",
+							"tamper"       : "Alarme Autoprotection",
+							"jamming"      : "Détection Brouillage Radio",
+							"comm_failure" : "Echec de Communication",
+							"line_failure" : "Echec Ligne Téléphonique",
+							"fuse"         : "Fusible",
+							"not_active"   : "Pas Active",
+							"ac_failure"   : "Echec Alimentation Secteur"
+						}
+					},
+					"zone_chime": {
+						"name": "Zone Chime",
+						"state": {
+							"chime_off"       : "Eteint",
+							"melody_chime"    : "Melodie",
+							"zone_name_chime" : "Zone Melodie"
+						}
+					},
+					"zone_motion_off_time": {
+						"name": "Zone Motion Off Time"
+					},
+					"visonic_device": {
+						"name": "Zone Device ID"
+					},
+					"battery_level": {
+						"name": "Battery Level"
+					},
+					"last_tripped_time": {
+						"name": "Zone Tripped Time",
+						"state": {
+							"unknown": "Not Yet Tripped"
+						}
+					},
+					"panel": {
+						"name": "Panel ID"
+					},
+					"device_tamper": {
+						"name": "Device Tamper",
+						"state": {
+							"false": "Good",
+							"true": "Alert",
+							"undefined": "Undefined"
+						}
+					},
+					"device_tripped": {
+						"name": "Device Tripped",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"device_armed": {
+						"name": "Device Armed",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"sensor_type": {
+						"name": "Sensor Type",
+						"state": {
+							"magnet"     : "Magnet",
+							"motion"     : "Motion PIR",
+							"camera"     : "Camera PIR",
+							"wired"      : "Wired",
+							"smoke"      : "Smoke",
+							"flood"      : "Flood",
+							"gas"        : "Gaz",
+							"vibration"  : "Vibration",
+							"shock"      : "Shock",
+							"temperature": "Temperature",
+							"sound"      : "Sound",
+							"unknown"    : "Unknown"
+						}
+					},
+					"zone_open": {
+						"name": "Zone Open",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"zone_tamper": {
+						"name": "Zone Tamper",
+						"state": {
+							"false": "Good",
+							"true": "Alert",
+							"undefined": "Undefined"
+						}
+					}
+				}				
+			}
+		},
+  	    "alarm_control_panel": {
+	        "alarm_panel_key": {
+				"state": {
+					"armed": "Armé",
+					"disarmed": "Désarmé",
+					"armed_home": "Armé Partiel",
+					"armed_away": "Armé Total",
+					"armed_night": "Armed Night",
+					"armed_vacation": "Armed Vacation",
+					"armed_custom_bypass": "Armed Custom Bypass",
+					"pending": "Pending",
+					"arming": "Arming",
+					"disarming": "Disarming",
+					"triggered": "Triggered"
+				},
+				"state_attributes": {
+					"code_format": {
+						"name": "Code format",
+						"state": {
+							"text": "Text",
+							"number": "Number"
+						}
+					},
+					"changed_by": {
+						"name": "Changed by"
+					},
+					"code_arm_required": {
+						"name": "Code for arming",
+						"state": {
+							"true": "Required",
+							"false": "Not required"
+						}
+					},
+					"mode": {
+						"unknown": "Unknown",
+						"problem": "Problem",
+						"starting": "Starting",
+						"standard": "Standard",
+						"standard_plus": "Standard Plus",
+						"powerlink": "Powerlink",
+						"powerlink_bridged": "Powerlink (Bridged)",
+						"download": "Download EPROM",
+						"stopped": "Integration Stopped",
+						"minimal_only": "Minimal Panel Connection"
+					},
+					"state": {
+						"unknown": "Unknown",
+						"disarmed": "Désarmé",
+						"arming_home": "Délai Armement Partiel",
+						"arming_away": "Délai Armement Total",
+						"entry_delay": "Délai d'Entrée",
+						"armed_home": "Armé Partiel",
+						"armed_away": "Armé Total",
+						"armed_home_bypass": "Isolation Partielle",
+						"armed_away_bypass": "Isolation Total",
+						"armed_home_instant": "Armé Partiel Instantané",
+						"armed_away_instant": "Armé Total Instantané",
+						"entry_delay_instant": "Temporisation d'Entrée Instantané",
+						"user_test": "Test Utilisateur",
+						"downloading": "Téléchargement EPROM",
+						"installer": "Mode Installateur",
+						"triggered": "Triggered"
+					},
+					"ready": {
+						"tamper": "Panel Ready",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"tamper": {
+						"tamper": "Panel Tamper Alarm",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"memory": {
+						"name": "Panel Alert in Memory",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"bypass": {
+						"name": "Panel Bypass",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"alarm": {
+					    "name" : "Alarm",
+						"state" : {
+							"none"     : "Non Alarme",
+							"intruder" : "Intruder",
+							"tamper"   : "Sabotage",
+							"panic"    : "Panique",
+							"fire"     : "Incendie",
+							"emergency": "Urgence",
+							"gas"      : "Gaz",
+							"flood"    : "Inondation"
+						}
+					},
+					"trouble": {
+					    "name" : "Trouble",
+						"state" : {
+							"none"         : "Aucun",
+							"general"      : "General",
+							"communication": "Echec de Communication",
+							"battery"      : "Batterie Faible",
+							"power"        : "Echec Alimentation Secteur",
+							"jamming"      : "Détection Brouillage Radio",
+							"telephone"    : "Echec Ligne Téléphonique"
+						}
+					},
+					"lasteventname": {
+					    "name" : "Last Event Name"
+					},
+					"lasteventaction": { 
+					    "name" : "Last Event Action"
+					},
+					"lasteventtime": { 
+					    "name" : "Last Event Time"
+					}
+				}
+	        }
+	    }
+	},
+    "selector": {
+        "alarm_command": {
+            "options": {
+                "disarm": "Disarm",
+                "arm_home": "Arm Home",
+                "arm_home_instant": "Arm Home Instant",
+                "arm_away": "Arm Away",
+                "arm_away_instant": "Arm Away Instant",
+                "mute": "Mute Siren",
+                "trigger": "Trigger Siren",
+                "fire": "Fire Alarm",
+                "emergency": "Emergency Alarm",
+                "panic": "Panic Alarm"
+            }
+        },
+        "bypass_command": {
+            "options": {
+                "off": "Active",
+                "on": "Bypass"
+            }
+        },
+        "x10command": {
+            "options": {
+                "off": "Off",
+                "on": "On",
+                "dimmer": "Decrease Brightness",
+                "brighten": "Increase Brightness"
+            }
+        },
+        "siren_sounding": {
+            "options": {
+                "intruder": "Intruder",
+                "tamper": "Tamper",
+                "fire": "Fire",
+                "emergency": "Emergency",
+                "gas": "Gas",
+                "flood": "Flood",
+                "x10": "X10",
+                "panic": "Panic"                  
+            }
+        },
+        "sensor_event_list": {
+            "options": {
+				"problem":   "Problem",
+				"fire":      "Fire",
+				"emergency": "Emergency",
+				"panic":     "Panic"
+            }
+        },
+		"panel_state_notifications": {
+            "options": {
+				"siren_sounding": "Siren Sounding",
+				"panel_reset":  "Panel System Reset",
+				"invalid_pin": "Code Rejected By Panel",
+				"panel_operation": "Panel Operation",
+				"connection_problem": "Connection Problems",
+				"bypass_problem": "Sensor Bypass Problems",
+				"image_problem": "Image Retrieval Problems",
+				"eventlog_problem": "Event Log Problems",
+				"command_not_sent": "Command Not Sent To Panel"
+			}
+		}
+    },
+    "exceptions": {
+        "no_panel_connection": {
+            "message": "Visonic Integration for {myname} is not connected to the panel."
+        },
+        "invalid_arm_state": {
+            "message": "Invalid: Can't set the armed state to {option}. Allowed states are: {options}"
+        },
+        "invalid_arm_state_no_option": {
+            "message": "Armed state not defined. Allowed states are: {options}"
+        }
+	},
+	"entity_component": {
+  	    "event_name": {
+			"state": {
+			    "startup"   : "Startup",
+				"system"    : "Système",
+				"zone"      : "Zone",
+				"fob"       : "Memclé",
+				"user"      : "User",
+				"pad"       : "Pad",
+				"siren"     : "Siren",
+				"2pad"      : "2Pad",
+				"x10"       : "X10",
+				"pgm"       : "PGM",
+				"gsm"       : "GSM",
+				"powerlink" : "P-LINK",
+				"ptag"      : "PTag",
+				"repeater"  : "Rptr",
+				"undefined" : "Unknown"
+			}
+		},
+  	    "event_action": {
+			"state": {
+				"000"  : "Aucun",
+				"001"  : "Alarme Intérieure",
+				"002"  : "Alarme Périphérie",
+				"003"  : "Alarme Différée",
+				"004"  : "Alarme Silencieuse 24H",
+				"005"  : "Alarme Audible 24H",
+				"006"  : "Autoprotection",
+				"007"  : "Alarme Autoprotection Centrale",
+				"008"  : "Alarme Autoprotection",
+				"009"  : "Alarme Autoprotection",
+				"010"  : "Défaut de communication",
+				"011"  : "Alarme Panique Depuis Memclé",
+				"012"  : "Alarme Panique depuis Centrale",
+				"013"  : "Contrainte",
+				"014"  : "Confirmer l'alarme",
+				"015"  : "Perte de Communication",
+				"016"  : "Rétablissement Défaut Supervision",
+				"017"  : "Rétablissement Alarme Intérieure",
+				"018"  : "Rétablissement Alarme Périphérie",
+				"019"  : "Rétablissement Alarme Différée",
+				"020"  : "Rétablissement Alarme Silencieuse 24H",
+				"021"  : "Rétablissement Alarme Audible 24H",
+				"022"  : "Rétablissement Autoprotection",
+				"023"  : "Rétablissement Alarme Autoprotection Centrale",
+				"024"  : "Rétablissement Alarme Autoprotection",
+				"025"  : "Rétablissement Alarme Autoprotection",
+				"026"  : "Rétablissement des Communications",
+				"027"  : "Annuler Alarme",
+				"028"  : "Rétablissement Général",
+				"029"  : "Rétablissement Défaut",
+				"030"  : "Pas utilisé",
+				"031"  : "Evenement Fermeture Récente",
+				"032"  : "Alarme Incendie",
+				"033"  : "Rétablissement Alarme Incendie",
+				"034"  : "Non Actif",
+				"035"  : "Urgence",
+				"036"  : "Pas utilisé",
+				"037"  : "Désarmement Latchkey",
+				"038"  : "Rétablissement Alarme Panique",
+				"039"  : "Défaut Supervision (Inactive)",
+				"040"  : "Rétablissement Supervision (Active)",
+				"041"  : "Batterie Faible",
+				"042"  : "Rétablissement Batterie Faible",
+				"043"  : "Coupure Secteur",
+				"044"  : "Rétablissement Secteur",
+				"045"  : "Batterie Centrale Faible",
+				"046"  : "Rétablissement Batterie Centrale Faible",
+				"047"  : "Détection Brouillage Radio",
+				"048"  : "Rétablissement Détection Brouillage Radio",
+				"049"  : "Défaut Communication",
+				"050"  : "Rétablissement Communications",
+				"051"  : "Défaut Ligne Téléphonique",
+				"052"  : "Rétablissement Ligne Téléphonique",
+				"053"  : "Auto Test",
+				"054"  : "Coupure Secteur/Fusible",
+				"055"  : "Rétablissement Secteur/Fusible",
+				"056"  : "Memclé Batterie Faible",
+				"057"  : "Rétablissement Memclé Batterie Faible",
+				"058"  : "Réinitialisation Technicien",
+				"059"  : "Batterie Déconnectée",
+				"060"  : "Clavier/Télécommande Batterie Faible",
+				"061"  : "Rétablissement Clavier/Télécommande Batterie Faible",
+				"062"  : "Clavier/Télécommande Inactif",
+				"063"  : "Rétablissement Clavier/Télécommande Actif",
+				"064"  : "Batterie Faible",
+				"065"  : "Nettoyage Détecteur Incendie",
+				"066"  : "Alarme incendie",
+				"067"  : "Batterie Faible",
+				"068"  : "Rétablissement Batterie",
+				"069"  : "Coupure Secteur",
+				"070"  : "Rétablissement Secteur",
+				"071"  : "Défaut Supervision (Inactive)",
+				"072"  : "Rétablissement Supervision (Active)",
+				"073"  : "Alarme Gaz",
+				"074"  : "Rétablissement Alarme Gaz",
+				"075"  : "Défaut Gaz",
+				"076"  : "Rétablissement Défaut Gaz",
+				"077"  : "Alarme Inondation",
+				"078"  : "Rétablissement Alarme Inondation",
+				"079"  : "Défaut X-10",
+				"080"  : "Rétablissement Défaut X-10",
+				"081"  : "Armement Partiel",
+				"082"  : "Armement Total",
+				"083"  : "Armement Partiel Instantané",
+				"084"  : "Armement Total Instantané",
+				"085"  : "Désarmement",
+				"086"  : "Echec d'armement",
+				"087"  : "Entrer dans Mode Test",
+				"088"  : "Sortir du Mode Test",
+				"089"  : "Fermeture Forcée",
+				"090"  : "Armement Automatique",
+				"091"  : "Armement Instantané",
+				"092"  : "Bypass",
+				"093"  : "Echec d'Armement",
+				"094"  : "Porte Ouverte",
+				"095"  : "Communication établie par le panneau de control",
+				"096"  : "Réinitialisation du Système",
+				"097"  : "Installer Programming",
+				"098"  : "Mauvais code PIN",
+				"099"  : "Not Sys Event",
+				"100"  : "Not Sys Event",
+				"101"  : "Alerte Chaleure Extrême",
+				"102"  : "Rétablissement Alerte Chaleure Extrême",
+				"103"  : "Alerte Gel",
+				"104"  : "Rétablissement Alerte Gel",
+				"105"  : "Alerte Froid",
+				"106"  : "Rétablissement Alerte Froid",
+				"107"  : "Alerte Chaud",
+				"108"  : "Rétablissement Alerte Chaud",
+				"109"  : "Défaut Capteur de Température",
+				"110"  : "Rétablissement Défaut Capteur de Température",
+				"111"  : "PIR Masqué",
+				"112"  : "Rétablissement PIR Masqué",
+				"113"  : "Repeater low battery",
+				"114"  : "Repeater low battery restore",
+				"115"  : "Repeater inactive",
+				"116"  : "Repeater inactive restore",
+				"117"  : "Repeater tamper",
+				"118"  : "Repeater tamper restore",
+				"119"  : "Siren test end",
+				"120"  : "Devices test end",
+				"121"  : "One way comm. trouble",
+				"122"  : "One way comm. trouble restore",
+				"123"  : "Sensor outdoor alarm",
+				"124"  : "Sensor outdoor restore",
+				"125"  : "Guard sensor alarmed",
+				"126"  : "Guard sensor alarmed restore",
+				"127"  : "Date time change",
+				"128"  : "System shutdown",
+				"129"  : "System power up",
+				"130"  : "Missed Reminder",
+				"131"  : "Pendant test fail",
+				"132"  : "Basic KP inactive",
+				"133"  : "Basic KP inactive restore",
+				"134"  : "Basic KP tamper",
+				"135"  : "Basic KP tamper Restore",
+				"136"  : "Heat",
+				"137"  : "Heat restore",
+				"138"  : "LE Heat Trouble",
+				"139"  : "CO alarm",
+				"140"  : "CO alarm restore",
+				"141"  : "CO trouble",
+				"142"  : "CO trouble restore",
+				"143"  : "Sortir Mode Installeur",
+				"144"  : "Entrer Mode Installeur",
+				"145"  : "Self test trouble",
+				"146"  : "Self test restore",
+				"147"  : "Confirm panic event",
+				"148"  : "n/a",
+				"149"  : "Soak test fail",
+				"150"  : "Fire Soak test fail",
+				"151"  : "Gas Soak test fail"
+			}
+		}
+	}
+}

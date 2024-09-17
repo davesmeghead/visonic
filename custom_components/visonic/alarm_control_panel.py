@@ -316,7 +316,6 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
                 )
         if self._client.isPowerMaster():
             self._client.sendCommand("Trigger Siren", AlPanelCommand.TRIGGER , code)
-            #self._client.sendCommand("Arm Away", command, code)
 
     def alarm_arm_custom_bypass(self, data=None):
         """Bypass Panel."""

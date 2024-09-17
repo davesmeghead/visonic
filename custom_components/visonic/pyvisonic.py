@@ -105,7 +105,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.4.2.0"
+PLUGIN_VERSION = "1.4.2.1"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
@@ -1122,7 +1122,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.DisableAllCommands = False       # INTERFACE : Get user variable from HA to allow or disable all commands to the panel 
         self.DownloadCode = DEFAULT_DL_CODE   # INTERFACE : Set the Download Code
         self.SirenTriggerList = ["intruder"]  # INTERFACE : This is the trigger list that we can assume is making the siren sound
-
         # Now that the defaults have been set, update them from the panel config dictionary (that may not have all settings in)
         self.updateSettings(panelConfig)
 
@@ -1902,7 +1901,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 command = 1   # Get Status command
                                 param = 0     # Irrelevant
                                 self._addMessageToSendList("MSG_PL_BRIDGE", urgent = True, options=[ [1, command], [2, param] ])  # Tell the Bridge to send me the status
-                            await asyncio.sleep(1.0)
+                            #await asyncio.sleep(1.0)
                         _sequencerState = SequencerType.InitialisePanel
                         continue   # just do the while loop
 
@@ -2641,10 +2640,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             log.error("[sendPdu] Attempt to send a sub command that is empty")
             return -1.0
 
-#        if self.sendlock is None:
-#            self.sendlock = asyncio.Lock()
-
-#        async with self.sendlock:
         sData = None
         command = None
 
