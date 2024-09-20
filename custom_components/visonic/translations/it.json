@@ -340,6 +340,10 @@
 		},
   	    "select": {
 	        "alarm_panel_key": {
+				"state": {
+					"armed": "Armed",
+					"bypass": "Bypassare"
+				},
 				"state_attributes": {
 					"panel": {
 						"name": "Panel ID"
@@ -373,10 +377,6 @@
 		},
   	    "binary_sensor": {
 	        "alarm_panel_key": {
-				"state": {
-					"off": "off",
-					"on": "on"
-				},
 				"state_attributes": {
 					"device_name": {
 						"name": "Device Name"
@@ -538,19 +538,6 @@
 		},
   	    "alarm_control_panel": {
 	        "alarm_panel_key": {
-				"state": {
-					"armed": "Armed",
-					"disarmed": "Disarmed",
-					"armed_home": "Armed Home",
-					"armed_away": "Armed Away",
-					"armed_night": "Armed Night",
-					"armed_vacation": "Armed Vacation",
-					"armed_custom_bypass": "Armed Custom Bypass",
-					"pending": "Pending",
-					"arming": "Arming",
-					"disarming": "Disarming",
-					"triggered": "Triggered"
-				},
 				"state_attributes": {
 					"code_format": {
 						"name": "Code format",
@@ -724,7 +711,8 @@
                 "bypass_problem": "Problemi con il Bypass dei sensori",
                 "image_problem": "Problemi di recupero immagini",
                 "eventlog_problem": "Problemi con il Log degli eventi",
-                "command_not_sent": "Comando non inviato al pannello"
+                "command_not_sent": "Comando non inviato al pannello",
+				"x10_problem": "Problemi di X10"
 			}
 		}
 	},

@@ -19,8 +19,8 @@ from .client import VisonicClient
 
 _LOGGER = logging.getLogger(__name__)
 
-BYPASS = "Bypass"
-ARMED = "Armed"
+BYPASS = "bypass"
+ARMED = "armed"
 
 messageDict = {
     AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS   : "Sensor Bypass: EPROM Download is in progress, please try again after this is complete",

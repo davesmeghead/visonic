@@ -105,7 +105,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.4.2.1"
+PLUGIN_VERSION = "1.4.2.2"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
@@ -1233,6 +1233,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.triggeredDownload = False
         
         self.PanelWantsToEnrol = False
+        self.PanelKeepAlive = False
         self.TimeoutReceived = False
         self.ExitReceived = False
         self.DownloadRetryReceived = False
@@ -1891,6 +1892,12 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     elif not self.pmDownloadMode and not self.ForceStandardMode and self.PanelWantsToEnrol:     #################################### PanelWantsToEnrol ####################################################
                         log.debug("[_sequencer] Panel wants to auto enroll and not downloading so sending Auto Enroll")
                         self.PanelWantsToEnrol = False
+                        self._sendMsgENROLL(True)
+                        continue   # just do the while loop
+
+                    elif not self.pmDownloadMode and not self.ForceStandardMode and self.PanelKeepAlive and not self.allowAckToTriggerRestore and _sequencerState in [SequencerType.InitialisePanel, SequencerType.WaitingForPanelDetails]:  ###### PanelKeepAlive ################################################
+                        log.debug("[_sequencer] Panel Powerlink Keep Alive so assume that panel wants to auto enroll and not downloading so sending Auto Enroll")
+                        self.PanelKeepAlive = False
                         self._sendMsgENROLL(True)
                         continue   # just do the while loop
 
@@ -4179,6 +4186,7 @@ class PacketHandling(ProtocolBase):
 
         elif self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS] and subType == 3:  # keepalive message
             # Example 0D AB 03 00 1E 00 31 2E 31 35 00 00 43 2A 0A
+            #               03 00 1e 00 33 33 31 34 00 00 43        From a Powermax+     PanelType=1, Model=33
             log.debug("[handle_msgtypeAB] ***************************** Got PowerLink Keep-Alive ****************************")
             # It is possible to receive this between enrolling (when the panel accepts the enroll successfully) and the EEPROM download
             #     I suggest we simply ignore it
@@ -4200,6 +4208,11 @@ class PacketHandling(ProtocolBase):
                 #if self.AutoSyncTime:
                 #    self._addMessageToSendList("MSG_GETTIME")
 
+        elif subType == 3:  # keepalive message
+            log.debug("[handle_msgtypeAB] ***************************** Got PowerLink Keep-Alive ****************************")
+            log.debug("[handle_msgtypeAB] ********************* Panel Mode not Powerlnk/ Standard Plus **********************")
+            self.PanelKeepAlive = True    
+
         elif self.PanelMode == AlPanelMode.POWERLINK and subType == 5:  # -- phone message
             action = data[2]
             if action == 1:
@@ -4214,9 +4227,11 @@ class PacketHandling(ProtocolBase):
                 # pmUserCalling = 1
             else:
                 log.debug("[handle_msgtypeAB] PowerLink Phone: Unknown Action {0}".format(hex(data[1]).upper()))
+
         elif self.PanelMode == AlPanelMode.POWERLINK and subType == 10 and data[2] == 0:
             log.debug("[handle_msgtypeAB] PowerLink telling us what the code {0} {1} is for downloads, currently commented out as I'm not certain of this".format(data[3], data[4]))
             # data[3] data[4]
+
         elif subType == 10 and data[2] == 1:
             if self.PanelMode == AlPanelMode.POWERLINK:
                 log.debug("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll but not acted on (already in powerlink) **************************")
@@ -4227,6 +4242,7 @@ class PacketHandling(ProtocolBase):
             elif not self.ForceStandardMode:
                 self.PanelWantsToEnrol = True
                 log.debug("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll **************************")
+
         return True
 
     # X10 Names (0xAC) I think

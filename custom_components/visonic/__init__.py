@@ -24,6 +24,8 @@ from homeassistant.const import (
     Platform,
     ATTR_CODE,
     ATTR_ENTITY_ID,
+    EVENT_CORE_CONFIG_UPDATE,
+#    EVENT_HOMEASSISTANT_STARTED,
     SERVICE_RELOAD,
 )
 
@@ -262,7 +264,7 @@ def translateLanguage(hass):
     _LOGGER.debug(f"[translateLanguage]       pmLogPowerMasterUser_t = {pmLogPowerMasterUser_t}")
 
     # Retrieve the actions from the language translations files
-    for key in range(1, len(pmLogEvent_t)+1):
+    for key in range(0, len(pmLogEvent_t)+1):
         state = f"{key:0>3}"
         tx_s = async_translate_state(hass=hass, 
                                      domain=DOMAIN,
@@ -445,9 +447,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
     #_LOGGER.debug(f"[Visonic Setup]       Entry data={entry.data}   options={entry.options}")
     _LOGGER.debug(f"[Visonic Setup]       Entry id={entry.entry_id} in a total of {configured_hosts(hass)} previously configured panels")
 
+    # Listener to handle fired events
+    def handle_core_config_updated(event):
+        _LOGGER.debug(f"[Visonic Setup] event {str(event)}")
+        #hass = async_get_hass()
+        translateLanguage(hass)
+
     if not translatedLanguageAlready:
         translatedLanguageAlready = True
         translateLanguage(hass)
+        # Listen for when EVENT_CORE_CONFIG_UPDATE is fired
+        #    hass.bus.async_listen(EVENT_HOMEASSISTANT_STARTED, handle_core_config_updated)
+        hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, handle_core_config_updated)
 
     # combine and convert python settings map to dictionary
     conf = await combineSettings(entry)
