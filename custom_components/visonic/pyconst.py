@@ -280,7 +280,8 @@ class AlSensorType(AlEnum):
     VIBRATION = AlIntEnum(7)
     SHOCK = AlIntEnum(8)
     TEMPERATURE = AlIntEnum(9)
-    SOUND = AlIntEnum(10)
+    SOUND = AlIntEnum(10),
+    GLASS_BREAK = AlIntEnum(11),
 a = AlSensorType()
 
 class AlLogPanelEvent:
