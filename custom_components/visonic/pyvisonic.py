@@ -1123,7 +1123,8 @@ pmZoneSensorMaster_t = {
    0x2C : ZoneSensorType("MC-303V PG2", AlSensorType.MAGNET),
    0x2D : ZoneSensorType("MC-302V PG2", AlSensorType.MAGNET),
    0x35 : ZoneSensorType("SD-304 PG2", AlSensorType.SHOCK),
-   0xFE : ZoneSensorType("Wired", AlSensorType.WIRED )
+   0x0B : ZoneSensorType("GB-502 PG2", AlSensorType.GLASS_BREAK),
+   0xFE : ZoneSensorType("Wired", AlSensorType.WIRED)
 }
 
 ##############################################################################################################################################################################################################################################
