@@ -37,7 +37,8 @@ _stype_to_ha_sensor_class = {
     AlSensorType.VIBRATION   : BinarySensorDeviceClass.VIBRATION, 
     AlSensorType.SHOCK       : BinarySensorDeviceClass.VIBRATION,
     AlSensorType.TEMPERATURE : BinarySensorDeviceClass.HEAT,
-    AlSensorType.SOUND       : BinarySensorDeviceClass.SOUND
+    AlSensorType.SOUND       : BinarySensorDeviceClass.SOUND,
+    AlSensorType.GLASS_BREAK : BinarySensorDeviceClass.VIBRATION,
 }
 
 
