@@ -15,6 +15,7 @@ from .client import VisonicClient
 from .const import (
     DOMAIN,
     PANEL_ATTRIBUTE_NAME,
+    MANUFACTURER,
     DEVICE_ATTRIBUTE_NAME,
 )
 
@@ -127,15 +128,16 @@ class VisonicSwitch(SwitchEntity):
     def device_info(self):
         """Return information about the device."""
         if self._visonic_device is not None:
+            n = f"Visonic X10 ({self._dname})" if self._panel == 0 else f"Visonic X10 ({self._panel}/{self._dname})"
             return {
-                "manufacturer": "Visonic",
+                "manufacturer": MANUFACTURER,
                 "identifiers": {(DOMAIN, self._name)},
-                "name": f"Visonic X10 ({self._dname})",
+                "name": n,
                 "model": self._visonic_device.getType(),
                 # "sw_version": self._api.information.version_string,
             }
         return { 
-                 "manufacturer": "Visonic", 
+                 "manufacturer": MANUFACTURER, 
             }
 
     def isPanelConnected(self) -> bool:

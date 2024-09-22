@@ -24,6 +24,7 @@ from . import VisonicConfigEntry
 from .const import (
     DOMAIN,
     map_panel_status_to_ha_status,
+    MANUFACTURER,
     PANEL_ATTRIBUTE_NAME,
 )
 
@@ -117,14 +118,14 @@ class VisonicSensor(Entity):
             if pm is not None:
                 if pm.lower() != "unknown":
                     return {
-                        "manufacturer": "Visonic",
+                        "manufacturer": MANUFACTURER,
                         "identifiers": {(DOMAIN, self._myname)},
                         "name": f"{self._myname}",
                         "model": pm,
                         # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
                     }
         return {
-            "manufacturer": "Visonic",
+            "manufacturer": MANUFACTURER,
             "identifiers": {(DOMAIN, self._myname)},
             "name": f"{self._myname}",
             "model": None,

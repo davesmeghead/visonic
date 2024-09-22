@@ -73,7 +73,7 @@ class VisonicSelect(SelectEntity):
         self._visonic_device.onChange(self.onChange)
         dname = visonic_device.createFriendlyName()
         pname = client.getMyString()
-        self._name = pname.lower() + dname.lower()
+        self._name = pname.lower() + dname.lower()  # this must match the binary_sensor self._name so that device_info associates them
         self._panel = client.getPanelID()
         self._is_available = self._visonic_device.isEnrolled()
         self._is_armed = not self._visonic_device.isBypass()
@@ -104,6 +104,14 @@ class VisonicSelect(SelectEntity):
         # Ask HA to schedule an update
         if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state(True)
+
+    # To link this entity to the device, this property must return an identifiers
+    #      value matching that used in the binary sensor, but no other information such as name. 
+    #           If name is returned, this entity will then also become a device in the HA UI.
+    @property
+    def device_info(self):
+        """Return information to link this entity with the correct device."""
+        return {"identifiers": {(DOMAIN, self._name)}}
 
     @property
     def options(self) -> list[str]:

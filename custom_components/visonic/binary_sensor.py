@@ -20,7 +20,13 @@ from homeassistant.const import (
 from . import VisonicConfigEntry
 from .pyconst import AlSensorDevice, AlSensorType, AlSensorCondition
 from .client import VisonicClient
-from .const import DOMAIN, SensorEntityFeature, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME
+from .const import (
+    DOMAIN,
+    SensorEntityFeature,
+    PANEL_ATTRIBUTE_NAME,
+    MANUFACTURER,
+    DEVICE_ATTRIBUTE_NAME,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +44,8 @@ _stype_to_ha_sensor_class = {
     AlSensorType.VIBRATION   : BinarySensorDeviceClass.VIBRATION, 
     AlSensorType.SHOCK       : BinarySensorDeviceClass.VIBRATION,
     AlSensorType.TEMPERATURE : BinarySensorDeviceClass.HEAT,
-    AlSensorType.SOUND       : BinarySensorDeviceClass.SOUND
+    AlSensorType.SOUND       : BinarySensorDeviceClass.SOUND,
+    AlSensorType.GLASS_BREAK : BinarySensorDeviceClass.VIBRATION,
 }
 
 def capitalize(s):
@@ -88,7 +95,7 @@ class VisonicBinarySensor(BinarySensorEntity):
         """Initialize the sensor."""
         #_LOGGER.debug("   In binary sensor VisonicSensor initialisation")
         self.hass = hass
-        self.client = client
+        self._client = client
         self.entry = entry
         self.doing_timeout = False
 
@@ -111,13 +118,13 @@ class VisonicBinarySensor(BinarySensorEntity):
         self._visonic_device.onChange(None)
         self._visonic_device = None
         self._is_available = False
-        self.client = None
+        self._client = None
         _LOGGER.debug("binary sensor async_will_remove_from_hass")
 
     async def _retainStateTimout(self):
         self.doing_timeout = True
 
-        timeout = self.client.getSensorOnDelay(self.device_class)
+        timeout = self._client.getSensorOnDelay(self.device_class)
 
         _LOGGER.debug(f"[binary sensor _retainStateTimout in ]   unique_id = {self.unique_id}   timeout = {timeout}    dc={self.device_class}")
         await asyncio.sleep(timeout) 
@@ -184,10 +191,11 @@ class VisonicBinarySensor(BinarySensorEntity):
         if self._visonic_device is not None:
             t = self._visonic_device.getSensorType()
             s = f"{t.name} Sensor"
+            n = f"Visonic Sensor ({self._dname})" if self._panel == 0 else f"Visonic Sensor ({self._panel}/{self._dname})"
             return {
-                "manufacturer": "Visonic",
+                "manufacturer": MANUFACTURER,
                 "identifiers": {(DOMAIN, self._name)},
-                "name": f"Visonic Sensor ({self._dname})",
+                "name": n,
                 #"model": s.title() + f" ({self._visonic_device.getSensorModel()})",
                 "model": s.title(),
                 "model_id": self._visonic_device.getSensorModel(),
@@ -195,7 +203,7 @@ class VisonicBinarySensor(BinarySensorEntity):
                 #"battery": 1 if self._visonic_device.isLowBattery else 100
             }
         return { 
-                 "manufacturer": "Visonic", 
+                 "manufacturer": MANUFACTURER, 
             }
 
     @property
@@ -258,7 +266,7 @@ class VisonicBinarySensor(BinarySensorEntity):
             attr["zone_chime"] = self._visonic_device.getChimeType()
             attr["zone_trouble"] = self._visonic_device.getProblem()
             
-            if self.client.isPowerMaster() and self._visonic_device.getMotionDelayTime() is not None and len(str(self._visonic_device.getMotionDelayTime())) > 0:
+            if self._client.isPowerMaster() and self._visonic_device.getMotionDelayTime() is not None and len(str(self._visonic_device.getMotionDelayTime())) > 0:
                 attr["zone_motion_off_time"] = self._visonic_device.getMotionDelayTime()
 
             attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()

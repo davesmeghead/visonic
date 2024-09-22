@@ -33,6 +33,7 @@ from .pyconst import AlPanelCommand, AlPanelStatus
 from .const import (
     DOMAIN,
     map_panel_status_to_ha_status,
+    MANUFACTURER,
     PANEL_ATTRIBUTE_NAME,
 )
 
@@ -90,7 +91,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         self._doneUsers = False
         self._last_triggered = ""
         self._panel = client.getPanelID()
-        _LOGGER.debug(f"Initialising alarm control panel {self._myname} panel {self._panel}")
+        _LOGGER.debug(f"Initialising alarm control panel {self._myname}    panel {self._panel}")
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
@@ -147,7 +148,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             if pm is not None:
                 if pm.lower() != "unknown":
                     return {
-                        "manufacturer": "Visonic",
+                        "manufacturer": MANUFACTURER,
                         "identifiers": {(DOMAIN, self._myname)},
                         "name": f"{self._myname}",
                         "model": pm,

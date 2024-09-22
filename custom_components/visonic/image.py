@@ -96,6 +96,14 @@ class VisonicImage(ImageEntity):
         else:
             _LOGGER.debug("changeHandler: image on change called but sensor is not defined")
 
+    # To link this entity to the device, this property must return an identifiers
+    #      value matching that used in the binary sensor, but no other information such as name. 
+    #           If name is returned, this entity will then also become a device in the HA UI.
+    @property
+    def device_info(self):
+        """Return information to link this entity with the correct device."""
+        return {"identifiers": {(DOMAIN, self._name)}}
+
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""

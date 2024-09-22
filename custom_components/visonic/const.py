@@ -15,7 +15,7 @@ from homeassistant.const import (
 
 # The domain for the integration
 DOMAIN = "visonic"
-
+MANUFACTURER = "Visonic"
 VISONIC_UNIQUE_NAME = "Visonic Alarm"
 
 #from enum import IntFlag

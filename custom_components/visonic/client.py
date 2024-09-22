@@ -122,7 +122,7 @@ from .const import (
 #    "trigger",
 #]
 
-CLIENT_VERSION = "0.9.8.2"
+CLIENT_VERSION = "0.9.8.3"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -467,7 +467,7 @@ class VisonicClient:
 
     def getAlarmPanelUniqueIdent(self):
         if self.getPanelID() > 0:
-            return VISONIC_UNIQUE_NAME + "_" + str(self.getPanelID())
+            return VISONIC_UNIQUE_NAME + " " + str(self.getPanelID())
         return VISONIC_UNIQUE_NAME
 
     def createNotification(self, condition : AvailableNotifications, message: str):
@@ -987,7 +987,7 @@ class VisonicClient:
         elif event_id == AlCondition.DOWNLOAD_TIMEOUT:
             self.createNotification(AvailableNotifications.PANEL_OPERATION, "Panel Data download timeout, Standard Mode Selected" )
         elif event_id == AlCondition.WATCHDOG_TIMEOUT_GIVINGUP:
-            if self.getPanelMode() == AlPanelMode.POWERLINK:
+            if self.getPanelMode() == AlPanelMode.POWERLINK or self.getPanelMode() == AlPanelMode.POWERLINK_BRIDGED:
                 self.createNotification(AvailableNotifications.CONNECTION_PROBLEM, "Communication Timeout - Watchdog Timeout too many times within 24 hours. Dropping out of Powerlink" )
             else:
                 self.createNotification(AvailableNotifications.CONNECTION_PROBLEM, "Communication Timeout - Watchdog Timeout too many times within 24 hours." )
@@ -1119,7 +1119,7 @@ class VisonicClient:
                     return False, None             # use keypad so invalidate the return, there should be a valid 4 code code
                 else:
                     return False, None             # use keypad so invalidate the return, there should be a valid 4 code code
-            elif panelmode == AlPanelMode.POWERLINK or panelmode == AlPanelMode.STANDARD_PLUS:  # 
+            elif panelmode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:  # 
                 if psc == AlPanelStatus.DISARMED and self.isArmWithoutCode() and forcedKeypad:
                     return True, None    
                 if forcedKeypad:
@@ -1140,7 +1140,7 @@ class VisonicClient:
         #self.logstate_debug("Getting Pin Start")
         if code is None or code == "" or len(code) != 4:
             panelmode = self.getPanelMode()
-            if panelmode == AlPanelMode.POWERLINK or panelmode == AlPanelMode.STANDARD_PLUS:
+            if panelmode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
                 # Powerlink or StdPlus and so we downloaded the code codes
                 return True, None
             else:
@@ -1222,7 +1222,7 @@ class VisonicClient:
 #        panelmode = self.getPanelMode()
 #        # self.logstate_debug("code format panel mode %s", panelmode)
 #        if not self.isForceKeypad() and panelmode is not None:
-#            if panelmode == AlPanelMode.POWERLINK or panelmode == AlPanelMode.STANDARD_PLUS:
+#            if panelmode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
 #                self.logstate_debug("No Code Required as powerlink or std plus ********")
 #                return False
 #
