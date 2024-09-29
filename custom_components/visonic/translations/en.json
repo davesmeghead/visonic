@@ -557,44 +557,48 @@
 						}
 					},
 					"mode": {
-						"unknown": "Unknown",
-						"problem": "Problem",
-						"starting": "Starting",
-						"standard": "Standard",
-						"standard_plus": "Standard Plus",
-						"powerlink": "Powerlink",
-						"powerlink_bridged": "Powerlink (Bridged)",
-						"download": "Download EPROM",
-						"stopped": "Integration Stopped",
-						"minimal_only": "Minimal Panel Connection"
+						"state": {
+							"unknown": "Unknown",
+							"problem": "Problem",
+							"starting": "Starting",
+							"standard": "Standard",
+							"standard_plus": "Standard Plus",
+							"powerlink": "Powerlink",
+							"powerlink_bridged": "Powerlink (Bridged)",
+							"download" : "Download EPROM",
+							"stopped": "Integration Stopped",
+							"minimal_only": "Minimal Panel Connection"
+						}
 					},
 					"state": {
-						"unknown": "Unknown",
-						"disarmed": "Disarmed",
-						"arming_home": "Arming Home",
-						"arming_away": "Arming Away",
-						"entry_delay": "Entry Delay",
-						"armed_home": "Armed Home",
-						"armed_away": "Armed Away",
-						"armed_home_bypass": "Armed Home (Bypass)",
-						"armed_away_bypass": "Armed Away (Bypass)",
-						"armed_home_instant": "Armed Home (Instant)",
-						"armed_away_instant": "Armed Away (Instant)",
-						"entry_delay_instant": "Entry Delay (Instant)",
-						"user_test": "User Test",
-						"downloading": "Downloading EPROM",
-						"installer": "Installer",
-						"triggered": "Triggered"
+						"state": {
+							"unknown": "Unknown",
+							"disarmed": "Disarmed",
+							"arming_home": "Arming Home",
+							"arming_away": "Arming Away",
+							"entry_delay": "Entry Delay",
+							"armed_home": "Armed Home",
+							"armed_away": "Armed Away",
+							"armed_home_bypass": "Armed Home (Bypass)",
+							"armed_away_bypass": "Armed Away (Bypass)",
+							"armed_home_instant": "Armed Home (Instant)",
+							"armed_away_instant": "Armed Away (Instant)",
+							"entry_delay_instant": "Entry Delay (Instant)",
+							"user_test": "User Test",
+							"downloading": "Downloading EPROM",
+							"installer": "Installer",
+							"triggered": "Triggered"
+						}
 					},
 					"ready": {
-						"tamper": "Panel Ready",
+						"name": "Panel Ready",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"tamper": {
-						"tamper": "Panel Tamper Alarm",
+						"name": "Panel Tamper Alarm",
 						"state": {
 							"false": "No",
 							"true": "Yes"

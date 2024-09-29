@@ -557,44 +557,48 @@
 						}
 					},
 					"mode": {
-						"unknown": "Inconnu",
-						"problem": "Probl\u00e8me",
-						"starting": "D\u00e9marrage",
-						"standard": "Standard",
-						"standard_plus": "Standard Plus",
-						"powerlink": "Powerlink",
-						"powerlink_bridged": "Powerlink (Bridged)",
-						"download": "T\u00e9l\u00e9chargement EPROM",
-						"stopped": "Integration Stopp\u00e9",
-						"minimal_only": "Centrale Minimale Connexion"
+						"state": {
+							"unknown": "Inconnu",
+							"problem": "Probl\u00e8me",
+							"starting": "D\u00e9marrage",
+							"standard": "Standard",
+							"standard_plus": "Standard Plus",
+							"powerlink": "Powerlink",
+							"powerlink_bridged": "Powerlink (Bridged)",
+							"download": "T\u00e9l\u00e9chargement EPROM",
+							"stopped": "Integration Stopp\u00e9",
+							"minimal_only": "Centrale Minimale Connexion"
+						}
 					},
 					"state": {
-						"unknown": "Inconnu",
-						"disarmed": "D\u00e9sarm\u00e9",
-						"arming_home": "D\u00e9lai Armement Partiel",
-						"arming_away": "D\u00e9lai Armement Total",
-						"entry_delay": "D\u00e9lai d'Entr\u00e9e",
-						"armed_home": "Arm\u00e9 Partiel",
-						"armed_away": "Arm\u00e9 Total",
-						"armed_home_bypass": "Isolation Partielle",
-						"armed_away_bypass": "Isolation Total",
-						"armed_home_instant": "Arm\u00e9 Partiel Instantan\u00e9",
-						"armed_away_instant": "Arm\u00e9 Total Instantan\u00e9",
-						"entry_delay_instant": "Temporisation d'Entr\u00e9e Instantan\u00e9",
-						"user_test": "Test Utilisateur",
-						"downloading": "T\u00e9l\u00e9chargement EPROM",
-						"installer": "Mode Installateur",
-						"triggered": "D\u00e9clench\u00e9"
+						"state": {
+							"unknown": "Inconnu",
+							"disarmed": "D\u00e9sarm\u00e9",
+							"arming_home": "D\u00e9lai Armement Partiel",
+							"arming_away": "D\u00e9lai Armement Total",
+							"entry_delay": "D\u00e9lai d'Entr\u00e9e",
+							"armed_home": "Arm\u00e9 Partiel",
+							"armed_away": "Arm\u00e9 Total",
+							"armed_home_bypass": "Isolation Partielle",
+							"armed_away_bypass": "Isolation Total",
+							"armed_home_instant": "Arm\u00e9 Partiel Instantan\u00e9",
+							"armed_away_instant": "Arm\u00e9 Total Instantan\u00e9",
+							"entry_delay_instant": "Temporisation d'Entr\u00e9e Instantan\u00e9",
+							"user_test": "Test Utilisateur",
+							"downloading": "T\u00e9l\u00e9chargement EPROM",
+							"installer": "Mode Installateur",
+							"triggered": "D\u00e9clench\u00e9"
+						}
 					},
 					"ready": {
-						"tamper": "Centrale pr\u00eate",
+						"name": "Centrale pr\u00eate",
 						"state": {
 							"false": "Non",
 							"true": "Oui"
 						}
 					},
 					"tamper": {
-						"tamper": "Alarme de sabotage de la centrale",
+						"name": "Alarme de sabotage de la centrale",
 						"state": {
 							"false": "Non",
 							"true": "Oui"

@@ -557,44 +557,48 @@
 						}
 					},
 					"mode": {
-						"unknown": "Unknown",
-						"problem": "Problem",
-						"starting": "Starting",
-						"standard": "Standard",
-						"standard_plus": "Standard Plus",
-						"powerlink": "Powerlink",
-						"powerlink_bridged": "Powerlink (Bridged)",
-						"download": "Download EPROM",
-						"stopped": "Integration Stopped",
-						"minimal_only": "Minimal Panel Connection"
+						"state": {
+							"unknown": "Unknown",
+							"problem": "Problem",
+							"starting": "Starting",
+							"standard": "Standard",
+							"standard_plus": "Standard Plus",
+							"powerlink": "Powerlink",
+							"powerlink_bridged": "Powerlink (Bridged)",
+							"download": "Download EPROM",
+							"stopped": "Integration Stopped",
+							"minimal_only": "Minimal Panel Connection"
+						}
 					},
 					"state": {
-						"unknown": "Unknown",
-						"disarmed": "Uitgeschakeld",
-						"arming_home": "Deel uitloopvertraging",
-						"arming_away": "Totaal uitloopvertraging",
-						"entry_delay": "Inloopvertraging",
-						"armed_home": "Deel ingeschakeld",
-						"armed_away": "Totaal ingeschakeld",
-						"armed_home_bypass": "Deel met overbrugging",
-						"armed_away_bypass": "Totaal met overbrugging",
-						"armed_home_instant": "Direct Deel",
-						"armed_away_instant": "Direct Totaal",
-						"entry_delay_instant": "Direct inloopvertraging",
-						"user_test": "Gebruiker test",
-						"downloading": "Downloaden EPROM",
-						"installer": "Monteurmode",
-						"triggered": "Triggered"
+						"state": {
+							"unknown": "Unknown",
+							"disarmed": "Uitgeschakeld",
+							"arming_home": "Deel uitloopvertraging",
+							"arming_away": "Totaal uitloopvertraging",
+							"entry_delay": "Inloopvertraging",
+							"armed_home": "Deel ingeschakeld",
+							"armed_away": "Totaal ingeschakeld",
+							"armed_home_bypass": "Deel met overbrugging",
+							"armed_away_bypass": "Totaal met overbrugging",
+							"armed_home_instant": "Direct Deel",
+							"armed_away_instant": "Direct Totaal",
+							"entry_delay_instant": "Direct inloopvertraging",
+							"user_test": "Gebruiker test",
+							"downloading": "Downloaden EPROM",
+							"installer": "Monteurmode",
+							"triggered": "Triggered"
+						}
 					},
 					"ready": {
-						"tamper": "Panel Ready",
+						"name": "Panel Ready",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
 						}
 					},
 					"tamper": {
-						"tamper": "Panel Sabotage alarm",
+						"name": "Panel Sabotage alarm",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"

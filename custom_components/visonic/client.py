@@ -121,7 +121,7 @@ from .const import (
 #    "trigger",
 #]
 
-CLIENT_VERSION = "0.9.9.2"
+CLIENT_VERSION = "0.9.9.3"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
