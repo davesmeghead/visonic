@@ -291,8 +291,8 @@
 					"type": {
 						"name": "Type",
 						"state": {
-							"Dimmer Switch" : "Dimmer Switch",
-							"OnOff Switch"  : "OnOff Switch"
+							"dimmer" : "Dimmer Switch",
+							"onoff"  : "OnOff Switch"
 						}
 					},
 					"visonic_device": {

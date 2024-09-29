@@ -105,7 +105,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.4.3.0"
+PLUGIN_VERSION = "1.4.3.1"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
@@ -3477,7 +3477,7 @@ class PacketHandling(ProtocolBase):
 
                 if x10Enabled or x10Name != 0x1F:
                     x10Location = pmZoneName_t[x10Name] if i > 0 else "PGM"
-                    x10Type = "OnOff Switch" if i == 0 else "Dimmer Switch"       # Assume PGM is onoff switch, all other devices are Dimmer Switches
+                    x10Type = "onoff" if i == 0 else "dimmer"       # Assume PGM is onoff switch, all other devices are dimmer Switches
                     if i in self.SwitchList:
                         self.SwitchList[i].type = x10Type
                         self.SwitchList[i].location = x10Location
