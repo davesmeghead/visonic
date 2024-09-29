@@ -1109,6 +1109,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
             log.debug("[Controller] ****************************** Operations Suspended ****************************")
             log.debug("[Controller] ********************************************************************************")
             log.debug("[Controller] ********************************************************************************")
+            self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
 
     def dumpSensorsToStringList(self) -> list:
         retval = list()

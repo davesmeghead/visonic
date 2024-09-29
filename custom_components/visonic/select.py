@@ -14,22 +14,13 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from . import VisonicConfigEntry
 from .pyconst import AlSensorDevice, AlCommandStatus, AlSensorCondition
-from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, AvailableNotifications
+from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME
 from .client import VisonicClient
 
 _LOGGER = logging.getLogger(__name__)
 
 BYPASS = "bypass"
 ARMED = "armed"
-
-messageDict = {
-    AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS   : "Sensor Bypass: EPROM Download is in progress, please try again after this is complete",
-    AlCommandStatus.FAIL_INVALID_CODE           : "Sensor Bypass: Invalid PIN",
-    AlCommandStatus.FAIL_USER_CONFIG_PREVENTED  : "Sensor Bypass: Please check your HA Configuration settings for this Integration and enable sensor bypass",
-    AlCommandStatus.FAIL_INVALID_STATE          : "Sensor Bypass: Invalid state requested",
-    AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED : "Sensor Bypass: Please check your panel settings and enable sensor bypass"
-}
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -167,13 +158,12 @@ class VisonicSelect(SelectEntity):
                     translation_domain=DOMAIN,
                     translation_key="no_panel_connection",
                     translation_placeholders={
-                        "myname": self._client.getAlarmPanelUniqueIdent() if self._client is not None else "<Your Panel>"
+                        "myname": self._client.getAlarmPanelUniqueIdent() if self._client is not None else "<******>"
                     }
                 )
 
         if self._pending_state_is_armed is not None:
             _LOGGER.debug("Currently Pending {0} so ignoring request to select option".format(self.unique_id))
-            self._client.sendHANotification(AvailableNotifications.ALWAYS, "Sensor Bypass: Change in arm/bypass already in progress, please try again")
         elif option is not None and option in self.options:
             #_LOGGER.debug("Sending Option {0} to {1}".format(option, self.unique_id))
             result = self._client.sendBypass(self._visonic_device.getDeviceID(), option == BYPASS, "") # pin code to "" to use default if set
@@ -182,10 +172,6 @@ class VisonicSelect(SelectEntity):
             else:
                 # Command not sent to panel
                 _LOGGER.debug(f"Sensor Bypass: Command not sent to panel {result}")
-                message = "Sensor Bypass: Command not sent to panel"
-                if result in messageDict:
-                    message = messageDict[result]
-                self._client.sendHANotification(AvailableNotifications.ALWAYS, message)
         elif option is None:
             raise HomeAssistantError(
                     translation_domain=DOMAIN,

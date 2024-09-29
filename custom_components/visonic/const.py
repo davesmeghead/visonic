@@ -109,7 +109,6 @@ PIN_REGEX = "^[0-9]{4}$"
 class AvailableNotifications(str, Enum):
     ALWAYS = 'always'
     SIREN = 'siren_sounding'
-#    TAMPER = 'panel_tamper'
     RESET = 'panel_reset'
     INVALID_PIN = 'invalid_pin'
     PANEL_OPERATION = 'panel_operation'

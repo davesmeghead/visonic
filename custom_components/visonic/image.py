@@ -49,6 +49,7 @@ class VisonicImage(ImageEntity):
     """A class to let you visualize the image from a PIR sensors camera."""
 
     _attr_translation_key: str = "alarm_panel_key"
+    #_attr_content_type = "image/jpg"
     #_attr_has_entity_name = True
 
     def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSensorDevice):

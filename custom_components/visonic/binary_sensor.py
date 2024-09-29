@@ -194,10 +194,10 @@ class VisonicBinarySensor(BinarySensorEntity):
             n = f"Visonic Sensor ({self._dname})" if self._panel == 0 else f"Visonic Sensor ({self._panel}/{self._dname})"
             return {
                 "manufacturer": MANUFACTURER,
-                "identifiers": {(DOMAIN, self._name)},
+                "identifiers": {(DOMAIN, slugify(self._name))},
                 "name": n,
                 #"model": s.title() + f" ({self._visonic_device.getSensorModel()})",
-                "model": s.title(),
+                "model": s.title().replace("_"," "),
                 "model_id": self._visonic_device.getSensorModel(),
 #                "translation_key" : "trans_attr",
                 #"battery": 1 if self._visonic_device.isLowBattery else 100

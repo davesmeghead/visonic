@@ -96,16 +96,16 @@ from string import punctuation
 
 try:
     from .pyconst import (AlTransport, AlPanelDataStream, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlTroubleType, AlPanelEventData, 
-                          AlAlarmType, AlPanelStatus, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlLogPanelEvent, AlSensorType)
+                          AlAlarmType, AlPanelStatus, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlLogPanelEvent, AlSensorType, AlTerminationType)
     from .pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                            AlSensorDeviceHelper, AlSwitchDeviceHelper)
 except:
     from pyconst import (AlTransport, AlPanelDataStream, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlTroubleType, AlPanelEventData,
-                         AlAlarmType, AlPanelStatus, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlLogPanelEvent, AlSensorType)
+                         AlAlarmType, AlPanelStatus, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlLogPanelEvent, AlSensorType, AlTerminationType)
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.4.2.3"
+PLUGIN_VERSION = "1.4.3.0"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
@@ -314,8 +314,9 @@ pmSendMsg = {
    "MSG_EXIT"         : VisonicCommand(convertByteArray('0F')                                 , None   , False, False,      SendDebugM, 1.5, "Exit" ),
 
    # Command codes do not have the 0x43 on the end and are only 11 values                                 
-   "MSG_DOWNLOAD_T"   : VisonicCommand(convertByteArray('24 00 00 99 99 00 00 00 00 00 00')   , None   , False,  True,      SendDebugD, 0.0, "Start Download Mode" ),            # This gets either an acknowledge OR an Access Denied response
-   "MSG_DOWNLOAD_F"   : VisonicCommand(convertByteArray('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C] , False, False,      SendDebugD, 0.5, "Trigger Panel Data From Panel" ),  # Use this instead of BUMP as can be used by all panels
+   "MSG_DOWNLOAD_DL"  : VisonicCommand(convertByteArray('24 00 00 99 99 00 00 00 00 00 00')   , None   , False,  True,      SendDebugD, 0.0, "Start Download Mode" ),            # This gets either an acknowledge OR an Access Denied response
+   "MSG_DOWNLOAD_TIME": VisonicCommand(convertByteArray('24 00 00 99 99 00 00 00 00 00 00')   , None   , False, False,      SendDebugD, 0.5, "Trigger Panel To Set Time" ),      # Use this instead of BUMP as can be used by all panels. To set time.
+   "MSG_DOWNLOAD_3C"  : VisonicCommand(convertByteArray('24 00 00 99 99 00 00 00 00 00 00')   , [0x3C] , False, False,      SendDebugD, 0.5, "Trigger Panel Data From Panel" ),  # Use this instead of BUMP as can be used by all panels
    "MSG_WRITE"        : VisonicCommand(convertByteArray('3D 00 00 00 00 00 00 00 00 00 00')   , None   , False, False,      SendDebugD, 0.0, "Write Data Set" ),
    "MSG_DL"           : VisonicCommand(convertByteArray('3E 00 00 00 00 B0 00 00 00 00 00')   , [0x3F] ,  True, False,      SendDebugD, 0.0, "Download Data Set" ),
    "MSG_SETTIME"      : VisonicCommand(convertByteArray('46 F8 00 01 02 03 04 05 06 FF FF')   , None   , False, False,      SendDebugM, 1.0, "Setting Time" ),                   # may not need an ack so I don't wait for 1 and just get on with it
@@ -967,28 +968,6 @@ ZoneEventAction = {
 def getTimeFunction() -> datetime:
     return datetime.now(timezone.utc).astimezone()
 
-class SequencerType(IntEnum):
-    Invalid                 = -1
-    LookForPowerlinkBridge  = 1
-    InitialisePanel         = 2
-    WaitingForPanelDetails  = 3
-    AimingForStandard       = 4
-    DoingStandard           = 5
-    AimingForStandardPlus   = 6
-    InitialiseEPROMDownload = 7
-    TriggerEPROMDownload    = 8
-    StartedEPROMDownload    = 9
-    DoingEPROMDownload      = 10
-    EPROMDownloadComplete   = 11
-    EnrollingPowerlink      = 12
-    DoingStandardPlus       = 13
-    WaitingForEnrollSuccess = 14
-    DoingPowerlink          = 15
-    DoingPowerlinkBridge    = 16
-
-    def __str__(self):
-        return str(self.name)
-
 class chunky:
     datasize : int  # Bits -->  8 is 1 Byte, 1 is Bits, 4 is Nibbles, greater than 8 is total bits e.g. 40 is 5 Bytes
     index : int     # 3 is Zones, 
@@ -1144,7 +1123,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.despatcherTask = None
         self.despatcherException = False
         # A queue of messages to send (i.e. VisonicListEntry)
-        #self.SendList = []
         self.SendQueue = PriorityQueueWithPeek()
 
         self.resetGlobals()
@@ -1287,27 +1265,29 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
 
     # This is called by the asyncio parent when the connection is lost
+    # The problem is that it is also called when there isn't an exception and we just close the connection
     def vp_connection_lost(self, exc):
         """Log when connection is closed, if needed call callback."""
         if not self.suspendAllOperations:
             log.error(f"ERROR Connection Lost : disconnected because the Ethernet/USB connection was externally terminated.  {exc}")
-        self._performDisconnect(reason="termination", exc=exc)
+        
+        if exc is not None:
+            # log.exception("ERROR Connection Lost : disconnected due to exception  <{0}>".format(exc))
+            log.error(f"ERROR Connection Lost : disconnected due to external error, exception data = {exc}")
+            self._performDisconnect(AlTerminationType.EXTERNAL_TERMINATION)
+        else:
+            log.debug(f"Connection Closed, assume that the connection is closing gracefully")
 
     # when the connection has problems then call the onDisconnect when available,
     #     otherwise try to reinitialise the connection from here
-    def _performDisconnect(self, reason : str, exc=None):
+    def _performDisconnect(self, termination : AlTerminationType):
         """Log when connection is closed, if needed call callback."""
+        
         if self.suspendAllOperations:
-            # log.debug('[Disconnection] Suspended. Sorry but all operations have been suspended, please recreate connection')
+            log.debug("[_performDisconnect] Operations Already Suspended. Sorry but all operations have been suspended, please recreate connection")
             return
 
-        self.shutdownOperation()
-
-        if exc is not None:
-            # log.exception("ERROR Connection Lost : disconnected due to exception  <{0}>".format(exc))
-            log.error("ERROR Connection Lost : disconnected due to exception {0}".format(exc))
-        else:
-            log.error("ERROR Connection Lost : disconnected because of close/abort.")
+        log.debug(f"Connection Lost : disconnected due to {termination}")
 
         #self.pmPhoneNr_t = {}
         self.pmEventLogDictionary = {}
@@ -1330,15 +1310,17 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         #self.pmSirenDev_t = {}
 
         if self.transport is not None:
-            self.transport.close()
+            self.transport.close()   # This will make the underlying code call vp_connection_lost with no exception
         self.transport = None
 
         #sleep(5.0)  # a bit of time for the watchdog timers and keep alive loops to self terminate
         if self.onDisconnectHandler:
-            log.error("                        Calling Exception handler.")
-            self.onDisconnectHandler(reason, exc)
+            #log.debug("                        Calling Exception handler.")
+            self.onDisconnectHandler(termination)
         else:
             log.error("                        No Exception handler to call, terminating Component......")
+
+        self.shutdownOperation()
 
     def isSendQueueEmpty(self) -> bool:
         return self.SendQueue.empty()
@@ -1456,7 +1438,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             if self.isPowerMaster():
                 self._addMessageToSendList("MSG_BUMP", urgent = True)
             else:
-                self._addMessageToSendList("MSG_DOWNLOAD_F", urgent = True, options=[ [3, convertByteArray(self.DownloadCode)] ])  # Can only set the time in the panel in DOWNLOADING state
+                self._addMessageToSendList("MSG_DOWNLOAD_TIME", urgent = True, options=[ [3, convertByteArray(self.DownloadCode)] ])  # Can only set the time in the panel in DOWNLOADING state
             log.debug("[setTimeInPanel]        Setting time in panel {0}".format(t))
             timePdu = bytearray([t.second + 1, t.minute, t.hour, t.day, t.month, t.year - 2000])   # add about 2 seconds on as it takes over 1 to get to the panel to set it
             self._addMessageToSendList("MSG_SETTIME", urgent = True, options=[ [3, timePdu] ])
@@ -1627,6 +1609,40 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     #    If we haven't got one in the timeout period then reset the send queues and state and then call a MSG_RESTORE
     # In standard mode, this command asks the panel for a status
     async def _sequencer(self):
+
+        class SequencerType(IntEnum):
+            Invalid                 = -1
+            LookForPowerlinkBridge  = 1
+            InitialisePanel         = 2
+            WaitingForPanelDetails  = 3
+            AimingForStandard       = 4
+            DoingStandard           = 5
+            #AimingForStandardPlus   = 6
+            InitialiseEPROMDownload = 7
+            TriggerEPROMDownload    = 8
+            StartedEPROMDownload    = 9
+            DoingEPROMDownload      = 10
+            EPROMDownloadComplete   = 11
+            EnrollingPowerlink      = 12
+            DoingStandardPlus       = 13
+            WaitingForEnrolSuccess  = 14
+            DoingPowerlink          = 15
+            DoingPowerlinkBridge    = 16
+
+            def __str__(self):
+                return str(self.name)
+
+        class PanelErrorStates(IntEnum):
+            AllGood               = 0
+            AccessDeniedDownload  = 1
+            AccessDeniedPin       = 2
+            AccessDeniedStop      = 3
+            AccessDeniedCommand   = 4
+            Exit                  = 5
+            TimeoutReceived       = 6
+            DownloadRetryReceived = 7
+            DespatcherException   = 8
+
         _sequencerState = SequencerType.LookForPowerlinkBridge
         _sequencerStatePrev = SequencerType.Invalid
         
@@ -1643,6 +1659,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         no_data_received_counter = 0
         no_packet_received_counter = 0
         _my_panel_state_trigger_count = 5
+        _sendStartUp = False
         image_delay_counter = 0
         log_sensor_state_counter = 0
         _last_B0_wanted_request_time = self._getTimeFunction()
@@ -1650,17 +1667,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         delay_loops = 0
         a_day = 24 * 60 * 60  # seconds in a day
 
-
-        class PanelErrorStates(IntEnum):
-            AllGood               = 0
-            AccessDeniedDownload  = 1
-            AccessDeniedPin       = 2
-            AccessDeniedStop      = 3
-            AccessDeniedCommand   = 4
-            Exit                  = 5
-            TimeoutReceived       = 6
-            DownloadRetryReceived = 7
-            DespatcherException   = 8
 
         async def waitForTransport(s : int):
             while s >= 0 and self.transport is None:
@@ -1707,14 +1713,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 _resetPanelInterface()
             self._addMessageToSendList("MSG_STATUS_SEN")
 
-        def StopAndSuspend(t : str, log_mess : str):
-            log.error( log_mess )
-            self.shutdownOperation()
-            self.sendPanelUpdate(AlCondition.NO_DATA_FROM_PANEL)  # Plugin suspended itself
-            if self.transport is not None:
-                self.transport.close()
-            self.transport = None
-        
         def clearPanelErrorMessages():
             self.AccessDeniedReceived = False
             self.AccessDeniedMessage = None
@@ -1788,6 +1786,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
             _last_B0_wanted_request_time = self._getTimeFunction()
             _my_panel_state_trigger_count = 5
+            _sendStartUp = False
             # declare a list and fill it with zeroes
             watchdog_list = [0] * WATCHDOG_MAXIMUM_EVENTS
             # The starting point doesn't really matter
@@ -1830,13 +1829,15 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         no_data_received_counter = no_data_received_counter + 1
                         # log.debug(f"[_sequencer] no_data_received_counter {no_data_received_counter}")
                         if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
-                            StopAndSuspend("neverconnected", "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)")
+                            log.error( "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)" )
+                            self._performDisconnect(AlTerminationType.NO_DATA_FROM_PANEL_NEVER_CONNECTED)
                             continue   # just do the while loop, which will exit as self.suspendAllOperations will be True
                     elif self.lastPacket is None: # have we been able to construct at least one full and crc checked message 
                         no_packet_received_counter = no_packet_received_counter + 1
                         #log.debug(f"[_sequencer] no_packet_received_counter {no_packet_received_counter}")
                         if no_packet_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
-                            StopAndSuspend("nomessagedata", "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no valid packet has been received from the panel)")
+                            log.error( "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no valid packet has been received from the panel)" )
+                            self._performDisconnect(AlTerminationType.NO_DATA_FROM_PANEL_NEVER_CONNECTED)
                             continue   # just do the while loop, which will exit as self.suspendAllOperations will be True
                     else:  # Data has been received from the panel but check when it was last received
                         # calc time difference between now and when data was last received
@@ -1846,7 +1847,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         interval = self._getUTCTimeFunction() - self.lastRecvTimeOfPanelData
                         # log.debug("Checking last receive time {0}".format(interval))
                         if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
-                            StopAndSuspend("disconnected", "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + ")")
+                            log.error( "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + ")" )
+                            self._performDisconnect(AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED)
                             continue   # just do the while loop, which will exit as self.suspendAllOperations will be True
 
                     #############################################################################################################################################################
@@ -1855,12 +1857,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                     if _sequencerState not in [SequencerType.DoingStandard, SequencerType.DoingStandardPlus, SequencerType.DoingPowerlink, SequencerType.DoingPowerlinkBridge] or changedState or counter % 120 == 0:
                         # When we reach 1 of the 3 final states then stop logging it, but then output every 2 minutes
-                        log.debug(f"[_sequencer] Mode = {str(_sequencerState)}     counter={counter}")
-
-                    if delay_loops > 0:
-                        delay_loops = delay_loops - 1
-                        clearPanelErrorMessages() # Clear all panel reported errors for the duration of the delay
-                        continue   # do all the basic connection checks above and then just do the while loop
+                        log.debug(f"[_sequencer] SeqState={str(_sequencerState)}     Counter={counter}      PanelMode={self.PanelMode}     PanelState={self.PanelState}     SendQueue={self.SendQueue.qsize()}")
 
                     if self.loopbackTest:
                         # This supports the loopback test
@@ -1868,18 +1865,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         self._clearReceiveResponseList()
                         self._emptySendQueue(pri_level = -1) # empty the list
                         self._addMessageToSendList("MSG_STOP")
-                        continue   # just do the while loop
-
-                    elif not self.pmDownloadMode and not self.ForceStandardMode and self.PanelWantsToEnrol:     #################################### PanelWantsToEnrol ####################################################
-                        log.debug("[_sequencer] Panel wants to auto enroll and not downloading so sending Auto Enroll")
-                        self.PanelWantsToEnrol = False
-                        self._sendMsgENROLL(True)
-                        continue   # just do the while loop
-
-                    elif not self.pmDownloadMode and not self.ForceStandardMode and self.PanelKeepAlive and not self.allowAckToTriggerRestore and _sequencerState in [SequencerType.InitialisePanel, SequencerType.WaitingForPanelDetails]:  ###### PanelKeepAlive ################################################
-                        log.debug("[_sequencer] Panel Powerlink Keep Alive so assume that panel wants to auto enroll and we're not downloading so sending Auto Enroll")
-                        self.PanelKeepAlive = False
-                        self._sendMsgENROLL(True)
                         continue   # just do the while loop
 
                     elif _sequencerState == SequencerType.LookForPowerlinkBridge:   ################################################################ LookForPowerlinkBridge ####################################################
@@ -1893,19 +1878,36 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         _sequencerState = SequencerType.InitialisePanel
                         continue   # just do the while loop
 
+                    elif delay_loops > 0:
+                        delay_loops = delay_loops - 1
+                        clearPanelErrorMessages() # Clear all panel reported errors for the duration of the delay
+                        continue   # do all the basic connection checks above and then just do the while loop
+
+                    elif not self.pmDownloadMode and not self.ForceStandardMode and self.PanelWantsToEnrol:     #################################### PanelWantsToEnrol ####################################################
+                        log.debug("[_sequencer] Panel wants to auto enroll and not downloading so sending Auto Enroll")
+                        self.PanelWantsToEnrol = False
+                        self._sendMsgENROLL(True)
+                        continue   # just do the while loop
+
+                    elif not self.pmDownloadMode and not self.ForceStandardMode and self.PanelKeepAlive and not self.allowAckToTriggerRestore and _sequencerState in [SequencerType.InitialisePanel, SequencerType.WaitingForPanelDetails]:  ###### PanelKeepAlive ################################################
+                        log.debug("[_sequencer] Panel Powerlink Keep Alive so assume that panel wants to auto enroll and we're not downloading so sending Auto Enroll")
+                        self.PanelKeepAlive = False
+                        self._sendMsgENROLL(True)
+                        continue   # just do the while loop
+
                     elif _sequencerState == SequencerType.InitialisePanel:          ################################################################ Initialising ####################################################
                         await asyncio.sleep(1.0)
                         _resetPanelInterface()
                         clearPanelErrorMessages()
                         if not self.pmGotPanelDetails:
-                            self._addMessageToSendList("MSG_DOWNLOAD_F", options=[ [3, convertByteArray(self.DownloadCode)] ])  # 
+                            self._addMessageToSendList("MSG_DOWNLOAD_3C", options=[ [3, convertByteArray(self.DownloadCode)] ])  # 
                         _sequencerState = SequencerType.WaitingForPanelDetails
                         continue   # just do the while loop
 
                     elif _sequencerState == SequencerType.WaitingForPanelDetails:   ################################################################ WaitingForPanelDetails ####################################################
 
                         # Take care of the first part of initialisation
-                        if self.pmGotPanelDetails:          # Got 3C
+                        if self.pmGotPanelDetails:          # Got 3C panel data message
                             log.debug("[_sequencer] Got panel details")
                             # ignore all possible errors etc, call the function and ignore the return value
                             clearPanelErrorMessages()
@@ -1934,8 +1936,9 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             elif s == PanelErrorStates.DownloadRetryReceived:
                                 delay_loops = 10
                                 _sequencerState = SequencerType.InitialisePanel
-                                log.debug("[_sequencer]    DownloadRetryReceived loop = 10")
-                        elif counter >= 7:     # 4 seconds to get panel data
+                                log.debug(f"[_sequencer]    DownloadRetryReceived loop = {delay_loops}")
+                            # Ignore other errors 
+                        elif counter >= 7:     # up to 7 seconds to get panel data message (worst case to also allow for Bridge traffic)
                             _sequencerState = SequencerType.InitialisePanel
 
                         continue   # just do the while loop
@@ -1969,7 +1972,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 if self.PowerLinkBridgeConnected:
                                     if self.PowerLinkBridgeStealth:
                                         _sequencerState = SequencerType.TriggerEPROMDownload
-                                        log.debug("[_sequencer] Bridge in Stealth, continuing to TriggerEPROMDownload")
+                                        log.debug("[_sequencer] Bridge already in Stealth, continuing to TriggerEPROMDownload")
                                     else:
                                         log.debug("[_sequencer] Sending command to Bridge - Please Turn Stealth ON")
                                         command = 2   # Stealth command
@@ -1978,6 +1981,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                         command = 1   # Get Status command
                                         param = 0     # Irrelevant
                                         self._addMessageToSendList("MSG_PL_BRIDGE", immediate = True, options=[ [1, command], [2, param] ])  # Tell the Bridge to send me the status
+                                        # Continue in this SequencerType until the bridge is in stealth
                                 else:
                                     _sequencerState = SequencerType.TriggerEPROMDownload
                             
@@ -1990,7 +1994,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         self.DownloadCounter = self.DownloadCounter + 1
                         log.debug("[_sequencer] Asking for panel EEPROM")
                         #self.setNextDownloadCode(self.PanelType if self.PanelType is not None else 1) # Set the next self.DownloadCode to try
-                        self._addMessageToSendList("MSG_DOWNLOAD_T", options=[ [3, convertByteArray(self.DownloadCode)] ])  #
+                        self._addMessageToSendList("MSG_DOWNLOAD_DL", options=[ [3, convertByteArray(self.DownloadCode)] ])  #
                         # We got a first response, now we can Download the panel EEPROM settings
                         self.lastSendOfDownloadEprom = self._getUTCTimeFunction()
                         # Kick off the download sequence and set associated variables
@@ -2068,9 +2072,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         else:
                             # Process the EPROM data
                             self._processEPROMSettings()
-                            self.sendPanelUpdate(AlCondition.DOWNLOAD_SUCCESS)   # download completed successfully
                             if self.gotValidUserCode():
-
                                 if self.PowerLinkBridgeConnected:
                                     log.debug("[_sequencer] Sending command to Bridge - Stealth OFF")
                                     command = 2   # Stealth command
@@ -2081,14 +2083,13 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                     self._addMessageToSendList("MSG_PL_BRIDGE", urgent = True, options=[ [1, command], [2, param] ])  # Tell the Bridge to send me the status
                                     self.PanelMode = AlPanelMode.POWERLINK_BRIDGED
                                     _sequencerState = SequencerType.DoingPowerlinkBridge
-                                    
                                 else:
                                     self.PanelMode = AlPanelMode.STANDARD_PLUS
                                     _sequencerState = SequencerType.EnrollingPowerlink
+                                self.sendPanelUpdate(AlCondition.DOWNLOAD_SUCCESS)   # download completed successfully, panel type matches and got usercode (so assume all sensors etc loaded)
                             else:
                                 _sequencerState = SequencerType.AimingForStandard
-
-                        self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
+                                self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
                         continue   # just do the while loop
 
                     elif _sequencerState == SequencerType.EnrollingPowerlink:       ################################################################ EnrollingPowerlink ##############################################
@@ -2105,20 +2106,20 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             log.debug(f"[_sequencer] Try to auto enroll (panel {self.PanelModel})  attempt {counter}")
                             #self._addMessageToSendList("MSG_EXIT")  # Exit download mode
                             self._sendMsgENROLL()  #  Try to enroll with the Download Code that worked for Downloading the EPROM
-                            _sequencerState = SequencerType.WaitingForEnrollSuccess
+                            _sequencerState = SequencerType.WaitingForEnrolSuccess
                         
                         continue   # just do the while loop
 
-                    elif _sequencerState == SequencerType.WaitingForEnrollSuccess:  ################################################################ WaitingForEnrollSuccess ##############################################
-                        
-                        if (s := processPanelErrorMessages()) != PanelErrorStates.AllGood:
+                    elif _sequencerState == SequencerType.WaitingForEnrolSuccess:  ################################################################ WaitingForEnrolSuccess ##############################################
+
+                        if (s := processPanelErrorMessages()) == PanelErrorStates.DespatcherException:
+                            # start again, restart the despatcher task
+                            _sequencerState = SequencerType.LookForPowerlinkBridge
+                        elif s != PanelErrorStates.AllGood:
                             clearPanelErrorMessages()
                             self.pmExpectedResponse = set()
                             self.PanelMode = AlPanelMode.STANDARD_PLUS
                             _sequencerState = SequencerType.EnrollingPowerlink
-                        elif s == PanelErrorStates.DespatcherException:
-                            # start again, restart the despatcher task
-                            _sequencerState = SequencerType.LookForPowerlinkBridge
                         elif self.PanelMode in [AlPanelMode.POWERLINK]:
                             _sequencerState = SequencerType.DoingPowerlink
                         elif counter == (MAX_TIME_BETWEEN_POWERLINK_ALIVE if self.receivedPowerlinkAcknowledge else 3):   
@@ -2196,7 +2197,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                         if self.PanelMode in [AlPanelMode.POWERLINK]:
                             _sequencerState = SequencerType.DoingPowerlink
-                        elif self.PanelMode in [AlPanelMode.POWERLINK_BRIDGED]:
+                        elif self.PanelMode in [AlPanelMode.POWERLINK_BRIDGED]:  # This is only possible from EPROM Download so it's unlikely to happen, but just in case ....
                             _sequencerState = SequencerType.DoingPowerlinkBridge
 
                     elif _sequencerState == SequencerType.DoingPowerlink:           ################################################################ DoingPowerlink ##############################################
@@ -2244,6 +2245,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     #############################################################################################################################################################
 
                     if self.PanelState == AlPanelStatus.DOWNLOADING or self.PanelMode == AlPanelMode.DOWNLOAD:
+                        # We may still be in the downloading state or the panel is in the downloading state
                         _my_panel_state_trigger_count = _my_panel_state_trigger_count - 1
                         log.debug(f"[_sequencer] By here we should be in normal operation, we are in {self.PanelMode.name} panel mode and status is {self.PanelState}    {_my_panel_state_trigger_count=}")
                         if _my_panel_state_trigger_count < 0:
@@ -2257,16 +2259,23 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         continue   # just do the while loop
 
                     if self.PanelMode not in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.MINIMAL_ONLY]:
+                        # By here the panel connection should be in one of the proper modes but it isn't so go back to the beginning
+                        #    Allow it for 5 seconds but then restart the sequence
                         _my_panel_state_trigger_count = _my_panel_state_trigger_count - 1
                         log.debug(f"[_sequencer] By here we should be in normal operation but we are still in {self.PanelMode.name} panel mode     {_my_panel_state_trigger_count=}")
                         if _my_panel_state_trigger_count < 0:
                             _my_panel_state_trigger_count = 10
                             self._reset_keep_alive_messages()
                             self.watchdog_counter = 0
+                            # Restart the sequence from the beginning
                             _sequencerState = SequencerType.LookForPowerlinkBridge
                         continue   # just do the while loop
 
                     _my_panel_state_trigger_count = 5
+                    
+                    if not _sendStartUp:
+                        _sendStartUp = True
+                        self.sendPanelUpdate(AlCondition.STARTUP_SUCCESS)   # startup completed successfully (in whatever mode)
 
                     # If Std+ or PL then periodically check and then maybe update the time in the panel
                     if self.AutoSyncTime:
@@ -2589,7 +2598,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 self.pmCrcErrorCount = 0
                 interval = self._getUTCTimeFunction() - self.pmFirstCRCErrorTime
                 if interval <= timedelta(seconds=CRC_ERROR_PERIOD):
-                    self._performDisconnect(reason="crcerror", exc="CRC errors")
+                    self._performDisconnect(AlTerminationType.CRC_ERROR)
                 self.pmFirstCRCErrorTime = self._getUTCTimeFunction()
 
     def _processReceivedMessage(self, ackneeded, debugp, data, msg):
@@ -2702,15 +2711,15 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             log.debug("[sendPdu] Setting Download Mode to true")
 
         if command is not None and command.debugprint == DebugLevel.FULL:
-            log.debug("[sendPdu] Sending Command ({0})    raw data {1}   waiting for message response {2}".format(command.msg, toString(sData), [hex(no).upper() for no in self.pmExpectedResponse]))
+            log.debug("[sendPdu] Sent Command ({0})    raw data {1}   waiting for message response {2}".format(command.msg, toString(sData), [hex(no).upper() for no in self.pmExpectedResponse]))
         elif command is not None and command.debugprint == DebugLevel.CMD:
-            log.debug("[sendPdu] Sending Command ({0})    waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
+            log.debug("[sendPdu] Sent Command ({0})    waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
         elif instruction.raw is not None:
             # Assume raw data to send is not obfuscated for now
-            log.debug("[sendPdu] Sending Raw Command      raw data {0}   waiting for message response {1}".format(toString(sData[:4] if OBFUS else sData), [hex(no).upper() for no in self.pmExpectedResponse]))            
+            log.debug("[sendPdu] Sent Raw Command      raw data {0}   waiting for message response {1}".format(toString(sData[:4] if OBFUS else sData), [hex(no).upper() for no in self.pmExpectedResponse]))            
         #elif command is not None:
         #    # Do not log the full raw data as it may contain the user code
-        #    log.debug("[sendPdu] Sending Command ({0})    <Obfuscated>   waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
+        #    log.debug("[sendPdu] Sent Command ({0})    <Obfuscated>   waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
 
         if command is not None and command.waittime > 0.0:
             return command.waittime
@@ -3639,8 +3648,7 @@ class PacketHandling(ProtocolBase):
 
         if self.lastPacketCounter == SAME_PACKET_ERROR:
             log.debug("[_processReceivedPacket] Had the same packet for " + str(SAME_PACKET_ERROR) + " times in a row : %s", toString(packet))
-            # _performDisconnect
-            self._performDisconnect(reason="samepacketerror", exc="Same Packet for {0} times in a row".format(SAME_PACKET_ERROR))
+            self._performDisconnect(AlTerminationType.SAME_PACKET_ERROR)
             return
         #else:
         #    log.debug("[_processReceivedPacket] Parsing complete valid packet: %s", toString(packet))
@@ -4872,10 +4880,6 @@ class VisonicProtocol(PacketHandling):
     ############################################################################################################
     ############################################################################################################
 
-    def shutdownOperation(self):
-        super().shutdownOperation()
-        self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
-
     # A dictionary that is used to add to the attribute list of the Alarm Control Panel
     #     If this is overridden then please include the items in the dictionary defined here by using super()
     def getPanelStatusDict(self, include_extended_status : bool) -> dict:
@@ -4961,18 +4965,20 @@ class VisonicProtocol(PacketHandling):
                         self._addMessageToSendList("MSG_STATUS_SEN", immediate = True)
                         return AlCommandStatus.SUCCESS
                     return AlCommandStatus.FAIL_INVALID_STATE
+                return AlCommandStatus.FAIL_ENTITY_INCORRECT
             return AlCommandStatus.FAIL_X10_PROBLEM
         return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
 
     def getJPG(self, device : int, count : int) -> AlCommandStatus:
         if not self.pmDownloadMode:
             if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
-                if device >= 1 and device <= 64:
-                    if device - 1 in self.SensorList and self.SensorList[device-1].getSensorType() == AlSensorType.CAMERA:
-                        if device not in self.image_ignore:
-                            if self.ImageManager.create(device, count):   # This makes sure that there isn't an ongoing image retrieval for this sensor
-                                self._addMessageToSendList("MSG_GET_IMAGE", options=[ [1, count], [2, device] ])  #  
-                                return AlCommandStatus.SUCCESS
+                if device - 1 in self.SensorList and self.SensorList[device-1].getSensorType() == AlSensorType.CAMERA:
+                    if device not in self.image_ignore:
+                        if self.ImageManager.create(device, count):   # This makes sure that there isn't an ongoing image retrieval for this sensor
+                            self._addMessageToSendList("MSG_GET_IMAGE", options=[ [1, count], [2, device] ])  #  
+                            return AlCommandStatus.SUCCESS
+                    return AlCommandStatus.FAIL_INVALID_STATE
+                return AlCommandStatus.FAIL_ENTITY_INCORRECT
             return AlCommandStatus.FAIL_INVALID_STATE
         return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
 
@@ -4994,21 +5000,24 @@ class VisonicProtocol(PacketHandling):
         if not self.pmDownloadMode:
             if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
                 if self.PanelSettings[PanelSetting.PanelBypass] is not None and self.PanelSettings[PanelSetting.PanelBypass] != "No Bypass":
-                    bpin = self._createPin(pin)
-                    bypassint = 1 << (sensor - 1)
-                    #log.debug("[SensorArmState]  setSensorBypassState A " + hex(bypassint))
-                    y1, y2, y3, y4 = (bypassint & 0xFFFFFFFF).to_bytes(4, "little")
-                    bypass = bytearray([y1, y2, y3, y4])
-                    log.debug("[SensorArmState]  setSensorBypassState bypass = " + toString(bypass))
-                    if len(bypass) == 4:
-                        if bypassValue:
-                            self._addMessageToSendList("MSG_BYPASSEN", urgent = True, options=[ [1, bpin], [3, bypass] ])
-                        else:
-                            self._addMessageToSendList("MSG_BYPASSDI", urgent = True, options=[ [1, bpin], [7, bypass] ])
-                        # request status to check success and update sensor variable
-                        self._addMessageToSendList("MSG_BYPASSTAT")
-                        return AlCommandStatus.SUCCESS
-                    return AlCommandStatus.FAIL_INVALID_STATE
+                    if (sensor - 1) in self.SensorList:
+                        bpin = self._createPin(pin)
+                        bypassint = 1 << (sensor - 1)
+                        #log.debug("[SensorArmState]  setSensorBypassState A " + hex(bypassint))
+                        y1, y2, y3, y4 = (bypassint & 0xFFFFFFFF).to_bytes(4, "little")
+                        bypass = bytearray([y1, y2, y3, y4])
+                        log.debug("[SensorArmState]  setSensorBypassState bypass = " + toString(bypass))
+                        if len(bypass) == 4:
+                            if bypassValue:
+                                self._addMessageToSendList("MSG_BYPASSEN", urgent = True, options=[ [1, bpin], [3, bypass] ])
+                            else:
+                                self._addMessageToSendList("MSG_BYPASSDI", urgent = True, options=[ [1, bpin], [7, bypass] ])
+                            # request status to check success and update sensor variable
+                            self._addMessageToSendList("MSG_BYPASSTAT")
+                            return AlCommandStatus.SUCCESS
+                        return AlCommandStatus.FAIL_INVALID_STATE
+                    return AlCommandStatus.FAIL_ENTITY_INCORRECT
+                return AlCommandStatus.FAIL_INVALID_STATE
             return AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED
         return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
 
@@ -5021,10 +5030,9 @@ class VisonicProtocol(PacketHandling):
                 log.debug("getEventLog")
                 self.eventCount = 0
                 self.pmEventLogDictionary = {}
-                if not self.pmDownloadMode:
-                    bpin = self._createPin(pin)
-                    self._addMessageToSendList("MSG_EVENTLOG", options=[ [4, bpin] ])
-                    return AlCommandStatus.SUCCESS
+                bpin = self._createPin(pin)
+                self._addMessageToSendList("MSG_EVENTLOG", options=[ [4, bpin] ])
+                return AlCommandStatus.SUCCESS
             return AlCommandStatus.FAIL_INVALID_STATE
         return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
 

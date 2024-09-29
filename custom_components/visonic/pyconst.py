@@ -225,6 +225,7 @@ class AlCommandStatus(AlEnum):
     FAIL_PANEL_CONFIG_PREVENTED = AlIntEnum(6)
     FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED = AlIntEnum(7)
     FAIL_PANEL_NO_CONNECTION = AlIntEnum(8)
+    FAIL_ENTITY_INCORRECT = AlIntEnum(9)
 a = AlCommandStatus()
 
 # This is used to update the HA frontend and send out an HA Event
@@ -240,8 +241,9 @@ class AlCondition(AlEnum):
     WATCHDOG_TIMEOUT_GIVINGUP = AlIntEnum(8)
     WATCHDOG_TIMEOUT_RETRYING = AlIntEnum(9)
     NO_DATA_FROM_PANEL = AlIntEnum(10)
-    COMMAND_REJECTED = AlIntEnum(15)
-    DOWNLOAD_SUCCESS = AlIntEnum(16)        # In the client this triggers the setting of the string name in the Config settings to the panel type
+    COMMAND_REJECTED = AlIntEnum(11)
+    STARTUP_SUCCESS = AlIntEnum(12)        # In the client this triggers the setting of the string name in the Config settings to the panel type
+    DOWNLOAD_SUCCESS = AlIntEnum(13)
 a = AlCondition()
 
 # This class represents the panels trouble state
@@ -291,6 +293,15 @@ class AlSensorType(AlEnum):
     SOUND = AlIntEnum(10)
     GLASS_BREAK = AlIntEnum(11)
 a = AlSensorType()
+
+# List of termination reasons
+class AlTerminationType(AlEnum):
+    NO_DATA_FROM_PANEL_NEVER_CONNECTED = AlIntEnum(1)
+    NO_DATA_FROM_PANEL_DISCONNECTED = AlIntEnum(2)
+    CRC_ERROR = AlIntEnum(3)
+    SAME_PACKET_ERROR = AlIntEnum(4)
+    EXTERNAL_TERMINATION = AlIntEnum(5)
+a = AlTerminationType()
 
 class AlPanelEventData:
     def __init__(self, name_i : int = 0, action_i : int = 0):

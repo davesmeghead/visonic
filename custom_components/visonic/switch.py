@@ -159,7 +159,7 @@ class VisonicSwitch(SwitchEntity):
                         "myname": self._client.getAlarmPanelUniqueIdent() if self._client is not None else "<Your Panel>"
                     }
                 )
-        self._client.setX10(self._x10id, state)
+        self._client.sendX10(self._x10id, state)
 
     @property
     def extra_state_attributes(self):

@@ -205,7 +205,7 @@ class VisonicConfigData:
     sensors: list()
     # Made it a class just in case I want to include more parameters in future
 
-def findClient(hass, panel : int):
+def findClient(hass, panel : int) -> VisonicClient | None:
     """Look through all the configuration entries looking for the panel."""
     data = hass.data[VisonicConfigKey]
     for entry_id in data:
@@ -247,21 +247,22 @@ def translateLanguage(hass):
 
     _LOGGER.debug(f"[translateLanguage] alarm control panel event_names translations {en_vals}")
 
-    pmLogPowerMaxUser_t = []
-    pmLogPowerMasterUser_t = []
-    for v in pmLogPower:
-        # Use the translation if in the list else default back to the English.  
-        #     The translation file does not need to contain all 14 translations
-        w = en_vals[v.key] if v.key in en_vals else v.name     # get the translation
-        # create list
-        if v.pmax_include:
-            pmLogPowerMaxUser_t.extend([f"{w} {i:>02}" if v.pmax_autonumber else w for i in range(v.pmax_start, v.pmax_stop+1)])
-        if v.pmas_include:
-            pmLogPowerMasterUser_t.extend([f"{w} {i:>02}" if v.pmas_autonumber else w for i in range(v.pmas_start, v.pmas_stop+1)])
-            
-    _LOGGER.debug(f"[translateLanguage] Replacing default English names with provided list:")
-    _LOGGER.debug(f"[translateLanguage]       pmLogPowerMaxUser_t    = {pmLogPowerMaxUser_t}")
-    _LOGGER.debug(f"[translateLanguage]       pmLogPowerMasterUser_t = {pmLogPowerMasterUser_t}")
+    if len(en_vals) > 0:
+        pmLogPowerMaxUser_t = []
+        pmLogPowerMasterUser_t = []
+        for v in pmLogPower:
+            # Use the translation if in the list else default back to the English.  
+            #     The translation file does not need to contain all 14 translations
+            w = en_vals[v.key] if v.key in en_vals else v.name     # get the translation
+            # create list
+            if v.pmax_include:
+                pmLogPowerMaxUser_t.extend([f"{w} {i:>02}" if v.pmax_autonumber else w for i in range(v.pmax_start, v.pmax_stop+1)])
+            if v.pmas_include:
+                pmLogPowerMasterUser_t.extend([f"{w} {i:>02}" if v.pmas_autonumber else w for i in range(v.pmas_start, v.pmas_stop+1)])
+                
+        _LOGGER.debug(f"[translateLanguage] Replacing default English names with provided list:")
+        _LOGGER.debug(f"[translateLanguage]       pmLogPowerMaxUser_t    = {pmLogPowerMaxUser_t}")
+        _LOGGER.debug(f"[translateLanguage]       pmLogPowerMasterUser_t = {pmLogPowerMasterUser_t}")
 
     # Retrieve the actions from the language translations files
     for key in range(0, len(pmLogEvent_t)+1):
@@ -591,7 +592,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: VisonicConfigEntry):
     if data.client is not None:
         p = data.client.getPanelID()
         # stop all activity in the client
-        unload_ok = await data.client.service_panel_stop()
+        unload_ok = await data.client.async_service_panel_stop()
 
         if entry.entry_id in hass.data[VisonicConfigKey]:
             hass.data[VisonicConfigKey].pop(entry.entry_id)
