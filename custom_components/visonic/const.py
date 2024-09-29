@@ -15,7 +15,7 @@ from homeassistant.const import (
 
 # The domain for the integration
 DOMAIN = "visonic"
-
+MANUFACTURER = "Visonic"
 VISONIC_UNIQUE_NAME = "Visonic Alarm"
 
 #from enum import IntFlag
@@ -44,7 +44,7 @@ ALARM_SENSOR_BYPASS = "alarm_sensor_bypass"
 ALARM_SENSOR_IMAGE = "alarm_sensor_image"
 
 PANEL_ATTRIBUTE_NAME = "panel"
-DEVICE_ATTRIBUTE_NAME = "visonic device"
+DEVICE_ATTRIBUTE_NAME = "visonic_device"
 
 # Default connection details (connection can be one of Ethernet, USB, RS232)
 DEFAULT_DEVICE_HOST = "127.0.0.1"
@@ -109,7 +109,6 @@ PIN_REGEX = "^[0-9]{4}$"
 class AvailableNotifications(str, Enum):
     ALWAYS = 'always'
     SIREN = 'siren_sounding'
-#    TAMPER = 'panel_tamper'
     RESET = 'panel_reset'
     INVALID_PIN = 'invalid_pin'
     PANEL_OPERATION = 'panel_operation'
@@ -128,14 +127,19 @@ available_emulation_modes = [
 
 # For alarm_control_panel and sensor, map the alarm panel states across to the Home Assistant states
 map_panel_status_to_ha_status = {
-    AlPanelStatus.UNKNOWN     : STATE_UNKNOWN,
-    AlPanelStatus.DISARMED    : STATE_ALARM_DISARMED,
-    AlPanelStatus.SPECIAL     : STATE_ALARM_DISARMED,
-    AlPanelStatus.DOWNLOADING : STATE_ALARM_DISARMED,
-    AlPanelStatus.ENTRY_DELAY : STATE_ALARM_PENDING,
-    AlPanelStatus.ARMING_HOME : STATE_ALARM_ARMING,
-    AlPanelStatus.ARMING_AWAY : STATE_ALARM_ARMING,
-    AlPanelStatus.ARMED_HOME  : STATE_ALARM_ARMED_HOME,
-    AlPanelStatus.ARMED_AWAY  : STATE_ALARM_ARMED_AWAY    
+    AlPanelStatus.UNKNOWN             : STATE_UNKNOWN,
+    AlPanelStatus.DISARMED            : STATE_ALARM_DISARMED,
+    AlPanelStatus.ARMING_HOME         : STATE_ALARM_ARMING,
+    AlPanelStatus.ARMING_AWAY         : STATE_ALARM_ARMING,
+    AlPanelStatus.ENTRY_DELAY         : STATE_ALARM_PENDING,
+    AlPanelStatus.ENTRY_DELAY_INSTANT : STATE_ALARM_PENDING,
+    AlPanelStatus.ARMED_HOME          : STATE_ALARM_ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY          : STATE_ALARM_ARMED_AWAY,
+    AlPanelStatus.ARMED_HOME_BYPASS   : STATE_ALARM_ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY_BYPASS   : STATE_ALARM_ARMED_AWAY,
+    AlPanelStatus.ARMED_HOME_INSTANT  : STATE_ALARM_ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY_INSTANT  : STATE_ALARM_ARMED_AWAY,
+    AlPanelStatus.USER_TEST           : STATE_UNKNOWN,
+    AlPanelStatus.DOWNLOADING         : STATE_UNKNOWN,
+    AlPanelStatus.INSTALLER           : STATE_UNKNOWN
 }
-

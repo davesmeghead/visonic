@@ -143,7 +143,7 @@ a = AlAlarmType()
 # the set of configuration parameters in to this client class
 class AlConfiguration(AlEnum):
     DownloadCode = AlIntEnum(0)           # 4 digit string or ""
-    PluginLanguage = AlIntEnum(3)         # String "EN", "FR", "NL"
+#    PluginLanguage = AlIntEnum(3)         # String "EN", "FR", "NL", "Panel"
     SirenTriggerList = AlIntEnum(5)       # A list of strings
     ForceStandard = AlIntEnum(6)          # Boolean
     DisableAllCommands = AlIntEnum(11)    # Boolean
@@ -160,6 +160,7 @@ class AlPanelMode(AlEnum):
     DOWNLOAD = AlIntEnum(6)
     STOPPED = AlIntEnum(7)
     MINIMAL_ONLY = AlIntEnum(8)
+    POWERLINK_BRIDGED = AlIntEnum(9)
 #    COMPLETE_READONLY = AlIntEnum(9)
 a = AlPanelMode()
 
@@ -172,8 +173,14 @@ class AlPanelStatus(AlEnum):
     ENTRY_DELAY = AlIntEnum(4)
     ARMED_HOME = AlIntEnum(5)
     ARMED_AWAY = AlIntEnum(6)
-    SPECIAL = AlIntEnum(7)
-    DOWNLOADING = AlIntEnum(8)
+    ARMED_HOME_BYPASS = AlIntEnum(7)
+    ARMED_AWAY_BYPASS = AlIntEnum(8)
+    ARMED_HOME_INSTANT = AlIntEnum(9)
+    ARMED_AWAY_INSTANT = AlIntEnum(10)
+    ENTRY_DELAY_INSTANT = AlIntEnum(11)
+    USER_TEST = AlIntEnum(12)
+    DOWNLOADING = AlIntEnum(13)
+    INSTALLER = AlIntEnum(14)
 a = AlPanelStatus()
 
 # The set of commands that can be used to arm and disarm the panel
@@ -190,7 +197,6 @@ class AlPanelCommand(AlEnum):
     FIRE = AlIntEnum(7)
     EMERGENCY = AlIntEnum(8)
     PANIC = AlIntEnum(9)
-    CHANGE_BAUD = AlIntEnum(20)
 a = AlPanelCommand()
 
 # The set of commands that can be used to mute and trigger the siren
@@ -219,6 +225,7 @@ class AlCommandStatus(AlEnum):
     FAIL_PANEL_CONFIG_PREVENTED = AlIntEnum(6)
     FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED = AlIntEnum(7)
     FAIL_PANEL_NO_CONNECTION = AlIntEnum(8)
+    FAIL_ENTITY_INCORRECT = AlIntEnum(9)
 a = AlCommandStatus()
 
 # This is used to update the HA frontend and send out an HA Event
@@ -234,8 +241,9 @@ class AlCondition(AlEnum):
     WATCHDOG_TIMEOUT_GIVINGUP = AlIntEnum(8)
     WATCHDOG_TIMEOUT_RETRYING = AlIntEnum(9)
     NO_DATA_FROM_PANEL = AlIntEnum(10)
-    COMMAND_REJECTED = AlIntEnum(15)
-    DOWNLOAD_SUCCESS = AlIntEnum(16)        # In the client this triggers the setting of the string name in the Config settings to the panel type
+    COMMAND_REJECTED = AlIntEnum(11)
+    STARTUP_SUCCESS = AlIntEnum(12)        # In the client this triggers the setting of the string name in the Config settings to the panel type
+    DOWNLOAD_SUCCESS = AlIntEnum(13)
 a = AlCondition()
 
 # This class represents the panels trouble state
@@ -264,6 +272,8 @@ class AlSensorCondition(AlEnum):
     EMERGENCY = AlIntEnum(8)
     PANIC = AlIntEnum(9)
     CAMERA = AlIntEnum(10)
+    ARMED = AlIntEnum(11)
+    RESTORE = AlIntEnum(12)
 a = AlSensorCondition()
 
 # List of sensor types
@@ -281,7 +291,27 @@ class AlSensorType(AlEnum):
     SHOCK = AlIntEnum(8)
     TEMPERATURE = AlIntEnum(9)
     SOUND = AlIntEnum(10)
+    GLASS_BREAK = AlIntEnum(11)
 a = AlSensorType()
+
+# List of termination reasons
+class AlTerminationType(AlEnum):
+    NO_DATA_FROM_PANEL_NEVER_CONNECTED = AlIntEnum(1)
+    NO_DATA_FROM_PANEL_DISCONNECTED = AlIntEnum(2)
+    CRC_ERROR = AlIntEnum(3)
+    SAME_PACKET_ERROR = AlIntEnum(4)
+    EXTERNAL_TERMINATION = AlIntEnum(5)
+a = AlTerminationType()
+
+class AlPanelEventData:
+    def __init__(self, name_i : int = 0, action_i : int = 0):
+        self.name_i = name_i
+        self.action_i = action_i
+        self.time = ""
+
+    def __str__(self):
+        return f"  {self.time}   {self.name_i} {self.action_i}"
+
 
 class AlLogPanelEvent:
     def __init__(self):
@@ -428,9 +458,8 @@ class PanelConfig(TypedDict):
     AlConfiguration.ForceStandard:        bool
     AlConfiguration.DisableAllCommands:   bool
     AlConfiguration.DownloadCode:         str
-    AlConfiguration.PluginLanguage:       str
+#    AlConfiguration.PluginLanguage:       str
     AlConfiguration.SirenTriggerList:     list[str]
-
 
 class AlTransport(ABC):
 
@@ -509,10 +538,10 @@ class AlPanelInterface(ABC):
         """ Get the panel bypass state """
         return False
 
-    @abstractmethod
-    def getPanelLastEvent(self) -> (str, str):
-        """ Return the panels last event string """
-        return ("", "")
+    #@abstractmethod
+    #def getPanelLastEvent(self) -> (str, str, str):
+    #    """ Return the panels last event string """
+    #    return ("", "")
 
     # @abstractmethod
     # def getPanelTroubleStatus(self) -> str:

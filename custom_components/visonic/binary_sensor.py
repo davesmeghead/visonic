@@ -2,6 +2,7 @@
 
 import logging
 import asyncio
+import re
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -19,7 +20,13 @@ from homeassistant.const import (
 from . import VisonicConfigEntry
 from .pyconst import AlSensorDevice, AlSensorType, AlSensorCondition
 from .client import VisonicClient
-from .const import DOMAIN, SensorEntityFeature, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME
+from .const import (
+    DOMAIN,
+    SensorEntityFeature,
+    PANEL_ATTRIBUTE_NAME,
+    MANUFACTURER,
+    DEVICE_ATTRIBUTE_NAME,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,9 +44,15 @@ _stype_to_ha_sensor_class = {
     AlSensorType.VIBRATION   : BinarySensorDeviceClass.VIBRATION, 
     AlSensorType.SHOCK       : BinarySensorDeviceClass.VIBRATION,
     AlSensorType.TEMPERATURE : BinarySensorDeviceClass.HEAT,
-    AlSensorType.SOUND       : BinarySensorDeviceClass.SOUND
+    AlSensorType.SOUND       : BinarySensorDeviceClass.SOUND,
+    AlSensorType.GLASS_BREAK : BinarySensorDeviceClass.VIBRATION,
 }
 
+def capitalize(s):
+    return s[0].upper() + s[1:]
+
+def titlecase(s):
+    return re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda word: capitalize(word.group(0)), s)
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -75,11 +88,14 @@ async def async_setup_entry(
 class VisonicBinarySensor(BinarySensorEntity):
     """Representation of a Visonic Sensor."""
 
+    _attr_translation_key: str = "alarm_panel_key"
+    #_attr_has_entity_name = True
+
     def __init__(self, hass, client: VisonicClient, sensor: AlSensorDevice, entry: VisonicConfigEntry):
         """Initialize the sensor."""
         #_LOGGER.debug("   In binary sensor VisonicSensor initialisation")
         self.hass = hass
-        self.client = client
+        self._client = client
         self.entry = entry
         self.doing_timeout = False
 
@@ -102,20 +118,20 @@ class VisonicBinarySensor(BinarySensorEntity):
         self._visonic_device.onChange(None)
         self._visonic_device = None
         self._is_available = False
-        self.client = None
+        self._client = None
         _LOGGER.debug("binary sensor async_will_remove_from_hass")
 
     async def _retainStateTimout(self):
         self.doing_timeout = True
 
-        timeout = self.client.getSensorOnDelay(self.device_class)
+        timeout = self._client.getSensorOnDelay(self.device_class)
 
         _LOGGER.debug(f"[binary sensor _retainStateTimout in ]   unique_id = {self.unique_id}   timeout = {timeout}    dc={self.device_class}")
         await asyncio.sleep(timeout) 
         if self._visonic_device is not None:
             self._current_value = self._visonic_device.isTriggered() or self._visonic_device.isOpen()
             self._is_available = self._visonic_device.isEnrolled()
-        if self.entity_id is not None:
+        if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state()
         _LOGGER.debug(f"[binary sensor _retainStateTimout out]   unique_id = {self.unique_id}   timeout = {timeout}    current = {self._current_value}")
         self.doing_timeout = False
@@ -137,7 +153,7 @@ class VisonicBinarySensor(BinarySensorEntity):
             self._is_available = self._visonic_device.isEnrolled()
             #_LOGGER.debug(f"   In binary sensor VisonicSensor onchange self._is_available = {self._is_available}    self._current_value = {self._current_value}")
             # Ask HA to schedule an update
-            if self.entity_id is not None:
+            if self.hass is not None and self.entity_id is not None:
                 self.schedule_update_ha_state()
         else:
             _LOGGER.debug("changeHandler: binary sensor on change called but sensor is not defined")
@@ -173,14 +189,21 @@ class VisonicBinarySensor(BinarySensorEntity):
     def device_info(self):
         """Return information about the device."""
         if self._visonic_device is not None:
+            t = self._visonic_device.getSensorType()
+            s = f"{t.name} Sensor"
+            n = f"Visonic Sensor ({self._dname})" if self._panel == 0 else f"Visonic Sensor ({self._panel}/{self._dname})"
             return {
-                "manufacturer": "Visonic",
-                "identifiers": {(DOMAIN, self._name)},
-                "name": f"Visonic Sensor ({self._dname})",
-                "model": self._visonic_device.getSensorModel(),
+                "manufacturer": MANUFACTURER,
+                "identifiers": {(DOMAIN, slugify(self._name))},
+                "name": n,
+                #"model": s.title() + f" ({self._visonic_device.getSensorModel()})",
+                "model": s.title().replace("_"," "),
+                "model_id": self._visonic_device.getSensorModel(),
+#                "translation_key" : "trans_attr",
+                #"battery": 1 if self._visonic_device.isLowBattery else 100
             }
         return { 
-                 "manufacturer": "Visonic", 
+                 "manufacturer": MANUFACTURER, 
             }
 
     @property
@@ -217,46 +240,48 @@ class VisonicBinarySensor(BinarySensorEntity):
             stype = self._visonic_device.getSensorType()
 
             attr = {}
-            attr["device name"] = self._dname
+            attr["device_name"] = self._dname
             if self._visonic_device.isZoneTamper() is None:
-                attr["zone tamper"] = "Undefined"
+                attr["zone_tamper"] = "undefined"
             else:
-                attr["zone tamper"] = "Yes" if self._visonic_device.isZoneTamper() else "No"
+                attr["zone_tamper"] = self._visonic_device.isZoneTamper() 
             if self._visonic_device.isTamper() is None:
-                attr["device tamper"] = "Undefined"
+                attr["device_tamper"] = "undefined"
             else:
-                attr["device tamper"] = "Yes" if self._visonic_device.isTamper() else "No"
+                attr["device_tamper"] = self._visonic_device.isTamper()
             
             if stype != AlSensorType.MOTION and stype != AlSensorType.CAMERA:
-                attr["zone open"] = "Yes" if self._visonic_device.isOpen() else "No"
+                attr["zone_open"] = self._visonic_device.isOpen()
             
             if stype != AlSensorType.UNKNOWN:
-                attr["sensor type"] = str(stype)
+                attr["sensor_type"] = str(stype).lower()
             elif self._visonic_device.getRawSensorIdentifier() is not None:
-                attr["sensor type"] = "Undefined " + str(self._visonic_device.getRawSensorIdentifier())
+                attr["sensor_type"] = "Undefined " + str(self._visonic_device.getRawSensorIdentifier())
             else:
-                attr["sensor type"] = "Unknown"
+                attr["sensor_type"] = "unknown"
 
             #attr["zone type"] = self.ztype
-            attr["zone name"] = self._visonic_device.getZoneLocation()
-            attr["zone type"] = self._visonic_device.getZoneType()
-            attr["zone chime"] = self._visonic_device.getChimeType()
+            attr["zone_name"] = self._visonic_device.getZoneLocation()
+            attr["zone_type"] = self._visonic_device.getZoneType()
+            attr["zone_chime"] = self._visonic_device.getChimeType()
+            attr["zone_trouble"] = self._visonic_device.getProblem()
             
-            if self._visonic_device.getMotionDelayTime() is not None and len(str(self._visonic_device.getMotionDelayTime())) > 0:
-                attr["zone motion off time"] = self._visonic_device.getMotionDelayTime()
+            if self._client.isPowerMaster() and self._visonic_device.getMotionDelayTime() is not None and len(str(self._visonic_device.getMotionDelayTime())) > 0:
+                attr["zone_motion_off_time"] = self._visonic_device.getMotionDelayTime()
 
             attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()
 
-            attr[ATTR_TRIPPED] = "True" if self._visonic_device.isTriggered() else "False"
+            attr[ATTR_TRIPPED] = self._visonic_device.isTriggered()
             if stype is not None and stype != AlSensorType.WIRED:
                 attr[ATTR_BATTERY_LEVEL] = 0 if self._visonic_device.isLowBattery() else 100
-            attr[ATTR_ARMED] = "False" if self._visonic_device.isBypass() else "True"
+            attr[ATTR_ARMED] = not self._visonic_device.isBypass()
             if self._visonic_device.getLastTriggerTime() is None:
-                attr[ATTR_LAST_TRIP_TIME] = None
+                attr[ATTR_LAST_TRIP_TIME] = "unknown"
             else:
-                tm = self._visonic_device.getLastTriggerTime().isoformat()
+                tm = self._visonic_device.getLastTriggerTime().strftime("%d/%m/%Y, %H:%M:%S")
+                #tm = self._visonic_device.getLastTriggerTime().isoformat()
                 # miss off the decimal hundredths seconds onwards
-                tm = tm.replace("T", " ")[0:21]
+                #tm = tm.replace("T", " ")[0:21]
                 attr[ATTR_LAST_TRIP_TIME] = tm
                 # attr[ATTR_LAST_TRIP_TIME] = self.pmTimeFunctionStr(self.triggertime)
             attr[PANEL_ATTRIBUTE_NAME] = self._panel

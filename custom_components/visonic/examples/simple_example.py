@@ -37,7 +37,7 @@ class ConnectionMode(Enum):
 myconfig = { 
     CONF_DOWNLOAD_CODE: "",
     CONF_EMULATION_MODE: ConnectionMode.POWERLINK,
-    CONF_LANGUAGE: "EN",
+    CONF_LANGUAGE: "Panel",
     CONF_SIREN_SOUNDING: ["Intruder"]
 }
 
@@ -109,7 +109,7 @@ def getConfigData() -> PanelConfig:
         AlConfiguration.DownloadCode: myconfig.get(CONF_DOWNLOAD_CODE, ""),
         AlConfiguration.ForceStandard: ForceStandardMode,
         AlConfiguration.DisableAllCommands: DisableAllCommands,
-        AlConfiguration.PluginLanguage: myconfig.get(CONF_LANGUAGE, "EN"),
+        AlConfiguration.PluginLanguage: myconfig.get(CONF_LANGUAGE, "Panel"),
         AlConfiguration.SirenTriggerList: myconfig.get(CONF_SIREN_SOUNDING, ["Intruder"])
     }
 

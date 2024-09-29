@@ -1,0 +1,907 @@
+{
+    "title": "Visonic Centrale d'Alarme",
+    "config": {
+        "abort": {
+            "already_configured": "Connexion \u00e0 la Centrale d'Alarme d\u00e9j\u00e0 configur\u00e9e",
+            "device_error": "Le p\u00e9riph\u00e9rique doit \u00eatre Ethernet ou USB",
+            "emulation_mode_error": "Param\u00e8tre de mode d'\u00e9mulation incorrect",
+            "settings_missing": "Import des param\u00e8tres \u00e0 partir du fichier yaml mais les param\u00e8tres essentiels sont manquants",
+            "editing": "Merci pour vos modifications"
+        },
+        "error": {
+            "eth_or_usb": "Doit \u00eatre Ethernet ou USB",
+            "emulation_mode_error": "Param\u00e8tre de mode d'\u00e9mulation incorrect",
+            "unknown": "Erreur inattendue"
+        },
+        "step": {
+            "device": {
+                "description": "Entrez le type d'appareil et le num\u00e9ro de la Centrale",
+                "title": "Connexion",
+                "data": {
+                    "type": "Ethernet ou USB",
+                    "panel_number": "Num\u00e9ro de la Centrale"
+                }
+            },
+            "myethernet": {
+                "description": "Entrez vos param\u00e8tres Ethernet",
+                "title": "Configuration Ethernet",
+                "data": {
+                    "host": "Adresse de l'h\u00f4te",
+                    "port": "Port"
+                }
+            },
+            "myusb": {
+                "description": "Entrez vos param\u00e8tres USB",
+                "title": "Configuration USB",
+                "data": {
+                    "path": "Chemin local USB",
+                    "baud": "D\u00e9bit en bauds"
+                }
+            },
+            "parameters1": {
+                "description": "",
+                "title": "Param\u00e8tres de la Centrale d'Alarme",
+                "data": {
+                    "exclude_x10": "Appareils X10 \u00e0 exclure (s\u00e9par\u00e9s par des virgules)",
+                    "exclude_sensor": "Liste de capteurs \u00e0 exclure (s\u00e9par\u00e9s par des virgules)",
+                    "emulation_mode": "Mode \u00e9mulation",
+                    "download_code": "Code t\u00e9l\u00e9chargement",
+                    "show_eeprom_attributes": "Afficher les donn\u00e9es EEPROM dans les attributs d'alarme"
+                }
+            },
+            "parameters10": {
+                "description": "",
+                "title": "Param\u00e8tres de la Centrale d'Alarme",
+                "data": {
+                    "siren_sounding": "Liste des d\u00e9clencheurs de la sir\u00e8ne",
+                    "sensor_event_list": "Liste des modifications du capteur pour cr\u00e9er un Ev\u00e9nement",
+                    "panel_state_notifications": "Liste des d\u00e9clencheurs pour les notifications Home Assistant",
+                    "retry_connection_count": "Nombre d'essai de connexion",
+                    "retry_connection_delay": "D\u00e9lai (en secondes) entre les tentatives de reconnexion"
+                }
+            },
+            "parameters11": {
+                "description": "",
+                "title": "Param\u00e8tres de zone/capteur de la Centrale d’alarme",
+                "data": {
+                    "motion_off_delay": "D\u00e9lai du mouvement/de la cam\u00e9ra (secondes)",
+                    "magnet_closed_delay": "D\u00e9lai de fermeture magn\u00e9tique/filaire (secondes)",
+                    "emergency_off_delay": "D\u00e9lai de fum\u00e9e/incendie (secondes)"
+                }
+            },
+            "parameters12": {
+                "description": "",
+                "title": "Param\u00e8tres d’armement/d\u00e9sarmement de la Centrale d’alarme",
+                "data": {
+                    "arm_without_usercode": "Armement sans code utilisateur (non pris en charge par tous les panneaux)",
+                    "force_numeric_keypad": "Forcer l'utilisation d'un pav\u00e9 num\u00e9rique",
+                    "arm_home_enabled": "Armement Partiel Activ\u00e9",
+                    "arm_night_enabled": "Armement Nuit Activ\u00e9",
+                    "arm_away_instant": "Armement Total effectue un Armement Total Instantan\u00e9",
+                    "arm_home_instant": "Armement Partiel effectue un Armement Partiel Instantan\u00e9",
+                    "allow_remote_arm": "Permettre Armement de la Centrale \u00e0 partir de Home Assistant",
+                    "allow_remote_disarm": "Permettre D\u00e9sarmement de la Centrale \u00e0 partir de Home Assistant",
+                    "allow_sensor_bypass": "Permettre by-pass des capteurs"
+                }
+            },
+            "parameters13": {
+                "description": "",
+                "title": "Centrale d'Alarme Param\u00e8tres Fichier journal",
+                "data": {
+                    "panellog_complete_event": "G\u00e9n\u00e9rer un \u00e9v\u00e9nement HA \u00e0 la fin",
+                    "panellog_logentry_event": "G\u00e9n\u00e9rer un \u00e9v\u00e9nement HA pour chaque entr\u00e9e de journal",
+                    "panellog_csv_add_title_row": "Ajouter une ligne de titre au fichier CSV g\u00e9n\u00e9r\u00e9",
+                    "panellog_xml_filename": "Le nom du fichier XML (et le chemin)",
+                    "panellog_csv_filename": "Le nom du fichier CSV (et le chemin)",
+                    "panellog_reverse_order": "Inverser l'ordre de sortie",
+                    "panellog_max_entries": "Afficher uniquement les X entr\u00e9es de journal les plus r\u00e9centes"
+                }
+            }
+        }
+    },
+    "options": {
+        "abort": {
+            "already_configured": "Centrale d'Alarme Connexion d\u00e9j\u00e0 configur\u00e9e",
+            "emulation_mode_error": "Param\u00e8tre de mode d'\u00e9mulation incorrect",
+            "device_error": "Le p\u00e9riph\u00e9rique doit \u00eatre Ethernet ou USB",
+            "editing": "Merci pour vos modifications"
+        },
+        "error": {
+            "eth_or_usb": "Doit \u00eatre Ethernet ou USB",
+            "emulation_mode_error": "Param\u00e8tre de mode d'\u00e9mulation incorrect",
+            "unknown": "Erreur inattendue"
+        },
+        "step": {
+            "parameters10": {
+                "description": "",
+                "title": "Centrale d'Alarme Param\u00e8tres",
+                "data": {
+                    "siren_sounding": "Liste des d\u00e9clencheurs de la Sir\u00e8ne",
+                    "sensor_event_list": "Liste des modifications du capteur pour cr\u00e9er un \u00e9v\u00e9nement",
+                    "panel_state_notifications": "Liste des d\u00e9clencheurs pour les notifications Home Assistant",
+                    "retry_connection_count": "Nombre d'essais pour tenter la connexion",
+                    "retry_connection_delay": "D\u00e9lai (en secondes) entre les tentatives de reconnexion"
+                }
+            },
+            "parameters11": {
+                "description": "",
+                "title": "Centrale d'Alarme Zone/Capteur Param\u00e8tres",
+                "data": {
+                    "motion_off_delay": "D\u00e9lai du mouvement/de la cam\u00e9ra (secondes)",
+                    "magnet_closed_delay": "D\u00e9lai de fermeture magn\u00e9tique/filaire (secondes)",
+                    "emergency_off_delay": "D\u00e9lai de fum\u00e9e/incendie (secondes)"
+                }
+            },
+            "parameters12": {
+                "description": "",
+                "title": "Centrale d'Alarme Armement/D\u00e9sarmement Param\u00e8tres",
+                "data": {
+                    "arm_without_usercode": "Armement sans Code Utilisateur (pas support\u00e9 par toutes les centrales)",
+                    "force_numeric_keypad": "Clavier Num\u00e9rique Obligatoire",
+                    "arm_home_enabled": "Armement Partiel Activ\u00e9",
+                    "arm_night_enabled": "Armement Nuit Activ\u00e9",
+                    "arm_away_instant": "Armement Total effectue un Armement Total Instantan\u00e9",
+                    "arm_home_instant": "Armement Partiel effectue un Armement Partiel Instantan\u00e9",
+                    "allow_remote_arm": "Permettre Armement de la Centrale \u00e0 partir de Home Assistant",
+                    "allow_remote_disarm": "Permettre D\u00e9sarmement de la Centrale \u00e0 partir de Home Assistant",
+                    "allow_sensor_bypass": "Permettre by-pass des capteurs"
+                }
+            },
+            "parameters13": {
+                "description": "",
+                "title": "Centrale d'Alarme Param\u00e8tres Fichier journal",
+                "data": {
+                    "panellog_complete_event": "G\u00e9n\u00e9rer un \u00e9v\u00e9nement HA \u00e0 la fin",
+                    "panellog_logentry_event": "G\u00e9n\u00e9rer un \u00e9v\u00e9nement HA pour chaque entr\u00e9e de journal",
+                    "panellog_csv_add_title_row": "Ajouter une ligne de titre au fichier CSV g\u00e9n\u00e9r\u00e9",
+                    "panellog_xml_filename": "Le nom du fichier XML (et le chemin)",
+                    "panellog_csv_filename": "Le nom du fichier CSV (et le chemin)",
+                    "panellog_reverse_order": "Inverser l'ordre de sortie",
+                    "panellog_max_entries": "Afficher uniquement les X entr\u00e9es de journal les plus r\u00e9centes"
+                }
+            }
+        }
+    },    
+    "device_automation": {
+        "action_type": {
+            "arm_away": "Armement {entity_name} Total",
+            "arm_home": "Armement {entity_name} Partiel",
+            "arm_night": "Armement {entity_name} Nuit",
+            "arm_vacation": "Armement {entity_name} Vacances",
+            "disarm": "D\u00e9sarmement {entity_name}",
+            "trigger": "D\u00e9clenchement {entity_name}"
+        },
+        "condition_type": {
+            "is_triggered": "{entity_name} est D\u00e9clench\u00e9",
+            "is_disarmed": "{entity_name} est D\u00e9sarm\u00e9",
+            "is_armed_home": "{entity_name} est Arm\u00e9 Partiel",
+            "is_armed_away": "{entity_name} est Arm\u00e9 Total",
+            "is_armed_night": "{entity_name} est Arm\u00e9 Nuit",
+            "is_armed_vacation": "{entity_name} est Arm\u00e9 Vacances"
+        },
+        "extra_fields": {
+            "code": "Code",
+            "for": "[%key:common::device_automation::extra_fields::for%]"
+        },
+        "trigger_type": {
+            "triggered": "{entity_name} D\u00e9clench\u00e9",
+            "disarmed": "{entity_name} D\u00e9sarm\u00e9",
+            "armed_home": "{entity_name} Arm\u00e9 Partiel",
+            "armed_away": "{entity_name} Arm\u00e9 Total",
+            "armed_night": "{entity_name} Arm\u00e9 Nuit",
+            "armed_vacation": "{entity_name} Arm\u00e9 Vacances"
+        }
+    },
+    "services": {
+        "alarm_panel_eventlog": {
+            "name": "R\u00e9cup\u00e9rer le journal des \u00e9v\u00e9nements",
+            "description": "R\u00e9cup\u00e9rez le journal des \u00e9v\u00e9nements de la Centrale d'Alarme.",
+            "fields": {
+                "entity_id": {
+                    "name": "Centrale Visonic",
+                    "description": "Nom de la centrale Visonic."
+                },
+                "code": {
+                    "name": "Code utilisateur",
+                    "description": "Un code Utilisateur d'alarme optionnel (en fonction de vos Param\u00e8tres) \u00e0 envoyer \u00e0 la centrale."
+                }
+            }
+        },
+        "alarm_panel_command": {
+            "name": "Envoi Commande",
+            "description": "Envoyez une commande \u00e0 la Centrale d'Alarme.",
+            "fields": {
+                "entity_id": {
+                    "name": "Centrale Visonic",
+                    "description": "Nom (ID d'entit\u00e9) de la centrale Visonic."
+                },
+                "command": {
+                    "name": "Commande Centrale",
+                    "description": "La commande \u00e0 envoyer \u00e0 la Centrale ('Armement Total', 'Armement Total Instantan\u00e9', 'Armement Partiel', 'Armement Partiel Instantan\u00e9', 'D\u00e9sarmement', 'D\u00e9clenchement', 'Silencieux', 'Urgence', 'Panique', 'Incendie')."
+                },
+                "code": {
+                    "name": "Code Utilisateur",
+                    "description": "Un code Utilisateur d'alarme optionnel (en fonction de vos Param\u00e8tres) \u00e0 envoyer \u00e0 la centrale."
+                }
+            }
+        },
+        "alarm_panel_x10": {
+            "name": "Commande X10",
+            "description": "Envoyez une commande X10 \u00e0 un appareil X10.",
+            "fields": {
+                "entity_id": {
+                    "name": "Commutateur Visonic X10",
+                    "description": "Nom du commutateur Visonic X10. Sensible \u00e0 la casse et constitue un param\u00e8tre obligatoire. Le 'switch.' le texte est facultatif."
+                },
+                "x10command": {
+                    "name": "Commande X10",
+                    "description": "Commande X10 : Eteint, Allum\u00e9, Variateur, Luminosit\u00e9."
+                }
+            }
+        },
+        "alarm_panel_reconnect": {
+            "name": "Reconnexion de la centrale",
+            "description": "Reconnexion \u00e0 la Centrale d'Alarme suite \u00e0 un pr\u00e9c\u00e9dent probl\u00e8me.",
+            "fields": {
+                "entity_id": {
+                    "name": "Centrale Visonic",
+                    "description": "Nom de la centrale Visonic."
+                }
+            }
+        },
+        "alarm_sensor_image": {
+            "name": "R\u00e9cup\u00e9rer l'image du capteur",
+            "description": "R\u00e9cup\u00e9rer l'image du capteur, cela ne fonctionne que si le capteur est une cam\u00e9ra PIR.",
+            "fields": {
+                "entity_id": {
+                    "name": "Capteur Visonic (Image)",
+                    "description": "Nom du capteur Visonic."
+                }
+            }
+        },
+        "alarm_sensor_bypass": {
+            "name": "By-pass du capteur",
+            "description": "By-pass et r\u00e9armer un capteur Visonic.",
+            "fields": {
+                "entity_id": {
+                    "name": "Capteur Visonic",
+                    "description": "Nom du capteur visonique \u00e0 by-passer. Ceci est sensible \u00e0 la casse et constitue un param\u00e8tre obligatoire. Le 'binary_sensor.' le texte est facultatif."
+                },
+                "bypass": {
+                    "name": "By-pass Commande",
+                    "description": "Pour by-passer ou r\u00e9armer un capteur."
+                },
+                "code": {
+                    "name": "Code Utilisateur",
+                    "description": "Un code Utilisateur d'alarme optionnel (en fonction de vos Param\u00e8tres) \u00e0 envoyer \u00e0 la centrale."
+                }
+            }
+        }
+    },
+    "entity": {
+  	    "switch": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"panel": {
+						"name": "Centrale ID"
+					},
+					"name": {
+						"name": "Nom"
+					},
+					"type": {
+						"name": "Type",
+						"state": {
+							"Dimmer Switch" : "Dimmer Switch",
+							"OnOff Switch"  : "OnOff Switch"
+						}
+					},
+					"visonic_device": {
+						"name": "ID de l'appareil de zone"
+					},
+					"location": {
+						"name": "Location",
+						"state": {
+							"attic"           : "Grenier",
+							"back_door"       : "Porte-arri\u00e8re",
+							"basement"        : "Sous-sol",
+							"bathroom"        : "Salle de Bains",
+							"bedroom"         : "Chambre",
+							"child_room"      : "Chambre enfant",
+							"conservatory"    : "Dressing",
+							"play_room"       : "Salle de S\u00e9jour",
+							"dining_room"     : "Salle \u00e0 Manger",
+							"downstairs"      : "Rez de chauss\u00e9e",
+							"emergency"       : "Urgence",
+							"fire"            : "Incendie",
+							"front_door"      : "Porte d'entr\u00e9e",
+							"garage"          : "Garage",
+							"garage_door"     : "Porte de garage",
+							"guest_room"      : "Chambre d'ami",
+							"hall"            : "Hall d'entr\u00e9e",
+							"kitchen"         : "Cuisine",
+							"laundry_room"    : "Buanderie",
+							"living_room"     : "Salon",
+							"master_bathroom" : "SDB principale",
+							"master_bedroom"  : "Chambre principale",
+							"office"          : "Bureau",
+							"upstairs"        : "Premier Etage",
+							"utility_room"    : "Arri\u00e8re Cuisine",
+							"yard"            : "Cour",
+							"custom_1"        : "Personnalis\u00e9 1",
+							"custom_2"        : "Personnalis\u00e92",
+							"custom_3"        : "Personnalis\u00e93",
+							"custom_4"        : "Personnalis\u00e9 4",
+							"custom_5"        : "Personnalis\u00e9 5",
+							"not_installed"   : "Non install\u00e9"
+						}
+					}
+   			    }
+			}
+		},
+  	    "select": {
+	        "alarm_panel_key": {
+				"state": {
+					"armed": "Arm\u00e9",
+					"bypass": "By-pass"
+				},
+				"state_attributes": {
+					"panel": {
+						"name": "Centrale ID"
+					},
+					"visonic_device": {
+						"name": "ID de l'appareil de zone"
+					}
+   			    }
+			}
+		},
+  	    "image": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"panel": {
+						"name": "Centrale ID"
+					},
+					"visonic_device": {
+						"name": "ID de l'appareil de zone"
+					}
+   			    }
+			}
+		},
+  	    "sensor": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"panel": {
+						"name": "Centrale ID"
+					}
+   			    }
+			}
+		},
+  	    "binary_sensor": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"device_name": {
+						"name": "Nom Appareil"
+					},
+					"zone_name": {
+						"name": "Nom Zone",
+						"state": {
+							"attic"           : "Grenier",
+							"back_door"       : "Porte-arri\u00e8re",
+							"basement"        : "Sous-sol",
+							"bathroom"        : "Salle de Bains",
+							"bedroom"         : "Chambre",
+							"child_room"      : "Chambre enfant",
+							"conservatory"    : "Dressing",
+							"play_room"       : "Salle de S\u00e9jour",
+							"dining_room"     : "Salle \u00e0 Manger",
+							"downstairs"      : "Rez de chauss\u00e9e",
+							"emergency"       : "Urgence",
+							"fire"            : "Incendie",
+							"front_door"      : "Porte d'entr\u00e9e",
+							"garage"          : "Garage",
+							"garage_door"     : "Porte de garage",
+							"guest_room"      : "Chambre d'ami",
+							"hall"            : "Hall d'entr\u00e9e",
+							"kitchen"         : "Cuisine",
+							"laundry_room"    : "Buanderie",
+							"living_room"     : "Salon",
+							"master_bathroom" : "SDB principale",
+							"master_bedroom"  : "Chambre principale",
+							"office"          : "Bureau",
+							"upstairs"        : "Premier Etage",
+							"utility_room"    : "Arri\u00e8re Cuisine",
+							"yard"            : "Cour",
+							"custom_1"        : "Personnalis\u00e9 1",
+							"custom_2"        : "Personnalis\u00e9 2",
+							"custom_3"        : "Personnalis\u00e9 3",
+							"custom_4"        : "Personnalis\u00e9 4",
+							"custom_5"        : "Personnalis\u00e9 5",
+							"not_installed"   : "Non install\u00e9"
+						}
+					},
+					"zone_type": {
+						"name": "Type Zone",
+						"state": {
+							"non-alarm"        : "Non Alarme",
+							"emergency"        : "Urgence",
+							"flood"            : "Inondation",
+							"gas"              : "Gaz",
+							"delay_1"          : "Tempo 1",
+							"delay_2"          : "Tempo 2",
+							"interior_follow"  : "Interior-Follow",
+							"perimeter"        : "Voie P\u00e9riph\u00e9rique",
+							"perimeter_follow" : "Voie P\u00e9riph\u00e9rique d'Entr\u00e9e",
+							"24_hours_silent"  : "24 Heures Silencieuse",
+							"24_hours_audible" : "24 Heures Audible",
+							"fire"             : "Incendie",
+							"interior"         : "Int\u00e9rieure",
+							"home_delay"       : "Home Delay",
+							"temperature"      : "Temp\u00e9rature",
+							"outdoor"          : "Ext\u00e9rieure",
+							"undefined"        : "Undefined"
+						}
+					},
+					"zone_trouble": {
+						"name": "Probl\u00e8me Zone",
+						"state": {
+							"none"         : "Aucun",
+							"tamper"       : "Alarme Autoprotection",
+							"jamming"      : "D\u00e9tection Brouillage Radio",
+							"comm_failure" : "Echec de Communication",
+							"line_failure" : "Echec Ligne T\u00e9l\u00e9phonique",
+							"fuse"         : "Fusible",
+							"not_active"   : "Pas Active",
+							"ac_failure"   : "Echec Alimentation Secteur"
+						}
+					},
+					"zone_chime": {
+						"name": "Carillon Zone",
+						"state": {
+							"chime_off"       : "Eteint",
+							"melody_chime"    : "M\u00e9lodie",
+							"zone_name_chime" : "Zone M\u00e9lodie"
+						}
+					},
+					"zone_motion_off_time": {
+						"name": "Temps d'arr\u00eat du mouvement de zone"
+					},
+					"visonic_device": {
+						"name": "ID du p\u00e9riph\u00e9rique de zone"
+					},
+					"battery_level": {
+						"name": "Niveau de batterie"
+					},
+					"last_tripped_time": {
+						"name": "Temps de d\u00e9clenchement de zone",
+						"state": {
+							"unknown": "Pas encore d\u00e9clench\u00e9"
+						}
+					},
+					"panel": {
+						"name": "Centrale ID"
+					},
+					"device_tamper": {
+						"name": "Autoprotection de l'appareil",
+						"state": {
+							"false": "Bon",
+							"true": "Alerte",
+							"undefined": "Ind\u00e9fini"
+						}
+					},
+					"device_tripped": {
+						"name": "Appareil d\u00e9clench\u00e9",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"device_armed": {
+						"name": "Appareil Arm\u00e9",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"sensor_type": {
+						"name": "Type Capteur",
+						"state": {
+							"magnet"     : "Aimant",
+							"motion"     : "Mouvement PIR",
+							"camera"     : "Cam\u00e9ra PIR",
+							"wired"      : "Filaire",
+							"smoke"      : "Fum\u00e9e",
+							"flood"      : "Inondation",
+							"gas"        : "Gaz",
+							"vibration"  : "Vibration",
+							"shock"      : "Choc",
+							"temperature": "Temp\u00e9rature",
+							"sound"      : "Son",
+							"unknown"    : "Inconnu"
+						}
+					},
+					"zone_open": {
+						"name": "Zone ouverte",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"zone_tamper": {
+						"name": "Autoprotection de zone",
+						"state": {
+							"false": "Bon",
+							"true": "Alerte",
+							"undefined": "Ind\u00e9fini"
+						}
+					}
+				}				
+			}
+		},
+  	    "alarm_control_panel": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"code_format": {
+						"name": "Format Code",
+						"state": {
+							"text": "Texte",
+							"number": "Nombre"
+						}
+					},
+					"changed_by": {
+						"name": "Modifi\u00e9 Par"
+					},
+					"code_arm_required": {
+						"name": "Code pour Armement",
+						"state": {
+							"true": "Requis",
+							"false": "Non requis"
+						}
+					},
+					"mode": {
+						"unknown": "Inconnu",
+						"problem": "Probl\u00e8me",
+						"starting": "D\u00e9marrage",
+						"standard": "Standard",
+						"standard_plus": "Standard Plus",
+						"powerlink": "Powerlink",
+						"powerlink_bridged": "Powerlink (Bridged)",
+						"download": "T\u00e9l\u00e9chargement EPROM",
+						"stopped": "Integration Stopp\u00e9",
+						"minimal_only": "Centrale Minimale Connexion"
+					},
+					"state": {
+						"unknown": "Inconnu",
+						"disarmed": "D\u00e9sarm\u00e9",
+						"arming_home": "D\u00e9lai Armement Partiel",
+						"arming_away": "D\u00e9lai Armement Total",
+						"entry_delay": "D\u00e9lai d'Entr\u00e9e",
+						"armed_home": "Arm\u00e9 Partiel",
+						"armed_away": "Arm\u00e9 Total",
+						"armed_home_bypass": "Isolation Partielle",
+						"armed_away_bypass": "Isolation Total",
+						"armed_home_instant": "Arm\u00e9 Partiel Instantan\u00e9",
+						"armed_away_instant": "Arm\u00e9 Total Instantan\u00e9",
+						"entry_delay_instant": "Temporisation d'Entr\u00e9e Instantan\u00e9",
+						"user_test": "Test Utilisateur",
+						"downloading": "T\u00e9l\u00e9chargement EPROM",
+						"installer": "Mode Installateur",
+						"triggered": "D\u00e9clench\u00e9"
+					},
+					"ready": {
+						"tamper": "Centrale pr\u00eate",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"tamper": {
+						"tamper": "Alarme de sabotage de la centrale",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"memory": {
+						"name": "Alerte en m\u00e9moire de la centrale",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"bypass": {
+						"name": "By-pass Centrale",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"alarm": {
+					    "name" : "Alarme",
+						"state" : {
+							"none"     : "Aucune Alarme",
+							"intruder" : "Intrus",
+							"tamper"   : "Sabotage",
+							"panic"    : "Panique",
+							"fire"     : "Incendie",
+							"emergency": "Urgence",
+							"gas"      : "Gaz",
+							"flood"    : "Inondation"
+						}
+					},
+					"trouble": {
+					    "name" : "D\u00e9faut",
+						"state" : {
+							"none"         : "Aucun",
+							"general"      : "G\u00e9n\u00e9rale",
+							"communication": "Echec de Communication",
+							"battery"      : "Batterie Faible",
+							"power"        : "Echec Alimentation Secteur",
+							"jamming"      : "D\u00e9tection Brouillage Radio",
+							"telephone"    : "Echec Ligne T\u00e9l\u00e9phonique"
+						}
+					},
+					"lasteventname": {
+					    "name" : "Nom du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventaction": { 
+					    "name" : "Action du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventtime": { 
+					    "name" : "Heure du dernier \u00e9v\u00e9nement"
+					}
+				}
+	        }
+	    }
+	},
+    "selector": {
+        "alarm_command": {
+            "options": {
+                "disarm": "D\u00e9sarmement",
+                "arm_home": "Armement Partiel",
+                "arm_home_instant": "Armement Partiel Instantan\u00e9",
+                "arm_away": "Armement Total",
+                "arm_away_instant": "Armement Total Instantan\u00e9",
+                "mute": "Sir\u00e8ne Silencieuse",
+                "trigger": "D\u00e9clenchement Sir\u00e8ne",
+                "fire": "Incendie Alarme",
+                "emergency": "Urgence Alarme",
+                "panic": "Panique Alarme"
+            }
+        },
+        "bypass_command": {
+            "options": {
+                "off": "Active",
+                "on": "By-pass"
+            }
+        },
+        "x10command": {
+            "options": {
+                "off": "Eteint",
+                "on": "Allum\u00e9",
+                "dimmer": "Diminution Luminosit\u00e9",
+                "brighten": "Augmentation Luminosit\u00e9"
+            }
+        },
+        "siren_sounding": {
+            "options": {
+                "intruder": "Intrus",
+                "tamper": "Sabotage",
+                "fire": "Incendie",
+                "emergency": "Urgence",
+                "gas": "Gaz",
+                "flood": "Inondation",
+                "x10": "X10",
+                "panic": "Panique"                  
+            }
+        },
+        "sensor_event_list": {
+            "options": {
+				"problem":   "Probl\u00e8me",
+				"fire":      "Incendie",
+				"emergency": "Urgence",
+				"panic":     "Panique"
+            }
+        },
+		"panel_state_notifications": {
+            "options": {
+				"siren_sounding": "Sir\u00e8ne qui sonne",
+				"panel_reset":  "R\u00e9initialisation du syst\u00e8me de la centrale",
+				"invalid_pin": "Code rejet\u00e9 par la centrale",
+				"panel_operation": "Op\u00e9ration centrale",
+				"connection_problem": "Probl\u00e8mes de connexion",
+				"bypass_problem": "Probl\u00e8mes de by-pass du capteur",
+				"image_problem": "Probl\u00e8mes de r\u00e9cup\u00e9ration d'image",
+				"eventlog_problem": "Probl\u00e8mes de journal des \u00e9v\u00e9nements",
+				"command_not_sent": "Commande non envoy\u00e9e \u00e0 la centrale",
+				"x10_problem": "Probl\u00e8me X10"
+			}
+		}
+    },
+    "exceptions": {
+        "no_panel_connection": {
+            "message": "Visonic Integration pour {myname} n'est pas connect\u00e9 \u00e0 la centrale."
+        },
+        "invalid_arm_state": {
+            "message": "Invalide : impossible de d\u00e9finir l'\u00e9tat arm\u00e9 sur {option}. Les \u00e9tats autoris\u00e9s sont : {options}"
+        },
+        "invalid_arm_state_no_option": {
+            "message": "\u00e9tat arm\u00e9 non d\u00e9fini. Les \u00e9tats autoris\u00e9s sont : {options}"
+        }
+	},
+	"entity_component": {
+  	    "event_name": {
+			"state": {
+			    "startup"   : "D\u00e9marrage",
+				"system"    : "Syst\u00e8me",
+				"zone"      : "Zone",
+				"fob"       : "Memcl\u00e9",
+				"user"      : "Utilisateur",
+				"pad"       : "Pad",
+				"siren"     : "Sir\u00e8ne",
+				"2pad"      : "2Pad",
+				"x10"       : "X10",
+				"pgm"       : "PGM",
+				"gsm"       : "GSM",
+				"powerlink" : "P-LINK",
+				"ptag"      : "PTag",
+				"repeater"  : "Rptr",
+				"undefined" : "Inconnu"
+			}
+		},
+  	    "event_action": {
+			"state": {
+				"000"  : "Aucun",
+				"001"  : "Alarme Int\u00e9rieure",
+				"002"  : "Alarme P\u00e9riph\u00e9rie",
+				"003"  : "Alarme Diff\u00e9r\u00e9e",
+				"004"  : "Alarme Silencieuse 24H",
+				"005"  : "Alarme Audible 24H",
+				"006"  : "Autoprotection",
+				"007"  : "Alarme Autoprotection Centrale",
+				"008"  : "Alarme Autoprotection",
+				"009"  : "Alarme Autoprotection",
+				"010"  : "D\u00e9faut de communication",
+				"011"  : "Alarme Panique Depuis Memcl\u00e9",
+				"012"  : "Alarme Panique depuis Centrale",
+				"013"  : "Contrainte",
+				"014"  : "Confirmer l'alarme",
+				"015"  : "Perte de Communication",
+				"016"  : "R\u00e9tablissement D\u00e9faut Supervision",
+				"017"  : "R\u00e9tablissement Alarme Int\u00e9rieure",
+				"018"  : "R\u00e9tablissement Alarme P\u00e9riph\u00e9rie",
+				"019"  : "R\u00e9tablissement Alarme Diff\u00e9r\u00e9e",
+				"020"  : "R\u00e9tablissement Alarme Silencieuse 24H",
+				"021"  : "R\u00e9tablissement Alarme Audible 24H",
+				"022"  : "R\u00e9tablissement Autoprotection",
+				"023"  : "R\u00e9tablissement Alarme Autoprotection Centrale",
+				"024"  : "R\u00e9tablissement Alarme Autoprotection",
+				"025"  : "R\u00e9tablissement Alarme Autoprotection",
+				"026"  : "R\u00e9tablissement des Communications",
+				"027"  : "Annuler Alarme",
+				"028"  : "R\u00e9tablissement G\u00e9n\u00e9ral",
+				"029"  : "R\u00e9tablissement D\u00e9faut",
+				"030"  : "Pas utilis\u00e9",
+				"031"  : "Evenement Fermeture R\u00e9cente",
+				"032"  : "Alarme Incendie",
+				"033"  : "R\u00e9tablissement Alarme Incendie",
+				"034"  : "Non Actif",
+				"035"  : "Urgence",
+				"036"  : "Pas utilis\u00e9",
+				"037"  : "D\u00e9sarmement Latchkey",
+				"038"  : "R\u00e9tablissement Alarme Panique",
+				"039"  : "D\u00e9faut Supervision (Inactive)",
+				"040"  : "R\u00e9tablissement Supervision (Active)",
+				"041"  : "Batterie Faible",
+				"042"  : "R\u00e9tablissement Batterie Faible",
+				"043"  : "Coupure Secteur",
+				"044"  : "R\u00e9tablissement Secteur",
+				"045"  : "Batterie Centrale Faible",
+				"046"  : "R\u00e9tablissement Batterie Centrale Faible",
+				"047"  : "D\u00e9tection Brouillage Radio",
+				"048"  : "R\u00e9tablissement D\u00e9tection Brouillage Radio",
+				"049"  : "D\u00e9faut Communication",
+				"050"  : "R\u00e9tablissement Communications",
+				"051"  : "D\u00e9faut Ligne T\u00e9l\u00e9phonique",
+				"052"  : "R\u00e9tablissement Ligne T\u00e9l\u00e9phonique",
+				"053"  : "Auto Test",
+				"054"  : "Coupure Secteur/Fusible",
+				"055"  : "R\u00e9tablissement Secteur/Fusible",
+				"056"  : "Memcl\u00e9 Batterie Faible",
+				"057"  : "R\u00e9tablissement Memcl\u00e9 Batterie Faible",
+				"058"  : "R\u00e9initialisation Technicien",
+				"059"  : "Batterie D\u00e9connect\u00e9e",
+				"060"  : "Clavier/T\u00e9l\u00e9commande Batterie Faible",
+				"061"  : "R\u00e9tablissement Clavier/T\u00e9l\u00e9commande Batterie Faible",
+				"062"  : "Clavier/T\u00e9l\u00e9commande Inactif",
+				"063"  : "R\u00e9tablissement Clavier/T\u00e9l\u00e9commande Actif",
+				"064"  : "Batterie Faible",
+				"065"  : "Nettoyage D\u00e9tecteur Incendie",
+				"066"  : "Alarme incendie",
+				"067"  : "Batterie Faible",
+				"068"  : "R\u00e9tablissement Batterie",
+				"069"  : "Coupure Secteur",
+				"070"  : "R\u00e9tablissement Secteur",
+				"071"  : "D\u00e9faut Supervision (Inactive)",
+				"072"  : "R\u00e9tablissement Supervision (Active)",
+				"073"  : "Alarme Gaz",
+				"074"  : "R\u00e9tablissement Alarme Gaz",
+				"075"  : "D\u00e9faut Gaz",
+				"076"  : "R\u00e9tablissement D\u00e9faut Gaz",
+				"077"  : "Alarme Inondation",
+				"078"  : "R\u00e9tablissement Alarme Inondation",
+				"079"  : "D\u00e9faut X-10",
+				"080"  : "R\u00e9tablissement D\u00e9faut X-10",
+				"081"  : "Armement Partiel",
+				"082"  : "Armement Total",
+				"083"  : "Armement Partiel Instantan\u00e9",
+				"084"  : "Armement Total Instantan\u00e9",
+				"085"  : "D\u00e9sarmement",
+				"086"  : "Echec d'armement",
+				"087"  : "Entrer dans Mode Test",
+				"088"  : "Sortir du Mode Test",
+				"089"  : "Fermeture Forc\u00e9e",
+				"090"  : "Armement Automatique",
+				"091"  : "Armement Instantan\u00e9",
+				"092"  : "Bypass",
+				"093"  : "Echec d'Armement",
+				"094"  : "Porte Ouverte",
+				"095"  : "Communication \u00e9tablie par le panneau de control",
+				"096"  : "R\u00e9initialisation du Syst\u00e8me",
+				"097"  : "Installer Programming",
+				"098"  : "Mauvais code PIN",
+				"099"  : "Not Sys Event",
+				"100"  : "Not Sys Event",
+				"101"  : "Alerte Chaleure Extr\u00eame",
+				"102"  : "R\u00e9tablissement Alerte Chaleure Extr\u00eame",
+				"103"  : "Alerte Gel",
+				"104"  : "R\u00e9tablissement Alerte Gel",
+				"105"  : "Alerte Froid",
+				"106"  : "R\u00e9tablissement Alerte Froid",
+				"107"  : "Alerte Chaud",
+				"108"  : "R\u00e9tablissement Alerte Chaud",
+				"109"  : "D\u00e9faut Capteur de Temp\u00e9rature",
+				"110"  : "R\u00e9tablissement D\u00e9faut Capteur de Temp\u00e9rature",
+				"111"  : "PIR Masqu\u00e9",
+				"112"  : "R\u00e9tablissement PIR Masqu\u00e9",
+				"113"  : "Repeater low battery",
+				"114"  : "Repeater low battery restore",
+				"115"  : "Repeater inactive",
+				"116"  : "Repeater inactive restore",
+				"117"  : "Repeater tamper",
+				"118"  : "Repeater tamper restore",
+				"119"  : "Sir\u00e8ne test end",
+				"120"  : "Devices test end",
+				"121"  : "One way comm. trouble",
+				"122"  : "One way comm. trouble restore",
+				"123"  : "Sensor outdoor alarm",
+				"124"  : "Sensor outdoor restore",
+				"125"  : "Guard sensor alarmed",
+				"126"  : "Guard sensor alarmed restore",
+				"127"  : "Date time change",
+				"128"  : "System shutdown",
+				"129"  : "System power up",
+				"130"  : "Missed Reminder",
+				"131"  : "Pendant test fail",
+				"132"  : "Basic KP inactive",
+				"133"  : "Basic KP inactive restore",
+				"134"  : "Basic KP tamper",
+				"135"  : "Basic KP tamper Restore",
+				"136"  : "Heat",
+				"137"  : "Heat restore",
+				"138"  : "LE Heat Trouble",
+				"139"  : "CO alarm",
+				"140"  : "CO alarm restore",
+				"141"  : "CO trouble",
+				"142"  : "CO trouble restore",
+				"143"  : "Sortir Mode Installeur",
+				"144"  : "Entrer Mode Installeur",
+				"145"  : "Self test trouble",
+				"146"  : "Self test restore",
+				"147"  : "Confirm panic event",
+				"148"  : "n/a",
+				"149"  : "Soak test fail",
+				"150"  : "Fire Soak test fail",
+				"151"  : "Gas Soak test fail"
+			}
+		}
+	}
+}

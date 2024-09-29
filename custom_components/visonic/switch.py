@@ -15,6 +15,7 @@ from .client import VisonicClient
 from .const import (
     DOMAIN,
     PANEL_ATTRIBUTE_NAME,
+    MANUFACTURER,
     DEVICE_ATTRIBUTE_NAME,
 )
 
@@ -50,6 +51,9 @@ async def async_setup_entry(
 class VisonicSwitch(SwitchEntity):
     """Representation of a Visonic X10 Switch."""
 
+    _attr_translation_key: str = "alarm_panel_key"
+    #_attr_has_entity_name = True
+
     def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSwitchDevice):
         """Initialise a Visonic X10 Device."""
         #_LOGGER.debug("Creating X10 Switch %s", visonic_device.id)
@@ -78,7 +82,7 @@ class VisonicSwitch(SwitchEntity):
         # the switch parameter is the same as self._visonic_device, but it's a generic callback handler that cals this function
         _LOGGER.debug("Switch changeHandler %s", str(self._name))
         self._current_value = self._visonic_device.isOn()
-        if self.entity_id is not None:
+        if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state()
 
     @property
@@ -124,21 +128,38 @@ class VisonicSwitch(SwitchEntity):
     def device_info(self):
         """Return information about the device."""
         if self._visonic_device is not None:
+            n = f"Visonic X10 ({self._dname})" if self._panel == 0 else f"Visonic X10 ({self._panel}/{self._dname})"
             return {
-                "manufacturer": "Visonic",
+                "manufacturer": MANUFACTURER,
                 "identifiers": {(DOMAIN, self._name)},
-                "name": f"Visonic X10 ({self._dname})",
+                "name": n,
                 "model": self._visonic_device.getType(),
                 # "sw_version": self._api.information.version_string,
             }
         return { 
-                 "manufacturer": "Visonic", 
+                 "manufacturer": MANUFACTURER, 
             }
+
+    def isPanelConnected(self) -> bool:
+        """Are we connected to the Alarm Panel."""
+        # If we are starting up or have been removed then assume we need a valid code
+        #_LOGGER.debug(f"alarm control panel isPanelConnected {self.entity_id=}")
+        if self._client is None:
+            return False
+        return self._client.isPanelConnected()
 
     # "off"  "on"  "dimmer"  "brighten"
     def turnmeonandoff(self, state : AlX10Command):
         """Send disarm command."""
-        self._client.setX10(self._x10id, state)
+        if not self.isPanelConnected():
+            raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="no_panel_connection",
+                    translation_placeholders={
+                        "myname": self._client.getAlarmPanelUniqueIdent() if self._client is not None else "<Your Panel>"
+                    }
+                )
+        self._client.sendX10(self._x10id, state)
 
     @property
     def extra_state_attributes(self):

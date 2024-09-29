@@ -1,167 +1,167 @@
 {
-    "title": "Visonic Alarm Panel",
+    "title": "Configurazione Allarme Visonic",
     "config": {
         "abort": {
-            "already_configured": "Alarm Panel Connection Already Configured",
-            "device_error": "Device must be either Ethernet or USB",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "settings_missing": "Import setting from yaml file but essential settings are missing",
-            "editing": "Thankyou for your edits"
+            "already_configured": "Errore: Connessione al Pannello di Allarme gi\u00E0 configurata",
+            "device_error": "Errore: il dispositivo deve essere Ethernet o USB",
+            "emulation_mode_error": "Errore: impostazione modalit\u00E0 emulazione non corretta",
+            "settings_missing": "Errore: importazione impostazioni dal file yaml ma mancano impostazioni essenziali",
+            "editing": "Grazie per le modifiche"
         },
         "error": {
-            "eth_or_usb": "Must be one of Ethernet or USB",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "unknown": "Unexpected error"
+            "eth_or_usb": "Deve essere Ethernet o USB",
+            "emulation_mode_error": "Impostazione modalit\u00E0 emulazione non corretta",
+            "unknown": "Errore sconosciuto"
         },
         "step": {
             "device": {
-                "description": "Enter your Device Type and Panel Number",
-                "title": "Connection",
+                "description": "Inserisci il tipo di dispositivo e il numero del pannello",
+                "title": "Connessione",
                 "data": {
-                    "type": "Ethernet or USB",
-                    "panel_number": "Panel Number"
+                    "type": "Ethernet o USB",
+                    "panel_number": "Numero del Pannello"
                 }
             },
             "myethernet": {
-                "description": "Enter your Ethernet Settings",
-                "title": "Ethernet Configuration",
+                "description": "Inserisci le impostazioni Ethernet",
+                "title": "Configurazione Ethernet",
                 "data": {
-                    "host": "Host Address",
-                    "port": "Port"
+                    "host": "Indirizzo Host",
+                    "port": "Porta"
                 }
             },
             "myusb": {
-                "description": "Enter your USB Settings",
-                "title": "USB Configuration",
+                "description": "Inserisci le impostazioni USB",
+                "title": "Configurazione USB",
                 "data": {
-                    "path": "USB Local Path",
-                    "baud": "Baud Rate"
+                    "path": "Percorso Locale USB",
+                    "baud": "Velocit\u00E0 di Trasmissione"
                 }
             },
             "parameters1": {
                 "description": "",
-                "title": "Alarm Panel Settings",
+                "title": "Impostazioni Pannello di Allarme",
                 "data": {
-                    "exclude_x10": "X10 Devices to Exclude (comma separated)",
-                    "exclude_sensor": "Sensor List to Exclude (comma separated)",
-                    "emulation_mode": "Emulation Mode",
-                    "download_code": "Download Code",
-                    "show_eeprom_attributes": "Show the EEPROM Data in the Alarm Attributes"
+                    "exclude_x10": "Dispositivi X10 da escludere (separati da virgole)",
+                    "exclude_sensor": "Elenco dei sensori da escludere (separati da virgole)",
+                    "emulation_mode": "Modalit\u00E0 Emulazione",
+                    "download_code": "Codice di Download",
+                    "show_eeprom_attributes": "Mostra i Dati EEPROM negli Attributi dell'Allarme"
                 }
             },
             "parameters10": {
                 "description": "",
-                "title": "Alarm Panel Settings",
+                "title": "Impostazioni Pannello di Allarme",
                 "data": {
-                    "siren_sounding": "List of triggers for the siren",
-                    "sensor_event_list": "List of Sensor changes to create an Event",
-                    "panel_state_notifications": "List of triggers for Home Assistant Notifications",
-                    "retry_connection_count": "Try this number of times to attempt the connection",
-                    "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
+                    "siren_sounding": "Elenco dei trigger per la sirena",
+                    "sensor_event_list": "Elenco delle modifiche ai sensori per creare un evento",
+                    "panel_state_notifications": "Elenco dei trigger per le notifiche di Home Assistant",
+                    "retry_connection_count": "Numero di tentativi di riconnessione",
+                    "retry_connection_delay": "Tempo di ritardo (secondi) tra i tentativi di riconnessione"
                 }
             },
             "parameters11": {
                 "description": "",
-                "title": "Alarm Panel Zone/Sensor Settings",
+                "title": "Impostazioni Pannello di Allarme",
                 "data": {
-                    "motion_off_delay": "Motion/Camera off delay time (seconds)",
-                    "magnet_closed_delay": "Magnet/Wired closed delay time (seconds)",
-                    "emergency_off_delay": "Smoke/Fire off delay time (seconds)"
+                    "motion_off_delay": "Tempo di ritardo spegnimento Movimento/Telecamera (secondi)",
+                    "magnet_closed_delay": "Tempo di ritardo chiusura Magnetico/Cablato (secondi)",
+                    "emergency_off_delay": "Tempo di ritardo spegnimento Emergenza Incendio/Fumo (secondi)"
                 }
             },
             "parameters12": {
                 "description": "",
-                "title": "Alarm Panel Arm/Disarm Settings",
+                "title": "Impostazioni Inserimento/Disinserimento del Pannello di Allarme",
                 "data": {
-                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
-                    "force_numeric_keypad": "Force use of a Numeric Keypad",
-                    "arm_home_enabled": "Arm Home Enabled",
-                    "arm_night_enabled": "Arm Night Enabled",
-                    "arm_away_instant": "Arm Away performs an Arm Away Instant",
-                    "arm_home_instant": "Arm Home performs an Arm Home Instant",
-                    "allow_remote_arm": "Allow Panel Arm from Home Assistant",
-                    "allow_remote_disarm": "Allow Panel DisArm from Home Assistant",
-                    "allow_sensor_bypass": "Allow each sensor to be bypassed"
+                    "arm_without_usercode": "Attiva senza codice utente (non supportato da tutti i pannelli)",
+                    "force_numeric_keypad": "Forza l'uso di una Tastiera Numerica",
+                    "arm_home_enabled": "Inserimento modalit\u00E0 Casa abilitata",
+                    "arm_night_enabled": "Inserimento modalit\u00E0 Notte abilitata",
+                    "arm_away_instant": "Inserimento modalit\u00E0 Assente istantanea",
+                    "arm_home_instant": "Inserimento modalit\u00E0 Casa istantanea",
+                    "allow_remote_arm": "Consenti inserimento da remoto da Home Assistant",
+                    "allow_remote_disarm": "Consenti disinserimento da remoto da Home Assistant",
+                    "allow_sensor_bypass": "Consenti di bypassare ogni sensore"
                 }
             },
             "parameters13": {
                 "description": "",
-                "title": "Alarm Panel Log File Settings",
+                "title": "Impostazioni File di Log Pannello di Allarme",
                 "data": {
-                    "panellog_complete_event": "Generate an HA Event on Completion",
-                    "panellog_logentry_event": "Generate an HA Event for each Log entry",
-                    "panellog_csv_add_title_row": "Add a Title Row to the generated CSV file",
-                    "panellog_xml_filename": "The XML Filename (and path)",
-                    "panellog_csv_filename": "The CSV Filename (and path)",
-                    "panellog_reverse_order": "Reverse the output order",
-                    "panellog_max_entries": "Only output the most recent X log entries"
+                    "panellog_complete_event": "Genera un evento HA alla conclusione",
+                    "panellog_logentry_event": "Genera un evento HA per ogni voce di log",
+                    "panellog_csv_add_title_row": "Aggiungi una riga di intestazione al file CSV generato",
+                    "panellog_xml_filename": "Nome del file XML (e percorso)",
+                    "panellog_csv_filename": "Nome del file CSV (e percorso)",
+                    "panellog_reverse_order": "Inverti l'ordine di uscita",
+                    "panellog_max_entries": "Mostra solo le X voci di log più recenti"
                 }
             }
         }
     },
     "options": {
         "abort": {
-            "already_configured": "Alarm Panel Connection Already Configured",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "device_error": "Device must be either Ethernet or USB",
-            "editing": "Thankyou for your edits"
+            "already_configured": "Connessione al Pannello di Allarme gi\u00E0 configurata",
+            "emulation_mode_error": "Impostazione modalit\u00E0 emulazione non corretta",
+            "device_error": "Il dispositivo deve essere Ethernet o USB",
+            "editing": "Grazie per le modifiche"
         },
         "error": {
-            "eth_or_usb": "Must be one of Ethernet or USB",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "unknown": "Unexpected error"
+            "eth_or_usb": "Deve essere Ethernet o USB",
+            "emulation_mode_error": "Impostazione modalit\u00E0 emulazione non corretta",
+            "unknown": "Errore sconosciuto"
         },
         "step": {
             "parameters10": {
                 "description": "",
-                "title": "Alarm Panel Settings",
+                "title": "Impostazioni Pannello di Allarme",
                 "data": {
-                    "siren_sounding": "List of triggers for the siren",
-                    "sensor_event_list": "List of Sensor changes to create an Event",
-                    "panel_state_notifications": "List of triggers for Home Assistant Notifications",
-                    "retry_connection_count": "Try this number of times to attempt the connection",
-                    "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
+                    "siren_sounding": "Elenco dei trigger per la sirena",
+                    "sensor_event_list": "Elenco delle modifiche ai sensori per creare un evento",
+                    "panel_state_notifications": "Elenco dei trigger per le notifiche di Home Assistant",
+                    "retry_connection_count": "Numero di tentativi di riconnessione",
+                    "retry_connection_delay": "Tempo di ritardo (secondi) tra i tentativi di riconnessione"
                 }
             },
             "parameters11": {
                 "description": "",
-                "title": "Alarm Panel Zone/Sensor Settings",
+                "title": "Impostazioni Pannello di Allarme",
                 "data": {
-                    "motion_off_delay": "Motion/Camera off delay time (seconds)",
-                    "magnet_closed_delay": "Magnet/Wired closed delay time (seconds)",
-                    "emergency_off_delay": "Smoke/Fire off delay time (seconds)"
+                    "motion_off_delay": "Tempo di ritardo spegnimento Movimento/Telecamera (secondi)",
+                    "magnet_closed_delay": "Tempo di ritardo chiusura Magnetico/Cablato (secondi)",
+                    "emergency_off_delay": "Tempo di ritardo spegnimento Emergenza Incendio/Fumo (secondi)"
                 }
             },
             "parameters12": {
                 "description": "",
-                "title": "Alarm Panel Arm/Disarm Settings",
+                "title": "Impostazioni Inserimento/Disinserimento del Pannello di Allarme",
                 "data": {
-                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
-                    "force_numeric_keypad": "Force use of a Numeric Keypad",
-                    "arm_home_enabled": "Arm Home Enabled",
-                    "arm_night_enabled": "Arm Night Enabled",
-                    "arm_away_instant": "Arm Away performs an Arm Away Instant",
-                    "arm_home_instant": "Arm Home performs an Arm Home Instant",
-                    "allow_remote_arm": "Allow Panel Arm from Home Assistant",
-                    "allow_remote_disarm": "Allow Panel DisArm from Home Assistant",
-                    "allow_sensor_bypass": "Allow each sensor to be bypassed"
+                    "arm_without_usercode": "Attiva senza codice utente (non supportato da tutti i pannelli)",
+                    "force_numeric_keypad": "Forza l'uso di una Tastiera Numerica",
+                    "arm_home_enabled": "Inserimento modalit\u00E0 Casa abilitata",
+                    "arm_night_enabled": "Inserimento modalit\u00E0 Notte abilitata",
+                    "arm_away_instant": "Inserimento modalit\u00E0 Assente istantanea",
+                    "arm_home_instant": "Inserimento modalit\u00E0 Casa istantanea",
+                    "allow_remote_arm": "Consenti inserimento da remoto da Home Assistant",
+                    "allow_remote_disarm": "Consenti disinserimento da remoto da Home Assistant",
+                    "allow_sensor_bypass": "Consenti di bypassare ogni sensore"
                 }
             },
             "parameters13": {
                 "description": "",
-                "title": "Alarm Panel Log File Settings",
+                "title": "Impostazioni File di Log Pannello di Allarme",
                 "data": {
-                    "panellog_complete_event": "Generate an HA Event on Completion",
-                    "panellog_logentry_event": "Generate an HA Event for each Log entry",
-                    "panellog_csv_add_title_row": "Add a Title Row to the generated CSV file",
-                    "panellog_xml_filename": "The XML Filename (and path)",
-                    "panellog_csv_filename": "The CSV Filename (and path)",
-                    "panellog_reverse_order": "Reverse the output order",
-                    "panellog_max_entries": "Only output the most recent X log entries"
+                    "panellog_complete_event": "Genera un evento HA alla conclusione",
+                    "panellog_logentry_event": "Genera un evento HA per ogni voce di log",
+                    "panellog_csv_add_title_row": "Aggiungi una riga di intestazione al file CSV generato",
+                    "panellog_xml_filename": "Nome del file XML (e percorso)",
+                    "panellog_csv_filename": "Nome del file CSV (e percorso)",
+                    "panellog_reverse_order": "Inverti l'ordine di uscita",
+                    "panellog_max_entries": "Mostra solo le X voci di log più recenti"
                 }
             }
         }
-    },    
+    },
     "device_automation": {
         "action_type": {
             "arm_away": "Arm {entity_name} Away",
@@ -194,86 +194,86 @@
     },
     "services": {
         "alarm_panel_eventlog": {
-            "name": "Retrieve Event Log",
-            "description": "Retrieve the Alarm Panel Event Log.",
+            "name": "Recupera Log Eventi",
+            "description": "Recupera il Log Eventi del Pannello di Allarme.",
             "fields": {
                 "entity_id": {
-                    "name": "Visonic Panel",
-                    "description": "Name of the visonic panel."
+                    "name": "Pannello Visonic",
+                    "description": "Nome del pannello Visonic."
                 },
                 "code": {
-                    "name": "User Code",
-                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
+                    "name": "Codice Utente",
+                    "description": "Un codice utente opzionale (in base alle impostazioni) da inviare al pannello."
                 }
             }
         },
         "alarm_panel_command": {
-            "name": "Send Command",
-            "description": "Send a command to the Alarm Panel.",
+            "name": "Invia Comando",
+            "description": "Invia un comando al Pannello di Allarme.",
             "fields": {
                 "entity_id": {
-                    "name": "Visonic Panel",
-                    "description": "Name (Entity ID) of the visonic panel."
+                    "name": "Pannello Visonic",
+                    "description": "Nome (ID entit\u00E0) del pannello Visonic."
                 },
                 "command": {
-                    "name": "Panel Command",
-                    "description": "The command to send to the panel ('Arm Away', 'Arm Away Instant', 'Arm Home', 'Arm Home Instant', 'Disarm', 'Trigger', 'Mute', 'Emergency', 'Panic', 'Fire')."
+                    "name": "Comando Pannello",
+                    "description": "Il comando da inviare al pannello ('Inserisci modalit\u00E0 Assente', 'Inserisci modalit\u00E0 Assente istantanea', 'Inserisci modalit\u00E0 Casa', 'Inserisci modalit\u00E0 Casa istantanea', 'Disinserisci', 'Inserisci allarme', 'Silenzia', 'Emergenza', 'Panico', 'Incendio')."
                 },
                 "code": {
-                    "name": "User Code",
-                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
+                    "name": "Codice Utente",
+                    "description": "Un codice utente opzionale (in base alle impostazioni) da inviare al pannello."
                 }
             }
         },
         "alarm_panel_x10": {
-            "name": "Command X10",
-            "description": "Send an X10 Command to an X10 Device.",
+            "name": "Comando X10",
+            "description": "Invia un comando X10 a un dispositivo X10.",
             "fields": {
                 "entity_id": {
-                    "name": "Visonic X10 Switch",
-                    "description": "Name of the visonic x10 switch. This is case sensitive and a mandatory setting. The 'switch.' text is optional."
+                    "name": "Interruttore Visonic X10",
+                    "description": "Nome dell'interruttore Visonic X10. Questo valore \u00E8 sensibile alle maiuscole e minuscole e obbligatorio. Il testo 'switch.' \u00E8 opzionale."
                 },
                 "x10command": {
-                    "name": "X10 Command",
-                    "description": "X10 Command: Off, On, Dimmer, Brighten."
+                    "name": "Comando X10",
+                    "description": "Comando X10: Off, On, Diminuisci luminosit\u00E0, Aumenta luminosit\u00E0."
                 }
             }
         },
         "alarm_panel_reconnect": {
-            "name": "Panel Reconnection",
-            "description": "Reconnect to the Alarm Panel following a previous problem.",
+            "name": "Riconnessione Pannello",
+            "description": "Riconnettiti al Pannello di Allarme dopo un problema precedente.",
             "fields": {
                 "entity_id": {
-                    "name": "Visonic Panel",
-                    "description": "Name of the visonic panel."
+                    "name": "Pannello Visonic",
+                    "description": "Nome del pannello Visonic."
                 }
             }
         },
         "alarm_sensor_image": {
-            "name": "Retrieve Image from Sensor",
-            "description": "Retrieve Image from Sensor, this only works if the Sensor is a Camera PIR.",
+            "name": "Recupera Immagine dal Sensore",
+            "description": "Recupera un'immagine dal Sensore, funziona solo se il Sensore \u00E8 una telecamera PIR.",
             "fields": {
                 "entity_id": {
-                    "name": "Visonic Sensor (Image)",
-                    "description": "Name of the visonic sensor."
+                    "name": "Sensore Visonic (Immagine)",
+                    "description": "Nome del sensore Visonic."
                 }
             }
         },
         "alarm_sensor_bypass": {
-            "name": "Sensor Bypass",
-            "description": "Bypass and Re-Arm a Visonic Sensor.",
+            "name": "Bypass Sensore",
+            "description": "Bypassa e riattiva un sensore Visonic.",
             "fields": {
                 "entity_id": {
-                    "name": "Visonic Sensor",
-                    "description": "Name of the visonic sensor to bypass. This is case sensitive and a mandatory setting. The 'binary_sensor.' text is optional."
+                    "name": "Sensore Visonic",
+                    "description": "Nome del sensore Visonic da bypassare. Questo valore \u00E8 sensibile alle maiuscole e minuscole e obbligatorio. Il testo 'binary_sensor.' \u00E8 opzionale."
                 },
                 "bypass": {
-                    "name": "Bypass Command",
-                    "description": "To bypass or re-arm a Sensor."
+                    "name": "Comando di Bypass",
+                    "description": "Un bypass opzionale ('True', 'On', 'Yes', 'Enable') o riattivazione ('False', 'Off', 'No', 'Disable'), il valore predefinito \u00E8 'Off' se non impostato."
                 },
                 "code": {
-                    "name": "User Code",
-                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
+                    "name": "Codice Utente",
+                    "description": "Un codice utente opzionale (in base alle impostazioni) da inviare al pannello."
                 }
             }
         }
@@ -342,7 +342,7 @@
 	        "alarm_panel_key": {
 				"state": {
 					"armed": "Armed",
-					"bypass": "Bypass"
+					"bypass": "Bypassare"
 				},
 				"state_attributes": {
 					"panel": {
@@ -617,14 +617,14 @@
 					"alarm": {
 					    "name" : "Alarm",
 						"state" : {
-							"none"     : "No Alarm",
-							"intruder" : "Intruder",
-							"tamper"   : "Tamper",
-							"panic"    : "Panic",
-							"fire"     : "Fire",
-							"emergency": "Emergency",
+							"none"     : "Nessun Allarme",
+							"intruder" : "Intruso",
+							"tamper"   : "Manomissione",
+							"panic"    : "Panico",
+							"fire"     : "Incendio",
+							"emergency": "Emergenza",
 							"gas"      : "Gas",
-							"flood"    : "Flood"
+							"flood"    : "Alluvione"
 						}
 					},
 					"trouble": {
@@ -655,67 +655,67 @@
     "selector": {
         "alarm_command": {
             "options": {
-                "disarm": "Disarm",
-                "arm_home": "Arm Home",
-                "arm_home_instant": "Arm Home Instant",
-                "arm_away": "Arm Away",
-                "arm_away_instant": "Arm Away Instant",
+                "disarm": "Disattiva",
+                "arm_home": "Attiva modalit\u00E0 Casa",
+                "arm_home_instant": "Attiva modalit\u00E0 Casa istantanea",
+                "arm_away": "Attiva modalit\u00E0 Assente",
+                "arm_away_instant": "Attiva modalit\u00E0 Assente istantanea",
                 "mute": "Mute Siren",
                 "trigger": "Trigger Siren",
-                "fire": "Fire Alarm",
-                "emergency": "Emergency Alarm",
-                "panic": "Panic Alarm"
+                "fire": "Incendio",
+                "emergency": "Emergenza",
+                "panic": "Panico"
             }
         },
         "bypass_command": {
             "options": {
-                "off": "Active",
-                "on": "Bypass"
+                "off": "Attivato",
+                "on": "Bypassare"
             }
         },
         "x10command": {
             "options": {
-                "off": "Off",
-                "on": "On",
-                "dimmer": "Decrease Brightness",
-                "brighten": "Increase Brightness"
+                "off": "Spegni",
+                "on": "Accendi",
+                "dimmer": "Riduci luminosit\u00E0",
+                "brighten": "Aumenta luminosit\u00E0"
             }
         },
         "siren_sounding": {
             "options": {
-                "intruder": "Intruder",
-                "tamper": "Tamper",
-                "fire": "Fire",
-                "emergency": "Emergency",
+                "intruder": "Intruso",
+                "tamper": "Manomissione",
+                "fire": "Incendio",
+                "emergency": "Emergenza",
                 "gas": "Gas",
-                "flood": "Flood",
+                "flood": "Alluvione",
                 "x10": "X10",
-                "panic": "Panic"                  
+                "panic": "Panico"
             }
         },
         "sensor_event_list": {
             "options": {
-				"problem":   "Problem",
-				"fire":      "Fire",
-				"emergency": "Emergency",
-				"panic":     "Panic"
+                "problem": "Problema",
+                "fire": "Incendio",
+                "emergency": "Emergenza",
+                "panic": "Panico"
             }
         },
 		"panel_state_notifications": {
             "options": {
-				"siren_sounding": "Siren Sounding",
-				"panel_reset":  "Panel System Reset",
-				"invalid_pin": "Code Rejected By Panel",
-				"panel_operation": "Panel Operation",
-				"connection_problem": "Connection Problems",
-				"bypass_problem": "Sensor Bypass Problems",
-				"image_problem": "Image Retrieval Problems",
-				"eventlog_problem": "Event Log Problems",
-				"command_not_sent": "Command Not Sent To Panel",
-				"x10_problem": "X10 Problem"
+                "siren_sounding": "Sirena in suono",
+                "panel_reset": "Reset Sistema Pannello",
+                "invalid_pin": "Codice rifiutato dal pannello",
+                "panel_operation": "Operazione Pannello",
+                "connection_problem": "Problemi di connessione",
+                "bypass_problem": "Problemi con il Bypass dei sensori",
+                "image_problem": "Problemi di recupero immagini",
+                "eventlog_problem": "Problemi con il Log degli eventi",
+                "command_not_sent": "Comando non inviato al pannello",
+				"x10_problem": "Problemi di X10"
 			}
 		}
-    },
+	},
     "exceptions": {
         "no_panel_connection": {
             "message": "Visonic Integration for {myname} is not connected to the panel."

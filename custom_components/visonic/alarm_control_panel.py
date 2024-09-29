@@ -7,10 +7,10 @@ import homeassistant.components.alarm_control_panel as alarm
 from homeassistant.util import slugify
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.components.alarm_control_panel import DOMAIN as ALARM_PANEL_DOMAIN
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers import config_validation as cv, entity_platform
 
 # Use the HA core attributes, alarm states and services
 from homeassistant.components.alarm_control_panel.const import (
@@ -33,6 +33,7 @@ from .pyconst import AlPanelCommand, AlPanelStatus
 from .const import (
     DOMAIN,
     map_panel_status_to_ha_status,
+    MANUFACTURER,
     PANEL_ATTRIBUTE_NAME,
 )
 
@@ -52,7 +53,7 @@ async def async_setup_entry(
         """Add Visonic Alarm Panel."""
         entities: list[SwitchEntity] = []
         entities.append(VisonicAlarm(hass, client, 1))
-        _LOGGER.debug(f"alarm control panel adding entity")
+        #_LOGGER.debug(f"alarm control panel adding entity")
         async_add_entities(entities, True)
 
     entry.async_on_unload(
@@ -69,6 +70,13 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     """Representation of a Visonic alarm control panel."""
 
 #    _unrecorded_attributes = alarm.AlarmControlPanelEntity._unrecorded_attributes | frozenset({-})
+    _attr_translation_key: str = "alarm_panel_key"
+    #_attr_has_entity_name = True
+    _entity_component_unrecorded_attributes = frozenset(
+        {"Panel Model", "Watchdog Timeout (Total)", "Watchdog Timeout (Past 24 Hours)", "Download Timeout", 
+          "Download Message Retries", "Panel Problem Count", "Last Panel Problem Time", "Client Version",
+          "Exception Count", "Protocol Version", "Power Master" }
+    )
 
     def __init__(self, hass: HomeAssistant, client: VisonicClient, partition_id: int):
         """Initialize a Visonic security alarm."""
@@ -83,7 +91,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         self._doneUsers = False
         self._last_triggered = ""
         self._panel = client.getPanelID()
-        _LOGGER.debug(f"Initialising alarm control panel {self._myname} panel {self._panel}")
+        _LOGGER.debug(f"Initialising alarm control panel {self._myname}    panel {self._panel}")
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
@@ -102,7 +110,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     def onClientChange(self):
         """HA Event Callback."""
         #_LOGGER.debug(f"alarm control panel onChange {self.entity_id=}   {self.available=}")
-        if self.entity_id is not None:
+        if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state(True)
 
     @property
@@ -140,16 +148,16 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             if pm is not None:
                 if pm.lower() != "unknown":
                     return {
-                        "manufacturer": "Visonic",
+                        "manufacturer": MANUFACTURER,
                         "identifiers": {(DOMAIN, self._myname)},
-                        "name": f"Visonic Alarm Panel {self._panel} (Partition {self._partition_id})",
+                        "name": f"{self._myname}",
                         "model": pm,
                         # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
                     }
         return {
             "manufacturer": "Visonic",
             "identifiers": {(DOMAIN, self._myname)},
-            "name": f"Visonic Alarm Panel {self._panel} (Partition {self._partition_id})",
+            "name": f"{self._myname}",
             "model": None,
             # "model": "Alarm Panel",
             # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
@@ -176,12 +184,12 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
                 armcode = self._client.getPanelStatus()
                 if armcode is not None and armcode in map_panel_status_to_ha_status:
                     self._mystate = map_panel_status_to_ha_status[armcode]
-
+            #_LOGGER.debug(f"[alarm_control_panel]  update {self._mystate=}   {armcode=}")
             # Currently may only contain "Exception Count"
             data = self._client.getClientStatusDict()
-            #_LOGGER.debug("data {data}")
+            #_LOGGER.debug(f"data {data}")
             stat = self._client.getPanelStatusDict()
-            #_LOGGER.debug("stat {stat}")
+            #_LOGGER.debug(f"stat {stat}")
 
             if data is not None and stat is not None:
                 self._device_state_attributes = {**stat, **data}
@@ -190,11 +198,8 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             elif data is not None:
                 self._device_state_attributes = data
             
-            if "count" in self._device_state_attributes and "name" in self._device_state_attributes:
-                count = self._device_state_attributes["count"]
-                if count > 0:
-                    name = self._device_state_attributes["name"]                                    
-                    self._last_triggered = name[0]
+            if "lasteventname" in self._device_state_attributes and len(self._device_state_attributes["lasteventname"]) > 2:
+                self._last_triggered = self._device_state_attributes["lasteventname"]
 
     @property
     def state(self):
@@ -247,14 +252,26 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         """Send disarm command."""
         #_LOGGER.debug(f"alarm control panel alarm_disarm {self.entity_id=}")
         if not self.isPanelConnected():
-            raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
+            raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="no_panel_connection",
+                    translation_placeholders={
+                        "myname": self._myname
+                    }
+                )
         self._client.sendCommand("Disarm", AlPanelCommand.DISARM, code)
 
     def alarm_arm_night(self, code=None):
         """Send arm night command (Same as arm home)."""
         #_LOGGER.debug(f"alarm control panel alarm_arm_night {self.entity_id=}")
         if not self.isPanelConnected():
-            raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
+            raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="no_panel_connection",
+                    translation_placeholders={
+                        "myname": self._myname
+                    }
+                )
         if self._client.isArmNight():
             self._client.sendCommand("Arm Night", AlPanelCommand.ARM_HOME_INSTANT, code)
 
@@ -262,7 +279,13 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         """Send arm home command."""
         #_LOGGER.debug(f"alarm control panel alarm_arm_home {self.entity_id=}")
         if not self.isPanelConnected():
-            raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
+            raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="no_panel_connection",
+                    translation_placeholders={
+                        "myname": self._myname
+                    }
+                )
         if self._client.isArmHome():
             command = AlPanelCommand.ARM_HOME_INSTANT if self._client.isArmHomeInstant() else AlPanelCommand.ARM_HOME
             self._client.sendCommand("Arm Home", command, code)
@@ -271,7 +294,13 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         """Send arm away command."""
         #_LOGGER.debug(f"alarm control panel alarm_arm_away {self.entity_id=}")
         if not self.isPanelConnected():
-            raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
+            raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="no_panel_connection",
+                    translation_placeholders={
+                        "myname": self._myname
+                    }
+                )
         command = AlPanelCommand.ARM_AWAY_INSTANT if self._client.isArmAwayInstant() else AlPanelCommand.ARM_AWAY
         self._client.sendCommand("Arm Away", command, code)
 
@@ -279,10 +308,15 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         """Send alarm trigger command."""
         #_LOGGER.debug(f"alarm control panel alarm_trigger {self.entity_id=}")
         if not self.isPanelConnected():
-            raise HomeAssistantError(f"Visonic Integration {self._myname} not connected to panel.")
+            raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="no_panel_connection",
+                    translation_placeholders={
+                        "myname": self._myname
+                    }
+                )
         if self._client.isPowerMaster():
             self._client.sendCommand("Trigger Siren", AlPanelCommand.TRIGGER , code)
-            #self._client.sendCommand("Arm Away", command, code)
 
     def alarm_arm_custom_bypass(self, data=None):
         """Bypass Panel."""

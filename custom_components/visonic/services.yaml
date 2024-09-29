@@ -24,20 +24,21 @@ alarm_panel_command:
           domain: alarm_control_panel
     command:
       required: true
-      example: 'Disarm'
+      example: 'disarm'
       selector:
         select:
+          translation_key: "alarm_command"
           options:
-            - "Disarm"
-            - "Arm Home"
-            - "Arm Home Instant"
-            - "Arm Away"
-            - "Arm Away Instant"
-            - "Mute"
-            - "Trigger"
-            - "Fire"
-            - "Emergency"
-            - "Panic"
+            - "disarm"
+            - "arm_home"
+            - "arm_home_instant"
+            - "arm_away"
+            - "arm_away_instant"
+            - "mute"
+            - "trigger"
+            - "fire"
+            - "emergency"
+            - "panic"
     code:
       required: false
       example: "1234"
@@ -55,7 +56,6 @@ alarm_panel_reconnect:
           integration: visonic
           domain: alarm_control_panel
 
-
 alarm_panel_x10:
   fields:
     entity_id:
@@ -67,15 +67,16 @@ alarm_panel_x10:
           domain: switch
     x10command:
       required: true
-      example: "Off"
-      default: "Off"
+      example: "off"
+      default: "off"
       selector:
         select:
+          translation_key: "x10command"
           options:
-            - "Off"
-            - "On"
-            - "Dimmer"
-            - "Brighten"
+            - "off"
+            - "on"
+            - "dimmer"
+            - "brighten"
 
 alarm_sensor_bypass:
   fields:
@@ -87,12 +88,13 @@ alarm_sensor_bypass:
           domain: binary_sensor
     bypass:
       required: true
-      example: "Off"
+      example: "off"
       selector:
         select:
+          translation_key: "bypass_command"
           options:
-            - "On"
-            - "Off"
+            - "on"
+            - "off"
     code:
       required: false
       example: "1234"
