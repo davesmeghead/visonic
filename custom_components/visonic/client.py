@@ -122,7 +122,7 @@ from .const import (
 #    "trigger",
 #]
 
-CLIENT_VERSION = "0.9.9.4"
+CLIENT_VERSION = "0.9.9.5"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -378,7 +378,7 @@ class VisonicClient:
         self.myPanelEventCoordinator = None
         self.PanelLastEventName = "Startup"
         self.PanelLastEventAction = "Normal"
-        self.PanelLastEventTime = self._getTimeFunction().strftime("%d/%m/%Y, %H:%M:%S")
+        self.PanelLastEventTime = self._getTimeFunction() # .strftime("%d/%m/%Y, %H:%M:%S")
 
         # Process the exclude sensor list
         self.exclude_sensor_list = self.config.get(CONF_EXCLUDE_SENSOR)

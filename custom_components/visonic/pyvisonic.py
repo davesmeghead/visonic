@@ -105,7 +105,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.4.3.2"
+PLUGIN_VERSION = "1.4.3.3"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE

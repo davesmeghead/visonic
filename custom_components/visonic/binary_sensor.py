@@ -278,7 +278,7 @@ class VisonicBinarySensor(BinarySensorEntity):
             if self._visonic_device.getLastTriggerTime() is None:
                 attr[ATTR_LAST_TRIP_TIME] = "unknown"
             else:
-                tm = self._visonic_device.getLastTriggerTime().strftime("%d/%m/%Y, %H:%M:%S")
+                tm = self._visonic_device.getLastTriggerTime() # .strftime("%d/%m/%Y, %H:%M:%S")
                 #tm = self._visonic_device.getLastTriggerTime().isoformat()
                 # miss off the decimal hundredths seconds onwards
                 #tm = tm.replace("T", " ")[0:21]

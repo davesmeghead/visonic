@@ -957,7 +957,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
     def addPanelEventData(self, ped : AlPanelEventData):
         #log.debug(f"[addPanelEventData] {ped}")
-        ped.time = self._getTimeFunction().strftime("%d/%m/%Y, %H:%M:%S")
+        ped.time = self._getTimeFunction() # .strftime("%d/%m/%Y, %H:%M:%S")
         self.panelEventData.append(ped)
 
 #    def setLastPanelEventData(self, count=0, type = list | str , event = list | str , zonemode = list | str , name = list | str ) -> dict:
