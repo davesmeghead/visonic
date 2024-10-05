@@ -45,6 +45,7 @@ from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.image import DOMAIN as IMAGE_DOMAIN
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
+from homeassistant.components.siren import DOMAIN as SIREN_DOMAIN
 from homeassistant.components.alarm_control_panel import DOMAIN as ALARM_PANEL_DOMAIN
 from homeassistant.util.thread import ThreadWithException
 
@@ -121,7 +122,7 @@ from .const import (
 #    "trigger",
 #]
 
-CLIENT_VERSION = "0.9.9.3"
+CLIENT_VERSION = "0.9.9.4"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -230,7 +231,6 @@ class PanelEventCoordinator:
         self.timerAlreadySent = True
     
     def _send_and_replace(self, data : dict):
-        self.logstate_debug(f"[EC] _send_and_replace {data}")
         if self._event_timer_task is not None:
             #self.logstate_debug("[EC] Cancelling _event_timer_task")
             self._event_timer_task.cancel()
@@ -241,6 +241,7 @@ class PanelEventCoordinator:
         self.EventName = data["name"]
         self.EventAction = data["event"]
         self.EventTime = data["time"]
+        self.logstate_debug(f"[EC] _send_and_replace {data}     name = {self._convert()["name"]}    event = {self._convert()["event"]}")  # e.g. {'name': 0, 'event': 28, 'time': '04/10/2024, 22:46:04'}
         self._event_timer_task = self.loop.create_task(self._event_timer())
     
     def setIsPowerMaster(self, pm):
@@ -493,11 +494,11 @@ class VisonicClient:
     #        return self.visonicProtocol.dumpStateToStringList()
     #    return []
 
-    def isSirenActive(self) -> bool:
+    def isSirenActive(self) -> (bool, AlSensorDevice | None):
         """Is the siren active."""
         if self.visonicProtocol is not None:
             return self.visonicProtocol.isSirenActive()
-        return False
+        return (False, None)
 
     def isPanelReady(self) -> bool:
         """Is panel ready"""
@@ -835,6 +836,7 @@ class VisonicClient:
                 else:
                     self.logstate_debug("Creating Alarm Panel Entity")
                     await self._setupVisonicEntity(Platform.ALARM_CONTROL_PANEL, ALARM_PANEL_DOMAIN)
+                    await self._setupVisonicEntity(Platform.SIREN, SIREN_DOMAIN)
 
     def onNewSensor(self, sensor: AlSensorDevice):
         asyncio.ensure_future(self.async_onNewSensor(sensor), loop=self.hass.loop)
@@ -1063,7 +1065,7 @@ class VisonicClient:
         #    # Powerlink Mode
         #    self.printAllEntities()
 
-        if event_id == AlCondition.PANEL_UPDATE and self.visonicProtocol is not None and self.visonicProtocol.isSirenActive():
+        if event_id == AlCondition.PANEL_UPDATE and self.visonicProtocol is not None and self.visonicProtocol.isSirenActive()[0]:
             self.createNotification(AvailableNotifications.SIREN, "Siren is Sounding, Alarm has been Activated" )
         elif event_id == AlCondition.PANEL_RESET:
             self.createNotification(AvailableNotifications.RESET, "The Panel has been Reset" )
@@ -1114,6 +1116,9 @@ class VisonicClient:
         self.logstate_warning(f"Unable to decode boolean value {val}    type is {type(val)}")
         return False
 
+    def getSirenTriggerList(self) -> []:
+        return self.config.get(CONF_SIREN_SOUNDING, ["Intruder"])
+
     def getConfigData(self) -> PanelConfig:
         """Create a dictionary full of the configuration data."""
 
@@ -1134,8 +1139,8 @@ class VisonicClient:
         return {
             AlConfiguration.DownloadCode: self.config.get(CONF_DOWNLOAD_CODE, ""),
             AlConfiguration.ForceStandard: self.ForceStandardMode,
-            AlConfiguration.DisableAllCommands: self.DisableAllCommands,
-            AlConfiguration.SirenTriggerList: self.config.get(CONF_SIREN_SOUNDING, ["Intruder"])
+            AlConfiguration.DisableAllCommands: self.DisableAllCommands
+            #AlConfiguration.SirenTriggerList: self.config.get(CONF_SIREN_SOUNDING, ["Intruder"])
         }
 
     async def _checkUserPermission(self, call, perm, entity):

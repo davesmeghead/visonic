@@ -536,6 +536,26 @@
 				}				
 			}
 		},
+		"siren": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"alarm": {
+					    "name" : "Alarm",
+						"state" : {
+							"none"     : "Geen Alarm",
+							"intruder" : "Indringer",
+							"tamper"   : "Knoeien",
+							"panic"    : "Paniek",
+							"fire"     : "Vuur",
+							"emergency": "Noodtoestand",
+							"gas"      : "Gas",
+							"flood"    : "Overstroming",
+							"external" : "HomeAssistant"
+						}
+					}
+				}
+			}
+		},
   	    "alarm_control_panel": {
 	        "alarm_panel_key": {
 				"state_attributes": {

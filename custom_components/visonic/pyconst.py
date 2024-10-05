@@ -144,7 +144,7 @@ a = AlAlarmType()
 class AlConfiguration(AlEnum):
     DownloadCode = AlIntEnum(0)           # 4 digit string or ""
 #    PluginLanguage = AlIntEnum(3)         # String "EN", "FR", "NL", "Panel"
-    SirenTriggerList = AlIntEnum(5)       # A list of strings
+#    SirenTriggerList = AlIntEnum(5)       # A list of strings
     ForceStandard = AlIntEnum(6)          # Boolean
     DisableAllCommands = AlIntEnum(11)    # Boolean
 a = AlConfiguration()
@@ -501,9 +501,9 @@ class AlPanelInterface(ABC):
         pass
 
     @abstractmethod
-    def isSirenActive(self) -> bool:
+    def isSirenActive(self) -> (bool, AlSensorDevice | None):
         """ Is the siren active. """
-        return False
+        return (False, None)
 
     @abstractmethod
     def getPanelStatus(self) -> AlPanelStatus:

@@ -551,11 +551,11 @@ class VisonicClient:
             return self.visonicProtocol.isPanelBypass()
         return False
 
-    def isSirenActive(self) -> bool:
+    def isSirenActive(self) -> (bool, AlSensorDevice | None):
         """ Is the siren active. """
         if self.visonicProtocol is not None:
             return self.visonicProtocol.isSirenActive()
-        return False
+        return (False, None)
 
     def isPanelReady(self) -> bool:
         """ Is panel ready. """
@@ -784,7 +784,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                     elif command == 'm':
                         pready = client.isPanelReady()
                         pstate = client.getPanelStatus()
-                        siren = client.isSirenActive();
+                        siren, _ = client.isSirenActive();
                         mode = client.getPanelMode();
                         console.print("Panel Mode=" + mode.name + "    Panel state=" + pstate.name + "    Panel Ready=" + str(pready) + "    Siren=" + str(siren) )
                         processedInput = True

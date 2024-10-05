@@ -178,14 +178,14 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         self._device_state_attributes = {}
 
         if self.isPanelConnected():
-            if self._client.isSirenActive():
+            isa, _ = self._client.isSirenActive()
+            if isa:
                 self._mystate = STATE_ALARM_TRIGGERED
             else:
                 armcode = self._client.getPanelStatus()
                 if armcode is not None and armcode in map_panel_status_to_ha_status:
                     self._mystate = map_panel_status_to_ha_status[armcode]
-            #_LOGGER.debug(f"[alarm_control_panel]  update {self._mystate=}   {armcode=}")
-            # Currently may only contain "Exception Count"
+
             data = self._client.getClientStatusDict()
             #_LOGGER.debug(f"data {data}")
             stat = self._client.getPanelStatusDict()

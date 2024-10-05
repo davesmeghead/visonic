@@ -202,17 +202,17 @@ class AlSensorDeviceHelper(AlSensorDevice):
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" sid=None"       if self.sid == None else       " sid={0:<3}".format(self.sid, type(self.sid)))
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" ztype=None"     if self.ztype == None else     " ztype={0:<2}".format(self.ztype, type(self.ztype)))
         strn = strn + (" Loc=None          " if self.zname == None else " Loc={0:<14}".format(self.zname[:14]))
-        strn = strn + (" ztypeName=None" if self.ztypeName == None else " ztypeName={0:<10}".format(self.ztypeName[:10]))
-        strn = strn + (" ztamper=None" if self.ztamper == None else " ztamper={0:<2}".format(self.ztamper))
-        strn = strn + (" ztrip=None" if self.ztrip == None else " ztrip={0:<2}".format(self.ztrip))
-        strn = strn + (" zchime=None" if self.zchime == None else    " zchime={0:<16}".format(self.zchime, type(self.zchime)))
+        strn = strn + (" ztypeName=None      " if self.ztypeName == None else " ztypeName={0:<10}".format(self.ztypeName[:10]))
+        strn = strn + (" ztamper=--" if self.ztamper == None else " ztamper={0:<2}".format(self.ztamper))
+        strn = strn + (" ztrip=--" if self.ztrip == None else " ztrip={0:<2}".format(self.ztrip))
+        strn = strn + (" zchime=None            " if self.zchime == None else    " zchime={0:<16}".format(self.zchime, type(self.zchime)))
         # temporarily miss it out to shorten the line in debug messages        strn = strn + (" partition=None" if self.partition == None else " partition={0}".format(self.partition, type(self.partition)))
-        strn = strn + (" bypass=None" if self.bypass == None else " bypass={0:<2}".format(self.bypass))
-        strn = strn + (" lowbatt=None" if self.lowbatt == None else " lowbatt={0:<2}".format(self.lowbatt))
-        strn = strn + (" status=None" if self.status == None else " status={0:<2}".format(self.status))
-        strn = strn + (" tamper=None" if self.tamper == None else " tamper={0:<2}".format(self.tamper))
-        strn = strn + (" enrolled=None" if self.enrolled == None else " enrolled={0:<2}".format(self.enrolled))
-        strn = strn + (" triggered=None" if self.triggered == None else " triggered={0:<2}".format(self.triggered))
+        strn = strn + (" bypass=--" if self.bypass == None else " bypass={0:<2}".format(self.bypass))
+        strn = strn + (" lowbatt=--" if self.lowbatt == None else " lowbatt={0:<2}".format(self.lowbatt))
+        strn = strn + (" status=--" if self.status == None else " status={0:<2}".format(self.status))
+        strn = strn + (" tamper=--" if self.tamper == None else " tamper={0:<2}".format(self.tamper))
+        strn = strn + (" enrolled=--" if self.enrolled == None else " enrolled={0:<2}".format(self.enrolled))
+        strn = strn + (" triggered=--" if self.triggered == None else " triggered={0:<2}".format(self.triggered))
 
         if self.motiondelaytime is not None and (self.stype == AlSensorType.MOTION or self.stype == AlSensorType.CAMERA):
             strn = strn + (" delay={0:<7}".format("Not Set" if self.motiondelaytime == 0xFFFF else str(self.motiondelaytime)))
@@ -817,6 +817,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         self.PanelAlertInMemory = False
         self.PanelBypass = False
         self.SirenActive = False
+        self.SirenActiveDeviceTrigger = None
         
         self.lastPanelEvent = {}
 
@@ -860,10 +861,10 @@ class AlPanelInterfaceHelper(AlPanelInterface):
     def updateSettings(self, newdata: PanelConfig):
         pass
 
-    def isSirenActive(self) -> bool:
+    def isSirenActive(self) -> (bool, AlSensorDevice | None):
         if not self.suspendAllOperations:
-            return self.SirenActive
-        return False
+            return (self.SirenActive, self.SirenActiveDeviceTrigger)
+        return (False, None)
 
     def getPanelStatus(self) -> AlPanelStatus:
         if not self.suspendAllOperations:

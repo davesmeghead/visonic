@@ -139,7 +139,8 @@ class VisonicSensor(Entity):
         self._device_state_attributes = {}
 
         if self.isPanelConnected():
-            if self._client.isSirenActive():
+            isa, _ = self._client.isSirenActive()
+            if isa:
                 self._mystate = STATE_ALARM_TRIGGERED
             else:
                 armcode = self._client.getPanelStatus()

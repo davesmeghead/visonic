@@ -536,6 +536,26 @@
 				}				
 			}
 		},
+		"siren": {
+	        "alarm_panel_key": {
+				"state_attributes": {
+					"alarm": {
+					    "name" : "Alarme",
+						"state" : {
+							"none"     : "Aucune Alarme",
+							"intruder" : "Intrus",
+							"tamper"   : "Sabotage",
+							"panic"    : "Panique",
+							"fire"     : "Incendie",
+							"emergency": "Urgence",
+							"gas"      : "Gaz",
+							"flood"    : "Inondation",
+							"external" : "HomeAssistant"
+						}
+					}
+				}
+			}
+		},
   	    "alarm_control_panel": {
 	        "alarm_panel_key": {
 				"state_attributes": {

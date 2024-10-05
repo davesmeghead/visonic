@@ -105,7 +105,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.4.3.1"
+PLUGIN_VERSION = "1.4.3.2"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
@@ -386,7 +386,7 @@ pmSendMsgB0_t = {
    "ZONE_STAT38"           : 0x38,
    "ASK_ME_1"              : 0x39,      # Panel sending a list of message types that may have updated info
    "ZONE_STAT3A"           : 0x3A,
-   "ZONE_STAT3B"           : 0x3B,
+   "ZONE_STAT3B"           : 0x3B,      # This seems to be panel state data after panic, emergency, fire. This cannot be asked for.
    "ZONE_STAT3C"           : 0x3C,
    "ZONE_TEMPS"            : 0x3D,
    "ZONE_STAT3E"           : 0x3E,
@@ -1078,7 +1078,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.ForceStandardMode = False        # INTERFACE : Get user variable from HA to force standard mode or try for PowerLink
         self.DisableAllCommands = False       # INTERFACE : Get user variable from HA to allow or disable all commands to the panel 
         self.DownloadCode = DEFAULT_DL_CODE   # INTERFACE : Set the Download Code
-        self.SirenTriggerList = ["intruder"]  # INTERFACE : This is the trigger list that we can assume is making the siren sound
         # Now that the defaults have been set, update them from the panel config dictionary (that may not have all settings in)
         self.updateSettings(panelConfig)
 
@@ -1234,10 +1233,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 if len(tmpDLCode) == 4 and type(tmpDLCode) is str:
                     self.DownloadCode = tmpDLCode[0:2] + " " + tmpDLCode[2:4]
                     log.debug("[Settings] Download Code set to {0}".format(self.DownloadCode))
-            if AlConfiguration.SirenTriggerList in newdata:
-                tmpList = newdata[AlConfiguration.SirenTriggerList]
-                self.SirenTriggerList = [x.lower() for x in tmpList]
-                log.debug("[Settings] Siren Trigger List set to {0}".format(self.SirenTriggerList))
 
         if self.DisableAllCommands:
             self.ForceStandardMode = True
@@ -3584,6 +3579,7 @@ class PacketHandling(ProtocolBase):
         if self.SirenActive and disarmed is not None and disarmed:
             log.debug("[ProcessPanelStateUpdate] ******************** Alarm Not Sounding (Disarmed) ****************")
             self.SirenActive = False
+            self.SirenActiveDeviceTrigger = None
 
 
     def ProcessZoneEvent(self, eventZone, eventType):
@@ -4110,15 +4106,13 @@ class PacketHandling(ProtocolBase):
             dummy = int(data[1])
             log.debug(f"[handle_msgtypeA7]      A7 message contains {msgCnt} messages,   unknown byte is {hex(dummy)}".format())
 
-            #zoneCnt = 0  # this means it wont work in the case we're in standard mode and the panel type is not set
-            #if self.PanelType is not None:
-            #    zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
+            zoneCnt = 0  # this means it wont work in the case we're in standard mode and the panel type is not set
+            if self.PanelType is not None:
+                zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
 
             # If there are multiple messages in the same A7 message then alarmStatus represents the last "not None" valid message i.e. in pmPanelAlarmType_t
             #oldTroubleStatus = self.PanelTroubleStatus
             #oldAlarmStatus = self.PanelAlarmStatus
-
-            #log.debug("[handle_msgtypeA7]         self.SirenTriggerList = {0}".format(self.SirenTriggerList))
 
             # 03 00 01 03 08 0e 01 13
             # 03 00 2f 55 2f 1b 00 1c
@@ -4134,10 +4128,11 @@ class PacketHandling(ProtocolBase):
                 else:
                     self.addPanelEventData(AlPanelEventData(eventZone, eventType))
 
-                    #log.debug(f"[handle_msgtypeA7] {hexify(eventType)=} {eventStr=}       {hexify(eventZone)=} {zoneStr=}")
+                    log.debug(f"[handle_msgtypeA7] {hexify(eventType)=}      {hexify(eventZone)=}      {zoneCnt=}")
                     # set the sensor data
                     #if eventZone >= 1 and eventZone <= zoneCnt:
                     #    if eventZone-1 in self.SensorList:
+                    #        log.debug(f"[handle_msgtypeA7]          Sensor {self.SensorList[eventZone-1]}")
                     #        
                     # ---------------------------------------------------------------------------------------
 
@@ -4156,26 +4151,30 @@ class PacketHandling(ProtocolBase):
                     if eventType in pmPanelAlarmType_t:
                         self.PanelAlarmStatus = pmPanelAlarmType_t[eventType]
                         #alarmStatus = self.PanelAlarmStatus
-                        log.debug(f"[handle_msgtypeA7]         Updating panel alarm status {self.PanelAlarmStatus}     Checking if it's in the siren trigger list {self.SirenTriggerList}")
-                        if str(self.PanelAlarmStatus).lower() in self.SirenTriggerList:
+                        if self.PanelAlarmStatus == AlAlarmType.INTRUDER:
                             # If any of the A7 messages are in the SirenTriggerList then assume the Siren is triggered
                             siren = True
                     else:
+                        log.debug(f"[handle_msgtypeA7]          Alarm Type {eventType} not in the list so setting alarm status to None")
                         self.PanelAlarmStatus = AlAlarmType.NONE
                     
                     # no clauses as if siren gets true again then keep updating self.SirenActive with the time
                     if siren:
                         self.SirenActive = True
+                        if eventZone-1 in self.SensorList:
+                            self.SirenActiveDeviceTrigger = self.SensorList[eventZone-1]
                         log.debug("[handle_msgtypeA7]            ******************** Alarm Active *******************")
 
                     # cancel alarm and the alarm has been triggered
                     if eventType in pmPanelCancelSet and self.SirenActive:  # Cancel Alarm
                         self.SirenActive = False
+                        self.SirenActiveDeviceTrigger = None
                         log.debug("[handle_msgtypeA7]            ******************** Alarm Cancelled ****************")
 
                     # Siren has been active but it is no longer active (probably timed out and has then been disarmed)
                     if eventType not in pmPanelIgnoreSet and not siren and self.SirenActive:  # Alarm Timed Out ????
                         self.SirenActive = False
+                        self.SirenActiveDeviceTrigger = None
                         log.debug("[handle_msgtypeA7]            ******************** Event in Ignore Set, Cancelling Alarm Indication ****************")
 
                     log.debug(f"[handle_msgtypeA7]         System message eventType={eventType}   self.PanelTamper={self.PanelTamper}   self.PanelAlarmStatus={self.PanelAlarmStatus}" +
@@ -4591,6 +4590,10 @@ class PacketHandling(ProtocolBase):
         # Only Powermasters send this message
         # Format: <Type> <SubType> <Length of Data and Counter> <Data> <Counter> <0x43>
         # A powermaster mainly interacts with B0 messages so reset watchdog on receipt
+
+        # The siren was triggered when the panel sent this
+        #    [_processReceivedMessage] Received PowerMaster (B0)   raw data 0d b0 03 13 0d ff 01 03 08 01 00 00 00 00 00 00 00 94 43 47 0a          response list []
+        #    [handle_msgtypeB0]       Received message chunk for  0x3 0x13, dont know what this is, chunk = datasize 1  index 3   length 8    data 01 00 00 00 00 00 00 00
 
         def chunkme(data) -> list:
             message_type = data[0]
