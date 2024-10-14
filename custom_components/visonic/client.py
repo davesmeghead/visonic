@@ -122,7 +122,7 @@ from .const import (
 #    "trigger",
 #]
 
-CLIENT_VERSION = "0.9.9.5"
+CLIENT_VERSION = "0.9.9.6"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -313,7 +313,7 @@ class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 class VisonicClient:
     """Set up for Visonic devices."""
     
-    _LOGGER.debug("Initialising Client - Version {0}".format(CLIENT_VERSION))
+    _LOGGER.debug(f"Initialising Client - Version {CLIENT_VERSION}")
 
     def __init__(self, hass: HomeAssistant, panelident: int, cf: dict, entry: ConfigEntry):
         """Initialize the Visonic Client."""
@@ -625,7 +625,7 @@ class VisonicClient:
                     output = template.render(
                         entries=self.templatedata,
                         total=total,
-                        available="{0}".format(available),
+                        available=f"{available}",
                     )
                     with open(self.config.get(CONF_LOG_XML_FN), "w") as f:
                         self.logstate_debug("Panel Event Log - Writing xml file")
@@ -1258,7 +1258,7 @@ class VisonicClient:
                 return False, None # Return invalid as panel downloading EEPROM
             else:
                 # If the panel mode is UNKNOWN, PROBLEM.
-                self.logstate_warning("Warning: Valid 4 digit PIN not found, panelmode is {0}".format(panelmode))
+                self.logstate_warning(f"Warning: Valid 4 digit PIN not found, panelmode is {panelmode}")
                 return False, None # Return invalid as panel not in correct state to do anything
         return True, code
 
@@ -1273,7 +1273,7 @@ class VisonicClient:
                 # Powerlink or StdPlus and so we downloaded the code codes
                 return True, None
             else:
-                self.logstate_warning("Warning: [pmGetPinSimple] Valid 4 digit PIN not found, panelmode is {0}".format(panelmode))
+                self.logstate_warning(f"Warning: [pmGetPinSimple] Valid 4 digit PIN not found, panelmode is {panelmode}")
                 return False, None
         return True, code
 
@@ -1676,7 +1676,7 @@ class VisonicClient:
             return sock
             
         except socket.error as err:
-            self.logstate_debug("Setting TCP socket Options Exception {0}".format(err))
+            self.logstate_debug(f"Setting TCP socket Options Exception {err}")
             if sock is not None:
                 sock.close()
 
@@ -1864,7 +1864,7 @@ class VisonicClient:
         attemptCounter = 0
         #self.logstate_debug(f"     {attemptCounter} of {self.totalAttempts}")
         while force or attemptCounter < self.totalAttempts:
-            self.logstate_debug("........... connection attempt {0} of {1}".format(attemptCounter + 1, self.totalAttempts))
+            self.logstate_debug(f"........... connection attempt {attemptCounter + 1} of {self.totalAttempts}")
             if await self.connect_to_alarm():
                 self.logstate_debug("........... connection made")
                 self._fireHAEvent(event_id = PanelCondition.CONNECTION, datadictionary = {"state": "connected", "attempt": attemptCounter + 1})
@@ -1873,7 +1873,7 @@ class VisonicClient:
             attemptCounter = attemptCounter + 1
             force = False
             if attemptCounter < self.totalAttempts:
-                self.logstate_debug("........... connection attempt delay {0} seconds".format(self.delayBetweenAttempts))
+                self.logstate_debug(f"........... connection attempt delay {self.delayBetweenAttempts} seconds")
                 await asyncio.sleep(self.delayBetweenAttempts)
 
         self.createNotification(
@@ -1948,7 +1948,6 @@ class VisonicClient:
         except (ConnectTimeout, HTTPError) as ex:
             createNotification(
                 AvailableNotifications.CONNECTION_PROBLEM,
-                "Visonic Panel Connection Error: {}<br />"
-                "You will need to restart hass after fixing."
-                "".format(ex))
+                "Visonic Panel Connection Error: {ex}<br />"
+                "You will need to restart hass after fixing.")
         #return False

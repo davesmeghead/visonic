@@ -377,7 +377,7 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
  
     async def handle_reload(call) -> None: 
         """Handle reload service call."""
-        _LOGGER.info("Domain {0} call {1} reload called: reloading integration".format(DOMAIN, call))
+        _LOGGER.info(f"Domain {DOMAIN} call {call} reload called: reloading integration")
         current_entries = hass.config_entries.async_entries(DOMAIN)
         reload_tasks = [
             hass.config_entries.async_reload(entry.entry_id)
@@ -450,7 +450,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
 
     # Listener to handle fired events
     def handle_core_config_updated(event):
-        _LOGGER.debug(f"[Visonic Setup] event {str(event)}")
+        _LOGGER.debug(f"[Visonic Setup] Core configuration has been Updated")
         #hass = async_get_hass()
         translateLanguage(hass)
 
@@ -458,7 +458,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
         translatedLanguageAlready = True
         translateLanguage(hass)
         # Listen for when EVENT_CORE_CONFIG_UPDATE is fired
-        #    hass.bus.async_listen(EVENT_HOMEASSISTANT_STARTED, handle_core_config_updated)
         hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, handle_core_config_updated)
 
     # combine and convert python settings map to dictionary

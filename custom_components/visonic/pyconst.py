@@ -325,13 +325,13 @@ class AlLogPanelEvent:
 
     def __str__(self):
         strn = ""
-        strn = strn + ("part=None" if self.partition is None else "part={0:<2}".format(self.partition))
-        strn = strn + ("    current=None" if self.current is None else "    current={0:<2}".format(self.current))
-        strn = strn + ("    total=None" if self.total is None else "    total={0:<2}".format(self.total))
-        strn = strn + ("    time=None" if self.time is None else "    time={0:<2}".format(self.time))
-        strn = strn + ("    date=None" if self.date is None else "    date={0:<2}".format(self.date))
-        strn = strn + ("    zone=None" if self.zone is None else "    zone={0:<2}".format(self.zone))
-        strn = strn + ("    event=None" if self.event is None else "    event={0:<2}".format(self.event))
+        strn = strn + ("part=None" if self.partition is None else f"part={self.partition:<2}")
+        strn = strn + ("    current=None" if self.current is None else f"    current={self.current:<2}")
+        strn = strn + ("    total=None" if self.total is None else f"    total={self.total:<2}")
+        #strn = strn + ("    time=None" if self.time is None else f"    time={self.time:<2}")
+        strn = strn + ("    date=None" if self.dateandtime is None else f"    date={self.dateandtime}")
+        strn = strn + ("    zone=None" if self.zone is None else f"    zone={self.zone:<2}")
+        strn = strn + ("    event=None" if self.event is None else f"    event={self.event:<2}")
         return strn
 
 
@@ -405,7 +405,7 @@ class AlSensorDevice(ABC):
 
     # Do not override me
     def createFriendlyName(self) -> str:
-        return "Z{0:0>2}".format(self.getDeviceID())
+        return f"Z{self.getDeviceID():0>2}"
 
     # Return the sensor model.  This is a string such as "Visonic MTT-302" to show in the HA frontend
     def getSensorModel(self) -> str:
@@ -451,7 +451,7 @@ class AlSwitchDevice(ABC):
     def createFriendlyName(self) -> str:
         if self.getDeviceID() == 0:
             return "PGM"
-        return "X{0:0>2}".format(self.getDeviceID())
+        return f"X{self.getDeviceID():0>2}"
 
 
 class PanelConfig(TypedDict):
@@ -515,6 +515,7 @@ class AlPanelInterface(ABC):
         """ Get the panel Mode e.g. Standard, Powerlink etc. """
         return AlPanelMode.UNKNOWN
 
+    @abstractmethod
     def isPowerMaster(self) -> bool:
         """ Get the panel type, PowerMaster or not """
         return False

@@ -105,7 +105,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.4.3.3"
+PLUGIN_VERSION = "1.4.3.4"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
@@ -248,7 +248,7 @@ class PriorityQueueWithPeek(asyncio.PriorityQueue):
 # Panel Names for each panel type (0-16).
 #     0 : "PowerMax" is not a supported panel type  
 #     Assume 360R is Panel 16 for this release as it was released after the PM33, also I've an old log file from a user that indicates this
-pmPanelType_t = {
+pmPanelType = {
    0 : "PowerMax", 
    1 : "PowerMax+", 
    2 : "PowerMax Pro", 
@@ -269,7 +269,7 @@ pmPanelType_t = {
 #               So make column 16 the same as column 13
 #     Don't know what 9, 11, 12 or 14 are so just copy other settings. I know that there are Commercial/Industry Panel versions so it might be them
 #     This data defines each panel type's maximum capability
-pmPanelConfig_t = {    #      0       1       2       3       4       5       6       7       8       9      10      11      12      13      14      15      16      See pmPanelType_t above
+pmPanelConfig = {    #      0       1       2       3       4       5       6       7       8       9      10      11      12      13      14      15      16      See pmPanelType above
    "CFG_SUPPORTED"     : (  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True ), # Supported Panels i.e. not a PowerMax
    "CFG_KEEPALIVE"     : (      0,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     25,     15,     25,     25,     15 ), # Keep Alive message interval if no other messages sent
    "CFG_DLCODE_1"      : (     "", "5650", "5650", "5650", "5650", "5650", "5650", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA", "AAAA" ), # Default download codes (for reset panels or panels that have not been changed)
@@ -323,7 +323,7 @@ pmSendMsg = {
    "MSG_SER_TYPE"     : VisonicCommand(convertByteArray('5A 30 04 01 00 00 00 00 00 00 00')   , [0x33] , False, False,      SendDebugM, 0.0, "Get Serial Type" ),
 
    "MSG_EVENTLOG"     : VisonicCommand(convertByteArray('A0 00 00 00 99 99 00 00 00 00 00 43'), [0xA0] , False, False,      SendDebugC, 0.0, "Retrieving Event Log" ),
-   "MSG_ARM"          : VisonicCommand(convertByteArray('A1 00 00 99 99 99 07 00 00 00 00 43'), None   ,  True, False,      SendDebugC, 0.0, "(Dis)Arming System" ),             # Including 07
+   "MSG_ARM"          : VisonicCommand(convertByteArray('A1 00 00 99 99 99 07 00 00 00 00 43'), None   ,  True, False,      SendDebugC, 0.0, "(Dis)Arming System" ),             # Including 07 to arm all 3 partitions
    "MSG_MUTE_SIREN"   : VisonicCommand(convertByteArray('A1 00 00 0B 99 99 00 00 00 00 00 43'), None   ,  True, False,      SendDebugC, 0.0, "Mute Siren" ),                     #
    "MSG_STATUS"       : VisonicCommand(convertByteArray('A2 00 00 3F 00 00 00 00 00 00 00 43'), [0xA5] ,  True, False,      SendDebugM, 0.0, "Getting Status" ),                 # Ask for A5 messages, the 0x3F asks for 01 02 03 04 05 06 messages
    "MSG_STATUS_SEN"   : VisonicCommand(convertByteArray('A2 00 00 08 00 00 00 00 00 00 00 43'), [0xA5] ,  True, False,      SendDebugM, 0.0, "Getting A5 04 Status" ),           # Ask for A5 messages, the 0x08 asks for 04 message only
@@ -364,7 +364,7 @@ pmSendMsg = {
 }
 
 # B0 Messages subset that we can send to a Powermaster, embed within MSG_POWERMASTER to use
-pmSendMsgB0_t = {
+pmSendMsgB0 = {
    "ZONE_STAT04"           : 0x04,
    "ZONE_STAT07"           : 0x07,
    "ZONE_OPENCLOSE"        : 0x18,      # Sensor Open/Close State
@@ -406,18 +406,18 @@ pmSendMsgB0_t = {
 #     5/D/F/25  Arm Away
 #     14/1C/1E  Arm Home Instant
 #     15/1D/1F  Arm Away Instant
-pmArmMode_t = {
+pmArmMode = {
    AlPanelCommand.DISARM : 0x00, AlPanelCommand.ARM_HOME : 0x04, AlPanelCommand.ARM_AWAY : 0x05, AlPanelCommand.ARM_HOME_INSTANT : 0x14, AlPanelCommand.ARM_AWAY_INSTANT : 0x15    # "usertest" : 0x06,
 }
 
 # Data to embed in the MSG_PM_SIREN_MODE message
 # PowerMaster to command the siren mode
-pmSirenMode_t = {
+pmSirenMode = {
    AlPanelCommand.EMERGENCY : 0x23, AlPanelCommand.FIRE : 0x20, AlPanelCommand.PANIC : 0x0C
 }
 
 # Data to embed in the MSG_X10PGM message
-pmX10State_t = {
+pmX10State = {
    AlX10Command.OFF : 0x00, AlX10Command.ON : 0x01, AlX10Command.DIMMER : 0x0A, AlX10Command.BRIGHTEN : 0x0B
 }
 
@@ -433,7 +433,7 @@ pmX10State_t = {
 #    ignorechecksum is for messages that do not have a checksum.  These are F1 and F4 messages (so far)
 #    When length is 0 then we stop processing the message on the first PACKET_FOOTER. This is only used for the short messages (4 or 5 bytes long) like ack, stop, denied and timeout
 PanelCallBack = collections.namedtuple("PanelCallBack", 'length ackneeded isvariablelength varlenbytepos flexiblelength ignorechecksum debugprint msg' )
-pmReceiveMsg_t = {
+pmReceiveMsg = {
    0x00     : PanelCallBack(  0,  True, False, -1, 0, False, DebugLevel.NONE,                          "Dummy Message" ),       # Dummy message used in the algorithm when the message type is unknown. The -1 is used to indicate an unknown message in the algorithm
    0x02     : PanelCallBack(  0, False, False,  0, 0, False, DebugLevel.NONE,                          "Acknowledge" ),         # Ack
    0x06     : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Timeout" ),             # Timeout. See the receiver function for ACK handling
@@ -496,7 +496,7 @@ pmPanelCancelSet = ( EVENT_TYPE_DISARM, EVENT_TYPE_ALARM_CANCEL, EVENT_TYPE_FIRE
 pmPanelIgnoreSet = ( EVENT_TYPE_DELAY_RESTORE, EVENT_TYPE_CONFIRM_ALARM, EVENT_TYPE_INTERIOR_RESTORE, EVENT_TYPE_PERIMETER_RESTORE)
 
 # These 2 dictionaries are subsets of pmLogEvent_t
-pmPanelAlarmType_t = {
+pmPanelAlarmType = {
    0x00 : AlAlarmType.NONE,     0x01 : AlAlarmType.INTRUDER,  0x02 : AlAlarmType.INTRUDER, 0x03 : AlAlarmType.INTRUDER,
    0x04 : AlAlarmType.INTRUDER, 0x05 : AlAlarmType.INTRUDER,  0x06 : AlAlarmType.TAMPER,   0x07 : AlAlarmType.TAMPER,
    0x08 : AlAlarmType.TAMPER,   0x09 : AlAlarmType.TAMPER,    0x0B : AlAlarmType.PANIC,    0x0C : AlAlarmType.PANIC,
@@ -504,7 +504,7 @@ pmPanelAlarmType_t = {
 #   0x75 : AlAlarmType.TAMPER
 }
 
-pmPanelTroubleType_t = {
+pmPanelTroubleType = {
 #   0x00 : AlTroubleType.NONE,          0x01 : AlTroubleType.GENERAL,   0x0A : AlTroubleType.COMMUNICATION, 0x0F : AlTroubleType.GENERAL,   0x01 is already in AlarmType, it is not a General Trouble indication
    0x00 : AlTroubleType.NONE,          0x0A : AlTroubleType.COMMUNICATION, 0x0F : AlTroubleType.GENERAL,
    0x29 : AlTroubleType.BATTERY,       0x2B : AlTroubleType.POWER,         0x2D : AlTroubleType.BATTERY,       0x2F : AlTroubleType.JAMMING,
@@ -515,7 +515,7 @@ pmPanelTroubleType_t = {
 
 # Zone names are taken from the panel, so no langauage support needed, these are updated when EEPROM is downloaded or the B0 message is received
 #    TODO : Ensure that the EPROM and downloaded strings match the lower case with underscores to match the language files where possible
-pmZoneName_t = [
+pmZoneName = [
    "attic", "back_door", "basement", "bathroom", "bedroom", "child_room", "conservatory", "play_room", "dining_room", "downstairs",
    "emergency", "fire", "front_door", "garage", "garage_door", "guest_room", "hall", "kitchen", "laundry_room", "living_room",
    "master_bathroom", "master_bedroom", "office", "upstairs", "utility_room", "yard", "custom_1", "custom_2", "custom_3",
@@ -533,7 +533,7 @@ Dumpy = XDumpy or SDumpy
 
 # PMAX EEPROM CONFIGURATION version 1_2
 SettingsCommand = collections.namedtuple('SettingsCommand', 'show count type poff psize pstep pbitoff name values')
-DecodePanelSettings = {
+pmDecodePanelSettings = {
     "jamDetect"      : SettingsCommand(   True,  1, "BYTE",    256,   8,   0,    -1,  "Jamming Detection",                  { '1':"UL 20/20", '2':"EN 30/60", '3':"Class 6", '4':"Other", '0':"Disable"} ),
     "entryDelays"    : SettingsCommand(   True,  2, "BYTE",    257,   8,   1,     2,  ["Entry Delay 1","Entry Delay 2"],    { '0':"None", '15':"15 Seconds", '30':"30 Seconds", '45':"45 Seconds", '60':"1 Minute", '180':"3 Minutes", '240':"4 Minutes"}),  # 257, 258
     "exitDelay"      : SettingsCommand(   True,  1, "BYTE",    259,   8,   0,    -1,  "Exit Delay",                         { '30':"30 Seconds", '60':"60 Seconds", '90':"90 Seconds", '120':"2 Minutes", '180':"3 Minutes", '240':"4 Minutes"}),
@@ -658,7 +658,7 @@ DecodePanelSettings = {
     "x10ZoneNames"   : SettingsCommand(  Dumpy, 16, "BYTE",   2864,   8,   1,    -1,  "X10 Location Name references",       {} ),   # 
     #"MaybeScreenSaver":SettingsCommand(  Dumpy, 75, "BYTE",   5888,   8,   1,    -1,  "Maybe the screen saver",             {} ),   # Structure not known 
 
-#    "ZoneStringNames": SettingsCommand(  Dumpy, 32,"STRING",  6400, 128,  16,    -1,  "Zone String Names",                  {} ),   # Zone String Names e.g "Attic", "Back door", "Basement", "Bathroom" etc 32 strings of 16 characters each, replace pmZoneName_t
+#    "ZoneStringNames": SettingsCommand(  Dumpy, 32,"STRING",  6400, 128,  16,    -1,  "Zone String Names",                  {} ),   # Zone String Names e.g "Attic", "Back door", "Basement", "Bathroom" etc 32 strings of 16 characters each, replace pmZoneName
 
 
 #PowerMax Only
@@ -704,7 +704,7 @@ DecodePanelSettings = {
 }
 # 'show count type poff psize pstep pbitoff name values'
 
-# These are the panel settings to keep a track of, most come from PanelSettingCodes and the EPROM/B0 
+# These are the panel settings to keep a track of, most come from pmPanelSettingCodes and the EPROM/B0 
 class PanelSetting(IntEnum):
     UserCodes       = 1
     PanelSerial     = 2
@@ -728,7 +728,7 @@ class PanelSetting(IntEnum):
 
 B0All = not OBFUS
 PanelSettingsCollection = collections.namedtuple('PanelSettingsCollection', 'length display datatype datacount msg') # overall length in bytes, datatype in bits
-pmPanelSettingsB0_t = {
+pmPanelSettingsB0 = {
    0x0000 : PanelSettingsCollection(  6, B0All,  1,  6, "Central Station Account Number 1"),  # size of each entry is 6 nibbles
    0x0100 : PanelSettingsCollection(  6, B0All,  1,  6, "Central Station Account Number 1"),  # size of each entry is 6 nibbles
    0x0200 : PanelSettingsCollection(  7, B0All,  2,  0, "Panel Serial Number"),
@@ -750,7 +750,7 @@ pmPanelSettingsB0_t = {
    0x5800 : PanelSettingsCollection(  4, B0All,  4,  2, "Unknown D"),
 }                                                                       
 
-# PanelSettingCodes represents the ways that we can get data to populate the PanelSettings
+# pmPanelSettingCodes represents the ways that we can get data to populate the PanelSettings
 #   A PowerMax Panel only has 1 way and that is to download the EPROM = PowerMaxEPROM
 #   A PowerMaster Panel has 3 ways:
 #        1. Download the EPROM = PowerMasterEPROM
@@ -760,26 +760,26 @@ pmPanelSettingsB0_t = {
 PanelSettingCodesType = collections.namedtuple('PanelSettingCodesType', 'item PowerMaxEPROM PowerMasterEPROM PowerMasterB0Panel PowerMasterB0Message PowerMasterB0Index default')
 #   For PowerMasterB0Message there is an assumption that the message type is 0x03, and this is the subtype
 #       PowerMasterB0Index index 3 is Sensor data, I should have an enum for this
-PanelSettingCodes = { # These are used to create the self.PanelSettings dictionary to create a common set of settings across the different ways of obtaining them
-    PanelSetting.UserCodes        : PanelSettingCodesType( None, "userCodeMax",      "userCodeMaster",  0x0800, None, None,                     [bytearray([0,0])] ),
-    PanelSetting.PanelSerial      : PanelSettingCodesType( 0,    "panelSerial",      "panelSerial",     0x0200, None, None,                     ["Undefined"] ),
-    PanelSetting.Keypad_1Way      : PanelSettingCodesType( None, "Keypad1PMax",      None,              ""    , None, None,                     bytearray()),            # PowerMaster Panels do not have 1 way keypads
-    PanelSetting.Keypad_2Way      : PanelSettingCodesType( None, "Keypad2PMax",      "KeypadPMaster",   ""    , None, None,                     bytearray()),
-    PanelSetting.KeyFob           : PanelSettingCodesType( None, "KeyFobsPMax",      "",                ""    , None, None,                     bytearray()),
-    PanelSetting.Sirens           : PanelSettingCodesType( None, "SirensPMax",       "SirensPMaster",   ""    , None, None,                     bytearray()),
-    PanelSetting.AlarmLED         : PanelSettingCodesType( None, None,               "AlarmLED",        ""    , None, None,                     bytearray()),
-    PanelSetting.PartitionData    : PanelSettingCodesType( None, "PartitionData",    "PartitionData",   ""    , None, None,                     bytearray()),
-    PanelSetting.ZoneNames        : PanelSettingCodesType( None, "ZoneNamePMax",     "ZoneNamePMaster", ""    , pmSendMsgB0_t["ZONE_NAMES"], 3, bytearray()),
-    PanelSetting.ZoneTypes        : PanelSettingCodesType( None, None,               None,              ""    , pmSendMsgB0_t["ZONE_TYPES"], 3, bytearray()),          # Indirectly from EPROM but needs to be calculated/extracted
-    PanelSetting.ZoneExt          : PanelSettingCodesType( None, None,               "ZoneExtPMaster",  ""    , None, None,                     bytearray()),
-    PanelSetting.ZoneDelay        : PanelSettingCodesType( None, None,               "ZoneDelay",       ""    , None, None,                     bytearray()),
-    PanelSetting.ZoneSignal       : PanelSettingCodesType( None, "ZoneSignalPMax",   "",                ""    , None, None,                     bytearray()),
-    PanelSetting.ZoneData         : PanelSettingCodesType( None, "ZoneDataPMax",     "ZoneDataPMaster", ""    , None, None,                     bytearray()),
-    PanelSetting.ZoneEnrolled     : PanelSettingCodesType( None, None,               None,              ""    , None, None,                     {} ),           
-    PanelSetting.PanicAlarm       : PanelSettingCodesType( 0,    "panicAlarm",       "panicAlarm",      ""    , None, None,                     [False]),
-    PanelSetting.PanelBypass      : PanelSettingCodesType( 0,    "panelbypass",      "panelbypass",     ""    , None, None,                     ["No Bypass"]),
-    PanelSetting.PanelModel       : PanelSettingCodesType( 0,    "panelModelCode",   "panelModelCode",  ""    , None, None,                     [bytearray([0,0,0,0])]),
-    PanelSetting.ZoneChime        : PanelSettingCodesType( None, None,               None,              ""    , None, None,                     {} )
+pmPanelSettingCodes = { # These are used to create the self.PanelSettings dictionary to create a common set of settings across the different ways of obtaining them
+    PanelSetting.UserCodes        : PanelSettingCodesType( None, "userCodeMax",      "userCodeMaster",  0x0800, None, None,                          [bytearray([0,0])] ),
+    PanelSetting.PanelSerial      : PanelSettingCodesType( 0,    "panelSerial",      "panelSerial",     0x0200, None, None,                          ["Undefined"] ),
+    PanelSetting.Keypad_1Way      : PanelSettingCodesType( None, "Keypad1PMax",      None,              ""    , None, None,                          bytearray()),            # PowerMaster Panels do not have 1 way keypads
+    PanelSetting.Keypad_2Way      : PanelSettingCodesType( None, "Keypad2PMax",      "KeypadPMaster",   ""    , None, None,                          bytearray()),
+    PanelSetting.KeyFob           : PanelSettingCodesType( None, "KeyFobsPMax",      "",                ""    , None, None,                          bytearray()),
+    PanelSetting.Sirens           : PanelSettingCodesType( None, "SirensPMax",       "SirensPMaster",   ""    , None, None,                          bytearray()),
+    PanelSetting.AlarmLED         : PanelSettingCodesType( None, None,               "AlarmLED",        ""    , None, None,                          bytearray()),
+    PanelSetting.PartitionData    : PanelSettingCodesType( None, "PartitionData",    "PartitionData",   ""    , None, None,                          bytearray()),
+    PanelSetting.ZoneNames        : PanelSettingCodesType( None, "ZoneNamePMax",     "ZoneNamePMaster", ""    , pmSendMsgB0["ZONE_NAMES"].data, 3, bytearray()),
+    PanelSetting.ZoneTypes        : PanelSettingCodesType( None, None,               None,              ""    , pmSendMsgB0["ZONE_TYPES"].data, 3, bytearray()),          # Indirectly from EPROM but needs to be calculated/extracted
+    PanelSetting.ZoneExt          : PanelSettingCodesType( None, None,               "ZoneExtPMaster",  ""    , None, None,                          bytearray()),
+    PanelSetting.ZoneDelay        : PanelSettingCodesType( None, None,               "ZoneDelay",       ""    , None, None,                          bytearray()),
+    PanelSetting.ZoneSignal       : PanelSettingCodesType( None, "ZoneSignalPMax",   "",                ""    , None, None,                          bytearray()),
+    PanelSetting.ZoneData         : PanelSettingCodesType( None, "ZoneDataPMax",     "ZoneDataPMaster", ""    , None, None,                          bytearray()),
+    PanelSetting.ZoneEnrolled     : PanelSettingCodesType( None, None,               None,              ""    , None, None,                          {} ),           
+    PanelSetting.PanicAlarm       : PanelSettingCodesType( 0,    "panicAlarm",       "panicAlarm",      ""    , None, None,                          [False]),
+    PanelSetting.PanelBypass      : PanelSettingCodesType( 0,    "panelbypass",      "panelbypass",     ""    , None, None,                          ["No Bypass"]),
+    PanelSetting.PanelModel       : PanelSettingCodesType( 0,    "panelModelCode",   "panelModelCode",  ""    , None, None,                          [bytearray([0,0,0,0])]),
+    PanelSetting.ZoneChime        : PanelSettingCodesType( None, None,               None,              ""    , None, None,                          {} )
 }
 
 # These blocks are not value specific, they are used to download blocks of EEPROM data that we need without reference to what the data means
@@ -838,7 +838,7 @@ pmZoneSensorMaxGeneric_t = {
 #0x75 : ZoneSensorType("Next+ K9-85 MCW", AlSensorType.MOTION ), # Jan
 #0x86 : ZoneSensorType("MCT-426", AlSensorType.SMOKE ), # Jan
 ZoneSensorType = collections.namedtuple("ZoneSensorType", 'name func' )
-pmZoneSensorMax_t = {
+pmZoneSensorMax = {
    0x6D : ZoneSensorType("MCX-601 Wireless Repeater", AlSensorType.IGNORED ),       # Joao-Sousa   ********************* Wireless Repeater so exclude it **************
    0x08 : ZoneSensorType("MCT-302", AlSensorType.MAGNET ),         # Fabio72
    0x09 : ZoneSensorType("MCT-302", AlSensorType.MAGNET ),         # Fabio72
@@ -877,7 +877,7 @@ pmZoneSensorMax_t = {
 # SMD-426 PG2 (photoelectric smoke detector)
 # SMD-427 PG2 (heat and photoelectric smoke detector)
 # SMD-429 PG2 (Smoke and Heat Detector)
-pmZoneSensorMaster_t = {
+pmZoneSensorMaster = {
    0x01 : ZoneSensorType("Next PG2", AlSensorType.MOTION ),
    0x03 : ZoneSensorType("Clip PG2", AlSensorType.MOTION ),
    0x04 : ZoneSensorType("Next CAM PG2", AlSensorType.CAMERA ),
@@ -907,7 +907,7 @@ pmZoneSensorMaster_t = {
 ##############################################################################################################################################################################################################################################
 
 PanelArmedStatusCollection = collections.namedtuple('PanelArmedStatusCollection', 'disarmed armed entry state eventmapping')
-PanelArmedStatus = {               # disarmed armed entry         state
+pmPanelArmedStatus = {               # disarmed armed entry         state
    0x00 : PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , 85),  # Disarmed
    0x01 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , -1),  # Arming Home
    0x02 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , -1),  # Arming Away
@@ -935,7 +935,7 @@ PanelArmedStatus = {               # disarmed armed entry         state
 }
 
 ZoneEventActionCollection = collections.namedtuple('ZoneEventActionCollection', 'func problem parameter')
-ZoneEventAction = {
+pmZoneEventAction = {
       0 : ZoneEventActionCollection("",           "none",          None ),                        # "None",
       1 : ZoneEventActionCollection("do_tamper",  "tamper",        True ),                        # "Tamper Alarm",          
       2 : ZoneEventActionCollection("do_tamper",  "none",          False ),                       # "Tamper Restore",        
@@ -995,10 +995,10 @@ class VisonicListEntry:
 
     def __str__(self):
         if self.command is not None:
-            return ("Command:{0}    Options:{1}".format(self.command.msg, self.options))
+            return f"Command:{self.command.msg}    Options:{self.options}"
         elif self.raw is not None:
-            return ("Raw: {0}".format(toString(self.raw)))
-        return ("Command:None")
+            return f"Raw: {toString(self.raw)}"
+        return "Command:None"
 
     def __lt__(self, other: object) -> bool:             # Implement < based on the creation time
         if not isinstance(other, VisonicListEntry):
@@ -1011,15 +1011,13 @@ class VisonicListEntry:
             # the length of instruction.options has to be an even number
             # it is a list of couples:  bitoffset , bytearray to insert
             #op = int(len(instruction.options) / 2)
-            # log.debug("[sendPdu] Options {0} {1}".format(instruction.options, op))
+            # log.debug(f"[sendPdu] Options {instruction.options} {op}")
             for o in range(0, len(self.options)):
                 s = self.options[o][0] # [o * 2]      # bit offset as an integer
                 a = self.options[o][1] # [o * 2 + 1]  # the bytearray to insert
                 if isinstance(a, int):
-                    # log.debug("[sendPdu] Options {0} {1} {2} {3}".format(type(s), type(a), s, a))
                     data[s] = a
                 else:
-                    # log.debug("[sendPdu] Options {0} {1} {2} {3} {4}".format(type(s), type(a), s, a, len(a)))
                     for i in range(0, len(a)):
                         data[s + i] = a[i]
         return data
@@ -1046,7 +1044,7 @@ def hexify(v : int) -> str:
 class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     """Manage low level Visonic protocol."""
 
-    log.debug("Initialising Protocol - Protocol Version {0}".format(PLUGIN_VERSION))
+    log.debug(f"Initialising Protocol - Protocol Version {PLUGIN_VERSION}")
 
     def __init__(self, loop=None, panelConfig : PanelConfig = None, panel_id : int = None, packet_callback: Callable = None) -> None:
         super().__init__(panel_id=panel_id)
@@ -1086,7 +1084,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         ########################################################################
         self.pmIncomingPduLen = 0             # The length of the incoming message
         self.pmCrcErrorCount = 0              # The CRC Error Count for Received Messages
-        self.pmCurrentPDU = pmReceiveMsg_t[0] # The current receiving message type
+        self.pmCurrentPDU = pmReceiveMsg[0] # The current receiving message type
         self.pmFlexibleLength = 0             # How many bytes less then the proper message size do we start checking for PACKET_FOOTER and a valid CRC
         # The receive byte array for receiving a message
         self.ReceiveData = bytearray(b"")
@@ -1140,7 +1138,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         
         self.PanelSettings = {}              # This is the record of settings for the integration to work
         for key in PanelSetting:
-            self.PanelSettings[key] = PanelSettingCodes[key].default     # populate each setting with the default
+            self.PanelSettings[key] = pmPanelSettingCodes[key].default     # populate each setting with the default
 
         self.B0_Message_Count = 0
         self.B0_Message_Wanted = set()
@@ -1219,20 +1217,20 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         
     def updateSettings(self, newdata: PanelConfig):
         if newdata is not None:
-            # log.debug("[updateSettings] Settings refreshed - Using panel config {0}".format(newdata))
+            # log.debug(f"[updateSettings] Settings refreshed - Using panel config {newdata}")
             if AlConfiguration.ForceStandard in newdata:
                 # Get user variable from HA to force standard mode or try for PowerLink
                 self.ForceStandardMode = newdata[AlConfiguration.ForceStandard]
-                log.debug("[Settings] Force Standard set to {0}".format(self.ForceStandardMode))
+                log.debug(f"[Settings] Force Standard set to {self.ForceStandardMode}")
             if AlConfiguration.DisableAllCommands in newdata:
                 # Get user variable from HA to Disable All Commands
                 self.DisableAllCommands = newdata[AlConfiguration.DisableAllCommands]
-                log.debug("[Settings] Disable All Commands set to {0}".format(self.DisableAllCommands))
+                log.debug(f"[Settings] Disable All Commands set to {self.DisableAllCommands}")
             if AlConfiguration.DownloadCode in newdata:
                 tmpDLCode = newdata[AlConfiguration.DownloadCode]  # INTERFACE : Get the download code
                 if len(tmpDLCode) == 4 and type(tmpDLCode) is str:
                     self.DownloadCode = tmpDLCode[0:2] + " " + tmpDLCode[2:4]
-                    log.debug("[Settings] Download Code set to {0}".format(self.DownloadCode))
+                    log.debug(f"[Settings] Download Code set to {self.DownloadCode}")
 
         if self.DisableAllCommands:
             self.ForceStandardMode = True
@@ -1267,7 +1265,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             log.error(f"ERROR Connection Lost : disconnected because the Ethernet/USB connection was externally terminated.  {exc}")
         
         if exc is not None:
-            # log.exception("ERROR Connection Lost : disconnected due to exception  <{0}>".format(exc))
             log.error(f"ERROR Connection Lost : disconnected due to external error, exception data = {exc}")
             self._performDisconnect(AlTerminationType.EXTERNAL_TERMINATION)
         else:
@@ -1358,18 +1355,18 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         # The first time its called it leaves DownloadCode alone
         if self.nextDownloadCode is None:
             tmp = self.DownloadCode[:2] + self.DownloadCode[2:]
-            if tmp == pmPanelConfig_t["CFG_DLCODE_1"][paneltype]: # The base setting is the same as DLCODE 1 so set the next one to be DLCODE 2
-                self.nextDownloadCode = pmPanelConfig_t["CFG_DLCODE_2"][paneltype]
+            if tmp == pmPanelConfig["CFG_DLCODE_1"][paneltype]: # The base setting is the same as DLCODE 1 so set the next one to be DLCODE 2
+                self.nextDownloadCode = pmPanelConfig["CFG_DLCODE_2"][paneltype]
             else:
-                self.nextDownloadCode = pmPanelConfig_t["CFG_DLCODE_1"][paneltype]
-        elif self.nextDownloadCode == pmPanelConfig_t["CFG_DLCODE_1"][paneltype]:
-            self.DownloadCode = pmPanelConfig_t["CFG_DLCODE_1"][paneltype][:2] + " " + pmPanelConfig_t["CFG_DLCODE_1"][paneltype][2:]
-            self.nextDownloadCode = pmPanelConfig_t["CFG_DLCODE_2"][paneltype]
-        elif self.nextDownloadCode == pmPanelConfig_t["CFG_DLCODE_2"][paneltype]:
-            self.DownloadCode = pmPanelConfig_t["CFG_DLCODE_2"][paneltype][:2] + " " + pmPanelConfig_t["CFG_DLCODE_2"][paneltype][2:]
-            self.nextDownloadCode = pmPanelConfig_t["CFG_DLCODE_3"][paneltype]
-        elif self.nextDownloadCode == pmPanelConfig_t["CFG_DLCODE_3"][paneltype]:
-            self.DownloadCode = pmPanelConfig_t["CFG_DLCODE_3"][paneltype][:2] + " " + pmPanelConfig_t["CFG_DLCODE_3"][paneltype][2:]
+                self.nextDownloadCode = pmPanelConfig["CFG_DLCODE_1"][paneltype]
+        elif self.nextDownloadCode == pmPanelConfig["CFG_DLCODE_1"][paneltype]:
+            self.DownloadCode = pmPanelConfig["CFG_DLCODE_1"][paneltype][:2] + " " + pmPanelConfig["CFG_DLCODE_1"][paneltype][2:]
+            self.nextDownloadCode = pmPanelConfig["CFG_DLCODE_2"][paneltype]
+        elif self.nextDownloadCode == pmPanelConfig["CFG_DLCODE_2"][paneltype]:
+            self.DownloadCode = pmPanelConfig["CFG_DLCODE_2"][paneltype][:2] + " " + pmPanelConfig["CFG_DLCODE_2"][paneltype][2:]
+            self.nextDownloadCode = pmPanelConfig["CFG_DLCODE_3"][paneltype]
+        elif self.nextDownloadCode == pmPanelConfig["CFG_DLCODE_3"][paneltype]:
+            self.DownloadCode = pmPanelConfig["CFG_DLCODE_3"][paneltype][:2] + " " + pmPanelConfig["CFG_DLCODE_3"][paneltype][2:]
             self.nextDownloadCode = "" # not None and invalid, so it goes to else next time
         else:
             ra = random.randint(10, 240)
@@ -1422,7 +1419,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         if paneltime is not None and t.year > 2000:
             self.Panel_Integration_Time_Difference = t - paneltime
             d = self.Panel_Integration_Time_Difference.total_seconds()
-            log.debug("[setTimeInPanel]        Local time is {0}      time difference {1} seconds".format(t, d))   # 
+            log.debug(f"[setTimeInPanel]        Local time is {t}      time difference {d} seconds")   # 
             if abs(d) < TIME_INTERVAL_ERROR:
                 log.debug(f"[setTimeInPanel]        Not Correcting Time in Panel as less than {TIME_INTERVAL_ERROR} seconds difference.")
                 settime = False
@@ -1434,7 +1431,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 self._addMessageToSendList("MSG_BUMP", urgent = True)
             else:
                 self._addMessageToSendList("MSG_DOWNLOAD_TIME", urgent = True, options=[ [3, convertByteArray(self.DownloadCode)] ])  # Can only set the time in the panel in DOWNLOADING state
-            log.debug("[setTimeInPanel]        Setting time in panel {0}".format(t))
+            log.debug(f"[setTimeInPanel]        Setting time in panel {t}")
             timePdu = bytearray([t.second + 1, t.minute, t.hour, t.day, t.month, t.year - 2000])   # add about 2 seconds on as it takes over 1 to get to the panel to set it
             self._addMessageToSendList("MSG_SETTIME", urgent = True, options=[ [3, timePdu] ])
             self._addMessageToSendList("MSG_EXIT", urgent = True)
@@ -1561,8 +1558,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             self.pmExpectedResponse = set()  # If it's only for an acknowledge response then ignore it
                         else:
                             st = '[{}]'.format(', '.join(hex(x) for x in self.pmExpectedResponse))
-                            log.debug("[_despatcher] ****************************** Response Timer Expired ********************************")
-                            log.debug("[_despatcher]                While Waiting for: {0}".format(st))
+                            log.debug(f"[_despatcher] ****************************** Response Timer Expired ********************************")
+                            log.debug(f"[_despatcher]                While Waiting for: {st}")
                             # Reset Send state (clear queue and reset flags)
                             self._clearReceiveResponseList()
                             #self._emptySendQueue(pri_level = 1)
@@ -1571,8 +1568,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         #   If there's a timeout then resend the previous message. If that doesn't work then dump the message and continue, but log the error
                         if not self.pmLastSentMessage.triedResendingMessage:
                             # resend the last message
-                            log.debug("[_despatcher] ****************************** Resend Timer Expired ********************************")
-                            log.debug("[_despatcher]                Re-Sending last message  {0}".format(self.pmLastSentMessage.command.msg))
+                            log.debug(f"[_despatcher] ****************************** Resend Timer Expired ********************************")
+                            log.debug(f"[_despatcher]                Re-Sending last message  {self.pmLastSentMessage.command.msg}")
                             self.pmLastSentMessage.triedResendingMessage = True
                             post_delay = self._sendPdu(self.pmLastSentMessage)
                         else:
@@ -1729,7 +1726,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 if self.AccessDeniedMessage is not None:
                     lastCommandData = self.AccessDeniedMessage.command.data
                     if lastCommandData is not None:
-                        log.debug("[_sequencer]     AccessDenied last command {0}".format(toString(lastCommandData[:3] if OBFUS else lastCommandData)))
+                        log.debug(f"[_sequencer]     AccessDenied last command {toString(lastCommandData[:3] if OBFUS else lastCommandData)}")
                         # Check download first, then pin, then stop
                         if lastCommandData[0] == 0x24:
                             log.debug("[_sequencer]           Got an Access Denied and we have sent a Bump or a Download command to the Panel")
@@ -1840,7 +1837,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         no_data_received_counter = 0
                         # calculate the time interval back to the last receipt of any data
                         interval = self._getUTCTimeFunction() - self.lastRecvTimeOfPanelData
-                        # log.debug("Checking last receive time {0}".format(interval))
                         if interval >= timedelta(seconds=LAST_RECEIVE_DATA_TIMEOUT):
                             log.error( "[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. data has not been received from the panel in " + str(interval) + ")" )
                             self._performDisconnect(AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED)
@@ -1941,7 +1937,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     elif _sequencerState == SequencerType.InitialiseEPROMDownload:  ################################################################ InitialiseEPROMDownload ##############################################
                         
                         interval = self._getUTCTimeFunction() - self.firstSendOfDownloadEprom
-                        #log.debug("[_sequencer] interval={0}  timeout={1}   self.firstSendOfDownloadEprom(UTC)={2}    timenow(UTC)={3}".format(interval, DOWNLOAD_TIMEOUT, self.firstSendOfDownloadEprom, self._getUTCTimeFunction()))
 
                         if self.DownloadCounter >= DOWNLOAD_RETRY_COUNT or (not EEPROM_DOWNLOAD_ALL and interval > timedelta(seconds=DOWNLOAD_TIMEOUT)): 
                             # Give it DOWNLOAD_RETRY_COUNT attempts start the download
@@ -2020,7 +2015,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 _sequencerState = SequencerType.InitialisePanel
                         else:
                             interval = self._getUTCTimeFunction() - self.lastSendOfDownloadEprom
-                            log.debug("[_sequencer] interval={0}  td={1}   self.lastSendOfDownloadEprom(UTC)={2}    timenow(UTC)={3}".format(interval, DOWNLOAD_RETRY_DELAY, self.lastSendOfDownloadEprom, self._getUTCTimeFunction()))
+                            log.debug(f"[_sequencer] interval={interval}  td={DOWNLOAD_RETRY_DELAY}   self.lastSendOfDownloadEprom(UTC)={self.lastSendOfDownloadEprom}    timenow(UTC)={self._getUTCTimeFunction()}")
                             
                             if interval > timedelta(seconds=DOWNLOAD_RETRY_DELAY):            # Give it this number of seconds to start the downloading
                                 _sequencerState = SequencerType.InitialiseEPROMDownload
@@ -2140,14 +2135,14 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             #self._addMessageToSendList(To_Send) # , res = [0xB0])   # Wait for B0
 
                             # Request Sensor Information and State
-                            self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_NAMES"])         # 21
-                            self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_TYPES"])         # 2D
-                            self.B0_Message_Wanted.add(pmSendMsgB0_t["SENSOR_STATUS"])      # 1F
-                            self.B0_Message_Wanted.add(pmSendMsgB0_t["PANEL_STATE"])        # 24
-                            self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_LAST_EVENT"])    # 4B
-                            self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_OPENCLOSE"])     # 18
-                            self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_TEMPS"])         # 3D  
-                            self.B0_Message_Wanted.add(pmSendMsgB0_t["SENSOR_ENROL"])       # 1D
+                            self.B0_Message_Wanted.add(pmSendMsgB0["ZONE_NAMES"])         # 21
+                            self.B0_Message_Wanted.add(pmSendMsgB0["ZONE_TYPES"])         # 2D
+                            self.B0_Message_Wanted.add(pmSendMsgB0["SENSOR_STATUS"])      # 1F
+                            self.B0_Message_Wanted.add(pmSendMsgB0["PANEL_STATE"])        # 24
+                            self.B0_Message_Wanted.add(pmSendMsgB0["ZONE_LAST_EVENT"])    # 4B
+                            self.B0_Message_Wanted.add(pmSendMsgB0["ZONE_OPENCLOSE"])     # 18
+                            self.B0_Message_Wanted.add(pmSendMsgB0["ZONE_TEMPS"])         # 3D  
+                            self.B0_Message_Wanted.add(pmSendMsgB0["SENSOR_ENROL"])       # 1D
                         else:    # PowerMax get ZONE_NAMES, ZONE_TYPES etc
                             self._addMessageToSendList("MSG_ZONENAME")
                             self._addMessageToSendList("MSG_ZONETYPE")
@@ -2275,16 +2270,17 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     # If Std+ or PL then periodically check and then maybe update the time in the panel
                     if self.AutoSyncTime:
                         if self.isPowerMaster() and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
+                            # PowerMaster Panels
                             if counter % POWERMASTER_CHECK_TIME_INTERVAL == 0 or (counter % 10 == 0 and (self.Panel_Integration_Time_Difference is None or (self.Panel_Integration_Time_Difference is not None and abs(self.Panel_Integration_Time_Difference.total_seconds()) > 5))):
                                 # Request Sensor Information and State
                                 #      remember that self.B0_Message_Wanted is a set so can only be added once
                                 log.debug("[_sequencer] Adding Panel and Sensor State requests")
-                                self.B0_Message_Wanted.add(pmSendMsgB0_t["SENSOR_STATUS"])      # 1F
-                                self.B0_Message_Wanted.add(pmSendMsgB0_t["PANEL_STATE"])        # 24
-                                self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_LAST_EVENT"])    # 4B
-                                self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_OPENCLOSE"])     # 18
-                                self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_TEMPS"])         # 3D  
-                                #self.B0_Message_Wanted.add(pmSendMsgB0_t["SENSOR_ENROL"])       # 1D
+                                self.B0_Message_Wanted.add(pmSendMsgB0["SENSOR_STATUS"])      # 1F
+                                self.B0_Message_Wanted.add(pmSendMsgB0["PANEL_STATE"])        # 24
+                                self.B0_Message_Wanted.add(pmSendMsgB0["ZONE_LAST_EVENT"])    # 4B
+                                self.B0_Message_Wanted.add(pmSendMsgB0["ZONE_OPENCLOSE"])     # 18
+                                self.B0_Message_Wanted.add(pmSendMsgB0["ZONE_TEMPS"])         # 3D  
+                                #self.B0_Message_Wanted.add(pmSendMsgB0["SENSOR_ENROL"])       # 1D
                         elif self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]:   # Powermax panels
                             # We set the time and then check it periodically, and then set it again if different by more than 5 seconds
                             #     every 4 hours (approx) or if not set yet or a big difference (set from B0 data)
@@ -2386,7 +2382,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     #    # As this does not use acknowledges or checksums then prevent the expected response timer from kicking in
                     #    self.ImageManager.terminateIfExceededTimeout(40)
                         
-                    # log.debug("[_sequencer] is {0}".format(self.watchdog_counter))
+                    # log.debug(f"[_sequencer] is {self.watchdog_counter}")
 
                     # We create a B0 message to request other B0 messages from a PowerMaster panel.
                     #    Wait 1 second per B0 request between sending again to give the panel a chance to send them
@@ -2454,11 +2450,11 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 # Determine total length of the message by getting the variable part int(data) and adding it to the fixed length part
                 self.pmIncomingPduLen = self.pmCurrentPDU.length + int(data)
                 self.pmFlexibleLength = self.pmCurrentPDU.flexiblelength
-                #log.debug("[data receiver] Variable length Message Being Received  Message Type {0}     pmIncomingPduLen {1}   data var {2}".format(hex(self.ReceiveData[1]).upper(), self.pmIncomingPduLen, int(data)))
+                #log.debug(f"[data receiver] Variable length Message Being Received  Message Type {hex(self.ReceiveData[1]).upper()}     pmIncomingPduLen {self.pmIncomingPduLen}   data var {int(data)}")
 
         # If we were expecting a message of a particular length (i.e. self.pmIncomingPduLen > 0) and what we have is already greater then that length then dump the message and resynchronise.
         if 0 < self.pmIncomingPduLen <= pdu_len:                             # waiting for pmIncomingPduLen bytes but got more and haven't been able to validate a PDU
-            log.info("[data receiver] PDU Too Large: Dumping current buffer {0}    The next byte is {1}".format(toString(self.ReceiveData), hex(data).upper()))
+            log.info(f"[data receiver] PDU Too Large: Dumping current buffer {toString(self.ReceiveData)}    The next byte is {hex(data).upper()}")
             pdu_len = 0                                                      # Reset the incoming data to 0 length
             self._resetMessageData()
 
@@ -2473,30 +2469,30 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
         elif pdu_len == 1:
             #log.debug("[data receiver] Received message Type %d", data)
-            if data != 0x00 and data in pmReceiveMsg_t:                      # Is it a message type that we know about
-                self.pmCurrentPDU = pmReceiveMsg_t[data]                     # set to current message type parameter settings for length, does it need an ack etc
+            if data != 0x00 and data in pmReceiveMsg:                      # Is it a message type that we know about
+                self.pmCurrentPDU = pmReceiveMsg[data]                     # set to current message type parameter settings for length, does it need an ack etc
                 self.ReceiveData.append(data)                                # Add on the message type to the buffer
                 if not isinstance(self.pmCurrentPDU, dict):
                     self.pmIncomingPduLen = self.pmCurrentPDU.length         # for variable length messages this is the fixed length and will work with this algorithm until updated.
-                #log.debug("[data receiver] Building PDU: It's a message {0}; pmIncomingPduLen = {1}   variable = {2}".format(hex(data).upper(), self.pmIncomingPduLen, self.pmCurrentPDU.isvariablelength))
+                #log.debug(f"[data receiver] Building PDU: It's a message {hex(data).upper()}; pmIncomingPduLen = {self.pmIncomingPduLen}   variable = {self.pmCurrentPDU.isvariablelength}")
             elif data == 0x00 or data == 0xFD:                               # Special case for pocket and PowerMaster 10
-                #log.info("[data receiver] Received message type {0} so not processing it".format(hex(data).upper()))
+                #log.info(f"[data receiver] Received message type {hex(data).upper()} so not processing it")
                 self._resetMessageData()
             else:
                 # build an unknown PDU. As the length is not known, leave self.pmIncomingPduLen set to 0 so we just look for PACKET_FOOTER as the end of the PDU
-                self.pmCurrentPDU = pmReceiveMsg_t[0]                        # Set to unknown message structure to get settings, varlenbytepos is -1
+                self.pmCurrentPDU = pmReceiveMsg[0]                        # Set to unknown message structure to get settings, varlenbytepos is -1
                 self.pmIncomingPduLen = 0                                    # self.pmIncomingPduLen should already be set to 0 but just to make sure !!!
-                log.warning("[data receiver] Warning : Construction of incoming packet unknown - Message Type {0}".format(hex(data).upper()))
+                log.warning(f"[data receiver] Warning : Construction of incoming packet unknown - Message Type {hex(data).upper()}")
                 self.ReceiveData.append(data)                                # Add on the message type to the buffer
 
         elif pdu_len == 2 and isinstance(self.pmCurrentPDU, dict):
-            #log.debug("[data receiver] Building PDU: It's a variable message {0} {1}".format(hex(self.ReceiveData[0]).upper(), hex(data).upper()))
+            #log.debug(f"[data receiver] Building PDU: It's a variable message {hex(self.ReceiveData[0]).upper()} {hex(data).upper()}")
             if data in self.pmCurrentPDU:
                 self.pmCurrentPDU = self.pmCurrentPDU[data]
                 #log.debug("[data receiver] Building PDU:   doing it properly")
             else:
                 self.pmCurrentPDU = self.pmCurrentPDU[0]                     # All should have a 0 entry so use as default when unknown
-                log.debug("[data receiver] Building PDU: It's a variable message {0} {1} BUT it is unknown".format(hex(self.ReceiveData[0]).upper(), hex(data).upper()))
+                log.debug(f"[data receiver] Building PDU: It's a variable message {hex(self.ReceiveData[0]).upper()} {hex(data).upper()} BUT it is unknown")
             self.pmIncomingPduLen = self.pmCurrentPDU.length                 # for variable length messages this is the fixed length and will work with this algorithm until updated.
             self.ReceiveData.append(data)                                    # Add on the message type to the buffer
 
@@ -2527,7 +2523,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 # We've got a validated message
                 #log.debug("[data receiver] Building PDU: Got Validated PDU type 0x%02x   data %s", int(msgType), toString(self.ReceiveData))
                 if self.pmCurrentPDU.varlenbytepos < 0:  # is it an unknown message i.e. varlenbytepos is -1
-                    log.warning("[data receiver] Received Valid but Unknown PDU {0}".format(hex(msgType)))
+                    log.warning(f"[data receiver] Received Valid but Unknown PDU {hex(msgType)}")
                     self._sendAck()  # assume we need to send an ack for an unknown message
                 else:  # Process the received known message
                     self._processReceivedMessage(ackneeded=self.pmCurrentPDU.ackneeded, debugp=self.pmCurrentPDU.debugprint, msg=self.pmCurrentPDU.msg, data=self.ReceiveData)
@@ -2537,13 +2533,13 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 a = self._calculateCRC(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
                 if len(self.ReceiveData) > PACKET_MAX_SIZE:
                     # If the length exceeds the max PDU size from the panel then stop and resync
-                    log.warning("[data receiver] PDU with CRC error Message = {0}   checksum calcs {1}".format(toString(self.ReceiveData), hex(a).upper()))
+                    log.warning(f"[data receiver] PDU with CRC error Message = {toString(self.ReceiveData)}   checksum calcs {hex(a).upper()}")
                     self._processCRCFailure()
                     self._resetMessageData()
                 elif self.pmIncomingPduLen == 0:
-                    if msgType in pmReceiveMsg_t:
+                    if msgType in pmReceiveMsg:
                         # A known message with zero length and an incorrect checksum. Reset the message data and resync
-                        log.warning("[data receiver] Warning : Construction of zero length incoming packet validation failed - Message = {0}  checksum calcs {1}".format(toString(self.ReceiveData), hex(a).upper()))
+                        log.warning(f"[data receiver] Warning : Construction of zero length incoming packet validation failed - Message = {toString(self.ReceiveData)}  checksum calcs {hex(a).upper()}")
 
                         # Send an ack even though the its an invalid packet to prevent the panel getting confused
                         if self.pmCurrentPDU.ackneeded:
@@ -2555,10 +2551,10 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         self._resetMessageData()
                     else:  # if msgType != 0xF1:        # ignore CRC errors on F1 message
                         # When self.pmIncomingPduLen == 0 then the message is unknown, the length is not known and we're waiting for a PACKET_FOOTER where the checksum is correct, so carry on
-                        log.debug("[data receiver] Building PDU: Length is {0} bytes (apparently PDU not complete)  {1}  checksum calcs {2}".format(len(self.ReceiveData), toString(self.ReceiveData), hex(a).upper()) )
+                        log.debug(f"[data receiver] Building PDU: Length is {len(self.ReceiveData)} bytes (apparently PDU not complete)  {toString(self.ReceiveData)}  checksum calcs {hex(a).upper()}")
                 else:
                     # When here then the message is a known message type of the correct length but has failed it's validation
-                    log.warning("[data receiver] Warning : Construction of incoming packet validation failed - Message = {0}   checksum calcs {1}".format(toString(self.ReceiveData), hex(a).upper()))
+                    log.warning(f"[data receiver] Warning : Construction of incoming packet validation failed - Message = {toString(self.ReceiveData)}   checksum calcs {hex(a).upper()}")
 
                     # Send an ack even though the its an invalid packet to prevent the panel getting confused
                     if self.pmCurrentPDU.ackneeded:
@@ -2581,7 +2577,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         # clear our buffer again so we can receive a new packet.
         self.ReceiveData = bytearray(b"")  # messages should never be longer than PACKET_MAX_SIZE
         # Reset control variables ready for next time
-        self.pmCurrentPDU = pmReceiveMsg_t[0]
+        self.pmCurrentPDU = pmReceiveMsg[0]
         self.pmIncomingPduLen = 0
         self.pmFlexibleLength = 0
 
@@ -2609,13 +2605,9 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         #tmplength = len(self.pmExpectedResponse)
         if len(self.pmExpectedResponse) > 0:  # and msgType != 2:   # 2 is a simple acknowledge from the panel so ignore those
             # We've sent something and are waiting for a reponse - this is it
-            # log.debug("[data receiver] msgType {0}  expected one of {1}".format(hex(msgType).upper(), [hex(no).upper() for no in self.pmExpectedResponse]))
             if msgType in self.pmExpectedResponse:
                 # while msgType in self.pmExpectedResponse:
                 self.pmExpectedResponse.remove(msgType)
-                #log.debug("[data receiver] msgType {0} got it so removed from list, list is now {1}".format(hex(msgType).upper(), [hex(no).upper() for no in self.pmExpectedResponse]))
-            #else:
-            #    log.debug("[data receiver] msgType not in self.pmExpectedResponse   Waiting for next PDU :  expected {0}   got {1}".format([hex(no).upper() for no in self.pmExpectedResponse], hex(msgType).upper()))
 
         if data is not None and debugp == DebugLevel.FULL:
             log.debug(f"[_processReceivedMessage] Received {msg}   raw data {toString(data)}          response list {[hex(no).upper() for no in self.pmExpectedResponse]}")
@@ -2631,7 +2623,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         """ Send ACK if packet is valid """
 
         iscommand = data[1] >= 0x40   # command message types
-        #ispm = self.receivedPowerlinkAcknowledge or (len(data) > 3 and (data[1] == 0xAB or (data[1] < 0x10 and data[-2] == 0x43)))
         panel_state_enrolled = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]
 
         # There are 2 types of acknowledge that we can send to the panel
@@ -2698,23 +2689,21 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         else:
             log.debug("[sendPdu]      Comms transport has been set to none, must be in process of terminating comms")
 
-        # log.debug("[sendPdu]      waiting for message response {}".format([hex(no).upper() for no in self.pmExpectedResponse]))
-
         if command is not None and command.download:
             self.pmDownloadMode = True
             self.triggeredDownload = False
             log.debug("[sendPdu] Setting Download Mode to true")
 
         if command is not None and command.debugprint == DebugLevel.FULL:
-            log.debug("[sendPdu] Sent Command ({0})    raw data {1}   waiting for message response {2}".format(command.msg, toString(sData), [hex(no).upper() for no in self.pmExpectedResponse]))
+            log.debug(f"[sendPdu] Sent Command ({command.msg})    raw data {toString(sData)}   waiting for message response {[hex(no).upper() for no in self.pmExpectedResponse]}")
         elif command is not None and command.debugprint == DebugLevel.CMD:
-            log.debug("[sendPdu] Sent Command ({0})    waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
+            log.debug(f"[sendPdu] Sent Command ({command.msg})    waiting for message response {[hex(no).upper() for no in self.pmExpectedResponse]}")
         elif instruction.raw is not None:
             # Assume raw data to send is not obfuscated for now
-            log.debug("[sendPdu] Sent Raw Command      raw data {0}   waiting for message response {1}".format(toString(sData[:4] if OBFUS else sData), [hex(no).upper() for no in self.pmExpectedResponse]))            
+            log.debug(f"[sendPdu] Sent Raw Command      raw data {toString(sData[:4] if OBFUS else sData)}   waiting for message response {[hex(no).upper() for no in self.pmExpectedResponse]}")            
         #elif command is not None:
         #    # Do not log the full raw data as it may contain the user code
-        #    log.debug("[sendPdu] Sent Command ({0})    <Obfuscated>   waiting for message response {1}".format(command.msg, [hex(no).upper() for no in self.pmExpectedResponse]))
+        #    log.debug(f"[sendPdu] Sent Command ({command.msg})    <Obfuscated>   waiting for message response {[hex(no).upper() for no in self.pmExpectedResponse]}")
 
         if command is not None and command.waittime > 0.0:
             return command.waittime
@@ -2758,20 +2747,20 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         retval = None
         if self.PanelType is not None and 0 <= self.PanelType <= 16:
             retval = False
-            zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
+            zoneCnt = pmPanelConfig["CFG_WIRELESS"][self.PanelType] + pmPanelConfig["CFG_WIRED"][self.PanelType]
             if self.isPowerMaster():
                 if force or len(self.PanelSettings[PanelSetting.ZoneNames]) < zoneCnt:
                     retval = True
                     log.debug("[updateSensorNamesAndTypes] Trying to get the zone names, zone count = " + str(zoneCnt) + "  I've only got " + str(len(self.PanelSettings[PanelSetting.ZoneNames])) + " zone names")
-                    self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_NAMES"])
+                    self.B0_Message_Wanted.add(pmSendMsgB0["ZONE_NAMES"])
                 if force or len(self.PanelSettings[PanelSetting.ZoneTypes]) < zoneCnt:
                     retval = True
                     log.debug("[updateSensorNamesAndTypes] Trying to get the zone types, zone count = " + str(zoneCnt) + "  I've only got " + str(len(self.PanelSettings[PanelSetting.ZoneTypes])) + " zone types")
-                    self.B0_Message_Wanted.add(pmSendMsgB0_t["ZONE_TYPES"])
+                    self.B0_Message_Wanted.add(pmSendMsgB0["ZONE_TYPES"])
                 #if force or len(self.SensorList) == 0:
                 #    retval = True
                 #    log.debug("[updateSensorNamesAndTypes] Trying to get the sensor status")
-                #    self.B0_Message_Wanted.add(pmSendMsgB0_t["SENSOR_STATUS"])
+                #    self.B0_Message_Wanted.add(pmSendMsgB0["SENSOR_STATUS"])
             else:
                 if force or len(self.PanelSettings[PanelSetting.ZoneNames]) < zoneCnt:
                     retval = True
@@ -2793,7 +2782,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         
         retlen = settings_len
         retval = bytearray()
-        #log.debug("[_readEPROMSettingsPageIndex]    Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len))
         while page in self.pmRawSettings and retlen > 0:
             rawset = self.pmRawSettings[page][index : index + retlen]
             retval = retval + rawset
@@ -2873,7 +2861,7 @@ class PacketHandling(ProtocolBase):
         wrap = index + settings_len - 0x100
         sett = [bytearray(b""), bytearray(b"")]
 
-        #log.debug("[Write Settings]   Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len))
+        #log.debug(f"[Write Settings]   Entering Function  page {page}   index {index}    length {settings_len}")
         if settings_len > 0xB1:
             log.debug("[Write Settings] ********************* Write Settings too long ********************")
             return
@@ -2882,7 +2870,7 @@ class PacketHandling(ProtocolBase):
             # log.debug("[Write Settings] The write settings data is Split across 2 pages")
             sett[0] = setting[: settings_len - wrap]  # bug fix in 0.0.6, removed the -1
             sett[1] = setting[settings_len - wrap :]
-            # log.debug("[Write Settings]         Wrapping  original len {0}   left len {1}   right len {2}".format(len(setting), len(sett[0]), len(sett[1])))
+            # log.debug(f"[Write Settings]         Wrapping  original len {len(setting)}   left len {len(sett[0])}   right len {len(sett[1])}")
             wrap = 1
         else:
             sett[0] = setting
@@ -2894,19 +2882,19 @@ class PacketHandling(ProtocolBase):
                 for dummy in range(0, 256):
                     self.pmRawSettings[page + i].append(255)
                 if len(self.pmRawSettings[page + i]) != 256:
-                    log.debug("[Write Settings] the EEPROM settings is incorrect for page {0}".format(page + i))
+                    log.debug(f"[Write Settings] the EEPROM settings is incorrect for page {page + i}")
                 # else:
                 #    log.debug("[Write Settings] WHOOOPEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
 
             settings_len = len(sett[i])
             if i == 1:
                 index = 0
-            #log.debug("[Write Settings]         Writing settings page {0}  index {1}    length {2}".format(page+i, index, settings_len))
+            #log.debug(f"[Write Settings]         Writing settings page {page+i}  index {index}    length {settings_len}")
             self.pmRawSettings[page + i] = self.pmRawSettings[page + i][0:index] + sett[i] + self.pmRawSettings[page + i][index + settings_len :]
             #if len(self.pmRawSettings[page + i]) != 256:
-            #    log.debug("[Write Settings] OOOOOOOOOOOOOOOOOOOO len = {0}".format(len(self.pmRawSettings[page + i])))
+            #    log.debug(f"[Write Settings] OOOOOOOOOOOOOOOOOOOO len = {len(self.pmRawSettings[page + i])}")
             # else:
-            #    log.debug("[Write Settings] Page {0} is now {1}".format(page+i, toString(self.pmRawSettings[page + i])))
+            #    log.debug(f"[Write Settings] Page {page+i} is now {toString(self.pmRawSettings[page + i])}")
 
     # _readEPROMSettingsPageIndex
     # This function retrieves the downloaded status and EEPROM data
@@ -2918,7 +2906,7 @@ class PacketHandling(ProtocolBase):
             index = index - 256
         
         if self.pmDownloadComplete:
-            #log.debug("[_readEPROMSettingsPageIndex]    Entering Function  page {0}   index {1}    length {2}".format(page, index, settings_len))
+            #log.debug(f"[_readEPROMSettingsPageIndex]    Entering Function  page {page}   index {index}    length {settings_len}")
             while page in self.pmRawSettings and retlen > 0:
                 rawset = self.pmRawSettings[page][index : index + retlen]
                 retval = retval + rawset
@@ -2926,9 +2914,8 @@ class PacketHandling(ProtocolBase):
                 retlen = retlen - len(rawset)
                 index = 0
             if settings_len == len(retval):
-                #log.debug("[_readEPROMSettingsPageIndex]       Length " + str(settings_len) + " returning (just the 1st value) " + toString(retval[:1]))
                 return retval
-        log.debug("[_readEPROMSettingsPageIndex]     Sorry but you havent downloaded that part of the EEPROM data     page={0} index={1} length={2}".format(hex(page), hex(index), settings_len))
+        log.debug(f"[_readEPROMSettingsPageIndex]     Sorry but you havent downloaded that part of the EEPROM data     page={hex(page)} index={hex(index)} length={settings_len}")
         
         # return a bytearray filled with 0xFF values
         retval = bytearray()
@@ -2952,7 +2939,7 @@ class PacketHandling(ProtocolBase):
                     if EEPROM_DOWNLOAD_ALL or ((p != 1 or j != 240) and (p != 2 or j != 0) and (p != 10 or j <= 140)):
                         if j <= len(self.pmRawSettings[p]):
                             s = toString(self.pmRawSettings[p][j : j + 0x10])
-                            log.debug("{0:3}:{1:3}  {2}".format(p, j, s))
+                            log.debug(f"{p:3}:{j:3}  {s}")
 
     def _calcBoolFromIntMask(self, val, mask) -> bool:
         return True if val & mask != 0 else False
@@ -3027,20 +3014,20 @@ class PacketHandling(ProtocolBase):
         return retval
 
     def _lookupEpromSingle(self, key):
-        v = self._lookupEprom(DecodePanelSettings[key])
+        v = self._lookupEprom(pmDecodePanelSettings[key])
         if len(v) >= 1:
             return v[0]
         return None
 
     def mySensorChangeHandler(self, sensor : SensorDevice, s : AlSensorCondition):
         log.debug("=============================================================== Sensor Change ===========================================================================")
-        log.debug("     {0:<18}   {1:<11}   Sensor {2}".format(self.PanelMode.name, str(s), sensor))
+        log.debug(f"     {self.PanelMode.name:<18}   {str(s):<11}   Sensor {sensor}")
         #log.debug("=========================================================================================================================================================")
         #self._dumpSensorsToLogFile()
     
     def mySwitchChangeHandler(self, switch : X10Device):
         log.debug("=============================================================== Switch Change ===========================================================================")
-        log.debug("     {0:<18}   X10    {1}".format(self.PanelMode.name, switch))
+        log.debug(f"     {self.PanelMode.name:<18}   X10    {switch}")
         #log.debug("=========================================================================================================================================================")
         #self._dumpSensorsToLogFile(True)
 
@@ -3056,7 +3043,7 @@ class PacketHandling(ProtocolBase):
 
         zoneName = "unknown"
         if i < len(self.PanelSettings[PanelSetting.ZoneNames]):     # 
-            zoneName = pmZoneName_t[self.PanelSettings[PanelSetting.ZoneNames][i] & 0x1F]
+            zoneName = pmZoneName[self.PanelSettings[PanelSetting.ZoneNames][i] & 0x1F]
         
         if zoneName is not None and self.SensorList[i].zname != zoneName:
             updated = True
@@ -3067,9 +3054,9 @@ class PacketHandling(ProtocolBase):
             sensorModel = "Model Unknown"
 
             if self.isPowerMaster(): # PowerMaster models
-                if sensor_type in pmZoneSensorMaster_t:
-                    sensorType = pmZoneSensorMaster_t[sensor_type].func
-                    sensorModel = pmZoneSensorMaster_t[sensor_type].name
+                if sensor_type in pmZoneSensorMaster:
+                    sensorType = pmZoneSensorMaster[sensor_type].func
+                    sensorModel = pmZoneSensorMaster[sensor_type].name
                     if motiondelaytime is not None and motiondelaytime == 0xFFFF and (sensorType == AlSensorType.MOTION or sensorType == AlSensorType.CAMERA):
                         log.debug(f"[_updateSensor] PowerMaster Sensor Z{i+1:0>2} has no motion delay set (Sensor will only be useful when the panel is armed)")
                 else:
@@ -3092,9 +3079,9 @@ class PacketHandling(ProtocolBase):
                 #          [handle_msgtype3C] PanelType=4 : PowerMax Pro Part , Model=81   Powermaster False
                 #                Sensor Types 0x96  0xC0 and 0xE5     I hope that E5 is a Motion as that is what it has been previously
 
-                if sensor_type in pmZoneSensorMax_t:
-                    sensorType = pmZoneSensorMax_t[sensor_type].func
-                    sensorModel = pmZoneSensorMax_t[sensor_type].name
+                if sensor_type in pmZoneSensorMax:
+                    sensorType = pmZoneSensorMax[sensor_type].func
+                    sensorModel = pmZoneSensorMax[sensor_type].name
                 elif tmpid in pmZoneSensorMaxGeneric_t:
                     # if tmpid in pmZoneSensorMaxGeneric_t:
                     sensorType = pmZoneSensorMaxGeneric_t[tmpid]
@@ -3114,8 +3101,11 @@ class PacketHandling(ProtocolBase):
             if self.SensorList[i].zchime != pmZoneChimeKey[zoneChime]:
                 updated = True
                 self.SensorList[i].zchimeref = zoneChime
-                self.SensorList[i].zchime = pmZoneChimeKey[zoneChime]
-
+                if zoneChime < len(pmZoneChimeKey):
+                    self.SensorList[i].zchime = pmZoneChimeKey[zoneChime]
+                else:
+                    self.SensorList[i].zchime = "undefined " + str(zoneChime)
+                    
         if zoneType is not None:
             self.PanelSettings[PanelSetting.ZoneTypes][i] = zoneType
         elif i < len(self.PanelSettings[PanelSetting.ZoneTypes]):     # 
@@ -3126,7 +3116,10 @@ class PacketHandling(ProtocolBase):
         if zoneType is not None and self.SensorList[i].ztype != zoneType:
             updated = True
             self.SensorList[i].ztype = zoneType
-            self.SensorList[i].ztypeName = pmZoneTypeKey[zoneType]
+            if zoneType < len(pmZoneTypeKey):
+                self.SensorList[i].ztypeName = pmZoneTypeKey[zoneType]
+            else:
+                self.SensorList[i].ztypeName = "undefined " + str(zoneType)   # undefined
 
         if motiondelaytime is not None and motiondelaytime != 0xFFFF:
             if self.SensorList[i].motiondelaytime != motiondelaytime:
@@ -3157,14 +3150,12 @@ class PacketHandling(ProtocolBase):
         else:
             self.SensorList[i].pushChange(AlSensorCondition.RESET)
 
-#        log.debug("[_updateSensor]      Z{0:0>2} :  sensor_type={1:0>2}   zoneInfo={2:0>2}   ZTypeName={3}   Chime={4}   SensorType={5}   zoneName={6}".format(
-#               i+1, hex(sensor_type).upper(), hex(zoneInfo).upper(), pmZoneTypeKey[zoneType], pmZoneChimeKey[zoneChime], sensorType, zoneName))
         return retval
     
     def _processKeypadsAndSirens(self, pmPanelTypeNr) -> str:
-        sirenCnt = pmPanelConfig_t["CFG_SIRENS"][pmPanelTypeNr]
-        keypad1wCnt = pmPanelConfig_t["CFG_1WKEYPADS"][pmPanelTypeNr]
-        keypad2wCnt = pmPanelConfig_t["CFG_2WKEYPADS"][pmPanelTypeNr]
+        sirenCnt = pmPanelConfig["CFG_SIRENS"][pmPanelTypeNr]
+        keypad1wCnt = pmPanelConfig["CFG_1WKEYPADS"][pmPanelTypeNr]
+        keypad2wCnt = pmPanelConfig["CFG_2WKEYPADS"][pmPanelTypeNr]
 
         # ------------------------------------------------------------------------------------------------------------------------------------------------
         # Process Devices (Sirens and Keypads)
@@ -3172,38 +3163,38 @@ class PacketHandling(ProtocolBase):
         deviceStr = ""
         if self.isPowerMaster(): # PowerMaster models
             # Process keypad settings
-            setting = self._lookupEprom(DecodePanelSettings["KeypadPMaster"])
+            setting = self._lookupEprom(pmDecodePanelSettings["KeypadPMaster"])
             for i in range(0, min(len(setting), keypad2wCnt)):
                 if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0 or setting[i][3] != 0 or setting[i][4] != 0:
-                    log.debug("[_processKeypadsAndSirens] Found an enrolled PowerMaster keypad {0}".format(i))
-                    deviceStr = "{0},K2{1:0>2}".format(deviceStr, i)
+                    log.debug(f"[_processKeypadsAndSirens] Found an enrolled PowerMaster keypad {i}")
+                    deviceStr = f"{deviceStr},K2{i:0>2}"
 
             # Process siren settings
-            setting = self._lookupEprom(DecodePanelSettings["SirensPMaster"])
+            setting = self._lookupEprom(pmDecodePanelSettings["SirensPMaster"])
             for i in range(0, min(len(setting), sirenCnt)):
                 if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0 or setting[i][3] != 0 or setting[i][4] != 0:
-                    log.debug("[_processKeypadsAndSirens] Found an enrolled PowerMaster siren {0}".format(i))
-                    deviceStr = "{0},S{1:0>2}".format(deviceStr, i)
+                    log.debug(f"[_processKeypadsAndSirens] Found an enrolled PowerMaster siren {i}")
+                    deviceStr = f"{deviceStr},S{i:0>2}"
         else:
             # Process keypad settings
-            setting = self._lookupEprom(DecodePanelSettings["Keypad1PMax"])
+            setting = self._lookupEprom(pmDecodePanelSettings["Keypad1PMax"])
             for i in range(0, min(len(setting), keypad1wCnt)):
                 if setting[i][0] != 0 or setting[i][1] != 0:
-                    log.debug("[_processKeypadsAndSirens] Found an enrolled PowerMax 1-way keypad {0}".format(i))
-                    deviceStr = "{0},K1{1:0>2}".format(deviceStr, i)
+                    log.debug(f"[_processKeypadsAndSirens] Found an enrolled PowerMax 1-way keypad {i}")
+                    deviceStr = f"{deviceStr},K1{i:0>2}"
 
-            setting = self._lookupEprom(DecodePanelSettings["Keypad2PMax"])
+            setting = self._lookupEprom(pmDecodePanelSettings["Keypad2PMax"])
             for i in range(0, min(len(setting), keypad2wCnt)):
                 if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0:
-                    log.debug("[_processKeypadsAndSirens] Found an enrolled PowerMax 2-way keypad {0}".format(i))
-                    deviceStr = "{0},K2{1:0>2}".format(deviceStr, i)
+                    log.debug(f"[_processKeypadsAndSirens] Found an enrolled PowerMax 2-way keypad {i}")
+                    deviceStr = f"{deviceStr},K2{i:0>2}"
 
             # Process siren settings
-            setting = self._lookupEprom(DecodePanelSettings["SirensPMax"])
+            setting = self._lookupEprom(pmDecodePanelSettings["SirensPMax"])
             for i in range(0, min(len(setting), sirenCnt)):
                 if setting[i][0] != 0 or setting[i][1] != 0 or setting[i][2] != 0:
-                    log.debug("[_processKeypadsAndSirens] Found a PowerMax siren {0}".format(i))
-                    deviceStr = "{0},S{1:0>2}".format(deviceStr, i)
+                    log.debug(f"[_processKeypadsAndSirens] Found a PowerMax siren {i}")
+                    deviceStr = f"{deviceStr},S{i:0>2}"
 
         return deviceStr[1:]
 
@@ -3212,8 +3203,8 @@ class PacketHandling(ProtocolBase):
         #      Add the "True" values to the self.Panelstatus
         # If val.show is True and addToLog is True then:
         #      Add all (either PowerMax / PowerMaster) values to the self.Panelstatus and the log file
-        for key in DecodePanelSettings:
-            val = DecodePanelSettings[key]
+        for key in pmDecodePanelSettings:
+            val = pmDecodePanelSettings[key]
             if val.show:
                 result = self._lookupEprom(val)
                 if result is not None:
@@ -3221,11 +3212,11 @@ class PacketHandling(ProtocolBase):
                         if isinstance(result[0], (bytes, bytearray)):
                             tmpdata = toString(result[0])
                             if addToLog:
-                                log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, val.name, tmpdata))
+                                log.debug( f"[Process Settings]      {key:<18}  {val.name:<40}  {tmpdata}")
                             self.PanelStatus[val.name] = tmpdata
                         else:
                             if addToLog:
-                                log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, val.name, result[0]))
+                                log.debug( f"[Process Settings]      {key:<18}  {val.name:<40}  {result[0]}")
                             self.PanelStatus[val.name] = result[0]
                     
                     elif type(val.name) is list and len(result) == len(val.name):
@@ -3233,11 +3224,11 @@ class PacketHandling(ProtocolBase):
                             if isinstance(result[0], (bytes, bytearray)):
                                 tmpdata = toString(result[i])
                                 if addToLog:
-                                    log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, val.name[i], tmpdata))
+                                    log.debug( f"[Process Settings]      {key:<18}  {val.name[i]:<40}  {tmpdata}")
                                 self.PanelStatus[val.name[i]] = tmpdata
                             else:
                                 if addToLog:
-                                    log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, val.name[i], result[i]))
+                                    log.debug( f"[Process Settings]      {key:<18}  {val.name[i]:<40}  {result[i]}")
                                 self.PanelStatus[val.name[i]] = result[i]
                     
                     elif len(result) > 1 and type(val.name) is str:
@@ -3250,24 +3241,24 @@ class PacketHandling(ProtocolBase):
                         # there's at least 2 so this will not exception
                         tmpdata = tmpdata[:-2]
                         if addToLog:
-                            log.debug( "[Process Settings]      {0:<18}  {1:<40}  {2}".format(key, val.name, tmpdata))
+                            log.debug( f"[Process Settings]      {key:<18}  {val.name:<40}  {tmpdata}")
                         self.PanelStatus[val.name] = tmpdata
                     
                     else:
-                        log.debug( "[Process Settings]   ************************** NOTHING DONE ************************     {0:<18}  {1}  {2}".format(key, val.name, result))
+                        log.debug( f"[Process Settings]   ************************** NOTHING DONE ************************     {key:<18}  {val.name}  {result}")
 
     def _setDataFromPanelType(self, p) -> bool:
-        if p in pmPanelType_t:
+        if p in pmPanelType:
             self.PanelType = p
-            if 0 <= self.PanelType <= len(pmPanelConfig_t["CFG_SUPPORTED"]) - 1:
-                isSupported = pmPanelConfig_t["CFG_SUPPORTED"][self.PanelType]
+            if 0 <= self.PanelType <= len(pmPanelConfig["CFG_SUPPORTED"]) - 1:
+                isSupported = pmPanelConfig["CFG_SUPPORTED"][self.PanelType]
                 if isSupported:
-                    self.PanelModel = pmPanelType_t[self.PanelType] if self.PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
-                    self.PowerMaster = pmPanelConfig_t["CFG_POWERMASTER"][self.PanelType]
-                    self.AutoEnroll = pmPanelConfig_t["CFG_AUTO_ENROLL"][self.PanelType]
-                    self.AutoSyncTime = pmPanelConfig_t["CFG_AUTO_SYNCTIME"][self.PanelType]
-                    self.KeepAlivePeriod = pmPanelConfig_t["CFG_KEEPALIVE"][self.PanelType]
-                    self.pmInitSupportedByPanel = pmPanelConfig_t["CFG_INIT_SUPPORT"][self.PanelType]
+                    self.PanelModel = pmPanelType[self.PanelType] if self.PanelType in pmPanelType else "UNKNOWN"   # INTERFACE : PanelType set to model
+                    self.PowerMaster = pmPanelConfig["CFG_POWERMASTER"][self.PanelType]
+                    self.AutoEnroll = pmPanelConfig["CFG_AUTO_ENROLL"][self.PanelType]
+                    self.AutoSyncTime = pmPanelConfig["CFG_AUTO_SYNCTIME"][self.PanelType]
+                    self.KeepAlivePeriod = pmPanelConfig["CFG_KEEPALIVE"][self.PanelType]
+                    self.pmInitSupportedByPanel = pmPanelConfig["CFG_INIT_SUPPORT"][self.PanelType]
                     return True
                 # Panel 0 i.e original PowerMax
                 log.error(f"Lookup of Visonic Panel type reveals that this seems to be a PowerMax Panel and supports EEPROM Download only with no capability, this Panel cannot be used with this Integration")
@@ -3295,17 +3286,16 @@ class PacketHandling(ProtocolBase):
             #     This checks whether the EEPROM settings have been downloaded OK
             
             #pmDisplayName = self._lookupEpromSingle("displayName")    
-            #log.debug("[Process Settings] old Panel Type: {0}    Model: {1}    Panels Displayed Name: {2}".format(self.PanelType, self.PanelModel, pmDisplayName))
 
             # ------------------------------------------------------------------------------------------------------------------------------------------------
             # Need the panel type to be valid so we can decode some of the remaining downloaded data correctly
-            # when we get here then self.PanelType is set and it's a known panel type i.e. if self.PanelType is not None and self.PanelType in pmPanelType_t is TRUE
+            # when we get here then self.PanelType is set and it's a known panel type i.e. if self.PanelType is not None and self.PanelType in pmPanelType is TRUE
             # ------------------------------------------------------------------------------------------------------------------------------------------------
 
             # self._dumpEPROMSettings()
 
-            # log.debug("[Process Settings] Panel Type Number " + str(self.PanelType) + "    serial string " + toString(panelSerialType))
-            zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
+            #log.debug(f"[Process Settings] Panel Type Number {str(self.PanelType)}   serial string {toString(panelSerialType)}")
+            zoneCnt = pmPanelConfig["CFG_WIRELESS"][self.PanelType] + pmPanelConfig["CFG_WIRED"][self.PanelType]
 
             # ------------------------------------------------------------------------------------------------------------------------------------------------
             # Process Panel Status to display in the user interface
@@ -3315,23 +3305,23 @@ class PacketHandling(ProtocolBase):
             # Process Panel Settings to use as a common panel settings regardless of how they were obtained.  This way gets them from EPROM.
             if self.isPowerMaster(): # PowerMaster models
                 for key in PanelSetting:
-                    if key in PanelSettingCodes and PanelSettingCodes[key].PowerMasterEPROM is not None and len(PanelSettingCodes[key].PowerMasterEPROM) > 0:
-                        if PanelSettingCodes[key].item is not None:
-                            self.PanelSettings[key] = self._lookupEprom(DecodePanelSettings[PanelSettingCodes[key].PowerMasterEPROM])[PanelSettingCodes[key].item]
+                    if key in pmPanelSettingCodes and pmPanelSettingCodes[key].PowerMasterEPROM is not None and len(pmPanelSettingCodes[key].PowerMasterEPROM) > 0:
+                        if pmPanelSettingCodes[key].item is not None:
+                            self.PanelSettings[key] = self._lookupEprom(pmDecodePanelSettings[pmPanelSettingCodes[key].PowerMasterEPROM])[pmPanelSettingCodes[key].item]
                         else:
-                            self.PanelSettings[key] = self._lookupEprom(DecodePanelSettings[PanelSettingCodes[key].PowerMasterEPROM])
+                            self.PanelSettings[key] = self._lookupEprom(pmDecodePanelSettings[pmPanelSettingCodes[key].PowerMasterEPROM])
             else:
                 for key in PanelSetting:
-                    if key in PanelSettingCodes and PanelSettingCodes[key].PowerMaxEPROM is not None and len(PanelSettingCodes[key].PowerMaxEPROM) > 0:
-                        if PanelSettingCodes[key].item is not None:
-                            self.PanelSettings[key] = self._lookupEprom(DecodePanelSettings[PanelSettingCodes[key].PowerMaxEPROM])[PanelSettingCodes[key].item] # [PanelSettingCodes[key].item]
+                    if key in pmPanelSettingCodes and pmPanelSettingCodes[key].PowerMaxEPROM is not None and len(pmPanelSettingCodes[key].PowerMaxEPROM) > 0:
+                        if pmPanelSettingCodes[key].item is not None:
+                            self.PanelSettings[key] = self._lookupEprom(pmDecodePanelSettings[pmPanelSettingCodes[key].PowerMaxEPROM])[pmPanelSettingCodes[key].item] # [pmPanelSettingCodes[key].item]
                         else:
-                            self.PanelSettings[key] = self._lookupEprom(DecodePanelSettings[PanelSettingCodes[key].PowerMaxEPROM])
+                            self.PanelSettings[key] = self._lookupEprom(pmDecodePanelSettings[pmPanelSettingCodes[key].PowerMaxEPROM])
             
             log.debug(f"[Process Settings]    UpdatePanelSettings")
             # ------------------------------------------------------------------------------------------------------------------------------------------------
             # Store partition info & check if partitions are on
-            partitionCnt = pmPanelConfig_t["CFG_PARTITIONS"][self.PanelType]
+            partitionCnt = pmPanelConfig["CFG_PARTITIONS"][self.PanelType]
             partition = None
             if partitionCnt > 1:  # Could the panel have more than 1 partition?
                 # If that panel type can have more than 1 partition, then check to see if the panel has defined more than 1
@@ -3343,10 +3333,10 @@ class PacketHandling(ProtocolBase):
             # ------------------------------------------------------------------------------------------------------------------------------------------------
             # Process panel type and serial
             pmPanelTypeCodeStr = self.PanelSettings[PanelSetting.PanelModel]      # self._lookupEpromSingle("panelModelCode")
-            idx = "{0:0>2}{1:0>2}".format(hex(self.PanelType).upper()[2:], hex(int(pmPanelTypeCodeStr)).upper()[2:])
+            idx = f"{hex(self.PanelType).upper()[2:]:0>2}{hex(int(pmPanelTypeCodeStr)).upper()[2:]:0>2}"
             #pmPanelName = pmPanelName_t[idx] if idx in pmPanelName_t else "Unknown_" + idx
 
-            #log.debug("[Process Settings]   Processing settings - panel code index {0}".format(idx))
+            #log.debug(f"[Process Settings]   Processing settings - panel code index {idx}")
 
             #  INTERFACE : Add this param to the status panel first
             #self.PanelStatus["Panel Name"] = pmPanelName
@@ -3377,9 +3367,9 @@ class PacketHandling(ProtocolBase):
             # This is 640 bytes, PowerMaster only.
             # It is 64 zones, each is 10 bytes
             #    5 = Sensor Type
-            pmaster_zone_ext_data = self.PanelSettings[PanelSetting.ZoneExt] # self._lookupEprom(DecodePanelSettings["ZoneExtPMaster"])
+            pmaster_zone_ext_data = self.PanelSettings[PanelSetting.ZoneExt] # self._lookupEprom(pmDecodePanelSettings["ZoneExtPMaster"])
 
-            log.debug("[Process Settings]   Zones Data Buffer  len settings {0}     len zoneNames {1}    zoneCnt {2}".format(len(zone_data), len(self.PanelSettings[PanelSetting.ZoneNames]), zoneCnt))
+            log.debug(f"[Process Settings]   Zones Data Buffer  len settings {len(zone_data)}     len zoneNames {len(self.PanelSettings[PanelSetting.ZoneNames])}    zoneCnt {zoneCnt}")
             log.debug(f"[Process Settings]   Zones Names Buffer :  {toString(self.PanelSettings[PanelSetting.ZoneNames])}")
             #log.debug(f"[Process Settings]   Zones Data Buffer  :  {zone_data}")
 
@@ -3425,16 +3415,16 @@ class PacketHandling(ProtocolBase):
 
                         if sensorType is not None and i in self.SensorList:
                             if sensorType == AlSensorType.MAGNET or sensorType == AlSensorType.WIRED:
-                                doorZoneStr = "{0},Z{1:0>2}".format(doorZoneStr, i + 1)
+                                doorZoneStr = f"{doorZoneStr},Z{i+1:0>2}"
                             elif sensorType == AlSensorType.MOTION or sensorType == AlSensorType.CAMERA:
-                                motionZoneStr = "{0},Z{1:0>2}".format(motionZoneStr, i + 1)
+                                motionZoneStr = f"{motionZoneStr},Z{i+1:0>2}"
                             elif sensorType == AlSensorType.SMOKE or sensorType == AlSensorType.GAS:
-                                smokeZoneStr = "{0},Z{1:0>2}".format(smokeZoneStr, i + 1)
+                                smokeZoneStr = f"{smokeZoneStr},Z{i+1:0>2}"
                             else:
-                                otherZoneStr = "{0},Z{1:0>2}".format(otherZoneStr, i + 1)
+                                otherZoneStr = f"{otherZoneStr},Z{i+1:0>2}"
 
                     elif i in self.SensorList:
-                        log.debug("[Process Settings]       Removing sensor {0} as it is not enrolled in Panel EEPROM Data".format(i+1))
+                        log.debug(f"[Process Settings]       Removing sensor {i+1} as it is not enrolled in Panel EEPROM Data")
                         del self.SensorList[i]
                         # self.SensorList[i] = None # remove zone if needed
 
@@ -3450,17 +3440,17 @@ class PacketHandling(ProtocolBase):
             log.debug("[Process Settings] Processing X10 devices")
 
             s = []
-            s.append(self._lookupEprom(DecodePanelSettings["x10ByArmAway"]))  # 0 = pgm, 1 = X01
-            s.append(self._lookupEprom(DecodePanelSettings["x10ByArmHome"]))
-            s.append(self._lookupEprom(DecodePanelSettings["x10ByDisarm"]))
-            s.append(self._lookupEprom(DecodePanelSettings["x10ByDelay"]))
-            s.append(self._lookupEprom(DecodePanelSettings["x10ByMemory"]))
-            s.append(self._lookupEprom(DecodePanelSettings["x10ByKeyfob"]))
-            s.append(self._lookupEprom(DecodePanelSettings["x10ActZoneA"]))
-            s.append(self._lookupEprom(DecodePanelSettings["x10ActZoneB"]))
-            s.append(self._lookupEprom(DecodePanelSettings["x10ActZoneC"]))
+            s.append(self._lookupEprom(pmDecodePanelSettings["x10ByArmAway"]))  # 0 = pgm, 1 = X01
+            s.append(self._lookupEprom(pmDecodePanelSettings["x10ByArmHome"]))
+            s.append(self._lookupEprom(pmDecodePanelSettings["x10ByDisarm"]))
+            s.append(self._lookupEprom(pmDecodePanelSettings["x10ByDelay"]))
+            s.append(self._lookupEprom(pmDecodePanelSettings["x10ByMemory"]))
+            s.append(self._lookupEprom(pmDecodePanelSettings["x10ByKeyfob"]))
+            s.append(self._lookupEprom(pmDecodePanelSettings["x10ActZoneA"]))
+            s.append(self._lookupEprom(pmDecodePanelSettings["x10ActZoneB"]))
+            s.append(self._lookupEprom(pmDecodePanelSettings["x10ActZoneC"]))
 
-            x10Names = self._lookupEprom(DecodePanelSettings["x10ZoneNames"])  # 0 = X01
+            x10Names = self._lookupEprom(pmDecodePanelSettings["x10ZoneNames"])  # 0 = X01
             log.debug(f"[Process Settings]            X10 device EPROM Name Data {toString(x10Names)}")
 
             for i in range(0, 16):
@@ -3471,7 +3461,7 @@ class PacketHandling(ProtocolBase):
                 x10Name = (x10Names[i - 1] & 0x1F) if i > 0 else 0x1F     # PGM needs to be set by x10Enabled
 
                 if x10Enabled or x10Name != 0x1F:
-                    x10Location = pmZoneName_t[x10Name] if i > 0 else "PGM"
+                    x10Location = pmZoneName[x10Name] if i > 0 else "PGM"
                     x10Type = "onoff" if i == 0 else "dimmer"       # Assume PGM is onoff switch, all other devices are dimmer Switches
                     if i in self.SwitchList:
                         self.SwitchList[i].type = x10Type
@@ -3510,15 +3500,15 @@ class PacketHandling(ProtocolBase):
         sysStatus = sysStatus & 0x1F     # Mark-Mills with a PowerMax Complete Part, sometimes this has the 0x20 bit set and I'm not sure why
         
         oldPS = self.PanelState
-        if sysStatus in PanelArmedStatus:
-            disarmed = PanelArmedStatus[sysStatus].disarmed
-            armed    = PanelArmedStatus[sysStatus].armed
-            entry    = PanelArmedStatus[sysStatus].entry
-            self.PanelState = PanelArmedStatus[sysStatus].state
+        if sysStatus in pmPanelArmedStatus:
+            disarmed = pmPanelArmedStatus[sysStatus].disarmed
+            armed    = pmPanelArmedStatus[sysStatus].armed
+            entry    = pmPanelArmedStatus[sysStatus].entry
+            self.PanelState = pmPanelArmedStatus[sysStatus].state
 
-            if PanelArmedStatus[sysStatus].eventmapping >= 0:
-                log.debug(f"[ProcessPanelStateUpdate]      self.PanelState is {self.PanelState}      using event mapping {PanelArmedStatus[sysStatus].eventmapping} for event data")
-                self.addPanelEventData(AlPanelEventData(0, PanelArmedStatus[sysStatus].eventmapping))
+            if pmPanelArmedStatus[sysStatus].eventmapping >= 0:
+                log.debug(f"[ProcessPanelStateUpdate]      self.PanelState is {self.PanelState}      using event mapping {pmPanelArmedStatus[sysStatus].eventmapping} for event data")
+                self.addPanelEventData(AlPanelEventData(0, pmPanelArmedStatus[sysStatus].eventmapping))
                 
         else:
             log.debug("[ProcessPanelStateUpdate]      Unknown state {0}, assuming Panel state of Unknown".format(hexify(sysStatus)))
@@ -3583,19 +3573,19 @@ class PacketHandling(ProtocolBase):
 
 
     def ProcessZoneEvent(self, eventZone, eventType):
-        log.debug("[ProcessZoneEvent]      Zone Event      Zone: {0}    Type: {1}".format(eventZone, eventType))
+        log.debug(f"[ProcessZoneEvent]      Zone Event      Zone: {eventZone}    Type: {eventType}")
         key = eventZone - 1  # get the key from the zone - 1
         
         if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.MINIMAL_ONLY, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK] and key not in self.SensorList and eventType > 0:
             log.debug("[ProcessZoneEvent]          Got a Zone Sensor that I did not know about so creating it")
             self._updateSensor(i = key, enrolled = True)
 
-        if key in self.SensorList and eventType in ZoneEventAction:
-            sf = getattr(self.SensorList[key], ZoneEventAction[eventType].func if eventType in ZoneEventAction else "")
+        if key in self.SensorList and eventType in pmZoneEventAction:
+            sf = getattr(self.SensorList[key], pmZoneEventAction[eventType].func if eventType in pmZoneEventAction else "")
             if sf is not None:
-                log.debug(f"[ProcessZoneEvent]               Processing event {eventType}  calling {ZoneEventAction[eventType].func}({str(ZoneEventAction[eventType].parameter)})")
-                sf(ZoneEventAction[eventType].parameter)
-            self.SensorList[key].setProblem(ZoneEventAction[eventType].problem)
+                log.debug(f"[ProcessZoneEvent]               Processing event {eventType}  calling {pmZoneEventAction[eventType].func}({str(pmZoneEventAction[eventType].parameter)})")
+                sf(pmZoneEventAction[eventType].parameter)
+            self.SensorList[key].setProblem(pmZoneEventAction[eventType].problem)
         else:
             log.debug(f"[ProcessZoneEvent]               Not processing zone {eventZone}   event {eventType}")
                 
@@ -3610,7 +3600,7 @@ class PacketHandling(ProtocolBase):
                 self.SwitchList[i].state = bool(status)
                 # Check to see if the state has changed
                 if (oldstate and not self.SwitchList[i].state) or (not oldstate and self.SwitchList[i].state):
-                    log.debug("[handle_msgtypeA5]      X10 device {0} changed to {2} ({1})".format(i, status, self.SwitchList[i].state))
+                    log.debug(f"[handle_msgtypeA5]      X10 device {i} changed to {self.SwitchList[i].state} ({status})")
                     self.SwitchList[i].pushChange()
 
 
@@ -3726,7 +3716,7 @@ class PacketHandling(ProtocolBase):
         """ Handle Acknowledges from the panel """
         # Normal acknowledges have msgtype 0x02 but no data, when in powerlink the panel also sends data byte 0x43
         #    I have not found this on the internet, this is my hypothesis
-        #log.debug("[handle_msgtype02] Ack Received  data = {0}".format(toString(data)))
+        #log.debug(f"[handle_msgtype02] Ack Received  data = {toString(data)}")
 
         processAB = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]
         if processAB and len(data) > 0 and data[0] == 0x43:
@@ -3744,24 +3734,24 @@ class PacketHandling(ProtocolBase):
 
     def handle_msgtype07(self, data):
         """MsgType=07 - No idea what this means"""
-        log.debug("[handle_msgtype07] No idea what this message means, data = {0}".format(toString(data)))
+        log.debug(f"[handle_msgtype07] No idea what this message means, data = {toString(data)}")
         # Assume that we need to send an ack
 
     def handle_msgtype08(self, data):
-        log.debug("[handle_msgtype08] Access Denied  len {0} data {1}".format(len(data), toString(data)))
+        log.debug(f"[handle_msgtype08] Access Denied  len {len(data)} data {toString(data)}")
         self.AccessDeniedReceived = True
         self.AccessDeniedMessage = self._getLastSentMessage()
 
     def handle_msgtype0B(self, data):  # LOOPBACK TEST SUCCESS, STOP COMMAND (0x0B) IS THE FIRST COMMAND SENT TO THE PANEL WHEN THIS INTEGRATION STARTS
         """ Handle LOOPBACK """
-        #log.debug("[handle_msgtype0B] Loopback test assumed {0}".format(toString(data)))
+        #log.debug(f"[handle_msgtype0B] Loopback test assumed {toString(data)}")
         self.loopbackTest = True
         self.loopbackCounter = self.loopbackCounter + 1
-        log.warning("[handle_msgtype0B] LOOPBACK TEST SUCCESS, Counter is {0}".format(self.loopbackCounter))
+        log.warning(f"[handle_msgtype0B] LOOPBACK TEST SUCCESS, Counter is {self.loopbackCounter}")
 
     def handle_msgtype0F(self, data):  # EXIT
         """ Handle EXIT from the panel """
-        log.debug("[handle_msgtype0F] Exit    data is {0}".format(toString(data)))
+        log.debug(f"[handle_msgtype0F] Exit    data is {toString(data)}")
         # This is sent by the panel during download to tell us to stop the download
         self.ExitReceived = True
 
@@ -3769,7 +3759,7 @@ class PacketHandling(ProtocolBase):
         """ MsgType=25 - Download retry. Unit is not ready to enter download mode """
         # Format: <MsgType> <?> <?> <delay in sec>
         iDelay = data[2]
-        log.debug("[handle_msgtype25] Download Retry, have to wait {0} seconds     data is {1}".format(iDelay, toString(data)))
+        log.debug(f"[handle_msgtype25] Download Retry, have to wait {iDelay} seconds     data is {toString(data)}")
         self.DownloadRetryReceived = True
 
     def handle_msgtype33(self, data):
@@ -3777,8 +3767,8 @@ class PacketHandling(ProtocolBase):
         Message sent after a MSG_START. We will store the information in an internal array/collection"""
 
         if len(data) != 10:
-            log.debug("[handle_msgtype33] ERROR: MSGTYPE=0x33 Expected len=14, Received={0}".format(len(data)))
-            log.debug("[handle_msgtype33]                            " + toString(data))
+            log.debug(f"[handle_msgtype33] ERROR: MSGTYPE=0x33 Expected len=14, Received={len(data)}")
+            log.debug(f"[handle_msgtype33]                            {toString(data)}")
             return
 
         # Data Format is: <index> <page> <8 data bytes>
@@ -3802,8 +3792,8 @@ class PacketHandling(ProtocolBase):
 
             if self.DownloadCode == DEFAULT_DL_CODE:
                 # If the panel still has its startup default Download Code, or if it hasn't been set by the user to something different
-                self.DownloadCode = pmPanelConfig_t["CFG_DLCODE_1"][self.PanelType][:2] + " " + pmPanelConfig_t["CFG_DLCODE_1"][self.PanelType][2:]
-                log.debug("[handle_msgtype3C] Setting Download Code from the Default value {0} to the default Panel Value {1}".format(DEFAULT_DL_CODE, self.DownloadCode))
+                self.DownloadCode = pmPanelConfig["CFG_DLCODE_1"][self.PanelType][:2] + " " + pmPanelConfig["CFG_DLCODE_1"][self.PanelType][2:]
+                log.debug(f"[handle_msgtype3C] Setting Download Code from the Default value {DEFAULT_DL_CODE} to the default Panel Value {self.DownloadCode}")
             else:
                 log.debug("[handle_msgtype3C] Using the user defined Download Code")
             
@@ -3842,8 +3832,8 @@ class PacketHandling(ProtocolBase):
         # PowerMaster 10 (Model 7) and PowerMaster 33 (Model 10) has a very specific problem with downloading the Panel EEPROM and doesn't respond with the correct number of bytes
         #if self.PanelType is not None and self.ModelType is not None and ((self.PanelType == 7 and self.ModelType == 68) or (self.PanelType == 10 and self.ModelType == 71)):
         #    if iLength != len(data) - 3:
-        #        log.debug("[handle_msgtype3F] Not checking data length as it could be incorrect.  We requested {0} and received {1}".format(iLength, len(data) - 3))
-        #        log.debug("[handle_msgtype3F]                            " + toString(data))
+        #        log.debug(f"[handle_msgtype3F] Not checking data length as it could be incorrect.  We requested {iLength} and received {len(data) - 3}")
+        #        log.debug(f"[handle_msgtype3F]                            {toString(data)}")
         #    # Write to memory map structure, but remove the first 3 bytes (index/page/length) from the data
         #    self._saveEPROMSettings(iPage, iIndex, data[3:])
            
@@ -3869,19 +3859,14 @@ class PacketHandling(ProtocolBase):
                     self.pmDownloadInProgress = True
                     self._addMessageToSendList("MSG_DL", options=[ [1, self.myDownloadList.pop(0)] ])  # Read the next block of EEPROM data
         elif self.pmDownloadRetryCount <= DOWNLOAD_PDU_RETRY_COUNT:
-            log.warning("[handle_msgtype3F] Invalid EPROM data block length (received: {0}, Expected: {1},  blocklen: {2}). Adding page {2} Index {3} to the end of the list to redownload".format(len(data)-3, iLength, blocklen, iPage, iIndex))
-            log.warning("[handle_msgtype3F]                            " + toString(data))
+            log.warning(f"[handle_msgtype3F] Invalid EPROM data block length (received: {len(data)-3}, Expected: {iLength},  blocklen: {blocklen}). Adding page {iPage} Index {iIndex} to the end of the list to redownload")
+            log.warning(f"[handle_msgtype3F]                            {toString(data)}")
             # Add it back on to the end to re-download it
-            repeatDownloadCommand = bytearray(4)
-            repeatDownloadCommand[0] = iIndex
-            repeatDownloadCommand[1] = iPage
-            repeatDownloadCommand[2] = blocklen
-            repeatDownloadCommand[3] = 0
-            self.myDownloadList.append(repeatDownloadCommand)
+            self.myDownloadList.append(bytearray([iIndex, iPage, blocklen, 0]))
             # Increment counter
             self.pmDownloadRetryCount = self.pmDownloadRetryCount + 1
         else:
-            log.warning("[handle_msgtype3F] Invalid EPROM data block length (received: {0}, Expected: {1},  blocklen: {2}). Giving up on page {2} Index {3}".format(len(data)-3, iLength, blocklen, iPage, iIndex))
+            log.warning(f"[handle_msgtype3F] Invalid EPROM data block length (received: {len(data)-3}, Expected: {iLength},  blocklen: {blocklen}). Giving up on page {iPage} Index {iIndex}")
             self.myDownloadList = []
             log.debug("[handle_msgtype3F] Download InComplete")
             self.pmDownloadInProgress = False
@@ -3891,12 +3876,24 @@ class PacketHandling(ProtocolBase):
 
     def handle_msgtypeA0(self, data):
         """ MsgType=A0 - Event Log """
-        # From my Powermaster30  [handle_MsgTypeA0] Packet = 5f 02 01 64 58 5c 58 d3 41 51 43
+        # From my Powermaster30  [handle_MsgTypeA0] Packet = 5f 02 01 64 58 5c 58 d3 41 51
+
+        # My PowerMax
+        #    To Ct Pt ---- time ---- Zo Ev    Time does not have the seconds value
+        #    fb 01 00 00 00 00 00 00 03 00
+        #    fb 02 01 1c 15 06 0a 18 1f 55    6/10/24 at 21:28:01    Disarmed   FOB-01    why are all the seconds 0 or 1
+        #    fb 03 01 09 12 06 0a 18 1f 52    6/10/24 at 18:09:01    Armed Away FOB-01
+
+        # From a PM10:
+        #    To Ct Pt -- time ---  Y Zo Ev    Don't know what Y and data[7] is. It could be the panel state e.g. 0x52 is Armed Away
+        #    fb 02 00 3f 71 02 67 04 01 5c    
+        #    fb 03 00 69 3a 01 67 53 00 1c    
+        #    fb 04 01 69 3a 01 67 52 61 1b    
 
         eventNum = data[1]
         # Check for the first entry, it only contains the number of events
         if eventNum == 0x01:
-            log.debug("[handle_msgtypeA0] Eventlog received")
+            log.debug("[handle_msgtypeA0]    Eventlog received")
             self.eventCount = data[0] - 1  ## the number of messages (including this one) minus 1
         else:
             iSec = data[2]
@@ -3928,7 +3925,7 @@ class PacketHandling(ProtocolBase):
 
             # Create an event log array
             self.pmEventLogDictionary[idx] = AlLogPanelEvent()
-            if pmPanelConfig_t["CFG_PARTITIONS"][self.PanelType] > 1:
+            if pmPanelConfig["CFG_PARTITIONS"][self.PanelType] > 1:
                 part = 0
                 for i in range(1, 4):
                     part = (iSec % (2 * i) >= i) and i or part
@@ -3954,10 +3951,10 @@ class PacketHandling(ProtocolBase):
 
     def handle_msgtypeA3(self, data):
         """ MsgType=A3 - Zone Names """
-        log.debug("[handle_MsgTypeA3] Packet = {0}".format(toString(data)))
+        log.debug(f"[handle_MsgTypeA3] Packet = {toString(data)}")
         msgCnt = int(data[0])
         offset = 8 * (int(data[1]) - 1)
-        log.debug("            Message Count is {0}   offset={1}     self.PanelMode = {2}".format( msgCnt, offset, str(self.PanelMode) ))
+        log.debug(f"            Message Count is {msgCnt}   offset={offset}     self.PanelMode = {str(self.PanelMode)}")
 
         if len(self.PanelSettings[PanelSetting.ZoneNames]) < offset+8:
             self.PanelSettings[PanelSetting.ZoneNames].extend(bytearray(offset+8-len(self.PanelSettings[PanelSetting.ZoneNames])))
@@ -4072,27 +4069,25 @@ class PacketHandling(ProtocolBase):
 
     def handle_msgtypeA6(self, data):
         """ MsgType=A6 - Zone Types """
-        log.debug("[handle_MsgTypeA6] Packet = {0}".format(toString(data)))
+        log.debug(f"[handle_MsgTypeA6] Packet = {toString(data)}")
         msgCnt = int(data[0])
         offset = 8 * (int(data[1]) - 1)
-        log.debug("            Message Count is {0}   offset={1}     self.PanelMode={2}".format( msgCnt, offset, str(self.PanelMode) ))
+        log.debug(f"            Message Count is {msgCnt}   offset={offset}     self.PanelMode={str(self.PanelMode)}")
         if len(self.PanelSettings[PanelSetting.ZoneTypes]) < offset+8:
             self.PanelSettings[PanelSetting.ZoneTypes].extend(bytearray(offset+8-len(self.PanelSettings[PanelSetting.ZoneTypes])))
         for i in range(0, 8):
             # Save the Zone Type
             self.PanelSettings[PanelSetting.ZoneTypes][offset+i] = ((int(data[2+i])) - 0x1E) & 0x0F
-            log.debug("                        Zone type for sensor {0} is {1} : {2}".format( offset+i+1, (int(data[2+i])) - 0x1E, pmZoneTypeKey[self.PanelSettings[PanelSetting.ZoneTypes][offset+i]] ))
+            log.debug(f"                        Zone type for sensor {offset+i+1} is {(int(data[2+i])) - 0x1E} : {pmZoneTypeKey[self.PanelSettings[PanelSetting.ZoneTypes][offset+i]]}")
             if self.PanelMode != AlPanelMode.POWERLINK and self.PanelMode != AlPanelMode.POWERLINK_BRIDGED and (offset+i) in self.SensorList:
                 self._updateSensor(offset+i, zoneType = self.PanelSettings[PanelSetting.ZoneTypes][offset+i])
 
-    # This function may change global variables:
-    #     self.SirenActive
-    #     self.PanelAlarmStatus
-    #     self.PanelTroubleStatus
-    #     self.pmForceArmSetInPanel
     def handle_msgtypeA7(self, data):
         """ MsgType=A7 - Panel Status Change """
         #log.debug("[handle_msgtypeA7] Panel Status Change " + toString(data))
+        # 01 00 27 51 02 ff 00 02 00 00
+        # ff 5d 00 2d 00 00 11 0c 00 00
+
         msgCnt = int(data[0])
 
         # If message count is FF then it looks like the first message is valid so decode it (this is experimental)
@@ -4108,9 +4103,9 @@ class PacketHandling(ProtocolBase):
 
             zoneCnt = 0  # this means it wont work in the case we're in standard mode and the panel type is not set
             if self.PanelType is not None:
-                zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
+                zoneCnt = pmPanelConfig["CFG_WIRELESS"][self.PanelType] + pmPanelConfig["CFG_WIRED"][self.PanelType]
 
-            # If there are multiple messages in the same A7 message then alarmStatus represents the last "not None" valid message i.e. in pmPanelAlarmType_t
+            # If there are multiple messages in the same A7 message then alarmStatus represents the last "not None" valid message i.e. in pmPanelAlarmType
             #oldTroubleStatus = self.PanelTroubleStatus
             #oldAlarmStatus = self.PanelAlarmStatus
 
@@ -4140,16 +4135,16 @@ class PacketHandling(ProtocolBase):
                     self.PanelTamper = eventType in pmPanelTamperSet
 
                     # Update trouble status
-                    if eventType in pmPanelTroubleType_t:     # Trouble state
-                        self.PanelTroubleStatus = pmPanelTroubleType_t[eventType]
+                    if eventType in pmPanelTroubleType:     # Trouble state
+                        self.PanelTroubleStatus = pmPanelTroubleType[eventType]
                     else:
                         self.PanelTroubleStatus = AlTroubleType.NONE
                         
                     # Update siren status
                     siren = False
                  
-                    if eventType in pmPanelAlarmType_t:
-                        self.PanelAlarmStatus = pmPanelAlarmType_t[eventType]
+                    if eventType in pmPanelAlarmType:
+                        self.PanelAlarmStatus = pmPanelAlarmType[eventType]
                         #alarmStatus = self.PanelAlarmStatus
                         if self.PanelAlarmStatus == AlAlarmType.INTRUDER:
                             # If any of the A7 messages are in the SirenTriggerList then assume the Siren is triggered
@@ -4189,7 +4184,7 @@ class PacketHandling(ProtocolBase):
     # pmHandlePowerlink (0xAB)
     def handle_msgtypeAB(self, data) -> bool:  # PowerLink Message
         """ MsgType=AB - Panel Powerlink Messages """
-        log.debug("[handle_msgtypeAB]  data {0}".format(toString(data)))
+        log.debug(f"[handle_msgtypeAB]  data {toString(data)}")
 
         # Restart the timer
         self._reset_watchdog_timeout()
@@ -4200,11 +4195,11 @@ class PacketHandling(ProtocolBase):
             log.debug("[handle_msgtypeAB] ***************************** Got Panel Time ****************************")
 
             pt = datetime(2000 + data[7], data[6], data[5], data[4], data[3], data[2]).astimezone()            
-            log.debug("[handle_msgtypeAB]    Panel time is {0}".format(pt))
+            log.debug(f"[handle_msgtypeAB]    Panel time is {pt}")
             if self.AutoSyncTime:
                 self.setTimeInPanel(pt)
 
-        elif self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS] and subType == 3:  # keepalive message
+        elif subType == 3 and self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS]:  # keepalive message
             # Example 0D AB 03 00 1E 00 31 2E 31 35 00 00 43 2A 0A
             #               03 00 1e 00 33 33 31 34 00 00 43        From a Powermax+     PanelType=1, Model=33
             log.debug("[handle_msgtypeAB] ***************************** Got PowerLink Keep-Alive ****************************")
@@ -4214,19 +4209,13 @@ class PacketHandling(ProtocolBase):
             self._reset_powerlink_counter() # reset when received keep-alive from the panel
 
             if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS]:
-                self._addMessageToSendList("MSG_ALIVE")       # EXPERIMENTAL 29/8/2022.  The Powerlink module sends this when it gets an i'm alive from the panel.
+                self._addMessageToSendList("MSG_ALIVE")       # The Powerlink module sends this when it gets an i'm alive from the panel.
 
             if self.PanelMode == AlPanelMode.STANDARD_PLUS:
                 log.debug("[handle_msgtypeAB]         Got alive message while Powerlink mode pending, going to full powerlink and calling Restore")
                 self.PanelMode = AlPanelMode.POWERLINK  # it is truly in powerlink now we are receiving powerlink alive messages from the panel
                 self._triggerRestoreStatus()
                 #self._dumpSensorsToLogFile()
-
-                # There is no point in setting the time here as we need to be in DOWNLOAD mode with the panel
-                #  We set the time at the end of download
-                # Get the time from the panel
-                #if self.AutoSyncTime:
-                #    self._addMessageToSendList("MSG_GETTIME")
 
         elif subType == 3:  # keepalive message
             log.debug("[handle_msgtypeAB] ***************************** Got PowerLink Keep-Alive ****************************")
@@ -4246,19 +4235,14 @@ class PacketHandling(ProtocolBase):
                 # pmMessage("User " .. pmUserCalling .. " acknowledged by phone.", 2)
                 # pmUserCalling = 1
             else:
-                log.debug("[handle_msgtypeAB] PowerLink Phone: Unknown Action {0}".format(hex(data[1]).upper()))
+                log.debug(f"[handle_msgtypeAB] PowerLink Phone: Unknown Action {hex(data[1]).upper()}")
 
         elif self.PanelMode == AlPanelMode.POWERLINK and subType == 10 and data[2] == 0:
-            log.debug("[handle_msgtypeAB] PowerLink telling us what the code {0} {1} is for downloads, currently commented out as I'm not certain of this".format(data[3], data[4]))
-            # data[3] data[4]
+            log.debug(f"[handle_msgtypeAB] PowerLink telling us what the code {data[3]} {data[4]} is for downloads, currently commented out as I'm not certain of this")
 
         elif subType == 10 and data[2] == 1:
             if self.PanelMode == AlPanelMode.POWERLINK:
                 log.debug("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll but not acted on (already in powerlink) **************************")
-#            elif self.PanelMode == AlPanelMode.STANDARD_PLUS:
-#                # The panel is asking to enroll, so give it a try
-#                log.debug("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll, so do it **************************")
-#                self._sendMsgENROLL()
             elif not self.ForceStandardMode:
                 self.PanelWantsToEnrol = True
                 log.debug("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enroll **************************")
@@ -4268,11 +4252,11 @@ class PacketHandling(ProtocolBase):
     # X10 Names (0xAC) I think
     def handle_msgtypeAC(self, data):  # PowerLink Message
         """ MsgType=AC - ??? """
-        log.debug("[handle_msgtypeAC]  data {0}".format(toString(data)))
+        log.debug(f"[handle_msgtypeAC]  data {toString(data)}")
 
     def handle_msgtypeAD(self, data):  # PowerLink Message
         """ MsgType=AD - Panel Powerlink Messages """
-        log.debug("[handle_msgtypeAD]  data {0}".format(toString(data)))
+        log.debug(f"[handle_msgtypeAD]  data {toString(data)}")
         #if data[2] == 0x00: # the request was accepted by the panel
         #    self._addMessageToSendList("MSG_NO_IDEA")
         
@@ -4333,7 +4317,7 @@ class PacketHandling(ProtocolBase):
         beezerodebug = True
         
         #log.debug(f"[handle_msgtypeB0] Z  {hex(msgType)}  {hex(subType)}    chunky {ch}")
-        if msgType == 0x03 and subType == pmSendMsgB0_t["PANEL_STATE"] and ch.datasize == 8 and ch.index == 255 and ch.length == 21:
+        if msgType == 0x03 and subType == pmSendMsgB0["PANEL_STATE"] and ch.datasize == 8 and ch.index == 255 and ch.length == 21:
             # Panel state change
             # 0d b0 03 24 1a ff 08 ff 15 06 00 00 00 02 00 00 00 1a 03 0c 01 01 00 14 07 01 00 85 00 00 06 43 d2 0a
             # 0d b0 03 24 1a ff 08 ff 15 06 00 00 00 02 00 00 00 09 1a 0e 04 08 18 14 01 01 00 85 00 00 0f 43 a6 0a
@@ -4373,7 +4357,7 @@ class PacketHandling(ProtocolBase):
                 log.debug("[handle_msgtypeB0]    It also claims to have a zone event")
                 #self.ProcessZoneEvent(eventZone=eventZone, eventType=eventType)
 
-        elif msgType == 0x03 and subType == pmSendMsgB0_t["ZONE_OPENCLOSE"] and ch.datasize == 1 and ch.index == 3:
+        elif msgType == 0x03 and subType == pmSendMsgB0["ZONE_OPENCLOSE"] and ch.datasize == 1 and ch.index == 3:
             # I'm 100% sure this is correct
             zoneLen = ch.length * 8     # 8 bits in a byte
             log.debug("[handle_msgtypeB0]       Received message, open/close information, zone length = {0}".format(zoneLen))
@@ -4381,7 +4365,7 @@ class PacketHandling(ProtocolBase):
             if zoneLen >= 32:
                 self.do_sensor_update(ch.data[4:8], "do_status", "[handle_msgtypeB0]      Zone Status 64-33", 32)
 
-        elif msgType == 0x03 and subType == pmSendMsgB0_t["ZONE_BYPASS"] and ch.datasize == 1 and ch.index == 3:
+        elif msgType == 0x03 and subType == pmSendMsgB0["ZONE_BYPASS"] and ch.datasize == 1 and ch.index == 3:
             # I'm 50% sure this is correct
             # 0d b0 03 19 0d ff 01 03 08 01 00 00 00 00 00 00 00 6f 43 66 0a        Z01 (sensor 0) has been bypassed
             zoneLen = ch.length * 8     # 8 bits in a byte
@@ -4390,7 +4374,7 @@ class PacketHandling(ProtocolBase):
             if zoneLen >= 32:
                 self.do_sensor_update(ch.data[4:8], "do_bypass", "[handle_msgtypeB0]      Zone Bypass 64-33", 32)
 
-        elif msgType == 0x03 and subType == pmSendMsgB0_t["SENSOR_ENROL"] and ch.datasize == 1 and ch.index == 3: # index 3 is zone information
+        elif msgType == 0x03 and subType == pmSendMsgB0["SENSOR_ENROL"] and ch.datasize == 1 and ch.index == 3: # index 3 is zone information
             # I'm 100% sure this is correct
             zoneLen = ch.length * 8     # 8 bits in a byte
             log.debug("[handle_msgtypeB0]       Received message, zone enrolled information, use this to set the enrolled flag in each sensor, zone length = {0}".format(zoneLen))
@@ -4398,7 +4382,7 @@ class PacketHandling(ProtocolBase):
             if zoneLen >= 32:
                 self.do_sensor_update(ch.data[4:8], "do_enrolled", "[handle_msgtypeB0]      Zone Enrolled 64-33", 32)
 
-        elif msgType == 0x03 and subType == pmSendMsgB0_t["SENSOR_STATUS"] and ch.datasize == 8 and ch.index == 3:
+        elif msgType == 0x03 and subType == pmSendMsgB0["SENSOR_STATUS"] and ch.datasize == 8 and ch.index == 3:
             # I'm 100% sure this is correct
             log.debug("[handle_msgtypeB0]       Received message, sensor list, length = {0}".format(ch.length))
             for i in range(0, ch.length):
@@ -4406,15 +4390,15 @@ class PacketHandling(ProtocolBase):
                 if v > 0:   # Is it a sensor?
                     log.debug("[handle_msgtypeB0]          sensor type for sensor {0} is {1}".format( i+1, v ))
                     # Create the sensor
-                    if v in pmZoneSensorMaster_t:         # PowerMaster models, we assume that only PowerMaster models send B0 PDUs
+                    if v in pmZoneSensorMaster:         # PowerMaster models, we assume that only PowerMaster models send B0 PDUs
                         self._updateSensor(i = i, sensor_type = v, enrolled = True)
                     else:
                         self._updateSensor(i = i, enrolled = True)
                         log.debug("[handle_msgtypeB0]                 Found unknown sensor type " + hex(v))
 
-        elif msgType == 0x03 and subType == pmSendMsgB0_t["ZONE_NAMES"] and ch.datasize == 8 and ch.index == 3:
+        elif msgType == 0x03 and subType == pmSendMsgB0["ZONE_NAMES"] and ch.datasize == 8 and ch.index == 3:
             # I'm 100% sure this is correct
-            zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
+            zoneCnt = pmPanelConfig["CFG_WIRELESS"][self.PanelType] + pmPanelConfig["CFG_WIRED"][self.PanelType]
             log.debug(f"[handle_msgtypeB0]       Received message, zone names, length = {ch.length}    zonecount = {zoneCnt}")
             if ch.length == zoneCnt:
                 for i in range(0, len(ch.data)):
@@ -4424,9 +4408,9 @@ class PacketHandling(ProtocolBase):
                     if i in self.SensorList:
                         self._updateSensor(i)
 
-        elif msgType == 0x03 and subType == pmSendMsgB0_t["ZONE_TYPES"] and ch.datasize == 8 and ch.index == 3:
+        elif msgType == 0x03 and subType == pmSendMsgB0["ZONE_TYPES"] and ch.datasize == 8 and ch.index == 3:
             # I'm 100% sure this is correct
-            zoneCnt = pmPanelConfig_t["CFG_WIRELESS"][self.PanelType] + pmPanelConfig_t["CFG_WIRED"][self.PanelType]
+            zoneCnt = pmPanelConfig["CFG_WIRELESS"][self.PanelType] + pmPanelConfig["CFG_WIRED"][self.PanelType]
             log.debug(f"[handle_msgtypeB0]       Received message, zone types, length = {ch.length}    zonecount = {zoneCnt}")
             if ch.length == zoneCnt:
                 for i in range(0, len(ch.data)):
@@ -4436,7 +4420,7 @@ class PacketHandling(ProtocolBase):
                     if i in self.SensorList:
                         self._updateSensor(i, zoneType = self.PanelSettings[PanelSetting.ZoneTypes][i])
 
-        elif msgType == 0x03 and subType == pmSendMsgB0_t["PANEL_SETTINGS"]:
+        elif msgType == 0x03 and subType == pmSendMsgB0["PANEL_SETTINGS"]:
             #03 35 0b ff 08 ff 06 00 00 01 00 00 00 02 43
             dataContentA = ch.data[0]
             dataContentB = ch.data[1]
@@ -4445,8 +4429,8 @@ class PacketHandling(ProtocolBase):
             datalen = ch.length - 3
             log.debug("[handle_msgtypeB0]     ***************************** Panel Settings ********************************")
             if experimental:
-                if dataContent in pmPanelSettingsB0_t:
-                    d = pmPanelSettingsB0_t[dataContent]
+                if dataContent in pmPanelSettingsB0:
+                    d = pmPanelSettingsB0[dataContent]
                     if (d.length == 0 or ch.length == d.length) and datatype == d.datatype:
                         val = None
                         if d.datatype == 1:              # 4 bit integers, possibly an array
@@ -4477,11 +4461,11 @@ class PacketHandling(ProtocolBase):
                         # Check the PanelSettings to see if there's one that refers to this dataContent
                         if val is not None:
                             for key in PanelSetting:
-                                if PanelSettingCodes[key].PowerMasterB0Panel == dataContent:
+                                if pmPanelSettingCodes[key].PowerMasterB0Panel == dataContent:
                                     log.debug(f"              {key=}   ({d.msg})    replacing {self.PanelSettings[key]}  with {val}")
-                                    if PanelSettingCodes[key].item is not None:
-                                        if len(val) > PanelSettingCodes[key].item:
-                                            self.PanelSettings[key] = val[PanelSettingCodes[key].item]
+                                    if pmPanelSettingCodes[key].item is not None:
+                                        if len(val) > pmPanelSettingCodes[key].item:
+                                            self.PanelSettings[key] = val[pmPanelSettingCodes[key].item]
                                     else:
                                         self.PanelSettings[key] = val
                                     break
@@ -4491,7 +4475,7 @@ class PacketHandling(ProtocolBase):
                     log.debug(f"               dataContent={hex(dataContent)} panel setting unknown")
             log.debug("[handle_msgtypeB0]     ***************************** Panel Settings Exit ***************************")
 
-        elif subType == pmSendMsgB0_t["ZONE_LAST_EVENT"] and ch.datasize == 40 and ch.index == 3:    # Each entry is ch.datasize=40 bits (or 5 bytes)
+        elif subType == pmSendMsgB0["ZONE_LAST_EVENT"] and ch.datasize == 40 and ch.index == 3:    # Each entry is ch.datasize=40 bits (or 5 bytes)
             # I'm 100% sure this is correct
             if msgType == 0x02:
                 # Zone Last Event
@@ -4517,7 +4501,7 @@ class PacketHandling(ProtocolBase):
                             o = i * 5
                             self._decode_4B(i + self.beezero_024B_sensorcount, ch.data[o:o+5])
                     else: # Assume PM10
-                        # Assume that when the PowerMaster panel has less than 32 sensors then it just sends this and not msgType == 0x02, subType == pmSendMsgB0_t["ZONE_LAST_EVENT"]
+                        # Assume that when the PowerMaster panel has less than 32 sensors then it just sends this and not msgType == 0x02, subType == pmSendMsgB0["ZONE_LAST_EVENT"]
                         sensorcount = int(ch.length / 5)
                         for i in range(0, sensorcount):
                             o = i * 5
@@ -4525,7 +4509,7 @@ class PacketHandling(ProtocolBase):
 
                 self.beezero_024B_sensorcount = None   # If theres a next time so they are coordinated
 
-        elif msgType == 0x03 and subType == pmSendMsgB0_t["ASK_ME_1"] and ch.datasize == 8 and ch.index == 0xFF:
+        elif msgType == 0x03 and subType == pmSendMsgB0["ASK_ME_1"] and ch.datasize == 8 and ch.index == 0xFF:
             log.debug(f"[handle_msgtypeB0]       Received ASK_ME_1 pop message   {ch}")
             if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS, AlPanelMode.STANDARD]:
                 if ch.length > 0:
@@ -4533,7 +4517,7 @@ class PacketHandling(ProtocolBase):
                     self._addMessageToSendList(s)
 
 
-        elif msgType == 0x03 and subType == pmSendMsgB0_t["ASK_ME_2"] and ch.datasize == 8 and ch.index == 0xFF:
+        elif msgType == 0x03 and subType == pmSendMsgB0["ASK_ME_2"] and ch.datasize == 8 and ch.index == 0xFF:
             log.debug(f"[handle_msgtypeB0]       Received ASK_ME_2 pop message   {ch}")
             if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS, AlPanelMode.STANDARD]:
                 if ch.length > 0:
@@ -4577,7 +4561,7 @@ class PacketHandling(ProtocolBase):
 #                ModelType = data[21]
 #                PanelType = data[22]
 #                PowerMaster = (PanelType >= 7)
-#                PanelModel = pmPanelType_t[PanelType] if PanelType in pmPanelType_t else "UNKNOWN"   # INTERFACE : PanelType set to model
+#                PanelModel = pmPanelType[PanelType] if PanelType in pmPanelType else "UNKNOWN"   # INTERFACE : PanelType set to model
 #                log.debug("[handle_msgtypeB0] PanelType={0} : {2} , Model={1}   Powermaster {3}".format(PanelType, ModelType, PanelModel, PowerMaster))
         else:
             if beezerodebug:
@@ -4646,11 +4630,11 @@ class PacketHandling(ProtocolBase):
                     #log.debug(f"               {toString(data[:2])}     Decode Chunk         {str(chunk)}")
                     # Check the PanelSettings to see if there's one that refers to this message
                     for key in PanelSetting:
-                        if PanelSettingCodes[key].PowerMasterB0Message == subType and PanelSettingCodes[key].PowerMasterB0Index == chunk.index:
+                        if pmPanelSettingCodes[key].PowerMasterB0Message == subType and pmPanelSettingCodes[key].PowerMasterB0Index == chunk.index:
                             log.debug(f"              {subType=}  {key=}   replacing {toString(self.PanelSettings[key])}  with {toString(chunk.data)}")
-                            if PanelSettingCodes[key].item is not None:
-                                if len(val) > PanelSettingCodes[key].item:
-                                    self.PanelSettings[key] = chunk.data[PanelSettingCodes[key].item]
+                            if pmPanelSettingCodes[key].item is not None:
+                                if len(val) > pmPanelSettingCodes[key].item:
+                                    self.PanelSettings[key] = chunk.data[pmPanelSettingCodes[key].item]
                             else:
                                 self.PanelSettings[key] = chunk.data
                             break
@@ -4685,7 +4669,7 @@ class PacketHandling(ProtocolBase):
         """ MsgType=F4 - Static JPG Image """
         from PIL import Image, UnidentifiedImageError                        
 
-        #log.debug("[handle_msgtypeF4]  data {0}".format(toString(data)))
+        #log.debug(f"[handle_msgtypeF4]  data {toString(data)}")
 
         #      0 - message type  ==>  3=start, 5=data
         #      1 - always 0
@@ -4698,7 +4682,7 @@ class PacketHandling(ProtocolBase):
         pushchange = False
 
         if msgtype == 0x03:     # JPG Header 
-            log.debug("[handle_msgtypeF4]  data {0}".format(toString(data)))
+            log.debug(f"[handle_msgtypeF4]  data {toString(data)}")
             pushchange = True
             zone = (10 * int(data[5] // 16)) + (data[5] % 16)         # the // does integer floor division so always rounds down
             unique_id = data[6]
@@ -4799,7 +4783,7 @@ class PacketHandling(ProtocolBase):
                         log.debug(f"[handle_msgtypeF4]           Got Image width {width}    height {height}      total = {total} = {hex(total)}")
 
                         # Got all the data so write it out to a jpg file
-                        #fn = "camera_image_z{0:0>2}_{1:0>2}{2:0>2}{3:0>2}_{4:0>2}{5:0>2}{6:0>2}.jpg".format(zone, t.day, t.month, t.year - 2000, t.hour, t.minute, t.second, )                    
+                        #fn = f"camera_image_z{zone:0>2}_{t.day:0>2}{t.month:0>2}{t.year - 2000:0>2}_{t.hour:0>2}{t.minute:0>2}{t.second:0>2}.jpg"
                         #with open(fn, 'wb') as f1:
                         #    f1.write(buffer)
                         #    f1.close()
@@ -4836,13 +4820,12 @@ class PacketHandling(ProtocolBase):
                     self.ImageManager.terminateImage()
 
         elif msgtype == 0x01:
-            log.debug("[handle_msgtypeF4]  data {0}".format(toString(data)))
-            #log.debug("[handle_msgtypeF4]  data {0}".format(toString(data)))
+            log.debug(f"[handle_msgtypeF4]  data {toString(data)}")
             log.debug(f"[handle_msgtypeF4]           Message Type not processed")
             pushchange = True
 
         else:
-            log.debug("[handle_msgtypeF4]  not seen data {0}".format(toString(data)))
+            log.debug(f"[handle_msgtypeF4]  not seen data {toString(data)}")
             log.debug(f"[handle_msgtypeF4]           Message Type not processed")
 
         return pushchange
@@ -4929,10 +4912,10 @@ class VisonicProtocol(PacketHandling):
             if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
                 bpin = self._createPin(code)
                 # Ensure that the state is valid
-                if state in pmArmMode_t:
+                if state in pmArmMode:
                     armCode = bytearray()
                     # Retrieve the code to send to the panel
-                    armCode.append(pmArmMode_t[state])
+                    armCode.append(pmArmMode[state])
                     self._addMessageToSendList("MSG_ARM", immediate = True, options=[ [3, armCode], [4, bpin] ])  #
                     self._addMessageToSendList("MSG_STATUS_SEN", immediate = True)
                     return AlCommandStatus.SUCCESS
@@ -4942,10 +4925,10 @@ class VisonicProtocol(PacketHandling):
                 elif state == AlPanelCommand.TRIGGER:
                     self._addMessageToSendList("MSG_PM_SIREN", immediate = True, options=[ [4, bpin] ])  #
                     return AlCommandStatus.SUCCESS
-                elif state in pmSirenMode_t:
+                elif state in pmSirenMode:
                     sirenCode = bytearray()
                     # Retrieve the code to send to the panel
-                    sirenCode.append(pmSirenMode_t[state])
+                    sirenCode.append(pmSirenMode[state])
                     self._addMessageToSendList("MSG_PM_SIREN_MODE", immediate = True, options=[ [4, bpin], [11, sirenCode] ])  #
                     return AlCommandStatus.SUCCESS
             return AlCommandStatus.FAIL_INVALID_STATE
@@ -4954,7 +4937,7 @@ class VisonicProtocol(PacketHandling):
     def setX10(self, device : int, state : AlX10Command) -> AlCommandStatus:
         # This is untested
         # "MSG_X10PGM"      : VisonicCommand(convertByteArray('A4 00 00 00 00 00 99 99 99 00 00 43'), None  , False, "X10 Data" ),
-        #log.debug("[SendX10Command] Processing {0} {1}".format(device, type(device)))
+        #log.debug(f"[SendX10Command] Processing {device} {type(device)}")
         if not self.pmDownloadMode:
             if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
                 if device >= 0 and device <= 15:
@@ -4962,8 +4945,8 @@ class VisonicProtocol(PacketHandling):
                     calc = 1 << device
                     byteA = calc & 0xFF
                     byteB = (calc >> 8) & 0xFF
-                    if state in pmX10State_t:
-                        what = pmX10State_t[state]
+                    if state in pmX10State:
+                        what = pmX10State[state]
                         self._addMessageToSendList("MSG_X10PGM", immediate = True, options=[ [6, what], [7, byteA], [8, byteB] ])
                         self._addMessageToSendList("MSG_STATUS_SEN", immediate = True)
                         return AlCommandStatus.SUCCESS
@@ -5032,7 +5015,9 @@ class VisonicProtocol(PacketHandling):
             if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
                 log.debug("getEventLog")
                 self.eventCount = 0
-                self.pmEventLogDictionary = {}
+                #if self.isPowerMaster():
+                #    self.B0_Message_Wanted.add("EVENT_LOG")
+                #else:
                 bpin = self._createPin(pin)
                 self._addMessageToSendList("MSG_EVENTLOG", options=[ [4, bpin] ])
                 return AlCommandStatus.SUCCESS

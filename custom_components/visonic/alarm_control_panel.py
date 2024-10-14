@@ -65,7 +65,6 @@ async def async_setup_entry(
     )
     #_LOGGER.debug("alarm control panel async_setup_entry exit")
 
-
 class VisonicAlarm(alarm.AlarmControlPanelEntity):
     """Representation of a Visonic alarm control panel."""
 
@@ -219,6 +218,8 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     def supported_features(self) -> int:
         """Return the list of supported features."""
         #_LOGGER.debug(f"alarm control panel supported_features {self.entity_id=}")
+        if self._client is None:
+            return 0
         if self._client.isDisableAllCommands():
             return 0
         #_LOGGER.debug(f"[AlarmcontrolPanel] Getting Supported Features {self._client.isArmHome()} {self._client.isArmNight()}")
@@ -242,6 +243,8 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         #_LOGGER.debug(f"alarm control panel code_format {self.entity_id=}")
         # Do not show the code panel if the integration is just starting up and 
         #    connecting to the panel
+        if self._client is None:
+            return None
         if self._client.isDisableAllCommands():
             return None
         if self.isPanelConnected():

@@ -40,7 +40,7 @@ async def async_setup_entry(
     def async_add_siren() -> None:
         """Add Visonic Siren"""
         entities: list[Entity] = []
-        entities.append(VisonicSiren(hass, client, 1))
+        entities.append(VisonicSiren(hass, client))
         _LOGGER.debug(f"siren adding entity")
         async_add_entities(entities)
 
@@ -59,12 +59,12 @@ class VisonicSiren(SirenEntity):
     _attr_translation_key: str = "alarm_panel_key"
     _attr_should_poll = False
 
-    def __init__(self, hass: HomeAssistant, client: VisonicClient, partition_id: int):
+    def __init__(self, hass: HomeAssistant, client: VisonicClient):
         """Initialize a Visonic security alarm."""
         self._client = client
         self.hass = hass
         client.onChange(self.onClientChange)
-        self._partition_id = partition_id
+        #self._partition_id = partition_id
         self._mystate = False
         pname = client.getMyString()
         self._myname = pname + "s01"
@@ -117,7 +117,7 @@ class VisonicSiren(SirenEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        return self._myname + "_" + str(self._partition_id)
+        return self._myname # + "_" + str(self._partition_id)
 
     @property
     def name(self):

@@ -27,7 +27,7 @@ CONF_PATH = "path"
 CONF_DOWNLOAD_CODE = "download_code"
 CONF_LANGUAGE = "language"
 CONF_EMULATION_MODE = "emulation_mode"
-CONF_SIREN_SOUNDING = "siren_sounding"
+#CONF_SIREN_SOUNDING = "siren_sounding"
 
 class ConnectionMode(Enum):
     POWERLINK = 1
@@ -36,9 +36,9 @@ class ConnectionMode(Enum):
 
 myconfig = { 
     CONF_DOWNLOAD_CODE: "",
-    CONF_EMULATION_MODE: ConnectionMode.POWERLINK,
-    CONF_LANGUAGE: "Panel",
-    CONF_SIREN_SOUNDING: ["Intruder"]
+    CONF_EMULATION_MODE: ConnectionMode.POWERLINK
+#    CONF_LANGUAGE: "EN"
+#    CONF_SIREN_SOUNDING: ["Intruder"]
 }
 
 def toBool(val) -> bool:
@@ -108,9 +108,9 @@ def getConfigData() -> PanelConfig:
     return {
         AlConfiguration.DownloadCode: myconfig.get(CONF_DOWNLOAD_CODE, ""),
         AlConfiguration.ForceStandard: ForceStandardMode,
-        AlConfiguration.DisableAllCommands: DisableAllCommands,
-        AlConfiguration.PluginLanguage: myconfig.get(CONF_LANGUAGE, "Panel"),
-        AlConfiguration.SirenTriggerList: myconfig.get(CONF_SIREN_SOUNDING, ["Intruder"])
+        AlConfiguration.DisableAllCommands: DisableAllCommands
+        #AlConfiguration.PluginLanguage: myconfig.get(CONF_LANGUAGE, "Panel"),
+        #AlConfiguration.SirenTriggerList: myconfig.get(CONF_SIREN_SOUNDING, ["Intruder"])
     }
 
 def callback_handler(visonic_devices, dict={}):
@@ -119,14 +119,14 @@ def callback_handler(visonic_devices, dict={}):
         _LOGGER.debug("Visonic attempt to add device when sensor is undefined")
         return
     if type(visonic_devices) == defaultdict:
-        _LOGGER.debug("Visonic got new sensors {0}".format(visonic_devices))
+        _LOGGER.debug(f"Visonic got new sensors {visonic_devices}")
     elif type(visonic_devices) == pyvisonic.SensorDevice:
         # This is an update of an existing device
-        _LOGGER.debug("Visonic got a sensor update {0}".format(visonic_devices))
+        _LOGGER.debug(f"Visonic got a sensor update {visonic_devices}")
     elif type(visonic_devices) == int:
-        _LOGGER.debug("Visonic got an Event {0} {1}".format(visonic_devices,dict))
+        _LOGGER.debug(f"Visonic got an Event {visonic_devices} {dict}")
     else:
-        _LOGGER.debug("Visonic attempt to add device with type {0}  device is {1}".format(type(visonic_devices), visonic_devices))
+        _LOGGER.debug(f"Visonic attempt to add device with type {type(visonic_devices)}  device is {visonic_devices}")
 
 def onNewSwitch(dev: AlSwitchDevice): 
     """Process a new x10."""
@@ -215,11 +215,11 @@ async def async_create_tcp_visonic_connection(address, port, panelConfig : Panel
 
     except socket.error as _:
         err = _
-        print("Setting TCP socket Options Exception {0}".format(err))
+        print(f"Setting TCP socket Options Exception {err}")
         if sock is not None:
             sock.close()
     except Exception as exc:
-        print("Setting TCP Options Exception {0}".format(exc))
+        print(f"Setting TCP Options Exception {exc}")
     return None, None
 
 # Create a connection using asyncio through a linux port (usb or rs232)
@@ -281,7 +281,7 @@ def setupLocalLogger(level: str = "WARNING", logfile = False):
             elapsed_seconds = record.created - self.start_time
             # using timedelta here for convenient default formatting
             elapsed = str(timedelta(seconds=elapsed_seconds))
-            return "{: <15} <{: <15}:{: >5}> {: >8}   {}".format(elapsed, record.filename, record.lineno, record.levelname, record.getMessage())
+            return f"{elapsed: <15} <{record.filename: <15}:{record.lineno: >5}> {record.levelname: >8}   {record.getMessage()}"
 
     # add custom formatter to root logger
     formatter = ElapsedFormatter()

@@ -195,27 +195,27 @@ class AlSensorDeviceHelper(AlSensorDevice):
         else:
             stypestr = "Unknown"
         strn = ""
-        strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
-        #strn = strn + (" Zone=None" if self.dname == None else " Zone={0:<4}".format(self.dname[:4]))
-        strn = strn + (" Type={0:<8}".format(stypestr))
-        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" model=None" if self.model == None else " model={0:<8}".format(self.model[:14]))
-        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" sid=None"       if self.sid == None else       " sid={0:<3}".format(self.sid, type(self.sid)))
-        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" ztype=None"     if self.ztype == None else     " ztype={0:<2}".format(self.ztype, type(self.ztype)))
-        strn = strn + (" Loc=None          " if self.zname == None else " Loc={0:<14}".format(self.zname[:14]))
-        strn = strn + (" ztypeName=None      " if self.ztypeName == None else " ztypeName={0:<10}".format(self.ztypeName[:10]))
-        strn = strn + (" ztamper=--" if self.ztamper == None else " ztamper={0:<2}".format(self.ztamper))
-        strn = strn + (" ztrip=--" if self.ztrip == None else " ztrip={0:<2}".format(self.ztrip))
-        strn = strn + (" zchime=None            " if self.zchime == None else    " zchime={0:<16}".format(self.zchime, type(self.zchime)))
-        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" partition=None" if self.partition == None else " partition={0}".format(self.partition, type(self.partition)))
-        strn = strn + (" bypass=--" if self.bypass == None else " bypass={0:<2}".format(self.bypass))
-        strn = strn + (" lowbatt=--" if self.lowbatt == None else " lowbatt={0:<2}".format(self.lowbatt))
-        strn = strn + (" status=--" if self.status == None else " status={0:<2}".format(self.status))
-        strn = strn + (" tamper=--" if self.tamper == None else " tamper={0:<2}".format(self.tamper))
-        strn = strn + (" enrolled=--" if self.enrolled == None else " enrolled={0:<2}".format(self.enrolled))
-        strn = strn + (" triggered=--" if self.triggered == None else " triggered={0:<2}".format(self.triggered))
+        strn = strn + ("id=None" if self.id == None else f"id={self.id:<2}")
+        #strn = strn + (" Zone=None" if self.dname == None else f" Zone={self.dname[:4]:<4}")
+        strn = strn + (f" Type={stypestr:<8}")
+        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" model=None" if self.model == None else f" model={self.model[:14]:<8}")
+        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" sid=None"       if self.sid == None else       f" sid={self.sid:<3}")
+        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" ztype=None"     if self.ztype == None else     f" ztype={self.ztype:<2}")
+        strn = strn + (" Loc=None          " if self.zname == None else f" Loc={self.zname[:14]:<14}")
+        strn = strn + (" ztypeName=None      " if self.ztypeName == None else f" ztypeName={self.ztypeName[:10]:<10}")
+        strn = strn + (" ztamper=--" if self.ztamper == None else f" ztamper={self.ztamper:<2}")
+        strn = strn + (" ztrip=--" if self.ztrip == None else f" ztrip={self.ztrip:<2}")
+        strn = strn + (" zchime=None            " if self.zchime == None else    f" zchime={self.zchime:<16}")
+        strn = strn + (" partition=None   " if self.partition == None else f" partition={pt:<7}")
+        strn = strn + (" bypass=--" if self.bypass == None else f" bypass={self.bypass:<2}")
+        strn = strn + (" lowbatt=--" if self.lowbatt == None else f" lowbatt={self.lowbatt:<2}")
+        strn = strn + (" status=--" if self.status == None else f" status={self.status:<2}")
+        strn = strn + (" tamper=--" if self.tamper == None else f" tamper={self.tamper:<2}")
+        strn = strn + (" enrolled=--" if self.enrolled == None else f" enrolled={self.enrolled:<2}")
+        strn = strn + (" triggered=--" if self.triggered == None else f" triggered={self.triggered:<2}")
 
         if self.motiondelaytime is not None and (self.stype == AlSensorType.MOTION or self.stype == AlSensorType.CAMERA):
-            strn = strn + (" delay={0:<7}".format("Not Set" if self.motiondelaytime == 0xFFFF else str(self.motiondelaytime)))
+            strn = strn + f" delay={'Not Set' if self.motiondelaytime == 0xFFFF else str(self.motiondelaytime):<7}"
 
         return strn
 
@@ -327,23 +327,23 @@ class AlSensorDeviceHelper(AlSensorDevice):
         return NO_DELAY_SET
 
     def _updateContactSensor(self, status = None, trigger = None):
-        #log.debug("[UpdateContactSensor]   Sensor {0}   before".format(self.id))
+        #log.debug(f"[UpdateContactSensor]   Sensor {self.id}   before")
         #self._dumpSensorsToLogFile()
         if trigger is not None and trigger:
             # If trigger is set then the caller is confident that it is a motion or camera sensor
-            log.debug("[UpdateContactSensor]   Sensor {0}   triggered to True".format(self.id))
+            log.debug(f"[UpdateContactSensor]   Sensor {self.id}   triggered to True")
             self.triggered = True
             self.triggertime = getTimeFunction()
             self.pushChange(AlSensorCondition.STATE)
         elif status is not None and self.status != status:
             # The current setting is different
             if status:
-                log.debug("[UpdateContactSensor]   Sensor {0}   triggered to True".format(self.id))
+                log.debug(f"[UpdateContactSensor]   Sensor {self.id}   triggered to True")
                 self.triggered = True
                 self.triggertime = getTimeFunction()
             if self.getSensorType() != AlSensorType.MOTION and self.getSensorType() != AlSensorType.CAMERA:
                 # Not a motion or camera to set status
-                log.debug("[UpdateContactSensor]   Sensor {0}   status from {1} to {2}".format(self.id, self.status, status))
+                log.debug(f"[UpdateContactSensor]   Sensor {self.id}   status from {self.status} to {status}")
                 self.status = status
                 #if status is not None and not status:
                 #    self.SensorList[sensor].pushChange(AlSensorCondition.RESET)
@@ -418,9 +418,10 @@ class AlSensorDeviceHelper(AlSensorDevice):
             return True # The value has changed
         return False # The value has not changed
 
+"""
     # JSON conversions
     def fromJSON(self, decode):
-        #log.debug("   In sensor fromJSON start {0}".format(self))
+        #log.debug(f"   In sensor fromJSON start {self}")
         if "triggered" in decode:
             self.triggered = toBool(decode["triggered"])
         if "open" in decode:
@@ -450,7 +451,7 @@ class AlSensorDeviceHelper(AlSensorDevice):
             self.model = titlecase(decode["sensor_model"])
         if "motion_delay_time" in decode:
             self.motiondelaytime = titlecase(decode["motion_delay_time"])
-        #log.debug("   In sensor fromJSON end   {0}".format(self))
+        #log.debug(f"   In sensor fromJSON end   {self}")
         self.hasJPG = False
 
     def toJSON(self) -> dict:
@@ -471,7 +472,7 @@ class AlSensorDeviceHelper(AlSensorDevice):
              "motion_delay_time": "" if self.getMotionDelayTime() is None else self.getMotionDelayTime(),
              "chime":  str(self.getChimeType()) })    # , ensure_ascii=True
         return dd
-
+"""
 
 class AlSwitchDeviceHelper(AlSwitchDevice):
 
@@ -486,12 +487,12 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
 
     def __str__(self):
         strn = ""
-        strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
-        #strn = strn + (" name=None" if self.name == None else " name={0:<4}".format(self.name))
-        strn = strn + (" Type=None           " if self.type == None else " Type={0:<15}".format(self.type))
-        strn = strn + (" Loc=None          " if self.location == None else " Loc={0:<14}".format(self.location))
-        strn = strn + (" enabled=None" if self.enabled == None else " enabled={0:<2}".format(self.enabled))
-        strn = strn + (" state=None" if self.state == None else " state={0:<8}".format(self.state))
+        strn = strn + ("id=None" if self.id == None else f"id={self.id:<2}")
+        #strn = strn + (" name=None" if self.name == None else f" name={self.name:<4}")
+        strn = strn + (" Type=None           " if self.type == None else f" Type={self.type:<15}")
+        strn = strn + (" Loc=None          " if self.location == None else f" Loc={self.location:<14}")
+        strn = strn + (" enabled=None" if self.enabled == None else f" enabled={self.enabled:<2}")
+        strn = strn + (" state=None" if self.state == None else f" state={self.state:<8}")
         return strn
 
     def __eq__(self, other):
@@ -536,6 +537,7 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
     def isOn(self) -> bool:
         return self.state #
 
+"""
     def fromJSON(self, decode):
         if "enabled" in decode:
             self.enabled = toBool(decode["enabled"])
@@ -556,7 +558,7 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
              "location": str(self.getLocation()),
              "state":  "On" if self.state else "Off" })  # , ensure_ascii=True
         return dd
-
+"""
 
 class ImageRecord:
     # The details of an individual image
@@ -745,11 +747,11 @@ class MyChecksumCalc:
             return True
 
         if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] + 1:
-            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {0} and {1} alt calc is {2}".format(toString(packet), hex(self._calculateCRC(packet[1:-2])[0]).upper(), hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()))
+            log.debug(f"[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {toString(packet)} and {hex(self._calculateCRC(packet[1:-2])[0]).upper()} alt calc is {hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()}")
             return True
 
         if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] - 1:
-            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {0} and {1} alt calc is {2}".format(toString(packet), hex(self._calculateCRC(packet[1:-2])[0]).upper(), hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()))
+            log.debug(f"[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {toString(packet)} and {hex(self._calculateCRC(packet[1:-2])[0]).upper()} alt calc is {hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()}")
             return True
 
         log.debug("[_validatePDU] Not valid packet, CRC failed, may be ongoing and not final 0A")
@@ -841,10 +843,10 @@ class AlPanelInterfaceHelper(AlPanelInterface):
     def _dumpSensorsToLogFile(self, incX10 = False):
         log.debug(" ================================================================================ Display Status ================================================================================")
         for key, sensor in self.SensorList.items():
-            log.debug("     key {0:<2} Sensor {1}".format(key, sensor))
+            log.debug(f"     key {key:<2} Sensor {sensor}")
         if incX10:
             for key, device in self.SwitchList.items():
-                log.debug("     key {0:<2} X10    {1}".format(key, device))
+                log.debug(f"     key {key:<2} X10    {device}")
         
         log.debug("   Model {: <18}     PowerMaster {: <18}     Ready   {: <13}".format(self.PanelModel,
                                         'Yes' if self.PowerMaster else 'No', 'Yes' if self.PanelReady else 'No'))

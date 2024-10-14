@@ -35,9 +35,9 @@ terminating_clean = "terminating_clean"
 
 # config parameters for myconfig, just to make the defaults easier
 CONF_DOWNLOAD_CODE = "download_code"
-CONF_LANGUAGE = "language"
+#CONF_LANGUAGE = "language"
 CONF_EMULATION_MODE = "emulation_mode"
-CONF_SIREN_SOUNDING = "siren_sounding"
+#CONF_SIREN_SOUNDING = "siren_sounding"
 
 class ConnectionMode(Enum):
     POWERLINK = 1
@@ -54,8 +54,8 @@ class PrintMode(Enum):
 myconfig = { 
     CONF_DOWNLOAD_CODE: "",
     CONF_EMULATION_MODE: ConnectionMode.POWERLINK,
-    CONF_LANGUAGE: "Panel",
-    CONF_SIREN_SOUNDING: ["Intruder"]
+    #CONF_LANGUAGE: "EN",
+    #CONF_SIREN_SOUNDING: ["Intruder"]
 }
 
 string_type="string"
@@ -109,7 +109,7 @@ def setupLocalLogger(level: str = "WARNING", empty = False):
             elapsed_seconds = record.created - self.start_time
             # using timedelta here for convenient default formatting
             elapsed = str(timedelta(seconds=elapsed_seconds))
-            return "{: <15} <{: <15}:{: >5}> {: >8}   {}".format(elapsed, record.filename, record.lineno, record.levelname, record.getMessage())
+            return f"{elapsed: <15} <{record.filename: <15}:{record.lineno: >5}> {record.levelname: >8}   {record.getMessage()}"
 
     # remove existing handlers 
     while root_logger.hasHandlers():
@@ -151,7 +151,7 @@ def ConfigureLogger(mode, console = None):
             console.print("Setting output mode to ERROR")
     else:
         if console is not None:
-            console.print("Not Setting output mode, unknown mode {0}".format(mode))
+            console.print(f"Not Setting output mode, unknown mode {mode}")
 
 
 class MyTransport(AlTransport):
@@ -223,12 +223,12 @@ class VisonicClient:
     def onSensorChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
         if self.process_sensor is not None:
             self.process_sensor(sensor)
-#        print("onSensorChange {0} {1}".format(s.name, sensor) )
+#        print(f"onSensorChange {s.name} {sensor}")
         
     def onSwitchChange(self, switch : AlSwitchDevice):
         if self.process_x10 is not None:
             self.process_x10(switch)
-#        print("onSwitchChange {0}".format(switch))
+#        print(f"onSwitchChange {switch}")
 
     def onNewSwitch(self, switch: AlSwitchDevice): 
         """Process a new x10."""
@@ -369,11 +369,11 @@ class VisonicClient:
 
         except socket.error as _:
             err = _
-            print("Setting TCP socket Options Exception {0}".format(err))
+            print(f"Setting TCP socket Options Exception {err}")
             if sock is not None:
                 sock.close()
         except Exception as exc:
-            print("Setting TCP Options Exception {0}".format(exc))
+            print(f"Setting TCP Options Exception {exc}")
         return None, None
 
 
@@ -649,7 +649,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
     def process_event(event_id : AlCondition, data : dict = None):
         # event means there's been a panel state change
         if event_id is not AlCondition.PUSH_CHANGE:
-            console.print("Visonic update event condition {0} {1}".format(str(event_id), data))
+            console.print(f"Visonic update event condition {str(event_id)} {data}")
        
     def process_log(event_log_entry : AlLogPanelEvent):
         """ Process a sequence of panel log events """
@@ -770,7 +770,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                 command = result[0]
                 ar = result.split(' ')
                 processedInput = False
-                #print("Command Received {0}".format(command))
+                #print(f"Command Received {command}")
                 if client.isSystemStarted():
                     # There must be a panel connection to do the following commands
                     if command == 'c':
@@ -829,7 +829,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         #  output mode 
                         if len(ar) > 1:
                             mode=str(ar[1].strip()).lower()
-                            #console.print("Setting output mode to {0} :{1}:".format(mode, mode[0]))
+                            #console.print(f"Setting output mode to {mode} :{mode[0]}:")
                             ConfigureLogger(mode, console)
                         else:
                             console.print("Current output level is " + str(logger_level))
@@ -853,7 +853,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         console.print("")
                         for key, value in myconfig.items():
                             s = str(key)
-                            console.print("{0} :  {1} = {2}".format(c, s, value))
+                            console.print(f"{c} :  {s} = {value}")
                             c = c + 1
                         console.print("")
                     elif command.isnumeric() == True:
@@ -879,7 +879,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
         ex_type, ex_value, ex_traceback = sys.exc_info()
 
         if str(ex_value) != terminating_clean:
-            print("Exception {0} {1}".format(len(terminating_clean),len(ex_value)))
+            print(f"Exception {len(terminating_clean)} {len(ex_value)}")
             print("Exception: ")
             print(f"  type : {ex_type.__name__}")
             print(f"  message : {ex_value}")

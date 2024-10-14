@@ -163,9 +163,9 @@ class VisonicSelect(SelectEntity):
                 )
 
         if self._pending_state_is_armed is not None:
-            _LOGGER.debug("Currently Pending {0} so ignoring request to select option".format(self.unique_id))
+            _LOGGER.debug(f"Currently Pending {self.unique_id} so ignoring request to select option")
         elif option is not None and option in self.options:
-            #_LOGGER.debug("Sending Option {0} to {1}".format(option, self.unique_id))
+            #_LOGGER.debug(f"Sending Option {option} to {self.unique_id}")
             result = self._client.sendBypass(self._visonic_device.getDeviceID(), option == BYPASS, "") # pin code to "" to use default if set
             if result == AlCommandStatus.SUCCESS:
                 self._pending_state_is_armed = (option == ARMED)

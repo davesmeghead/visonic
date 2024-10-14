@@ -236,7 +236,7 @@ class VisonicBinarySensor(BinarySensorEntity):
     def extra_state_attributes(self):
         """Return the state attributes of the device."""
         # _LOGGER.debug("in device_state_attributes")
-        if self._visonic_device is not None:
+        if self._client is not None and self._visonic_device is not None:
             stype = self._visonic_device.getSensorType()
 
             attr = {}
