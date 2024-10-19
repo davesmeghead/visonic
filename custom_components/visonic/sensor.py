@@ -24,6 +24,7 @@ from . import VisonicConfigEntry
 from .const import (
     DOMAIN,
     map_panel_status_to_ha_status,
+    MANUFACTURER,
     PANEL_ATTRIBUTE_NAME,
 )
 
@@ -44,7 +45,7 @@ async def async_setup_entry(
     def async_add_sensor() -> None:
         """Add Visonic Sensor (to behave instead of the alarm panel when all comms is prevented)."""
         entities: list[Entity] = []
-        entities.append(VisonicSensor(hass, client, 1))
+        entities.append(VisonicSensor(hass, client))
         #_LOGGER.debug(f"sensor adding entity")
         async_add_entities(entities)
 
@@ -60,12 +61,14 @@ async def async_setup_entry(
 class VisonicSensor(Entity):
     """Representation of a Visonic alarm control panel as a simple sensor for minimal."""
 
-    def __init__(self, hass: HomeAssistant, client: VisonicClient, partition_id: int):
+    _attr_translation_key: str = "alarm_panel_key"
+    #_attr_has_entity_name = True
+
+    def __init__(self, hass: HomeAssistant, client: VisonicClient):
         """Initialize a Visonic security alarm."""
         self._client = client
         self.hass = hass
         client.onChange(self.onClientChange)
-        self._partition_id = partition_id
         self._mystate = STATE_UNKNOWN
         self._myname = client.getAlarmPanelUniqueIdent()
         self._device_state_attributes = {}
@@ -88,13 +91,13 @@ class VisonicSensor(Entity):
     # The callback handler from the client. All we need to do is schedule an update.
     def onClientChange(self):
         """HA Event Callback."""
-        if self.entity_id is not None:
+        if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state(False)
 
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        return self._myname + "_" + str(self._partition_id)
+        return self._myname
 
     @property
     def name(self):
@@ -114,16 +117,16 @@ class VisonicSensor(Entity):
             if pm is not None:
                 if pm.lower() != "unknown":
                     return {
-                        "manufacturer": "Visonic",
+                        "manufacturer": MANUFACTURER,
                         "identifiers": {(DOMAIN, self._myname)},
-                        "name": f"Visonic Alarm Panel {self._panel} (Partition {self._partition_id})",
+                        "name": f"{self._myname}",
                         "model": pm,
                         # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
                     }
         return {
-            "manufacturer": "Visonic",
+            "manufacturer": MANUFACTURER,
             "identifiers": {(DOMAIN, self._myname)},
-            "name": f"Visonic Alarm Panel {self._panel} (Partition {self._partition_id})",
+            "name": f"{self._myname}",
             "model": None,
             # "model": "Alarm Panel",
             # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
@@ -135,7 +138,8 @@ class VisonicSensor(Entity):
         self._device_state_attributes = {}
 
         if self.isPanelConnected():
-            if self._client.isSirenActive():
+            isa, _ = self._client.isSirenActive()
+            if isa:
                 self._mystate = STATE_ALARM_TRIGGERED
             else:
                 armcode = self._client.getPanelStatus()
@@ -157,11 +161,11 @@ class VisonicSensor(Entity):
             elif data is not None:
                 self._device_state_attributes = data
             
-            if "count" in self._device_state_attributes and "name" in self._device_state_attributes:
-                count = self._device_state_attributes["count"]
-                if count > 0:
-                    name = self._device_state_attributes["name"]                                    
-                    self._last_triggered = name[0]
+            if "lastevent" in self._device_state_attributes and len(self._device_state_attributes["lastevent"]) > 2:
+                pos = self._device_state_attributes["lastevent"].find('/')
+                #_LOGGER.debug(f"[sensor]  {pos=}")
+                if pos > 2:
+                    self._last_triggered = self._device_state_attributes["lastevent"][0:pos]
 
     @property
     def state(self):

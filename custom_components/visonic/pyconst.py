@@ -34,6 +34,11 @@ log = logging.getLogger(__name__)
 PLUGIN_VERSION = "Not Implemented"
 NO_DELAY_SET = "No Delay Set"
 
+PE_PARTITION = "partition"
+PE_TIME = "time"
+PE_EVENT = "event"
+PE_NAME = "name"
+
 class AlIntEnum(int):
     ThisShouldNotHappen = "ThisShouldNotHappen"
 
@@ -143,8 +148,8 @@ a = AlAlarmType()
 # the set of configuration parameters in to this client class
 class AlConfiguration(AlEnum):
     DownloadCode = AlIntEnum(0)           # 4 digit string or ""
-    PluginLanguage = AlIntEnum(3)         # String "EN", "FR", "NL"
-    SirenTriggerList = AlIntEnum(5)       # A list of strings
+#    PluginLanguage = AlIntEnum(3)         # String "EN", "FR", "NL", "Panel"
+#    SirenTriggerList = AlIntEnum(5)       # A list of strings
     ForceStandard = AlIntEnum(6)          # Boolean
     DisableAllCommands = AlIntEnum(11)    # Boolean
 a = AlConfiguration()
@@ -160,7 +165,8 @@ class AlPanelMode(AlEnum):
     DOWNLOAD = AlIntEnum(6)
     STOPPED = AlIntEnum(7)
     MINIMAL_ONLY = AlIntEnum(8)
-    COMPLETE_READONLY = AlIntEnum(9)
+    POWERLINK_BRIDGED = AlIntEnum(9)
+#    COMPLETE_READONLY = AlIntEnum(9)
 a = AlPanelMode()
 
 # The set of panel states
@@ -172,8 +178,14 @@ class AlPanelStatus(AlEnum):
     ENTRY_DELAY = AlIntEnum(4)
     ARMED_HOME = AlIntEnum(5)
     ARMED_AWAY = AlIntEnum(6)
-    SPECIAL = AlIntEnum(7)
-    DOWNLOADING = AlIntEnum(8)
+    ARMED_HOME_BYPASS = AlIntEnum(7)
+    ARMED_AWAY_BYPASS = AlIntEnum(8)
+    ARMED_HOME_INSTANT = AlIntEnum(9)
+    ARMED_AWAY_INSTANT = AlIntEnum(10)
+    ENTRY_DELAY_INSTANT = AlIntEnum(11)
+    USER_TEST = AlIntEnum(12)
+    DOWNLOADING = AlIntEnum(13)
+    INSTALLER = AlIntEnum(14)
 a = AlPanelStatus()
 
 # The set of commands that can be used to arm and disarm the panel
@@ -190,7 +202,6 @@ class AlPanelCommand(AlEnum):
     FIRE = AlIntEnum(7)
     EMERGENCY = AlIntEnum(8)
     PANIC = AlIntEnum(9)
-    CHANGE_BAUD = AlIntEnum(20)
 a = AlPanelCommand()
 
 # The set of commands that can be used to mute and trigger the siren
@@ -204,7 +215,7 @@ a = AlPanelCommand()
 class AlX10Command(AlEnum):
     OFF = AlIntEnum(0)
     ON = AlIntEnum(1)
-    DIM = AlIntEnum(2)
+    DIMMER = AlIntEnum(2)
     BRIGHTEN = AlIntEnum(3)
 a = AlX10Command()
 
@@ -219,6 +230,7 @@ class AlCommandStatus(AlEnum):
     FAIL_PANEL_CONFIG_PREVENTED = AlIntEnum(6)
     FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED = AlIntEnum(7)
     FAIL_PANEL_NO_CONNECTION = AlIntEnum(8)
+    FAIL_ENTITY_INCORRECT = AlIntEnum(9)
 a = AlCommandStatus()
 
 # This is used to update the HA frontend and send out an HA Event
@@ -234,8 +246,9 @@ class AlCondition(AlEnum):
     WATCHDOG_TIMEOUT_GIVINGUP = AlIntEnum(8)
     WATCHDOG_TIMEOUT_RETRYING = AlIntEnum(9)
     NO_DATA_FROM_PANEL = AlIntEnum(10)
-    COMMAND_REJECTED = AlIntEnum(15)
-    DOWNLOAD_SUCCESS = AlIntEnum(16)        # In the client this triggers the setting of the string name in the Config settings to the panel type
+    COMMAND_REJECTED = AlIntEnum(11)
+    STARTUP_SUCCESS = AlIntEnum(12)        # In the client this triggers the setting of the string name in the Config settings to the panel type
+    DOWNLOAD_SUCCESS = AlIntEnum(13)
 a = AlCondition()
 
 # This class represents the panels trouble state
@@ -264,6 +277,8 @@ class AlSensorCondition(AlEnum):
     EMERGENCY = AlIntEnum(8)
     PANIC = AlIntEnum(9)
     CAMERA = AlIntEnum(10)
+    ARMED = AlIntEnum(11)
+    RESTORE = AlIntEnum(12)
 a = AlSensorCondition()
 
 # List of sensor types
@@ -281,27 +296,59 @@ class AlSensorType(AlEnum):
     SHOCK = AlIntEnum(8)
     TEMPERATURE = AlIntEnum(9)
     SOUND = AlIntEnum(10)
+    GLASS_BREAK = AlIntEnum(11)
 a = AlSensorType()
 
+# List of termination reasons
+class AlTerminationType(AlEnum):
+    NO_DATA_FROM_PANEL_NEVER_CONNECTED = AlIntEnum(1)
+    NO_DATA_FROM_PANEL_DISCONNECTED = AlIntEnum(2)
+    CRC_ERROR = AlIntEnum(3)
+    SAME_PACKET_ERROR = AlIntEnum(4)
+    EXTERNAL_TERMINATION = AlIntEnum(5)
+a = AlTerminationType()
+
+class AlPanelEventData:
+    def __init__(self, partition: int = 0, name : int = 0, action : int = 0):
+        self.partition = partition
+        self.name_i = name
+        self.action_i = action
+        self.time = ""
+
+    def __str__(self):
+        return f"  {self.time}   {self.partition}  {self.name_i} {self.action_i}"
+
+    def setPartition(self, p):
+        if 1 <= p <= 3:
+            self.partition = p
+
+    def asDict(self) -> dict:
+        a = {}
+        a[PE_NAME] = self.name_i
+        a[PE_EVENT] = self.action_i
+        a[PE_TIME] = self.time
+        if 1 <= self.partition <= 3:  # if partition remains at the defailt 0 then miss it out
+            a[PE_PARTITION] = self.partition
+        return a
+
 class AlLogPanelEvent:
-    def __init__(self):
-        self.current = None
-        self.total = None
-        self.partition = None
-        self.time = None
-        self.date = None
-        self.zone = None
-        self.event = None
+    def __init__(self, total = None, current = None, partition = None, dateandtime = None, zone = None, event = None):
+        self.current = current
+        self.total = total
+        self.partition = partition
+        self.dateandtime = dateandtime
+        self.zone = zone
+        self.event = event
 
     def __str__(self):
         strn = ""
-        strn = strn + ("part=None" if self.partition is None else "part={0:<2}".format(self.partition))
-        strn = strn + ("    current=None" if self.current is None else "    current={0:<2}".format(self.current))
-        strn = strn + ("    total=None" if self.total is None else "    total={0:<2}".format(self.total))
-        strn = strn + ("    time=None" if self.time is None else "    time={0:<2}".format(self.time))
-        strn = strn + ("    date=None" if self.date is None else "    date={0:<2}".format(self.date))
-        strn = strn + ("    zone=None" if self.zone is None else "    zone={0:<2}".format(self.zone))
-        strn = strn + ("    event=None" if self.event is None else "    event={0:<2}".format(self.event))
+        strn = strn + ("part=None" if self.partition is None else f"part={self.partition:<2}")
+        strn = strn + ("    current=None" if self.current is None else f"    current={self.current:<2}")
+        strn = strn + ("    total=None" if self.total is None else f"    total={self.total:<2}")
+        #strn = strn + ("    time=None" if self.time is None else f"    time={self.time:<2}")
+        strn = strn + ("    date=None" if self.dateandtime is None else f"    date={self.dateandtime}")
+        strn = strn + ("    zone=None" if self.zone is None else f"    zone={self.zone:<2}")
+        strn = strn + ("    event=None" if self.event is None else f"    event={self.event:<2}")
         return strn
 
 
@@ -314,6 +361,10 @@ class AlSensorDevice(ABC):
     @abstractmethod
     def getDeviceID(self) -> int:
         return self.id
+
+    @abstractmethod
+    def getPartition(self) -> set:
+        return {}
 
     @abstractmethod
     def isTriggered(self) -> bool:
@@ -375,7 +426,7 @@ class AlSensorDevice(ABC):
 
     # Do not override me
     def createFriendlyName(self) -> str:
-        return "Z{0:0>2}".format(self.getDeviceID())
+        return f"Z{self.getDeviceID():0>2}"
 
     # Return the sensor model.  This is a string such as "Visonic MTT-302" to show in the HA frontend
     def getSensorModel(self) -> str:
@@ -421,16 +472,15 @@ class AlSwitchDevice(ABC):
     def createFriendlyName(self) -> str:
         if self.getDeviceID() == 0:
             return "PGM"
-        return "X{0:0>2}".format(self.getDeviceID())
+        return f"X{self.getDeviceID():0>2}"
 
 
 class PanelConfig(TypedDict):
     AlConfiguration.ForceStandard:        bool
     AlConfiguration.DisableAllCommands:   bool
     AlConfiguration.DownloadCode:         str
-    AlConfiguration.PluginLanguage:       str
+#    AlConfiguration.PluginLanguage:       str
     AlConfiguration.SirenTriggerList:     list[str]
-
 
 class AlTransport(ABC):
 
@@ -472,12 +522,12 @@ class AlPanelInterface(ABC):
         pass
 
     @abstractmethod
-    def isSirenActive(self) -> bool:
+    def isSirenActive(self) -> (bool, AlSensorDevice | None):
         """ Is the siren active. """
-        return False
+        return (False, None)
 
     @abstractmethod
-    def getPanelStatus(self) -> AlPanelStatus:
+    def getPanelStatus(self, partition : int | None = None) -> AlPanelStatus:
         """ Get the panel state i.e. Disarmed, Arming Home etc. """
         return AlPanelStatus.UNKNOWN
 
@@ -486,33 +536,38 @@ class AlPanelInterface(ABC):
         """ Get the panel Mode e.g. Standard, Powerlink etc. """
         return AlPanelMode.UNKNOWN
 
+    @abstractmethod
     def isPowerMaster(self) -> bool:
         """ Get the panel type, PowerMaster or not """
         return False
+
+    @abstractmethod
+    def getPartitionsInUse(self) -> set | None:  # returns None if not yet known
+        return None
 
     @abstractmethod
     def getPanelModel(self) -> str:
         return "Unknown"
 
     @abstractmethod
-    def isPanelReady(self) -> bool:
+    def isPanelReady(self, partition : int) -> bool:
         """ Get the panel ready state """
         return False
 
     @abstractmethod
-    def getPanelTrouble(self) -> AlTroubleType:
+    def getPanelTrouble(self, partition : int) -> AlTroubleType:
         """ Get the panel trouble state """
         return AlTroubleType.UNKNOWN
 
     @abstractmethod
-    def isPanelBypass(self) -> bool:
+    def isPanelBypass(self, partition : int) -> bool:
         """ Get the panel bypass state """
         return False
 
-    @abstractmethod
-    def getPanelLastEvent(self) -> str:
-        """ Return the panels last event string """
-        return ""
+    #@abstractmethod
+    #def getPanelLastEvent(self) -> (str, str, str):
+    #    """ Return the panels last event string """
+    #    return ("", "")
 
     # @abstractmethod
     # def getPanelTroubleStatus(self) -> str:
@@ -521,7 +576,7 @@ class AlPanelInterface(ABC):
     # A dictionary that is used to add to the attribute list of the Alarm Control Panel
     #     If this is overridden then please include the items in the dictionary defined here by using super()
     @abstractmethod
-    def getPanelStatusDict(self, include_extended_status : bool) -> dict:
+    def getPanelStatusDict(self, partition : int | None = None, include_extended_status : bool = None) -> dict:
         """ Get a dictionary representing the panel status. """
         return {}
 
@@ -539,7 +594,7 @@ class AlPanelInterface(ABC):
     #    "1234" a 4 digit code for any panel mode to use that code
     #    anything else to use code "0000" (this may work depending on the panel type for arming, but not for disarming)
     @abstractmethod
-    def requestPanelCommand(self, state : AlPanelCommand, code : str = "") -> AlCommandStatus:
+    def requestPanelCommand(self, state : AlPanelCommand, code : str = "", partitions : set = {1,2,3}) -> AlCommandStatus:
         """ Send a request to the panel to Arm/Disarm """
         return AlCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED
 

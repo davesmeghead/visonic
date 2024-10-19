@@ -15,7 +15,7 @@ from homeassistant.const import (
 
 # The domain for the integration
 DOMAIN = "visonic"
-
+MANUFACTURER = "Visonic"
 VISONIC_UNIQUE_NAME = "Visonic Alarm"
 
 #from enum import IntFlag
@@ -37,13 +37,14 @@ ALARM_PANEL_LOG_FILE_ENTRY = f"{DOMAIN}_alarm_panel_event_log_entry"
 
 # The HA Services.  These strings match the content of the services.yaml file
 ALARM_PANEL_COMMAND = "alarm_panel_command"
+ALARM_PANEL_X10 = "alarm_panel_x10"
 ALARM_PANEL_EVENTLOG = "alarm_panel_eventlog"
 ALARM_PANEL_RECONNECT = "alarm_panel_reconnect"
 ALARM_SENSOR_BYPASS = "alarm_sensor_bypass"
 ALARM_SENSOR_IMAGE = "alarm_sensor_image"
 
 PANEL_ATTRIBUTE_NAME = "panel"
-DEVICE_ATTRIBUTE_NAME = "visonic device"
+DEVICE_ATTRIBUTE_NAME = "visonic_device"
 
 # Default connection details (connection can be one of Ethernet, USB, RS232)
 DEFAULT_DEVICE_HOST = "127.0.0.1"
@@ -82,6 +83,7 @@ CONF_DOWNLOAD_CODE = "download_code"
 CONF_LANGUAGE = "language"
 CONF_EMULATION_MODE = "emulation_mode"
 CONF_COMMAND = "command"
+CONF_X10_COMMAND = "x10command"
 
 # settings than can be modified
 CONF_ENABLE_REMOTE_ARM = "allow_remote_arm"
@@ -107,7 +109,6 @@ PIN_REGEX = "^[0-9]{4}$"
 class AvailableNotifications(str, Enum):
     ALWAYS = 'always'
     SIREN = 'siren_sounding'
-#    TAMPER = 'panel_tamper'
     RESET = 'panel_reset'
     INVALID_PIN = 'invalid_pin'
     PANEL_OPERATION = 'panel_operation'
@@ -116,6 +117,7 @@ class AvailableNotifications(str, Enum):
     IMAGE_PROBLEM = 'image_problem'
     EVENTLOG_PROBLEM = 'eventlog_problem'
     COMMAND_NOT_SENT = 'command_not_sent'
+    X10_PROBLEM = 'x10_problem'
 
 available_emulation_modes = [
     "Powerlink Emulation",
@@ -125,14 +127,19 @@ available_emulation_modes = [
 
 # For alarm_control_panel and sensor, map the alarm panel states across to the Home Assistant states
 map_panel_status_to_ha_status = {
-    AlPanelStatus.UNKNOWN     : STATE_UNKNOWN,
-    AlPanelStatus.DISARMED    : STATE_ALARM_DISARMED,
-    AlPanelStatus.SPECIAL     : STATE_ALARM_DISARMED,
-    AlPanelStatus.DOWNLOADING : STATE_ALARM_DISARMED,
-    AlPanelStatus.ENTRY_DELAY : STATE_ALARM_PENDING,
-    AlPanelStatus.ARMING_HOME : STATE_ALARM_ARMING,
-    AlPanelStatus.ARMING_AWAY : STATE_ALARM_ARMING,
-    AlPanelStatus.ARMED_HOME  : STATE_ALARM_ARMED_HOME,
-    AlPanelStatus.ARMED_AWAY  : STATE_ALARM_ARMED_AWAY    
+    AlPanelStatus.UNKNOWN             : STATE_UNKNOWN,
+    AlPanelStatus.DISARMED            : STATE_ALARM_DISARMED,
+    AlPanelStatus.ARMING_HOME         : STATE_ALARM_ARMING,
+    AlPanelStatus.ARMING_AWAY         : STATE_ALARM_ARMING,
+    AlPanelStatus.ENTRY_DELAY         : STATE_ALARM_PENDING,
+    AlPanelStatus.ENTRY_DELAY_INSTANT : STATE_ALARM_PENDING,
+    AlPanelStatus.ARMED_HOME          : STATE_ALARM_ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY          : STATE_ALARM_ARMED_AWAY,
+    AlPanelStatus.ARMED_HOME_BYPASS   : STATE_ALARM_ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY_BYPASS   : STATE_ALARM_ARMED_AWAY,
+    AlPanelStatus.ARMED_HOME_INSTANT  : STATE_ALARM_ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY_INSTANT  : STATE_ALARM_ARMED_AWAY,
+    AlPanelStatus.USER_TEST           : STATE_UNKNOWN,
+    AlPanelStatus.DOWNLOADING         : STATE_UNKNOWN,
+    AlPanelStatus.INSTALLER           : STATE_UNKNOWN
 }
-

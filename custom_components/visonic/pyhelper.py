@@ -34,12 +34,12 @@ else:
     import logging
     import datetime
     from abc import abstractmethod
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from typing import Callable, List, TypedDict
 
     # get the current date and time
     def _getUTCTime() -> datetime:
-        return datetime.utcnow()
+        return datetime.now(tz=timezone.utc)
 
     #if DontUseLogger is None:
     mylog = logging.getLogger(__name__)
@@ -52,19 +52,19 @@ import asyncio
 import re
 import inspect
 from inspect import currentframe, getframeinfo, stack
+import collections
+from collections import namedtuple
 
 try:
-    from .pyconst import (AlIntEnum, NO_DELAY_SET, PanelConfig, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, 
+    from .pyconst import (AlIntEnum, NO_DELAY_SET, PanelConfig, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, AlPanelEventData,
                           AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlPanelInterface, AlSensorDevice, 
                           AlLogPanelEvent, AlSensorType, AlSwitchDevice)
 except:
-    from pyconst import (AlIntEnum, NO_DELAY_SET, PanelConfig, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, 
+    from pyconst import (AlIntEnum, NO_DELAY_SET, PanelConfig, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, AlPanelEventData,
                          AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlPanelInterface, AlSensorDevice, 
                          AlLogPanelEvent, AlSensorType, AlSwitchDevice)
 
 # Event Type Constants
-EVENT_TYPE_SYSTEM_RESET = 0x60
-EVENT_TYPE_FORCE_ARM = 0x59
 EVENT_TYPE_DISARM = 0x55
 EVENT_TYPE_SENSOR_TAMPER = 0x06
 EVENT_TYPE_PANEL_TAMPER = 0x07
@@ -76,7 +76,15 @@ EVENT_TYPE_FLOOD_ALERT_RESTORE = 0x4A
 EVENT_TYPE_GAS_TROUBLE_RESTORE = 0x4E
 EVENT_TYPE_DELAY_RESTORE = 0x13
 EVENT_TYPE_CONFIRM_ALARM = 0x0E
+EVENT_TYPE_INTERIOR_RESTORE = 0x11
+EVENT_TYPE_PERIMETER_RESTORE = 0x12
 
+# The reasons to cancel the siren
+pmPanelCancelSet = ( EVENT_TYPE_DISARM, EVENT_TYPE_ALARM_CANCEL, EVENT_TYPE_FIRE_RESTORE, EVENT_TYPE_FLOOD_ALERT_RESTORE, EVENT_TYPE_GAS_TROUBLE_RESTORE)
+# The reasons to ignore (not cancel) the siren
+pmPanelIgnoreSet = ( EVENT_TYPE_DELAY_RESTORE, EVENT_TYPE_CONFIRM_ALARM, EVENT_TYPE_INTERIOR_RESTORE, EVENT_TYPE_PERIMETER_RESTORE)
+
+pmPanelTamperSet = ( EVENT_TYPE_SENSOR_TAMPER, EVENT_TYPE_PANEL_TAMPER, EVENT_TYPE_TAMPER_ALARM_A, EVENT_TYPE_TAMPER_ALARM_B)
 
 # These 2 dictionaries are subsets of pmLogEvent_t
 pmPanelAlarmType_t = {
@@ -84,15 +92,76 @@ pmPanelAlarmType_t = {
    0x04 : AlAlarmType.INTRUDER, 0x05 : AlAlarmType.INTRUDER,  0x06 : AlAlarmType.TAMPER,   0x07 : AlAlarmType.TAMPER,
    0x08 : AlAlarmType.TAMPER,   0x09 : AlAlarmType.TAMPER,    0x0B : AlAlarmType.PANIC,    0x0C : AlAlarmType.PANIC,
    0x20 : AlAlarmType.FIRE,     0x23 : AlAlarmType.EMERGENCY, 0x49 : AlAlarmType.GAS,      0x4D : AlAlarmType.FLOOD,
+#   0x75 : AlAlarmType.TAMPER
 }
 
 pmPanelTroubleType_t = {
 #   0x00 : AlTroubleType.NONE,          0x01 : AlTroubleType.GENERAL,   0x0A : AlTroubleType.COMMUNICATION, 0x0F : AlTroubleType.GENERAL,   0x01 is already in AlarmType, it is not a General Trouble indication
    0x00 : AlTroubleType.NONE,          0x0A : AlTroubleType.COMMUNICATION, 0x0F : AlTroubleType.GENERAL,
-   0x29 : AlTroubleType.BATTERY,       0x2B : AlTroubleType.POWER,     0x2D : AlTroubleType.BATTERY,       0x2F : AlTroubleType.JAMMING,
-   0x31 : AlTroubleType.COMMUNICATION, 0x33 : AlTroubleType.TELEPHONE, 0x36 : AlTroubleType.POWER,         0x38 : AlTroubleType.BATTERY,
-   0x3B : AlTroubleType.BATTERY,       0x3C : AlTroubleType.BATTERY,   0x40 : AlTroubleType.BATTERY,       0x43 : AlTroubleType.BATTERY
+   0x29 : AlTroubleType.BATTERY,       0x2B : AlTroubleType.POWER,         0x2D : AlTroubleType.BATTERY,       0x2F : AlTroubleType.JAMMING,
+   0x31 : AlTroubleType.COMMUNICATION, 0x33 : AlTroubleType.TELEPHONE,     0x36 : AlTroubleType.POWER,         0x38 : AlTroubleType.BATTERY,
+   0x3B : AlTroubleType.BATTERY,       0x3C : AlTroubleType.BATTERY,       0x40 : AlTroubleType.BATTERY,       0x43 : AlTroubleType.BATTERY,
+#   0x45 : AlTroubleType.POWER,         0x71 : AlTroubleType.BATTERY,       0x79 : AlTroubleType.COMMUNICATION
 }
+
+
+PanelArmedStatusCollection = collections.namedtuple('PanelArmedStatusCollection', 'disarmed armed entry state eventmapping')
+pmPanelArmedStatus = {               # disarmed armed entry         state
+   0x00 : PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , 85),  # Disarmed
+   0x01 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , -1),  # Arming Home
+   0x02 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , -1),  # Arming Away
+   0x03 : PanelArmedStatusCollection( False,  True,  True, AlPanelStatus.ENTRY_DELAY        , -1),  # Entry Delay
+   0x04 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME         , 81),  # Armed Home
+   0x05 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY         , 82),  # Armed Away
+   0x06 : PanelArmedStatusCollection(  True, False, False, AlPanelStatus.USER_TEST          , -1),  # User Test  (assume can only be done when panel is disarmed)
+                                                                                    
+   0x07 : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DOWNLOADING        , -1),  # Downloading
+   0x08 : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.INSTALLER          , -1),  # Programming
+   0x09 : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.INSTALLER          , -1),  # Installer
+   0x0A : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME         , 81),  # Armed Home Bypass   AlPanelStatus.ARMED_HOME_BYPASS
+   0x0B : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY         , 82),  # Armed Away Bypass   AlPanelStatus.ARMED_AWAY_BYPASS
+   0x0C : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DISARMED           , 85),  # Ready
+   0x0D : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DISARMED           , 85),  # Not Ready  (assume can only be done when panel is disarmed)
+   0x0E : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.UNKNOWN            , 85),  # 
+   0x0F : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.UNKNOWN            , 85),  # 
+   # I don't think that the B0 message can command higher than 15            
+   0x10 : PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , 85),  # Disarmed Instant
+   0x11 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , -1),  # Arming Home Last 10 Seconds             ####### armed was False
+   0x12 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , -1),  # Arming Away Last 10 Seconds             ####### armed was False
+   0x13 : PanelArmedStatusCollection( False,  True,  True, AlPanelStatus.ENTRY_DELAY_INSTANT, -1),  # Entry Delay Instant
+   0x14 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME_INSTANT , 81),  # Armed Home Instant
+   0x15 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY_INSTANT , 82)   # Armed Away Instant
+}
+
+INVALID_PARTITION = None
+
+def hexify(v : int) -> str:
+    return f"{hex(v)[2:]}"
+
+# Convert byte array to a string of hex values
+def toString(array_alpha: bytearray, gap = " "):
+    return ("".join(("%02x"+gap) % b for b in array_alpha))[:-len(gap)] if len(gap) > 0 else ("".join("%02x" % b for b in array_alpha))
+
+def toBool(val) -> bool:
+    if type(val) == bool:
+        return val
+    elif type(val) == int:
+        return val != 0
+    elif type(val) == str:
+        v = val.lower()
+        return not (v == "no" or v == "false" or v == "0")
+    #print("Visonic unable to decode boolean value {val}    type is {type(val)}")
+    return False
+
+def capitalize(s):
+    return s[0].upper() + s[1:].lower()
+
+def titlecase(s):
+    return re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda word: capitalize(word.group(0)), s)
+
+# get the current date and time
+def getTimeFunction() -> datetime:
+    return datetime.now(timezone.utc).astimezone()
 
 class vloggerclass:
     def __init__(self, loggy, panel_id : int = -1, detail : bool = False):
@@ -146,24 +215,6 @@ class vloggerclass:
 log = mylog
 #log = vloggerclass(mylog, 0, False)
 
-def toBool(val) -> bool:
-    if type(val) == bool:
-        return val
-    elif type(val) == int:
-        return val != 0
-    elif type(val) == str:
-        v = val.lower()
-        return not (v == "no" or v == "false" or v == "0")
-    #print("Visonic unable to decode boolean value {val}    type is {type(val)}")
-    return False
-
-def capitalize(s):
-    return s[0].upper() + s[1:]
-
-def titlecase(s):
-    return re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda word: capitalize(word.group(0)), s)
-
-
 class AlSensorDeviceHelper(AlSensorDevice):
 
     def __init__(self, **kwargs):
@@ -173,9 +224,10 @@ class AlSensorDeviceHelper(AlSensorDevice):
         self.ztypeName = kwargs.get("ztypeName", None)  # str   Zone Type Name
         self.sid = kwargs.get("sid", 0)  # int   sensor id
         self.ztype = kwargs.get("ztype", 0)  # int   zone type
-        self.zname = kwargs.get("zname", None)  # str   zone name
-        self.zchime = kwargs.get("zchime", None)  # str   zone chime
-        self.partition = kwargs.get("partition", 0)  # set   partition set (could be in more than one partition)
+        self.zname = kwargs.get("zname", "Unknown")  # str   zone name
+        self.zchime = kwargs.get("zchime", "Unknown")  # str   zone chime
+        self.zchimeref = kwargs.get("zchimeref", {})  # set   partition set (could be in more than one partition)
+        self.partition = kwargs.get("partition", {})  # set   partition set (could be in more than one partition)
         self.bypass = kwargs.get("bypass", False)  # bool  if bypass is set on this sensor
         self.lowbatt = kwargs.get("lowbatt", False)  # bool  if this sensor has a low battery
         self.status = kwargs.get("status", False)  # bool  status, as returned by the A5 message
@@ -184,17 +236,20 @@ class AlSensorDeviceHelper(AlSensorDevice):
         self.ztrip = kwargs.get("ztrip", False)  # bool  zone trip, as returned by the A5 message
         self.enrolled = kwargs.get("enrolled", False)  # bool  enrolled, as returned by the A5 message
         self.triggered = kwargs.get("triggered", False)  # bool  triggered, as returned by the A5 message
-        self.utctriggertime = None  # datetime  This is used to time out the triggered value and set it back to false
         self.triggertime = None     # datetime  This is used to time stamp in local time the occurance of the trigger
-        self.model = kwargs.get("model", None)  # str   device model
+        self.model = kwargs.get("model", "Unknown")  # str   device model
         self.motiondelaytime = kwargs.get("motiondelaytime", None)  # int   device model
         self.hasJPG = False
         self.jpg_data = None
         self.jpg_time = None
+        self.problem = "none"
         #self.timelog = []
         self.statuslog = None
 
     def __str__(self):
+        pt = ""
+        for i in self.partition:
+            pt = pt + str(i) + " "
         stypestr = ""
         if self.stype is not None and self.stype != AlSensorType.UNKNOWN:
             stypestr = titlecase(str(self.stype).replace("_"," "))
@@ -203,27 +258,27 @@ class AlSensorDeviceHelper(AlSensorDevice):
         else:
             stypestr = "Unknown"
         strn = ""
-        strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
-        #strn = strn + (" Zone=None" if self.dname == None else " Zone={0:<4}".format(self.dname[:4]))
-        strn = strn + (" Type={0:<8}".format(stypestr))
-        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" model=None" if self.model == None else " model={0:<8}".format(self.model[:14]))
-        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" sid=None"       if self.sid == None else       " sid={0:<3}".format(self.sid, type(self.sid)))
-        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" ztype=None"     if self.ztype == None else     " ztype={0:<2}".format(self.ztype, type(self.ztype)))
-        strn = strn + (" Loc=None          " if self.zname == None else " Loc={0:<14}".format(self.zname[:14]))
-        strn = strn + (" ztypeName=None" if self.ztypeName == None else " ztypeName={0:<10}".format(self.ztypeName[:10]))
-        strn = strn + (" ztamper=None" if self.ztamper == None else " ztamper={0:<2}".format(self.ztamper))
-        strn = strn + (" ztrip=None" if self.ztrip == None else " ztrip={0:<2}".format(self.ztrip))
-        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" zchime=None"    if self.zchime == None else    " zchime={0:<12}".format(self.zchime, type(self.zchime)))
-        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" partition=None" if self.partition == None else " partition={0}".format(self.partition, type(self.partition)))
-        strn = strn + (" bypass=None" if self.bypass == None else " bypass={0:<2}".format(self.bypass))
-        strn = strn + (" lowbatt=None" if self.lowbatt == None else " lowbatt={0:<2}".format(self.lowbatt))
-        strn = strn + (" status=None" if self.status == None else " status={0:<2}".format(self.status))
-        strn = strn + (" tamper=None" if self.tamper == None else " tamper={0:<2}".format(self.tamper))
-        strn = strn + (" enrolled=None" if self.enrolled == None else " enrolled={0:<2}".format(self.enrolled))
-        strn = strn + (" triggered=None" if self.triggered == None else " triggered={0:<2}".format(self.triggered))
+        strn = strn + ("id=None" if self.id == None else f"id={self.id:<2}")
+        #strn = strn + (" Zone=None" if self.dname == None else f" Zone={self.dname[:4]:<4}")
+        strn = strn + (f" Type={stypestr:<8}")
+        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" model=None" if self.model == None else f" model={self.model[:14]:<8}")
+        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" sid=None"       if self.sid == None else       f" sid={self.sid:<3}")
+        # temporarily miss it out to shorten the line in debug messages        strn = strn + (" ztype=None"     if self.ztype == None else     f" ztype={self.ztype:<2}")
+        strn = strn + (" Loc=None          " if self.zname == None else f" Loc={self.zname[:14]:<14}")
+        strn = strn + (" ztypeName=None      " if self.ztypeName == None else f" ztypeName={self.ztypeName[:10]:<10}")
+        strn = strn + (" ztamper=--" if self.ztamper == None else f" ztamper={self.ztamper:<2}")
+        strn = strn + (" ztrip=--" if self.ztrip == None else f" ztrip={self.ztrip:<2}")
+        strn = strn + (" zchime=None            " if self.zchime == None else    f" zchime={self.zchime:<16}")
+        strn = strn + (" partition=None   " if self.partition == None else f" partition={pt:<7}")
+        strn = strn + (" bypass=--" if self.bypass == None else f" bypass={self.bypass:<2}")
+        strn = strn + (" lowbatt=--" if self.lowbatt == None else f" lowbatt={self.lowbatt:<2}")
+        strn = strn + (" status=--" if self.status == None else f" status={self.status:<2}")
+        strn = strn + (" tamper=--" if self.tamper == None else f" tamper={self.tamper:<2}")
+        strn = strn + (" enrolled=--" if self.enrolled == None else f" enrolled={self.enrolled:<2}")
+        strn = strn + (" triggered=--" if self.triggered == None else f" triggered={self.triggered:<2}")
 
         if self.motiondelaytime is not None and (self.stype == AlSensorType.MOTION or self.stype == AlSensorType.CAMERA):
-            strn = strn + (" delay={0:<7}".format("Not Set" if self.motiondelaytime == 0xFFFF else str(self.motiondelaytime)))
+            strn = strn + f" delay={'Not Set' if self.motiondelaytime == 0xFFFF else str(self.motiondelaytime):<7}"
 
         return strn
 
@@ -251,10 +306,15 @@ class AlSensorDeviceHelper(AlSensorDevice):
             and self.enrolled == other.enrolled
             and self.triggered == other.triggered
             and self.hasJPG == other.hasJPG
-            #and self.utctriggertime == other.utctriggertime
             #and self.triggertime == other.triggertime
             and self.motiondelaytime == other.motiondelaytime
         )
+
+    def setProblem(self, s):
+        self.problem = s
+
+    def getProblem(self) -> str:
+        return self.problem
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -264,6 +324,9 @@ class AlSensorDeviceHelper(AlSensorDevice):
             self._callback = []
         else:
             self._callback.append(callback)
+
+    def getPartition(self):
+        return self.partition
 
     def pushChange(self, s : AlSensorCondition):
         for cb in self._callback:
@@ -329,9 +392,102 @@ class AlSensorDeviceHelper(AlSensorDevice):
             return NO_DELAY_SET if self.motiondelaytime == 0xFFFF else str(self.motiondelaytime)
         return NO_DELAY_SET
 
+    def _updateContactSensor(self, status = None, trigger = None):
+        #log.debug(f"[UpdateContactSensor]   Sensor {self.id}   before")
+        #self._dumpSensorsToLogFile()
+        if trigger is not None and trigger:
+            # If trigger is set then the caller is confident that it is a motion or camera sensor
+            log.debug(f"[UpdateContactSensor]   Sensor {self.id}   triggered to True")
+            self.triggered = True
+            self.triggertime = getTimeFunction()
+            self.pushChange(AlSensorCondition.STATE)
+        elif status is not None and self.status != status:
+            # The current setting is different
+            if status:
+                log.debug(f"[UpdateContactSensor]   Sensor {self.id}   triggered to True")
+                self.triggered = True
+                self.triggertime = getTimeFunction()
+            if self.getSensorType() != AlSensorType.MOTION and self.getSensorType() != AlSensorType.CAMERA:
+                # Not a motion or camera to set status
+                log.debug(f"[UpdateContactSensor]   Sensor {self.id}   status from {self.status} to {status}")
+                self.status = status
+                #if status is not None and not status:
+                #    self.SensorList[sensor].pushChange(AlSensorCondition.RESET)
+            # Push change as status has toggled
+            self.pushChange(AlSensorCondition.STATE)
+        # The pushchange function calls the sensors onchange function so it should have already seen triggered and status values, so we can reset triggered
+        self.triggered = False
+
+    def do_status(self, stat):
+        self._updateContactSensor(status = stat)
+
+    def do_trigger(self, trig):
+        self._updateContactSensor(trigger = trig)
+
+    def do_enrolled(self, val : bool) -> bool:
+        if val is not None and self.enrolled != val:
+            self.enrolled = val
+            if self.enrolled:
+                self.pushChange(AlSensorCondition.ENROLLED)
+            else:
+                self.pushChange(AlSensorCondition.RESET)
+            return True # The value has changed
+        return False # The value has not changed
+
+    def do_bypass(self, val : bool) -> bool:
+        if val is not None and self.bypass != val:
+            self.bypass = val
+            if self.bypass:
+                self.pushChange(AlSensorCondition.BYPASS)
+            else:
+                self.pushChange(AlSensorCondition.ARMED)
+            return True # The value has changed
+        return False # The value has not changed
+
+    def do_ztrip(self, val : bool) -> bool:
+        if val is not None and self.ztrip != val:
+            self.ztrip = val
+            if self.ztrip: # I can't remember seeing this from the panel
+                self.pushChange(AlSensorCondition.STATE)
+            #else:
+            #    self.pushChange(AlSensorCondition.RESET)
+            return True # The value has changed
+        return False # The value has not changed
+
+    def do_ztamper(self, val : bool) -> bool:
+        if val is not None and self.ztamper != val:
+            self.ztamper = val
+            if self.ztamper:
+                self.pushChange(AlSensorCondition.TAMPER)
+            else:
+                self.pushChange(AlSensorCondition.RESTORE)
+            return True # The value has changed
+        return False # The value has not changed
+
+    def do_battery(self, val : bool) -> bool:
+        if val is not None and self.lowbatt != val:
+            self.lowbatt = val
+            if self.lowbatt:
+                self.pushChange(AlSensorCondition.BATTERY)
+            #else:
+            #    self.pushChange(AlSensorCondition.RESET)
+            return True # The value has changed
+        return False # The value has not changed
+
+    def do_tamper(self, val : bool) -> bool:
+        if val is not None and self.tamper != val:
+            self.tamper = val
+            if self.tamper:
+                self.pushChange(AlSensorCondition.TAMPER)
+            else:
+                self.pushChange(AlSensorCondition.RESTORE)
+            return True # The value has changed
+        return False # The value has not changed
+
+"""
     # JSON conversions
     def fromJSON(self, decode):
-        #log.debug("   In sensor fromJSON start {0}".format(self))
+        #log.debug(f"   In sensor fromJSON start {self}")
         if "triggered" in decode:
             self.triggered = toBool(decode["triggered"])
         if "open" in decode:
@@ -346,7 +502,7 @@ class AlSensorDeviceHelper(AlSensorDevice):
             st = decode["sensor_type"]
             self.stype = AlSensorType.value_of(st.upper())
         if "trigger_time" in decode:
-            self.utctriggertime = datetime.fromisoformat(decode["trigger_time"]) if str(decode["trigger_time"]) != "" else None
+            self.triggertime = datetime.fromisoformat(decode["trigger_time"]) if str(decode["trigger_time"]) != "" else None
         if "location" in decode:
             self.zname = titlecase(decode["location"])
         if "zone_type" in decode:
@@ -361,7 +517,7 @@ class AlSensorDeviceHelper(AlSensorDevice):
             self.model = titlecase(decode["sensor_model"])
         if "motion_delay_time" in decode:
             self.motiondelaytime = titlecase(decode["motion_delay_time"])
-        #log.debug("   In sensor fromJSON end   {0}".format(self))
+        #log.debug(f"   In sensor fromJSON end   {self}")
         self.hasJPG = False
 
     def toJSON(self) -> dict:
@@ -382,7 +538,7 @@ class AlSensorDeviceHelper(AlSensorDevice):
              "motion_delay_time": "" if self.getMotionDelayTime() is None else self.getMotionDelayTime(),
              "chime":  str(self.getChimeType()) })    # , ensure_ascii=True
         return dd
-
+"""
 
 class AlSwitchDeviceHelper(AlSwitchDevice):
 
@@ -397,12 +553,12 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
 
     def __str__(self):
         strn = ""
-        strn = strn + ("id=None" if self.id == None else "id={0:<2}".format(self.id))
-        #strn = strn + (" name=None" if self.name == None else " name={0:<4}".format(self.name))
-        strn = strn + (" Type=None           " if self.type == None else " Type={0:<15}".format(self.type))
-        strn = strn + (" Loc=None          " if self.location == None else " Loc={0:<14}".format(self.location))
-        strn = strn + (" enabled=None" if self.enabled == None else " enabled={0:<2}".format(self.enabled))
-        strn = strn + (" state=None" if self.state == None else " state={0:<8}".format(self.state))
+        strn = strn + ("id=None" if self.id == None else f"id={self.id:<2}")
+        #strn = strn + (" name=None" if self.name == None else f" name={self.name:<4}")
+        strn = strn + (" Type=None           " if self.type == None else f" Type={self.type:<15}")
+        strn = strn + (" Loc=None          " if self.location == None else f" Loc={self.location:<14}")
+        strn = strn + (" enabled=None" if self.enabled == None else f" enabled={self.enabled:<2}")
+        strn = strn + (" state=None" if self.state == None else f" state={self.state:<8}")
         return strn
 
     def __eq__(self, other):
@@ -428,9 +584,9 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
         else:
             self._callback.append(callback)
 
-    def pushChange(self, s : AlSensorCondition):
+    def pushChange(self):
         for cb in self._callback:
-            cb(self, s)
+            cb(self)
 
     def getDeviceID(self):
         return self.id
@@ -447,6 +603,7 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
     def isOn(self) -> bool:
         return self.state #
 
+"""
     def fromJSON(self, decode):
         if "enabled" in decode:
             self.enabled = toBool(decode["enabled"])
@@ -456,7 +613,7 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
             self.location = titlecase(decode["location"])
         if "state" in decode:
             s = AlX10Command.value_of(decode["state"].upper())
-            self.state = (s == AlX10Command.ON or s == AlX10Command.BRIGHTEN or s == AlX10Command.DIM)
+            self.state = (s == AlX10Command.ON or s == AlX10Command.BRIGHTEN or s == AlX10Command.DIMMER)
 
     def toJSON(self) -> dict:
         dd=json.dumps({
@@ -467,7 +624,7 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
              "location": str(self.getLocation()),
              "state":  "On" if self.state else "Off" })  # , ensure_ascii=True
         return dd
-
+"""
 
 class ImageRecord:
     # The details of an individual image
@@ -656,11 +813,11 @@ class MyChecksumCalc:
             return True
 
         if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] + 1:
-            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {0} and {1} alt calc is {2}".format(self._toString(packet), hex(self._calculateCRC(packet[1:-2])[0]).upper(), hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()))
+            log.debug(f"[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {toString(packet)} and {hex(self._calculateCRC(packet[1:-2])[0]).upper()} alt calc is {hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()}")
             return True
 
         if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] - 1:
-            log.debug("[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {0} and {1} alt calc is {2}".format(self._toString(packet), hex(self._calculateCRC(packet[1:-2])[0]).upper(), hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()))
+            log.debug(f"[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {toString(packet)} and {hex(self._calculateCRC(packet[1:-2])[0]).upper()} alt calc is {hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()}")
             return True
 
         log.debug("[_validatePDU] Not valid packet, CRC failed, may be ongoing and not final 0A")
@@ -669,7 +826,7 @@ class MyChecksumCalc:
     # alternative to calculate the checksum for sending and receiving messages
     def _calculateCRCAlt(self, msg: bytearray):
         """ Calculate CRC Checksum """
-        # log.debug("[_calculateCRC] Calculating for: %s", self._toString(msg))
+        # log.debug("[_calculateCRC] Calculating for: %s", toString(msg))
         # Calculate the checksum
         checksum = 0
         for char in msg[0 : len(msg)]:
@@ -680,13 +837,13 @@ class MyChecksumCalc:
         checksum = 256 - (checksum % 255)
         if checksum == 256:
             checksum = 1
-        # log.debug("[_calculateCRC] Calculating for: {self._toString(msg)}     calculated CRC is: {self._toString(bytearray([checksum]))}")
+        # log.debug("[_calculateCRC] Calculating for: {toString(msg)}     calculated CRC is: {toString(bytearray([checksum]))}")
         return bytearray([checksum])
 
     # calculate the checksum for sending and receiving messages
     def _calculateCRC(self, msg: bytearray):
         """ Calculate CRC Checksum """
-        # log.debug("[_calculateCRC] Calculating for: %s", self._toString(msg))
+        # log.debug("[_calculateCRC] Calculating for: %s", toString(msg))
         # Calculate the checksum
         checksum = 0
         for char in msg[0 : len(msg)]:
@@ -694,10 +851,165 @@ class MyChecksumCalc:
         checksum = 0xFF - (checksum % 0xFF)
         if checksum == 0xFF:
             checksum = 0x00
-        # log.debug("[_calculateCRC] Calculating for: {self._toString(msg)}     calculated CRC is: {self._toString(bytearray([checksum]))}")
+        # log.debug("[_calculateCRC] Calculating for: {toString(msg)}     calculated CRC is: {toString(bytearray([checksum]))}")
         return bytearray([checksum])
 
+class PartitionStateClass:
 
+    def __init__(self):
+        """Initialize class."""
+        self.PanelState = AlPanelStatus.UNKNOWN
+        self.PanelReady = False
+        self.PanelTamper = False
+        self.PanelAlertInMemory = False
+        self.PanelBypass = False
+        self.SirenActive = False
+        self.SirenActiveDeviceTrigger = None
+        self.PanelAlarmStatus = AlAlarmType.NONE
+        self.PanelTroubleStatus = AlTroubleType.NONE
+
+    def Reset(self):
+        self.PanelState = AlPanelStatus.UNKNOWN
+        self.PanelReady = False
+        self.PanelTamper = False
+        self.PanelAlertInMemory = False
+        self.PanelBypass = False
+        self.SirenActive = False
+        self.SirenActiveDeviceTrigger = None
+        self.PanelAlarmStatus = AlAlarmType.NONE
+        self.PanelTroubleStatus = AlTroubleType.NONE
+
+    def statelist(self) -> list:
+        return [self.SirenActive, self.PanelState, self.PanelReady, self.PanelTroubleStatus, self.PanelAlarmStatus, self.PanelBypass]
+
+    def getEventData(self) -> dict:
+        datadict = {}
+        datadict["state"] = "triggered" if self.SirenActive else self.PanelState.name.lower()
+        datadict["ready"] = self.PanelReady
+        datadict["tamper"] = self.PanelTamper
+        datadict["memory"] = self.PanelAlertInMemory
+        #datadict["siren"] = self.SirenActive
+        datadict["bypass"] = self.PanelBypass
+        datadict["alarm"] = self.PanelAlarmStatus.name.lower()
+        datadict["trouble"] = self.PanelTroubleStatus.name.lower()
+        return datadict
+
+    def UpdatePanelState(self, eventType, sensor):
+        # Update tamper status
+        self.PanelTamper = eventType in pmPanelTamperSet
+
+        # Update trouble status
+        if eventType in pmPanelTroubleType_t:     # Trouble state
+            self.PanelTroubleStatus = pmPanelTroubleType_t[eventType]
+        else:
+            self.PanelTroubleStatus = AlTroubleType.NONE
+            
+        # Update siren status
+        siren = False
+     
+        if eventType in pmPanelAlarmType_t:
+            self.PanelAlarmStatus = pmPanelAlarmType_t[eventType]
+            #alarmStatus = self.PanelAlarmStatus
+            if self.PanelAlarmStatus == AlAlarmType.INTRUDER:
+                # If any of the A7 messages are in the SirenTriggerList then assume the Siren is triggered
+                siren = True
+        else:
+            log.debug(f"[handle_msgtypeA7]          Alarm Type {eventType} not in the list so setting alarm status to None")
+            self.PanelAlarmStatus = AlAlarmType.NONE
+        
+        # no clauses as if siren gets true again then keep updating self.SirenActive with the time
+        if siren:
+            self.SirenActive = True
+            self.SirenActiveDeviceTrigger = None if sensor is None else sensor
+            log.debug("[handle_msgtypeA7]            ******************** Alarm Active *******************")
+
+        # cancel alarm and the alarm has been triggered
+        if eventType in pmPanelCancelSet and self.SirenActive:  # Cancel Alarm
+            self.SirenActive = False
+            self.SirenActiveDeviceTrigger = None
+            log.debug("[handle_msgtypeA7]            ******************** Alarm Cancelled ****************")
+
+        # Siren has been active but it is no longer active (probably timed out and has then been disarmed)
+        if eventType not in pmPanelIgnoreSet and not siren and self.SirenActive:  # Alarm Timed Out ????
+            self.SirenActive = False
+            self.SirenActiveDeviceTrigger = None
+            log.debug("[handle_msgtypeA7]            ******************** Event in Ignore Set, Cancelling Alarm Indication ****************")
+
+        log.debug(f"[handle_msgtypeA7]         System message eventType={eventType}   self.PanelTamper={self.PanelTamper}   self.PanelAlarmStatus={self.PanelAlarmStatus}" +
+                  f"    self.PanelTroubleStatus={self.PanelTroubleStatus}    self.SirenActive={self.SirenActive}   siren={siren}")
+
+
+    def ProcessPanelStateUpdate(self, sysStatus, sysFlags, PanelMode) -> AlPanelEventData | None:
+        
+        retval = None
+        
+        sysStatus = sysStatus & 0x1F     # Mark-Mills with a PowerMax Complete Part, sometimes this has the 0x20 bit set and I'm not sure why
+        
+        if sysStatus in pmPanelArmedStatus:
+            disarmed = pmPanelArmedStatus[sysStatus].disarmed
+            armed    = pmPanelArmedStatus[sysStatus].armed
+            entry    = pmPanelArmedStatus[sysStatus].entry
+            self.PanelState = pmPanelArmedStatus[sysStatus].state
+
+            if pmPanelArmedStatus[sysStatus].eventmapping >= 0:
+                log.debug(f"[ProcessPanelStateUpdate]      self.PanelState is {self.PanelState}      using event mapping {pmPanelArmedStatus[sysStatus].eventmapping} for event data")
+                retval = AlPanelEventData(partition = -1, name = 0, action = pmPanelArmedStatus[sysStatus].eventmapping) # use partiton set to -1 as a dummy
+                
+        else:
+            log.debug(f"[ProcessPanelStateUpdate]      Unknown state {hexify(sysStatus)}, assuming Panel state of Unknown")
+            disarmed = None
+            armed = None
+            entry = False
+            self.PanelState = AlPanelStatus.UNKNOWN  # UNKNOWN
+
+        if PanelMode == AlPanelMode.DOWNLOAD:
+            self.PanelState = AlPanelStatus.DOWNLOADING  # Downloading
+
+        log.debug(f"[ProcessPanelStateUpdate]  sysStatus={hexify(sysStatus)}    log: {self.PanelState.name}, {disarmed=}  {armed=}")
+
+        self.PanelReady = sysFlags & 0x01 != 0
+        self.PanelAlertInMemory = sysFlags & 0x02 != 0
+
+        if (sysFlags & 0x04 != 0):                   # Trouble
+            if self.PanelTroubleStatus == AlTroubleType.NONE:       # if set to NONE then set it to GENERAL, if it's already set from A& then that is more specific
+                self.PanelTroubleStatus = AlTroubleType.GENERAL
+        else:
+            self.PanelTroubleStatus = AlTroubleType.NONE
+
+        self.PanelBypass = sysFlags & 0x08 != 0
+        
+        if sysFlags & 0x10 != 0:
+            log.debug(f"[ProcessPanelStateUpdate]      sysFlags bit 4 set --> Should be last 10 seconds of entry/exit")
+            
+        if sysFlags & 0x20 != 0:
+            log.debug(f"[ProcessPanelStateUpdate]      sysFlags bit 5 set --> Should be Zone Event")
+            
+        if sysFlags & 0x40 != 0:
+            log.debug(f"[ProcessPanelStateUpdate]      sysFlags bit 6 set --> Should be Status Changed")
+            
+        #if sysFlags & 0x10 != 0:  # last 10 seconds of entry/exit
+        #    self.PanelArmed = sarm == "Arming"
+        #else:
+        #     self.PanelArmed = sarm == "Armed"
+        PanelAlarmEvent = sysFlags & 0x80 != 0
+
+        if PanelMode not in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
+            # if the system status has the panel armed and there has been an alarm event, assume that the alarm is sounding
+            #        and that the sensor that triggered it isn't an entry delay
+            #   Normally this would only be directly available in Powerlink mode with A7 messages, but an assumption is made here
+            if armed is not None and armed and not entry and PanelAlarmEvent:
+                log.debug("[ProcessPanelStateUpdate]      Alarm Event Assumed while in Standard Mode")
+                # Alarm Event
+                self.SirenActive = True
+
+        # Clear any alarm event if the panel alarm has been triggered before (while armed) but now that the panel is disarmed (in all modes)
+        if self.SirenActive and disarmed is not None and disarmed:
+            log.debug("[ProcessPanelStateUpdate] ******************** Alarm Not Sounding (Disarmed) ****************")
+            self.SirenActive = False
+            self.SirenActiveDeviceTrigger = None
+        
+        return retval
+    
 
 class AlPanelInterfaceHelper(AlPanelInterface):
 
@@ -716,53 +1028,77 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         self.onNewSwitchHandler = None
         self.onDisconnectHandler = None
         self.onPanelLogHandler = None
+        
+        self.partitionsEnabled = False
 
         ########################################################################
         # Global Variables that define the overall panel status
         ########################################################################
         self.PanelMode = AlPanelMode.UNKNOWN
-
-        self.PanelState = AlPanelStatus.UNKNOWN
-        self.PanelReady = False
-        self.PanelTamper = False
-        self.PanelAlertInMemory = False
-        self.PanelBypass = False
-        self.SirenActive = False
-
-        self.PanelAlarmStatus = AlAlarmType.NONE
-        self.PanelTroubleStatus = AlTroubleType.NONE
-        self.PanelLastEvent = "Unknown"
-        self.PanelStatusText = "Unknown"
-        self.LastPanelEventData = {}
-
-        # Keep a dict of the sensors so we know if its new or existing
-        self.SensorList = {}
-        # Keep a dict of the switches so we know if its new or existing
-        self.SwitchList = {}
-
-        self.setLastPanelEventData()
-
         # Whether its a powermax or powermaster
         self.PowerMaster = None
         # Define model type to be unknown
         self.PanelModel = "Unknown"
         self.PanelType = None
         
+        self.PartitionsInUse = set()  # this is a set so no repetitions allowed
+        self.PartitionState = [PartitionStateClass(), PartitionStateClass(), PartitionStateClass()]    # Maximum of 3 partitions across all panel models
+
+        #self.PanelState = AlPanelStatus.UNKNOWN
+        #self.PanelReady = False
+        #self.PanelTamper = False
+        #self.PanelAlertInMemory = False
+        #self.PanelBypass = False
+        #self.SirenActive = False
+        #self.SirenActiveDeviceTrigger = None
+        #self.PanelAlarmStatus = AlAlarmType.NONE
+        #self.PanelTroubleStatus = AlTroubleType.NONE
+        
+        self.lastPanelEvent = {}
+
+        #self.PanelStatusText = "Unknown"
+#        self.LastPanelEventData = {}
+        self.panelEventData = []
+
+        # Keep a dict of the sensors so we know if its new or existing
+        self.SensorList = {}
+        # Keep a dict of the switches so we know if its new or existing
+        self.SwitchList = {}
+        
+    def getPartitionsInUse(self) -> set | None:
+        if self.partitionsEnabled:
+            return self.PartitionsInUse
+        return None
+        
     def _dumpSensorsToLogFile(self, incX10 = False):
         log.debug(" ================================================================================ Display Status ================================================================================")
         for key, sensor in self.SensorList.items():
-            log.debug("     key {0:<2} Sensor {1}".format(key, sensor))
+            log.debug(f"     key {key:<2} Sensor {sensor}")
         if incX10:
             for key, device in self.SwitchList.items():
-                log.debug("     key {0:<2} X10    {1}".format(key, device))
+                log.debug(f"     key {key:<2} X10    {device}")
         
-        log.debug("   Model {: <18}     PowerMaster {: <18}     LastEvent {: <18}     Ready   {: <13}".format(self.PanelModel,
-                                        'Yes' if self.PowerMaster else 'No', self.getPanelLastEvent(), 'Yes' if self.PanelReady else 'No'))
         pm = titlecase(self.PanelMode.name.replace("_"," ")) # str(AlPanelMode()[self.PanelMode]).replace("_"," ")
-        ts = titlecase(self.PanelTroubleStatus.name.replace("_"," ")) # str(AlTroubleType()[self.PanelTroubleStatus]).replace("_"," ")
-        al = titlecase(self.PanelAlarmStatus.name.replace("_"," ")) # str(AlAlarmType()[self.PanelAlarmStatus]).replace("_"," ")
-
-        log.debug("   Mode  {: <18}     Status      {: <18}     Trouble {: <13}     AlarmStatus {: <12}".format(pm, self.PanelStatusText, ts, al))
+        log.debug(f"   Model {self.PanelModel: <18}     PowerMaster {'Yes' if self.PowerMaster else 'No': <10}     Mode  {pm: <18}     ")
+        if self.getPartitionsInUse() is not None:
+            for piu in self.getPartitionsInUse():
+                if 1 <= piu <= 3:
+                    p = self.PartitionState[piu-1]
+                    r = 'Yes' if p.PanelReady else 'No'
+                    ts = titlecase(p.PanelTroubleStatus.name)                   # str(AlTroubleType()[self.PanelTroubleStatus]).replace("_"," ")
+                    al = titlecase(p.PanelAlarmStatus.name)                     # str(AlAlarmType()[self.PanelAlarmStatus]).replace("_"," ")
+                    pn = titlecase(p.PanelState.name)
+                    log.debug(f"   Partition {piu:<1}      Ready {r: <13}      Status {pn: <18}      Trouble {ts: <13}      AlarmStatus {al: <12}")
+                else:
+                    log.debug(f"   Partition {piu:<1}      Invalid")
+                    
+        else:
+            p = self.PartitionState[0]
+            r = 'Yes' if p.PanelReady else 'No'
+            ts = titlecase(p.PanelTroubleStatus.name)                   # str(AlTroubleType()[self.PanelTroubleStatus]).replace("_"," ")
+            al = titlecase(p.PanelAlarmStatus.name)                     # str(AlAlarmType()[self.PanelAlarmStatus]).replace("_"," ")
+            pn = titlecase(p.PanelState.name)
+            log.debug(f"                                    Ready {r: <13}      Status {pn: <18}      Trouble {ts: <13}      AlarmStatus {al: <12}")
         log.debug(" ================================================================================================================================================================================")
 
     def getPanelModel(self):
@@ -771,45 +1107,58 @@ class AlPanelInterfaceHelper(AlPanelInterface):
     def updateSettings(self, newdata: PanelConfig):
         pass
 
-    def isSirenActive(self) -> bool:
-        if not self.suspendAllOperations:
-            return self.SirenActive
-        return False
-
-    def getPanelStatus(self) -> AlPanelStatus:
-        if not self.suspendAllOperations:
-            return self.PanelState
-        return AlPanelStatus.UNKNOWN
-
     def getPanelMode(self) -> AlPanelMode:
         if not self.suspendAllOperations:
             return self.PanelMode
         return AlPanelMode.UNKNOWN
 
-    def isPanelReady(self) -> bool:
+    def isSirenActive(self) -> (bool, AlSensorDevice | None):
+        if not self.suspendAllOperations:
+            if self.getPartitionsInUse() is not None:
+                for piu in self.getPartitionsInUse():
+                    if self.PartitionState[piu-1].SirenActive:
+                        return (True, self.PartitionState[piu-1].SirenActiveDeviceTrigger)
+            else:
+                return (self.PartitionState[0].SirenActive, self.PartitionState[0].SirenActiveDeviceTrigger)
+        return (False, None)
+
+    def getPanelStatus(self, partition = INVALID_PARTITION) -> AlPanelStatus:
+        if not self.suspendAllOperations:
+            if partition is not None and 1 <= partition <= 3:
+                return self.PartitionState[partition-1].PanelState
+            return self.PartitionState[0].PanelState
+        return AlPanelStatus.UNKNOWN
+
+    def isPanelReady(self, partition = INVALID_PARTITION) -> bool:
         """ Get the panel ready state """
         if not self.suspendAllOperations:
-            return self.PanelReady
+            if partition is not None and 1 <= partition <= 3:
+                return self.PartitionState[partition-1].PanelReady
+            return self.PartitionState[0].PanelReady
         return False
 
-    def getPanelTrouble(self) -> AlTroubleType:
+    def getPanelTrouble(self, partition = INVALID_PARTITION) -> AlTroubleType:
         """ Get the panel trouble state """
         if not self.suspendAllOperations:
-            return self.PanelTroubleStatus
+            if partition is not None and 1 <= partition <= 3:
+                return self.PartitionState[partition-1].PanelTroubleStatus
+            return self.PartitionState[0].PanelTroubleStatus
         return AlTroubleType.UNKNOWN
 
-    def isPanelBypass(self) -> bool:
+    def isPanelBypass(self, partition = INVALID_PARTITION) -> bool:
         """ Get the panel bypass state """
         if not self.suspendAllOperations:
-            return self.PanelBypass
+            if partition is not None and 1 <= partition <= 3:
+                return self.PartitionState[partition-1].PanelBypass
+            return self.PartitionState[0].PanelBypass
         return False
 
-    def getPanelLastEvent(self) -> str:
-        return self.PanelLastEvent
+#    def getPanelLastEvent(self) -> (str, str, str):
+#        return (self.PanelLastEventName, self.PanelLastEventAction, self.PanelLastEventTime)
 
-    def requestPanelCommand(self, state : AlPanelCommand, code : str = "") -> AlCommandStatus:
-        """ Send a request to the panel to Arm/Disarm """
-        return AlCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED
+#    def requestPanelCommand(self, state : AlPanelCommand, code : str = "", partitions : set = {1,2,3}) -> AlCommandStatus:
+#        """ Send a request to the panel to Arm/Disarm """
+#        return AlCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED
 
     # device in range 0 to 15 (inclusive), 0=PGM, 1 to 15 are X10 devices
     # state is the X10 state to set the switch
@@ -840,55 +1189,29 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         """ Get Panel Event Log """
         return AlCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED
 
-    # Convert byte array to a string of hex values
-    def _toString(self, array_alpha: bytearray):
-        return ("".join("%02x " % b for b in array_alpha))[:-1]
-
     # get the current date and time
     def _getTimeFunction(self) -> datetime:
-        return datetime.now()
+        return datetime.now(timezone.utc).astimezone()
 
     # get the current date and time
     def _getUTCTimeFunction(self) -> datetime:
         return _getUTCTime()
 
-    def setLastPanelEventData(self, count=0, type=[ ], event=[ ], zonemode=[ ], name=[ ]) -> dict:
-        datadict = {}
-        datadict["event_count"] = count
-        if count > 0:
-            datadict["event_time"] = self._getTimeFunction()
-        else:
-            datadict["event_time"] = ""
-        datadict["event_type"] = type
-        datadict["event_event"] = event
-        datadict["event_mode"] = zonemode
-        datadict["event_name"] = name
-        self.LastPanelEventData = datadict
+    def sendPanelEventData(self) -> bool:
+        retval = False
+        for ped in self.panelEventData:
+            retval = True
+            a = ped.asDict()
+            log.debug(f"[PanelUpdate]  ped={ped}  event data={a}")
+            self.sendPanelUpdate(AlCondition.PANEL_UPDATE, a)
+            self.lastPanelEvent = a
+        self.panelEventData = [ ] # empty the list
+        return retval
 
-        if count > 0:
-            self.PanelLastEvent = name[count-1] + "/" + zonemode[count-1]
-            for i in range(0, count):
-                a = {}
-                a["name"] = titlecase(name[i].replace("_"," ").lower())
-                a["event"] = titlecase(zonemode[i].replace("_"," ").lower())
-                log.debug(f"[PanelUpdate]  {a}")
-                self.onPanelChangeHandler(AlCondition.PANEL_UPDATE, a)
-
-        #log.debug(f"Last event {datadict}")
-        return datadict
-
-    def getEventData(self) -> dict:
-        datadict = {}
-        datadict["mode"] = titlecase(self.PanelMode.name.replace("_"," ").lower())
-        datadict["state"] = "Triggered" if self.SirenActive else titlecase(self.PanelState.name.replace("_"," ").lower())
-        datadict["ready"] = self.PanelReady
-        datadict["tamper"] = self.PanelTamper
-        datadict["memory"] = self.PanelAlertInMemory
-        datadict["siren"] = self.SirenActive
-        datadict["bypass"] = self.PanelBypass
-        datadict["alarm"] = titlecase(self.PanelAlarmStatus.name.replace("_"," ").lower())
-        datadict["trouble"] = titlecase(self.PanelTroubleStatus.name.replace("_"," ").lower())
-        return datadict
+    def addPanelEventData(self, ped : AlPanelEventData):
+        #log.debug(f"[addPanelEventData] {ped}")
+        ped.time = self._getTimeFunction() # .strftime("%d/%m/%Y, %H:%M:%S")
+        self.panelEventData.append(ped)  
 
     # Set the onDisconnect callback handlers
     def onDisconnect(self, fn : Callable):             # onDisconnect ( exception or string or None )
@@ -910,12 +1233,9 @@ class AlPanelInterfaceHelper(AlPanelInterface):
     def onPanelChange(self, fn : Callable):             # onPanelChange ( datadictionary : dict )
         self.onPanelChangeHandler = fn
 
-    def sendPanelUpdate(self, ev : AlCondition):
+    def sendPanelUpdate(self, ev : AlCondition, d : dict = {} ):
         if self.onPanelChangeHandler is not None:
-            if ev == AlCondition.PANEL_UPDATE:
-                self.onPanelChangeHandler(AlCondition.PUSH_CHANGE, {})                
-            else:
-                self.onPanelChangeHandler(ev, {})
+            self.onPanelChangeHandler(ev, d)
 
     def _searchDict(self, dict, v_search):
         for k, v in dict.items():
@@ -923,6 +1243,71 @@ class AlPanelInterfaceHelper(AlPanelInterface):
                 return k
         return None
 
+    def merge(self, a : dict, b : dict, path=None, update=True):
+        "http://stackoverflow.com/questions/7204805/python-dictionaries-of-dictionaries-merge"
+        "merges b into a"
+        if path is None: path = []
+        for key in b:
+            if key in a:
+                if isinstance(a[key], dict) and isinstance(b[key], dict):
+                    self.merge(a[key], b[key], path + [str(key)])
+                elif a[key] == b[key]:
+                    pass # same leaf value
+                elif isinstance(a[key], list) and isinstance(b[key], list):
+                    for idx, val in enumerate(b[key]):
+                        a[key][idx] = self.merge(a[key][idx], b[key][idx], path + [str(key), str(idx)], update=update)
+                elif update:
+                    a[key] = b[key]
+                else:
+                    raise Exception('Conflict at %s' % '.'.join(path + [str(key)]))
+            else:
+                a[key] = b[key]
+        return a
+
+    def getPanelFixedDict(self) -> dict:
+        pm = "Unknown"
+        if self.PowerMaster is not None:
+            if self.PowerMaster: # PowerMaster models
+                pm = "Yes"
+            else:
+                pm = "No"
+        return {
+            "Panel Model": self.PanelModel,
+            "Power Master": pm
+            #"Model Type": self.ModelType
+        }
+
+    def shutdownOperation(self):
+        if not self.suspendAllOperations:
+            self._initVars()
+            self.suspendAllOperations = True
+            self.PanelMode = AlPanelMode.STOPPED
+            self.PartitionState[0].Reset()
+            self.PartitionState[1].Reset()
+            self.PartitionState[2].Reset()
+            self.PanelStatus = {}
+            log.debug("[Controller] ********************************************************************************")
+            log.debug("[Controller] ********************************************************************************")
+            log.debug("[Controller] ****************************** Operations Suspended ****************************")
+            log.debug("[Controller] ********************************************************************************")
+            log.debug("[Controller] ********************************************************************************")
+            self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
+
+    def dumpSensorsToStringList(self) -> list:
+        retval = list()
+        for key, sensor in self.SensorList.items():
+            retval.append(f"key {key:<2} Sensor {sensor}")
+        return retval
+
+    def dumpSwitchesToStringList(self) -> list:
+        retval = list()
+        for key, switch in self.SwitchList.items():
+            retval.append(f"key {key:<2} Switch {switch}")
+        return retval
+
+
+
+"""
     # decodes json to set the variables and returns true if any of the booleans have changed state
     def fromJSON(self, decode) -> bool:
         # Not currently processed:     "zone": 0, "reset": false,
@@ -961,15 +1346,18 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         #if "powermaster" in decode:
         #    self.PowerMaster = decode["powermaster"]
 
-        if "event_count" in decode:
-            c = decode["event_count"]
-            if c > 0:
-                t = decode["event_type"]
-                e = decode["event_event"]
-                m = decode["event_mode"]
-                n = decode["event_name"]
-                log.debug(f"Got Zone Event {c} {t} {e} {m} {n}")
-                self.setLastPanelEventData(count=c, type=t, event=e, zonemode=m, name=n)
+        raise Exception('fromJSON not supported %s' % '.'.join(path + [str(key)]))
+#        if "event_count" in decode:
+#            c = decode["event_count"]
+#            if c > 0:
+#                t = decode["event_type"]
+#                e = decode["event_event"]
+#                m = decode["event_mode"]
+#                n = decode["event_name"]
+#                log.debug(f"Got Zone Event {c} {t} {e} {m} {n}")
+#                self.setLastPanelEventData(count=c, type=t, event=e, zonemode=m, name=n)
+#                for i in range(0,c):
+#                    self.addPanelEventData(AlPanelEventData(0, "System", 160 + sysStatus, pmLogEvent_t[160 + sysStatus]))
 
         return oldPanelState != self.PanelState or \
                oldPanelMode != self.PanelMode or \
@@ -977,66 +1365,8 @@ class AlPanelInterfaceHelper(AlPanelInterface):
                oldPanelTrouble != self.PanelTroubleStatus or \
                oldPanelAlarm != self.PanelAlarmStatus or \
                oldPanelBypass != self.PanelBypass
+"""
 
-    def merge(self, a : dict, b : dict, path=None, update=True):
-        "http://stackoverflow.com/questions/7204805/python-dictionaries-of-dictionaries-merge"
-        "merges b into a"
-        if path is None: path = []
-        #log.debug("[merge] type a={0} type b={1}".format(type(a), type(b)))
-        for key in b:
-            if key in a:
-                if isinstance(a[key], dict) and isinstance(b[key], dict):
-                    self.merge(a[key], b[key], path + [str(key)])
-                elif a[key] == b[key]:
-                    pass # same leaf value
-                elif isinstance(a[key], list) and isinstance(b[key], list):
-                    for idx, val in enumerate(b[key]):
-                        a[key][idx] = self.merge(a[key][idx], b[key][idx], path + [str(key), str(idx)], update=update)
-                elif update:
-                    a[key] = b[key]
-                else:
-                    raise Exception('Conflict at %s' % '.'.join(path + [str(key)]))
-            else:
-                a[key] = b[key]
-        return a
-
-    def getPanelFixedDict(self) -> dict:
-        pm = "Unknown"
-        if self.PowerMaster is not None:
-            if self.PowerMaster: # PowerMaster models
-                pm = "Yes"
-            else:
-                pm = "No"
-        return {
-            "Panel Model": self.PanelModel,
-            "Power Master": pm
-            #"Model Type": self.ModelType
-        }
-
-    def shutdownOperation(self):
-        if not self.suspendAllOperations:
-            self.suspendAllOperations = True
-            self._initVars()
-            self.PanelMode = AlPanelMode.STOPPED
-            self.PanelState = AlPanelStatus.UNKNOWN
-            self.PanelStatus = {}
-            log.debug("[Controller] ********************************************************************************")
-            log.debug("[Controller] ********************************************************************************")
-            log.debug("[Controller] ****************************** Operations Suspended ****************************")
-            log.debug("[Controller] ********************************************************************************")
-            log.debug("[Controller] ********************************************************************************")
-
-    def dumpSensorsToStringList(self) -> list:
-        retval = list()
-        for key, sensor in self.SensorList.items():
-            retval.append("key {0:<2} Sensor {1}".format(key, sensor))
-        return retval
-
-    def dumpSwitchesToStringList(self) -> list:
-        retval = list()
-        for key, switch in self.SwitchList.items():
-            retval.append("key {0:<2} Switch {1}".format(key, switch))
-        return retval
 
 # Turn on auto code formatting when using black
 # fmt: on

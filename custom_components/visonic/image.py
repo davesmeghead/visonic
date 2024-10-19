@@ -48,7 +48,9 @@ async def async_setup_entry(
 class VisonicImage(ImageEntity):
     """A class to let you visualize the image from a PIR sensors camera."""
 
-    _attr_has_entity_name = True
+    _attr_translation_key: str = "alarm_panel_key"
+    #_attr_content_type = "image/jpg"
+    #_attr_has_entity_name = True
 
     def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSensorDevice):
         #super().__init__(self, hass)
@@ -77,7 +79,7 @@ class VisonicImage(ImageEntity):
 
     def onChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
         """Call on any change to the sensor."""
-        # the sensor parameter is the same as self._visonic_device, but it's a generic callback handler that cals this function
+        # the sensor parameter is the same as self._visonic_device, but it's a generic callback handler that calls this function
         # Update the current value based on the device state
         #_LOGGER.debug(f"   In Image VisonicSensor onchange {self._visonic_device}")
         if self._visonic_device is not None:
@@ -90,10 +92,18 @@ class VisonicImage(ImageEntity):
                     self._sensor_image = self._visonic_device.jpg_data
                     self._attr_image_last_updated = self._visonic_device.jpg_time
                     # Ask HA to schedule an update
-                    if self.entity_id is not None:
+                    if self.hass is not None and self.entity_id is not None:
                         self.schedule_update_ha_state()
         else:
             _LOGGER.debug("changeHandler: image on change called but sensor is not defined")
+
+    # To link this entity to the device, this property must return an identifiers
+    #      value matching that used in the binary sensor, but no other information such as name. 
+    #           If name is returned, this entity will then also become a device in the HA UI.
+    @property
+    def device_info(self):
+        """Return information to link this entity with the correct device."""
+        return {"identifiers": {(DOMAIN, self._name)}}
 
     @property
     def unique_id(self) -> str:

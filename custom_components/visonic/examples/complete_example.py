@@ -18,6 +18,7 @@ import re
 from enum import Enum
 from pyvisonic import VisonicProtocol
 import socket
+from inspect import currentframe, getframeinfo, stack
 
 # Try to import aconsole, if it fails then print an error message
 try:
@@ -30,11 +31,13 @@ except:
     print("")
     sys.exit(0)
 
+terminating_clean = "terminating_clean"
+
 # config parameters for myconfig, just to make the defaults easier
 CONF_DOWNLOAD_CODE = "download_code"
-CONF_LANGUAGE = "language"
+#CONF_LANGUAGE = "language"
 CONF_EMULATION_MODE = "emulation_mode"
-CONF_SIREN_SOUNDING = "siren_sounding"
+#CONF_SIREN_SOUNDING = "siren_sounding"
 
 class ConnectionMode(Enum):
     POWERLINK = 1
@@ -51,8 +54,8 @@ class PrintMode(Enum):
 myconfig = { 
     CONF_DOWNLOAD_CODE: "",
     CONF_EMULATION_MODE: ConnectionMode.POWERLINK,
-    CONF_LANGUAGE: "EN",
-    CONF_SIREN_SOUNDING: ["Intruder"]
+    #CONF_LANGUAGE: "EN",
+    #CONF_SIREN_SOUNDING: ["Intruder"]
 }
 
 string_type="string"
@@ -106,7 +109,7 @@ def setupLocalLogger(level: str = "WARNING", empty = False):
             elapsed_seconds = record.created - self.start_time
             # using timedelta here for convenient default formatting
             elapsed = str(timedelta(seconds=elapsed_seconds))
-            return "{: <15} <{: <15}:{: >5}> {: >8}   {}".format(elapsed, record.filename, record.lineno, record.levelname, record.getMessage())
+            return f"{elapsed: <15} <{record.filename: <15}:{record.lineno: >5}> {record.levelname: >8}   {record.getMessage()}"
 
     # remove existing handlers 
     while root_logger.hasHandlers():
@@ -148,7 +151,7 @@ def ConfigureLogger(mode, console = None):
             console.print("Setting output mode to ERROR")
     else:
         if console is not None:
-            console.print("Not Setting output mode, unknown mode {0}".format(mode))
+            console.print(f"Not Setting output mode, unknown mode {mode}")
 
 
 class MyTransport(AlTransport):
@@ -161,6 +164,11 @@ class MyTransport(AlTransport):
 
     def close(self):
         self.transport.close()
+
+# Convert byte array to a string of hex values
+def toString(array_alpha: bytearray, gap = " "):
+    return ("".join(("%02x"+gap) % b for b in array_alpha))[:-len(gap)] if len(gap) > 0 else ("".join("%02x" % b for b in array_alpha))
+
 
 class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 
@@ -215,12 +223,12 @@ class VisonicClient:
     def onSensorChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
         if self.process_sensor is not None:
             self.process_sensor(sensor)
-#        print("onSensorChange {0} {1}".format(s.name, sensor) )
+#        print(f"onSensorChange {s.name} {sensor}")
         
     def onSwitchChange(self, switch : AlSwitchDevice):
         if self.process_x10 is not None:
             self.process_x10(switch)
-#        print("onSwitchChange {0}".format(switch))
+#        print(f"onSwitchChange {switch}")
 
     def onNewSwitch(self, switch: AlSwitchDevice): 
         """Process a new x10."""
@@ -249,13 +257,12 @@ class VisonicClient:
                 self.process_sensor(sensor)
                 sensor.onChange(self.onSensorChange)
 
-    def onPanelChangeHandler(self, e):
+    def onPanelChangeHandler(self, e: AlCondition, data : dict):
         """ This is a callback function, called from the visonic library. """
         if type(e) == AlIntEnum:
             if self.process_event is not None:
                 datadict = self.visonicProtocol.getEventData()
                 #datadict.update(self.LastPanelEventData)
-
                 self.process_event(e, datadict)
         else:
             print(f"Visonic attempt to call onPanelChangeHandler type {type(e)}  device is {e}")
@@ -298,9 +305,9 @@ class VisonicClient:
         return {
             AlConfiguration.DownloadCode: self.config.get(CONF_DOWNLOAD_CODE, ""),
             AlConfiguration.ForceStandard: self.ForceStandardMode,
-            AlConfiguration.DisableAllCommands: self.DisableAllCommands,
-            AlConfiguration.PluginLanguage: self.config.get(CONF_LANGUAGE, "EN"),
-            AlConfiguration.SirenTriggerList: self.config.get(CONF_SIREN_SOUNDING, ["Intruder"])
+            AlConfiguration.DisableAllCommands: self.DisableAllCommands
+            #AlConfiguration.PluginLanguage: self.config.get(CONF_LANGUAGE, "Panel"),
+            #AlConfiguration.SirenTriggerList: self.config.get(CONF_SIREN_SOUNDING, ["Intruder"])
         }
 
     def onDisconnect(self, excep, another_parameter):
@@ -338,7 +345,6 @@ class VisonicClient:
             sock.settimeout(1.0)  # set timeout to 1 second to flush the receive buffer
             sock.connect((address, port))
 
-            pl_sock = None
             # Flush the buffer, receive any data and dump it
             try:
                 dummy = sock.recv(10000)  # try to receive 100 bytes
@@ -350,7 +356,7 @@ class VisonicClient:
             # set the timeout to infinite
             sock.settimeout(None)
 
-            vp = ClientVisonicProtocol(serial_connection = False, panelConfig=panelConfig, pl_sock = pl_sock, loop=loop)
+            vp = ClientVisonicProtocol(serial_connection = False, panelConfig=panelConfig, loop=loop)
 
             #print("The vp " + str(type(vp)) + "   with value " + str(vp))
             # create the connection to the panel as an asyncio protocol handler and then set it up in a task
@@ -363,11 +369,11 @@ class VisonicClient:
 
         except socket.error as _:
             err = _
-            print("Setting TCP socket Options Exception {0}".format(err))
+            print(f"Setting TCP socket Options Exception {err}")
             if sock is not None:
                 sock.close()
         except Exception as exc:
-            print("Setting TCP Options Exception {0}".format(exc))
+            print(f"Setting TCP Options Exception {exc}")
         return None, None
 
 
@@ -527,40 +533,40 @@ class VisonicClient:
             self.visonicProtocol.updateSettings(self.__getConfigData())
         #print("[updateConfig] exit")
 
-    def getPanelLastEvent(self) -> str:
-        """ Is the siren active. """
-        if self.visonicProtocol is not None:
-            return self.visonicProtocol.getPanelLastEvent()
-        return False
+    #def getPanelLastEvent(self) -> (str, str, str):
+    #    """ Get Last Panel Event. """
+    #    if self.visonicProtocol is not None:
+    #        return self.visonicProtocol.getPanelLastEvent()
+    #    return False
 
-    def getPanelTrouble(self) -> AlTroubleType:
+    def getPanelTrouble(self, partition : int) -> AlTroubleType:
         """ Get the panel trouble state """
         if self.visonicProtocol is not None:
-            return self.visonicProtocol.getPanelTrouble()
+            return self.visonicProtocol.getPanelTrouble(partition)
         return AlTroubleType.UNKNOWN
 
-    def isPanelBypass(self) -> bool:
+    def isPanelBypass(self, partition : int) -> bool:
         """ Is the siren active. """
         if self.visonicProtocol is not None:
-            return self.visonicProtocol.isPanelBypass()
+            return self.visonicProtocol.isPanelBypass(partition)
         return False
 
-    def isSirenActive(self) -> bool:
+    def isSirenActive(self) -> (bool, AlSensorDevice | None):
         """ Is the siren active. """
         if self.visonicProtocol is not None:
             return self.visonicProtocol.isSirenActive()
-        return False
+        return (False, None)
 
-    def isPanelReady(self) -> bool:
+    def isPanelReady(self, partition : int) -> bool:
         """ Is panel ready. """
         if self.visonicProtocol is not None:
-            return self.visonicProtocol.isPanelReady()
+            return self.visonicProtocol.isPanelReady(partition)
         return False
 
-    def getPanelStatus(self) -> AlPanelStatus:
+    def getPanelStatus(self, partition : int) -> AlPanelStatus:
         """ Get the panel status code. """
         if self.visonicProtocol is not None:
-            return self.visonicProtocol.getPanelStatus()
+            return self.visonicProtocol.getPanelStatus(partition)
         return AlPanelStatus.UNKNOWN
 
     def getPanelMode(self) -> AlPanelMode:
@@ -578,11 +584,11 @@ class VisonicClient:
     def isSystemStarted(self) -> bool:
         return self.SystemStarted
 
-    def sendCommand(self, command : AlPanelCommand, code : str) -> AlCommandStatus:
+    def sendCommand(self, command : AlPanelCommand, code : str, partitions : set = {1,2,3}) -> AlCommandStatus:
         """ Send a command to the panel """
         if self.visonicProtocol is not None:
             # def requestPanelCommand(self, state : AlPanelCommand, code : str = "")
-            return self.visonicProtocol.requestPanelCommand(command, code)
+            return self.visonicProtocol.requestPanelCommand(command, code, partitions)
         return AlCommandStatus.FAIL_INVALID_STATE
 
     def getJPG(self, device : int, count : int) -> AlCommandStatus:
@@ -643,17 +649,15 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
     def process_event(event_id : AlCondition, data : dict = None):
         # event means there's been a panel state change
         if event_id is not AlCondition.PUSH_CHANGE:
-            console.print("Visonic update event condition {0} {1}".format(str(event_id), data))
+            console.print(f"Visonic update event condition {str(event_id)} {data}")
        
     def process_log(event_log_entry : AlLogPanelEvent):
         """ Process a sequence of panel log events """
-        total = event_log_entry.total
-        current = event_log_entry.current  # only used for output and not logic
         data = {
-            "current": current,
-            "total": total,
-            "date": event_log_entry.date,
-            "time": event_log_entry.time,
+            "current": event_log_entry.current,  # only used for output and not logic,
+            "total": event_log_entry.total,
+            "date": event_log_entry.dateandtime,
+            #"time": event_log_entry.time,
             "partition": event_log_entry.partition,
             "zone": event_log_entry.zone,
             "event": event_log_entry.event,
@@ -668,8 +672,11 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
             if dev not in sensors:
                 console.print("Adding Sensor " + str(dev))
                 sensors.append(dev)
-            #print("Sensor Update")
-            #self.sendSensor(dev)
+            if dev.isTriggered():
+                console.print(f"Device {dev.getDeviceID()} Triggered")
+            else:
+                console.print(f"Device {dev.getDeviceID()} Settings have been updated, open = {dev.isOpen()}")
+            
     
     def process_x10(dev):
         if dev.enabled:
@@ -761,7 +768,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                 command = result[0]
                 ar = result.split(' ')
                 processedInput = False
-                #print("Command Received {0}".format(command))
+                #print(f"Command Received {command}")
                 if client.isSystemStarted():
                     # There must be a panel connection to do the following commands
                     if command == 'c':
@@ -773,11 +780,12 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         prompt = prompt1
                         processedInput = True
                     elif command == 'm':
-                        pready = client.isPanelReady()
-                        pstate = client.getPanelStatus()
-                        siren = client.isSirenActive();
-                        mode = client.getPanelMode();
-                        console.print("Panel Mode=" + mode.name + "    Panel state=" + pstate.name + "    Panel Ready=" + str(pready) + "    Siren=" + str(siren) )
+                        for p in client.getPartitionsInUse():
+                            pready = client.isPanelReady(p)
+                            pstate = client.getPanelStatus(p)
+                            siren, _ = client.isSirenActive();
+                            mode = client.getPanelMode();
+                            console.print("Panel Mode=" + mode.name + "    Panel state=" + pstate.name + "    Panel Ready=" + str(pready) + "    Siren=" + str(siren) )
                         processedInput = True
                     elif command == 'd':
                         client.sendCommand(AlPanelCommand.DISARM, getCode(ar,1))
@@ -820,14 +828,14 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         #  output mode 
                         if len(ar) > 1:
                             mode=str(ar[1].strip()).lower()
-                            #console.print("Setting output mode to {0} :{1}:".format(mode, mode[0]))
+                            #console.print(f"Setting output mode to {mode} :{mode[0]}:")
                             ConfigureLogger(mode, console)
                         else:
                             console.print("Current output level is " + str(logger_level))
                     elif command == 'q':
                         #  we are disconnected and so quit the program
                         #print("Terminating program")
-                        raise Exception('terminating_clean')
+                        raise Exception(terminating_clean)
                     elif not client.isSystemStarted() and command == 'c':
                         if len(ar) > 1:
                             mode=str(ar[1].strip()).lower()
@@ -844,7 +852,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         console.print("")
                         for key, value in myconfig.items():
                             s = str(key)
-                            console.print("{0} :  {1} = {2}".format(c, s, value))
+                            console.print(f"{c} :  {s} = {value}")
                             c = c + 1
                         console.print("")
                     elif command.isnumeric() == True:
@@ -859,18 +867,18 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         for device in devices:
                             console.print("Device " + str(device))
                     else:
-                        console.print("ERROR: There must be a panel connection to perform command " + result)
+                        console.print("ERROR: invalid command " + result)
         
         print("Here ZZZZZZZ")
         
     except Exception as e:
-        print("Got an exception")
-        print(e.message)
+        #print("Got an exception")
+        #print(e.message)
         # Get current system exception
         ex_type, ex_value, ex_traceback = sys.exc_info()
 
-        if str(ex_value) != "terminating_clean":
-            print("Exception {0} {1}".format(len("terminating_clean"),len(ex_value)))
+        if str(ex_value) != terminating_clean:
+            print(f"Exception {len(terminating_clean)} {len(ex_value)}")
             print("Exception: ")
             print(f"  type : {ex_type.__name__}")
             print(f"  message : {ex_value}")
@@ -886,10 +894,36 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
         raise e   
 
 def handle_exception(loop, context):
+
+    def _createPrefix() -> str:
+        previous_frame = currentframe().f_back
+        (
+            filepath,
+            line_number,
+            function,
+            lines,
+            index,
+        ) = inspect.getframeinfo(previous_frame)
+        filename = filepath[filepath.rfind('/')+1:]
+        s = f"{filename} {line_number:<5} {function:<30} "
+        previous_frame = currentframe()
+        (
+            filepath,
+            line_number,
+            function,
+            lines,
+            index,
+        ) = inspect.getframeinfo(previous_frame)
+        filename = filepath[filepath.rfind('/')+1:]
+        
+        return s + f"{filename} {line_number:<5} {function:<30} "
+
     # context["message"] will always be there; but context["exception"] may not
     msg = context.get("exception", context["message"])
-    print(f"Caught exception: {msg}")
-    print(f"                  {context}")
+    if str(msg) != terminating_clean:
+        print(f"Caught exception: {msg}")
+        print(f"                  {context}")
+        #print(f"                  {_createPrefix()}")
     asyncio.create_task(shutdown(loop))
 
 async def shutdown(loop, signal=None):
@@ -901,17 +935,18 @@ async def shutdown(loop, signal=None):
     await asyncio.gather(*tasks, return_exceptions=True)
     loop.stop()
 
-   
-
 if __name__ == '__main__':
+    # Set up the asyncio first and then we don't get the debug data messages
+    testloop = asyncio.new_event_loop()
+    asyncio.set_event_loop(testloop)
+    testloop.set_exception_handler(handle_exception)
+
     setupLocalLogger("ERROR", empty = True)   # one of "WARNING"  "INFO"  "ERROR"   "DEBUG"
     ConfigureLogger(str(args.print).lower(), None)
     setConnectionMode(str(args.connect).lower())
 
-    testloop = asyncio.get_event_loop()
-    testloop.set_exception_handler(handle_exception)
-
     client = VisonicClient(loop = testloop, config = myconfig)
+
     if client is not None:
         success = True #client.connect(wait_sleep=False, wait_loop=True)
         if success:

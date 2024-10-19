@@ -4,10 +4,13 @@ import logging
 from typing import Callable, Any
 import re
 import socket
-from datetime import datetime
+import datetime
+from datetime import datetime, timedelta, timezone
 from jinja2 import Environment, FileSystemLoader
 from functools import partial
 import threading
+import collections
+from collections import namedtuple
 
 from enum import IntEnum
 from requests import ConnectTimeout, HTTPError
@@ -31,7 +34,6 @@ from homeassistant.const import (
     EVENT_HOMEASSISTANT_STOP,
 )
 
-# The following 3 are only used in def printAllEntities which is only for debug
 from homeassistant.helpers import entity_platform as ep
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -42,11 +44,13 @@ from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.image import DOMAIN as IMAGE_DOMAIN
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
+from homeassistant.components.siren import DOMAIN as SIREN_DOMAIN
 from homeassistant.components.alarm_control_panel import DOMAIN as ALARM_PANEL_DOMAIN
 from homeassistant.util.thread import ThreadWithException
 
 from .pyconst import (AlEnum, AlTransport, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, AlSensorType,  
-                      AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlSensorDevice, AlLogPanelEvent, AlSwitchDevice)
+                      AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlSensorDevice, AlLogPanelEvent, AlSwitchDevice, AlTerminationType,
+                      PE_PARTITION, PE_EVENT, PE_NAME, PE_TIME)
 from .pyvisonic import VisonicProtocol
 from .create_schema import AvailableSensorEvents
 
@@ -57,9 +61,6 @@ from .const import (
     ALARM_COMMAND_EVENT,
     ALARM_PANEL_LOG_FILE_COMPLETE,
     ALARM_PANEL_LOG_FILE_ENTRY,
-#    ALARM_PANEL_COMMAND,
-#    ALARM_PANEL_EVENTLOG,
-#    ALARM_PANEL_RECONNECT,
     ATTR_BYPASS,
     VISONIC_UNIQUE_NAME,
     CONF_EXCLUDE_SENSOR,
@@ -73,12 +74,10 @@ from .const import (
     CONF_ARM_NIGHT_ENABLED,
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
-#    CONF_AUTO_SYNC_TIME,
     CONF_EEPROM_ATTRIBUTES,
     CONF_DEVICE_BAUD,
     CONF_DEVICE_TYPE,
     CONF_DOWNLOAD_CODE,
-#    CONF_FORCE_AUTOENROLL,
     CONF_EMULATION_MODE,
     CONF_LANGUAGE,
     CONF_MOTION_OFF_DELAY,
@@ -96,6 +95,7 @@ from .const import (
     CONF_RETRY_CONNECTION_COUNT,
     CONF_RETRY_CONNECTION_DELAY,
     CONF_COMMAND,
+    CONF_X10_COMMAND,
     DOMAIN,
     NOTIFICATION_ID,
     NOTIFICATION_TITLE,
@@ -106,27 +106,24 @@ from .const import (
     PIN_REGEX,
 )
 
-#BASE_PRELOAD_PLATFORMS = [
-#    "config",
-#    "config_flow",
-#    "diagnostics",
-#    "energy",
-#    "group",
-#    "logbook",
-#    "hardware",
-#    "intent",
-#    "media_source",
-#    "recorder",
-#    "repairs",
-#    "system_health",
-#    "trigger",
-#]
-  
-CLIENT_VERSION = "0.9.6.4"
+CLIENT_VERSION = "0.10.0.0"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
 _LOGGER = logging.getLogger(__name__)
+
+messageDictReason = {
+    AlCommandStatus.SUCCESS                             : "Success, sent Command to Panel",
+    AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS           : "Failed to Send Command To Panel, not supported when downloading EPROM",
+    AlCommandStatus.FAIL_INVALID_CODE                   : "Failed to Send Command To Panel, not allowed without valid pin",
+    AlCommandStatus.FAIL_USER_CONFIG_PREVENTED          : "Failed to Send Command To Panel, disabled by user settings",
+    AlCommandStatus.FAIL_INVALID_STATE                  : "Failed to Send Command To Panel, invalid state requested",
+    AlCommandStatus.FAIL_X10_PROBLEM                    : "Failed to Send Command To Panel, general X10 Problem",
+    AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED         : "Failed to Send Command To Panel, disabled by panel settings",
+    AlCommandStatus.FAIL_ENTITY_INCORRECT               : "Failed to Send Command To Panel, entity not supported",
+    AlCommandStatus.FAIL_PANEL_NO_CONNECTION            : "Failed to Send Command To Panel, no connection to panel",
+    AlCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED : "Failed to Send Command To Panel, report error to integration author and send a log file"
+}
 
 class PanelCondition(IntEnum): # Start at 100 to make them unique for AlarmPanelEventActionList mixing with AlCondition
     CHECK_ARM_DISARM_COMMAND = 100
@@ -134,42 +131,138 @@ class PanelCondition(IntEnum): # Start at 100 to make them unique for AlarmPanel
     CHECK_EVENT_LOG_COMMAND = 102
     CHECK_X10_COMMAND = 103
     CONNECTION = 104
-    PANEL_LOG = 105
+    PANEL_LOG_COMPLETE = 105
+    PANEL_LOG_ENTRY = 106
 
-messageDict = {
-    AlCommandStatus.SUCCESS                     : "Success, sent Command to Panel",
-    AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS   : "Failed to Send Command To Panel, not supported when downloading EPROM",
-    AlCommandStatus.FAIL_INVALID_CODE           : "Failed to Send Command To Panel, not allowed without valid pin",
-    AlCommandStatus.FAIL_USER_CONFIG_PREVENTED  : "Failed to Send Command To Panel, disabled by user settings",
-    AlCommandStatus.FAIL_INVALID_STATE          : "Failed to Send Command To Panel, invalid state requested",
-    AlCommandStatus.FAIL_X10_PROBLEM            : "Failed to Send Command To Panel, general X10 Problem",
-    AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED : "Failed to Send Command To Panel, disabled by panel settings"
-}
-
-ValidEvents = [
-    ALARM_SENSOR_CHANGE_EVENT,
-    ALARM_PANEL_CHANGE_EVENT,
-    ALARM_PANEL_LOG_FILE_ENTRY,
-    ALARM_PANEL_LOG_FILE_COMPLETE,
-    ALARM_COMMAND_EVENT
-]
-  
+HA_Event_Type = collections.namedtuple('HA_Event_Type', 'name action')  # If action is an empty string then it is not added
 AlarmPanelEventActionList = {
-   AlCondition.ZONE_UPDATE                 : "",
-   AlCondition.PANEL_UPDATE                : "panelupdate", 
-   AlCondition.PANEL_RESET                 : "panelreset",
-   AlCondition.PIN_REJECTED                : "pinrejected",
-   AlCondition.DOWNLOAD_TIMEOUT            : "timeoutdownload", 
-   AlCondition.WATCHDOG_TIMEOUT_GIVINGUP   : "timeoutwaiting", 
-   AlCondition.WATCHDOG_TIMEOUT_RETRYING   : "timeoutactive", 
-   AlCondition.NO_DATA_FROM_PANEL          : "nopaneldata", 
-   PanelCondition.CONNECTION               : "connection",
-   PanelCondition.PANEL_LOG                : "",
-   PanelCondition.CHECK_ARM_DISARM_COMMAND : "armdisarm", 
-   PanelCondition.CHECK_BYPASS_COMMAND     : "bypass", 
-   PanelCondition.CHECK_EVENT_LOG_COMMAND  : "eventlog", 
-   PanelCondition.CHECK_X10_COMMAND        : "x10"
+    AlCondition.ZONE_UPDATE                 : HA_Event_Type(ALARM_SENSOR_CHANGE_EVENT,     ""),
+    AlCondition.PANEL_UPDATE                : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "panelupdate"), 
+    AlCondition.PANEL_RESET                 : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "panelreset"),
+    AlCondition.PIN_REJECTED                : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "pinrejected"),
+    AlCondition.DOWNLOAD_TIMEOUT            : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "timeoutdownload"), 
+    AlCondition.WATCHDOG_TIMEOUT_GIVINGUP   : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "timeoutwaiting"), 
+    AlCondition.WATCHDOG_TIMEOUT_RETRYING   : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "timeoutactive"), 
+    AlCondition.NO_DATA_FROM_PANEL          : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "nopaneldata"), 
+    PanelCondition.CONNECTION               : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "connection"),
+    PanelCondition.PANEL_LOG_COMPLETE       : HA_Event_Type(ALARM_PANEL_LOG_FILE_COMPLETE, ""),
+    PanelCondition.PANEL_LOG_ENTRY          : HA_Event_Type(ALARM_PANEL_LOG_FILE_ENTRY,    ""),
+    PanelCondition.CHECK_ARM_DISARM_COMMAND : HA_Event_Type(ALARM_COMMAND_EVENT,           "armdisarm"), 
+    PanelCondition.CHECK_BYPASS_COMMAND     : HA_Event_Type(ALARM_COMMAND_EVENT,           "bypass"), 
+    PanelCondition.CHECK_EVENT_LOG_COMMAND  : HA_Event_Type(ALARM_COMMAND_EVENT,           "eventlog"), 
+    PanelCondition.CHECK_X10_COMMAND        : HA_Event_Type(ALARM_COMMAND_EVENT,           "x10")
 }
+
+##############################################################################################################################################################################################################################################
+##########################  Panel Event coordinator to manage A5, B0.24 and A7 panel state and event data ####################################################################################################################################
+##############################################################################################################################################################################################################################################
+
+class PanelEventCoordinator:
+    
+    def __init__(self, loop, callbackSender, ispm = False, logstate_debug = None):
+        if logstate_debug is None:
+            self.logstate_debug = self._dummy
+        else:
+            self.logstate_debug = logstate_debug
+        if callbackSender is None:
+            self.callbackSender = self._dummy
+        else:
+            self.callbackSender = callbackSender
+        self.logstate_debug(f"[EC] Starting")
+        self.loop = loop
+        self.isPowerMaster = ispm
+        self.EventTime = 0
+        self.EventName = 0
+        self.EventAction = -100
+        self.EventPartition = None
+        self._event_timer_task = None
+        self.timerAlreadySent = True
+
+    def _dummy(self, msg, *args, **kwargs):
+        pass
+
+    def _sendData(self):
+        if self.EventAction >= 0:
+            d = self._convert()
+            self.logstate_debug(f"[EC] sending panel update {self.EventName=} {self.EventAction=} as data {d}")
+            self.callbackSender(AlCondition.PANEL_UPDATE, d)
+        else:
+            self.logstate_debug(f"[EC] _sendData wont send blank data")
+
+    def _convert(self) -> dict:
+        from . import pmLogEvent_t, pmLogPowerMaxUser_t, pmLogPowerMasterUser_t
+        d = {}
+        # Set the name
+        d[PE_NAME] = "Unknown"
+        if self.isPowerMaster:
+            d[PE_NAME] = pmLogPowerMasterUser_t[self.EventName] or "Unknown"
+        else:
+            d[PE_NAME] = pmLogPowerMaxUser_t[int(self.EventName & 0x7F)] or "Unknown"
+        # Set the event
+        d[PE_EVENT] = "Unknown"
+        if 0 <= self.EventAction <= 151:
+            if len(pmLogEvent_t[self.EventAction]) > 0:
+                d[PE_EVENT] = pmLogEvent_t[self.EventAction]
+        # Set the time
+        d[PE_TIME] = self.EventTime
+        if self.EventPartition is not None:
+            d[PE_PARTITION] = self.EventPartition
+        return d
+
+    async def _event_timer(self):
+        self.timerAlreadySent = False
+        #self.logstate_debug(f"[EC] _event_timer started")
+        await asyncio.sleep(0.8)
+        #self.logstate_debug(f"[EC] _event_timer expired")
+        self._sendData()
+        self.timerAlreadySent = True
+    
+    def _send_and_replace(self, data : dict):
+        if self._event_timer_task is not None:
+            #self.logstate_debug("[EC] Cancelling _event_timer_task")
+            self._event_timer_task.cancel()
+        # send existing data
+        if not self.timerAlreadySent:
+            self._sendData()
+        # save new data
+        self.EventName = data[PE_NAME]
+        self.EventAction = data[PE_EVENT]
+        self.EventTime = data[PE_TIME]
+        self.EventPartition = data[PE_PARTITION] if PE_PARTITION in data else None
+        self.logstate_debug(f"[EC] _send_and_replace {data}     partition = {self._convert()[PE_PARTITION] if self.EventPartition is not None else "Not set as it is a panel"}    " + 
+                 f"name = {self._convert()[PE_NAME]}    event = {self._convert()[PE_EVENT]}")  # e.g. {'name': 0, 'event': 28, 'time': '04/10/2024, 22:46:04'}
+        self._event_timer_task = self.loop.create_task(self._event_timer())
+    
+    def setIsPowerMaster(self, pm):
+        self.isPowerMaster = pm
+
+    def addEvent(self, data : dict):
+        if data is not None:
+            #self.logstate_debug(f"[EC] addEvent {data}")
+            
+            if self.EventAction != data[PE_EVENT]:
+                # If the action is not the same
+                self._send_and_replace(data)
+            else:
+                # If the action is the same
+                if self.EventName == data[PE_NAME]:   # exactly the same event as last time then do not send it
+                    # Name is exactly the same as what we already have
+                    #self.logstate_debug(f"[EC] Panel event data {data} is the same as last time so not sending event")
+                    return
+                if self.EventName != 0 and data[PE_NAME] == 0:
+                    # Existing Name is better than new one
+                    self.logstate_debug(f"[EC] Panel event data {data} is the same Event but I already have a better name")
+                    return
+                if self.EventName == 0 and data[PE_NAME] != 0:
+                    # The existing name is 0 (i.e. system) and the new name is better so replace it
+                    self.logstate_debug(f"[EC] Replacing 'system' with {data["name"]} but keeping original time {self.EventTime}")
+                    self.EventName = data["name"]
+                    #self.EventTime = data[PE_TIME]
+                    return
+                # Here when the existing name and the new name are different and both non-zero
+                #   Send the previous and replace with the new
+                self._send_and_replace(data)
+                
 
 class MyTransport(AlTransport):
 
@@ -181,11 +274,6 @@ class MyTransport(AlTransport):
 
     def close(self):
         self._transport.close()
-
-    def changeSerialBaud(self, baud : int):
-        print(f"[MyTransport] A, {self._transport.serial.baudrate} {type(self._transport.serial.baudrate)}")
-        self._transport.serial.baudrate = baud
-        print(f"[MyTransport] B, {self._transport.serial.baudrate} {type(self._transport.serial.baudrate)}")
 
 # This class joins the Protocol data stream to the visonic protocol handler.
 #    transport needs to have 2 functions:   write(bytearray)  and  close()
@@ -207,11 +295,6 @@ class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
         super().vp_connection_lost(exc)
         self._transport = None
 
-    def changeSerialBaud(self, baud : int):
-        print(f"[ClientVisonicProtocol] A, {self._transport.serial.baudrate} {type(self._transport.serial.baudrate)}")
-        self._transport.serial.baudrate = baud
-        print(f"[ClientVisonicProtocol] B, {self._transport.serial.baudrate} {type(self._transport.serial.baudrate)}")
-
     # This is needed so we can create the class instance before giving it to the protocol handlers
     def __call__(self):
         return self
@@ -219,7 +302,7 @@ class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 class VisonicClient:
     """Set up for Visonic devices."""
     
-    _LOGGER.debug("Initialising Client - Version {0}".format(CLIENT_VERSION))
+    _LOGGER.debug(f"Initialising Client - Version {CLIENT_VERSION}")
 
     def __init__(self, hass: HomeAssistant, panelident: int, cf: dict, entry: ConfigEntry):
         """Initialize the Visonic Client."""
@@ -228,12 +311,17 @@ class VisonicClient:
         # Get the user defined config
         self.config = cf.copy()
         self.strlog = []
-        #self.logstate_debug(f"init panel {str(panelident)}  language {str(self.hass.config.language)}   self.config = {self.config}")
         self.panelident = panelident
+        self.logstate_debug(f"init panel {str(panelident)}  language {str(self.hass.config.language)}")
         self._initialise()
         self.logstate_info(f"Exclude sensor list = {self.exclude_sensor_list}     Exclude x10 list = {self.exclude_x10_list}")
         
+    # get the current date and time
+    def _getTimeFunction(self) -> datetime:
+        return datetime.now(timezone.utc).astimezone()
+
     def _initialise(self):
+        from . import pmLogEvent_t, pmLogPowerMaxUser_t
         # panel connection
         self.logstate_debug("reset client panel variables")
         
@@ -243,7 +331,7 @@ class VisonicClient:
         self.visonic_switch_setup_lock = asyncio.Lock()
         self.visonic_alarm_setup_lock = asyncio.Lock()
 
-        self.panel_exception_counter = 0
+        self.panel_disconnection_counter = 0
         self.visonicTask = None
         self.visonicProtocol : AlPanelInterface = None
         self.SystemStarted = False
@@ -258,9 +346,13 @@ class VisonicClient:
         self.switch_task = None
         self.image_task = None
         
+        self.rationalised_ha_devices = False
+        
         self.loaded_platforms = set()
         
         self.onChangeHandler = []
+        
+        self.panel_entity_name = {}
 
         self.sensor_list = list()
         self.image_list = list()
@@ -274,6 +366,12 @@ class VisonicClient:
         self.DisableAllCommands = False
 
         self._setupSensorDelays()
+
+        self.myPanelEventCoordinator = None
+        self.PanelLastEventName = pmLogPowerMaxUser_t[0]  # get the language translation for "Startup", entry 0 should be the same for all panel models so just use powermax
+        self.PanelLastEventAction = pmLogEvent_t[0]       # get the language translation for "Normal"
+        #self.logstate_debug(f"client panel variables {self.PanelLastEventName}  {self.PanelLastEventAction}")
+        self.PanelLastEventTime = self._getTimeFunction() # .strftime("%d/%m/%Y, %H:%M:%S")
 
         # Process the exclude sensor list
         self.exclude_sensor_list = self.config.get(CONF_EXCLUDE_SENSOR)
@@ -323,21 +421,21 @@ class VisonicClient:
     def logstate_debug(self, msg, *args, **kwargs):
         s = "P" + str(self.getPanelID()) + "  " + (msg % args % kwargs)
         _LOGGER.debug(s)
-        self.strlog.append(str(datetime.now()) + "  D " + s)
+        self.strlog.append(str(datetime.now(timezone.utc).astimezone()) + "  D " + s)
         while len(self.strlog) > MAX_CLIENT_LOG_ENTRIES:
             self.strlog.pop(0)
             
     def logstate_info(self, msg, *args, **kwargs):
         s = "P" + str(self.getPanelID()) + "  " + (msg % args % kwargs)
         _LOGGER.info(" " + s)
-        self.strlog.append(str(datetime.now()) + "  I " + s)
+        self.strlog.append(str(datetime.now(timezone.utc).astimezone()) + "  I " + s)
         while len(self.strlog) > MAX_CLIENT_LOG_ENTRIES:
             self.strlog.pop(0)
 
     def logstate_warning(self, msg, *args, **kwargs):
         s = "P" + str(self.getPanelID()) + "  " + (msg % args % kwargs)
         _LOGGER.warning(s)
-        self.strlog.append(str(datetime.now()) + "  W " + s)
+        self.strlog.append(str(datetime.now(timezone.utc).astimezone()) + "  W " + s)
         while len(self.strlog) > MAX_CLIENT_LOG_ENTRIES:
             self.strlog.pop(0)
 
@@ -357,7 +455,7 @@ class VisonicClient:
 
     def getAlarmPanelUniqueIdent(self):
         if self.getPanelID() > 0:
-            return VISONIC_UNIQUE_NAME + " Panel " + str(self.getPanelID())
+            return VISONIC_UNIQUE_NAME + " " + str(self.getPanelID())
         return VISONIC_UNIQUE_NAME
 
     def createNotification(self, condition : AvailableNotifications, message: str):
@@ -368,11 +466,11 @@ class VisonicClient:
         
         if condition == AvailableNotifications.ALWAYS or condition.value in notification_config:
             # Create an info entry in the log file and an HA notification
-            self.logstate_info(f"HA Notification: {message}")
+            self.logstate_info(f"HA Notification: {condition}  {message}")
             persistent_notification.create(self.hass, message, title=NOTIFICATION_TITLE, notification_id=NOTIFICATION_ID)
         else:
             # Just create a log file entry (but indicate that it wasnt shown in the frontend to the user
-            self.logstate_info(f"HA Warning (not shown in frontend due to user config), condition is {condition} message={message}")
+            self.logstate_info(f"HA Notification (not shown in frontend due to user config), condition is {condition} message={message}")
 
     def dumpSensorsToStringList(self) -> list:
         if self.visonicProtocol is not None:
@@ -389,22 +487,27 @@ class VisonicClient:
     #        return self.visonicProtocol.dumpStateToStringList()
     #    return []
 
-    def isSirenActive(self) -> bool:
+    def isSirenActive(self) -> (bool, AlSensorDevice | None):
         """Is the siren active."""
         if self.visonicProtocol is not None:
             return self.visonicProtocol.isSirenActive()
-        return False
+        return (False, None)
 
-    def isPanelReady(self) -> bool:
+    def isPanelReady(self, partition : int ) -> bool:
         """Is panel ready"""
         if self.visonicProtocol is not None:
-            return self.visonicProtocol.isPanelReady()
+            return self.visonicProtocol.isPanelReady(partition)
         return False
 
-    def isPanelTrouble(self) -> bool:
+    def getPartitionsInUse(self) -> set | None:
+        if self.visonicProtocol is not None:
+            return self.visonicProtocol.getPartitionsInUse()
+        return None
+
+    def isPanelTrouble(self, partition : int ) -> bool:
         """Is panel trouble"""
         if self.visonicProtocol is not None:
-            return self.visonicProtocol.isPanelTrouble()
+            return self.visonicProtocol.isPanelTrouble(partition)
         return False
 
     def isForceKeypad(self) -> bool:
@@ -421,7 +524,7 @@ class VisonicClient:
         return False
 
     def getClientStatusDict(self):
-        return { "Exception Count": self.panel_exception_counter }
+        return { "Disconnection Count": self.panel_disconnection_counter }
 
     def isArmHome(self):
         return self.toBool(self.config.get(CONF_ARM_HOME_ENABLED, True))
@@ -449,10 +552,10 @@ class VisonicClient:
         """Is it Remote Disarm"""
         return self.toBool(self.config.get(CONF_ENABLE_REMOTE_DISARM, False))
 
-    def getPanelStatus(self) -> AlPanelStatus:
+    def getPanelStatus(self, partition : int | None = None) -> AlPanelStatus:
         """Get the panel status code."""
         if self.visonicProtocol is not None:
-            return self.visonicProtocol.getPanelStatus()
+            return self.visonicProtocol.getPanelStatus(partition)
         return AlPanelStatus.UNKNOWN
 
     def getPanelMode(self) -> AlPanelMode:
@@ -472,14 +575,21 @@ class VisonicClient:
             return self.visonicProtocol.getPanelFixedDict()
         return {}
 
-    def getPanelStatusDict(self, include_extended_status : bool = None) -> dict:
+    def getPanelStatusDict(self, partition : int | None = None, include_extended_status : bool = None) -> dict:
         """Get the panel status."""
         if self.visonicProtocol is not None:
             if include_extended_status is None:
                 include_extended_status = self.toBool(self.config.get(CONF_EEPROM_ATTRIBUTES, False))
-            pd = self.visonicProtocol.getPanelStatusDict(include_extended_status)
-            #self.logstate_debug("Client Dict {0}".format(pd))
-            pd["Client Version"] = CLIENT_VERSION
+            pd = self.visonicProtocol.getPanelStatusDict(partition, include_extended_status)
+            if partition is None:
+                #self.logstate_debug(f"Client Dict {pd}")
+                pd["lastevent"] = self.PanelLastEventName + "/" + self.PanelLastEventAction
+                pd["lasteventname"] = self.PanelLastEventName
+                pd["lasteventaction"] = self.PanelLastEventAction
+                pd["lasteventtime"] = self.PanelLastEventTime
+                pd["Client Version"] = CLIENT_VERSION
+            elif partition == 1:
+                pd["Client Version"] = CLIENT_VERSION
             return pd
         return {}
 
@@ -516,7 +626,7 @@ class VisonicClient:
                     output = template.render(
                         entries=self.templatedata,
                         total=total,
-                        available="{0}".format(available),
+                        available=f"{available}",
                     )
                     with open(self.config.get(CONF_LOG_XML_FN), "w") as f:
                         self.logstate_debug("Panel Event Log - Writing xml file")
@@ -562,11 +672,11 @@ class VisonicClient:
 
     def process_panel_event_log(self, entry: AlLogPanelEvent):
         """Process a sequence of panel log events."""
+        from . import pmLogEvent_t, pmLogPowerMaxUser_t, pmLogPowerMasterUser_t
 
         #self._exc_info = None
         #finish_event = asyncio.Event()
 
-        self.logstate_debug(f"Panel Event Log - Processing {entry.current} of {entry.total}")
         reverse = self.toBool(self.config.get(CONF_LOG_REVERSE))
         total = 0
         if entry.total is not None and self.config.get(CONF_LOG_MAX_ENTRIES) is not None:
@@ -579,32 +689,43 @@ class VisonicClient:
         if reverse:
             current = total + 1 - entry.current
         # Fire event visonic_alarm_panel_event_log
-        if (
-            self.toBool(self.config.get(CONF_LOG_EVENT))
-            and entry.current <= total
-        ):  
-            self._fireHAEvent(
-                name = ALARM_PANEL_LOG_FILE_ENTRY, 
-                event_id = PanelCondition.PANEL_LOG, 
-                datadictionary = {"current": current,
-                                  "total": total,
-                                  "date": entry.date,
-                                  "time": entry.time,
-                                  "partition": entry.partition,
-                                  "zone": entry.zone,
-                                  "event": entry.event,
-                }
-            )
-            #self.logstate_debug("Panel Event Log - fired Single Item event")
-        
+
         # Initialise values
         if entry.current == 1:
             self.templatedata = []
             self.csvdata = ""
+            self.logstate_debug(f"Panel Event Log - Processing")
 
+        eventStr = "Unknown"
+        if 0 <= entry.event <= 151:
+            if len(pmLogEvent_t[entry.event]) > 0:
+                eventStr = pmLogEvent_t[entry.event]
+            else:
+                self.logstate_debug(f"[process_panel_event_log] Found unknown log event {entry.event}")
+
+        if self.isPowerMaster(): # PowerMaster models
+            zoneStr = pmLogPowerMasterUser_t[entry.zone] if entry.zone in pmLogPowerMasterUser_t else "Unknown"
+        else:
+            zoneStr = pmLogPowerMaxUser_t[entry.zone] if entry.zone in pmLogPowerMaxUser_t else "Unknown"
+
+        if (
+            self.toBool(self.config.get(CONF_LOG_EVENT))
+            and entry.current <= total
+        ):  
+            datadictionary = {"current": current,
+                              "total": total,
+                              "date": entry.dateandtime,
+                              #"time": entry.time,
+                              "partition": entry.partition,
+                              "zone": zoneStr,
+                              "event": eventStr,
+            }
+            self._fireHAEvent(event_id = PanelCondition.PANEL_LOG_ENTRY, datadictionary = datadictionary)
+            #self.logstate_debug(f"    Event Log {entry.current} of {entry.total}   event {datadictionary}")
+        
         if self.csvdata is not None and self.templatedata is not None:
             # Accumulating CSV Data
-            csvtemp = (f"{current}, {total}, {entry.partition}, {entry.date}, {entry.time}, {entry.zone}, {entry.event}\n")
+            csvtemp = (f"{current}, {total}, {entry.partition}, {entry.dateandtime}, {zoneStr}, {eventStr}\n")
             if reverse:
                 self.csvdata = csvtemp + self.csvdata
             else:
@@ -612,12 +733,12 @@ class VisonicClient:
 
             # Accumulating Data for the XML generation
             dd = {
-                "partition": "{0}".format(entry.partition),
-                "current": "{0}".format(current),
-                "date": "{0}".format(entry.date),
-                "time": "{0}".format(entry.time),
-                "zone": "{0}".format(entry.zone),
-                "event": "{0}".format(entry.event),
+                "partition": f"{entry.partition}",
+                "current": f"{current}",
+                "date": f"{entry.dateandtime}",
+                #"time": f"{entry.time}",
+                "zone": f"{zoneStr}",
+                "event": f"{eventStr}",
             }
 
             self.templatedata.append(dd)
@@ -639,7 +760,7 @@ class VisonicClient:
 
                 if self.toBool(self.config.get(CONF_LOG_DONE)):
                     self.logstate_debug("Panel Event Log - Firing Completion Event")
-                    self._fireHAEvent(name = ALARM_PANEL_LOG_FILE_COMPLETE, event_id = PanelCondition.PANEL_LOG, datadictionary = {"total": total, "available": entry.total})
+                    self._fireHAEvent(event_id = PanelCondition.PANEL_LOG_COMPLETE, datadictionary = {"total": total, "available": entry.total})
                 self.logstate_debug("Panel Event Log - Complete")
 
     # This is not called from anywhere, use it for debug purposes and/or to clear all entities from HA
@@ -662,7 +783,6 @@ class VisonicClient:
         # The platforms do not initially exist, but after a reload they already exist
         platforms = ep.async_get_platforms(self.hass, DOMAIN)
         _LOGGER.debug(f"         platforms {platforms}")
-
    
     async def _setupVisonicEntity(self, platform, domain, param = None):
         """Setup a platform and add an entity using the dispatcher."""
@@ -683,8 +803,8 @@ class VisonicClient:
         if self.hass is None:
             self.logstate_warning("Attempt to add X10 switch when hass is undefined")
             return
-        if not self._createdAlarmPanel:
-            await self._async_setupAlarmPanel()
+        #if not self._createdAlarmPanel:
+        #    await self._async_setupAlarmPanel()
         if dev is None:
             self.logstate_warning("Attempt to add X10 switch when sensor is undefined")
             return
@@ -694,9 +814,9 @@ class VisonicClient:
         if dev.isEnabled() and dev.getDeviceID() not in self.exclude_x10_list:
             dev.onChange(self.onSwitchChange)
             async with self.visonic_switch_setup_lock:
-                if dev.getDeviceID() not in self.x10_list:
-                    self.logstate_debug(f"X10 Switch list {self.x10_list=}     {dev.getDeviceID()=}")
-                    self.x10_list.append(dev.getDeviceID())
+                if dev not in self.x10_list:
+                    self.logstate_debug(f"X10 Switch list {dev.getDeviceID()=}")
+                    self.x10_list.append(dev)
                     await self._setupVisonicEntity(Platform.SWITCH, SWITCH_DOMAIN, dev)
                 else:
                     self.logstate_debug(f"X10 Device {dev.getDeviceID()} already in the list")
@@ -716,6 +836,7 @@ class VisonicClient:
                 else:
                     self.logstate_debug("Creating Alarm Panel Entity")
                     await self._setupVisonicEntity(Platform.ALARM_CONTROL_PANEL, ALARM_PANEL_DOMAIN)
+                    await self._setupVisonicEntity(Platform.SIREN, SIREN_DOMAIN)
 
     def onNewSensor(self, sensor: AlSensorDevice):
         asyncio.ensure_future(self.async_onNewSensor(sensor), loop=self.hass.loop)
@@ -726,8 +847,8 @@ class VisonicClient:
         if self.hass is None:
             self.logstate_warning("Visonic attempt to add sensor when hass is undefined")
             return
-        if not self._createdAlarmPanel:
-            await self._async_setupAlarmPanel()
+        #if not self._createdAlarmPanel:
+        #    await self._async_setupAlarmPanel()
         if sensor is None:
             self.logstate_warning("Visonic attempt to add sensor when sensor is undefined")
             return
@@ -761,24 +882,24 @@ class VisonicClient:
                 # The connection to the panel allows interaction with the sensor, including asking to get the image from a camera
                 await self._setupVisonicEntity(Platform.IMAGE, IMAGE_DOMAIN, sensor)
 
-    def onChange(self, fn : Callable):
-        self.onChangeHandler.append(fn)
+    def onChange(self, callback : Callable, partition : int | None = None, panel_entity_name : str | None = None):
+        if panel_entity_name is not None:
+            if partition is None:
+                partition = 1
+            self.panel_entity_name[partition] = panel_entity_name
+        self.onChangeHandler.append(callback)
 
-    def _fireHAEvent(self, name: str, event_id: AlCondition | PanelCondition, datadictionary: dict):
+    def _fireHAEvent(self, event_id: AlCondition | PanelCondition, datadictionary: dict):
         # Check to ensure variables are set correctly
         if self.hass is None:
             self.logstate_warning("Attempt to generate HA event when hass is undefined")
             return
 
-        if not self._createdAlarmPanel:
-            self._setupAlarmPanel()
+        #if not self._createdAlarmPanel:
+        #    self._setupAlarmPanel()
 
         if event_id is None:
             self.logstate_warning("Attempt to generate HA event when Event Type is undefined")
-            return
-
-        if name not in ValidEvents:
-            self.logstate_warning(f"Attempt to generate HA event but it is Invalid {name}")
             return
 
         # Call all the registered client change handlers
@@ -786,21 +907,39 @@ class VisonicClient:
             cb()
 
         if event_id in AlarmPanelEventActionList: # Event must be in the list to send out
+            name = AlarmPanelEventActionList[event_id].name
             a = {}
             a[PANEL_ATTRIBUTE_NAME] = self.getPanelID()
-            a["panel_id"] = Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent())
-
-            if name == ALARM_PANEL_CHANGE_EVENT or name == ALARM_COMMAND_EVENT:
-                e = AlarmPanelEventActionList[event_id]
-                a["action"] = str(e)
+            
+            if len(AlarmPanelEventActionList[event_id].action) > 0:       # name == ALARM_PANEL_CHANGE_EVENT or name == ALARM_COMMAND_EVENT:
+                a["action"] = AlarmPanelEventActionList[event_id].action
 
             if datadictionary is not None:
+                piu = self.getPartitionsInUse()
+                
+                if piu is None and PE_PARTITION in datadictionary:
+                    # if no used partitions and PE_PARTITION in datadictionary then remove it
+                    del datadictionary[PE_PARTITION]
+
+                if piu is not None and PE_PARTITION not in datadictionary:
+                    # if partitions in use and PE_PARTITION is not in the datadictionary then add the first partition 
+                    datadictionary[PE_PARTITION] = list(piu)[0]
+                
+                if PE_PARTITION in datadictionary:
+                    if datadictionary[PE_PARTITION] in self.panel_entity_name:
+                        a["panel_id"] = Platform.ALARM_CONTROL_PANEL + "." + slugify(self.panel_entity_name[datadictionary[PE_PARTITION]])   # Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent())
+                    else:
+                        a["panel_id"] = Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent())
+                    self.logstate_debug(f"Client [_fireHAEvent]      Setting entity id in the event {a['panel_id']}")
+                else:
+                    a["panel_id"] = Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent())
+
                 b = datadictionary.copy()
                 dd = {**a, **b}
-                self.logstate_debug(f"Client: Sending HA Event {name}  {dd}")
+                self.logstate_debug(f"Client [_fireHAEvent]  Sending HA Event {name}  {dd}")
                 self.hass.bus.fire( name, dd )
             else:
-                self.logstate_debug(f"Client: Sending HA Event {name}  {a}")
+                self.logstate_debug(f"Client [_fireHAEvent]  Sending HA Event {name}  {a}")
                 self.hass.bus.fire( name, a )
 
     def onSensorChange(self, sensor : AlSensorDevice, c : AlSensorCondition):
@@ -824,21 +963,112 @@ class VisonicClient:
                     datadict["entity_id"] = s.entity_id
                     break
             
-            self._fireHAEvent(ALARM_SENSOR_CHANGE_EVENT, AlCondition.ZONE_UPDATE, datadict)
+            self._fireHAEvent(AlCondition.ZONE_UPDATE, datadict)
 
         # Check to make sure we have an image entity created for this sensor
         if not self.DisableAllCommands and sensor.getDeviceID() not in self.image_list and sensor.getSensorType() == AlSensorType.CAMERA:
             asyncio.ensure_future(self.create_image_entity(sensor), loop=self.hass.loop)
     
     def onSwitchChange(self, switch : AlSwitchDevice):
-        #_LOGGER.debug("onSwitchChange {0}".format(switch))
+        #_LOGGER.debug(f"onSwitchChange {switch}")
         pass
 
-    # This can be called from this module but it is also the callback handler for the connection
-    def onPanelChangeHandler(self, event_id: AlCondition | PanelCondition, data : dict, event_name = ALARM_PANEL_CHANGE_EVENT):
-        """Generate HA Bus Event and Send Notification to Frontend."""
+    def rationalise_ha_devices(self):
+
+        def buildEntitySet() -> set:
+            entname = slugify(self.getAlarmPanelUniqueIdent())
+            retval = set()
+            retval.add(entname)
+            for sensor in self.sensor_list:
+                entname = self.getMyString() + sensor.createFriendlyName().lower()
+                retval.add(entname)
+            for switch in self.x10_list:
+                entname = self.getMyString() + switch.createFriendlyName().lower()
+                retval.add(entname)
+            return retval
+ 
+        def filterEntitybyPanelIdent( entities : list, p : int ) -> list:
+            retval = []
+            reg = f"{self.getMyString()}[xz]\\d\\d"
+            for e in entities:
+                if re.search(reg, e.unique_id):
+                    retval.append(e)
+            return retval                
+            
+        def filterDevicebyPanelIdent( devices : list, p : int ) -> list:
+            retval = []
+            reg = f"{self.getMyString()}[xz]\\d\\d"
+            for d in devices:
+                for i in d.identifiers:
+                    if re.search(reg, i[1] ):
+                        retval.append(d)
+            return retval                
+
+        # Get the set of sensors and switches created by this panel (a set contains unique items, no duplication)
+        my_entities = buildEntitySet()
+        self.logstate_debug(f"     Set of Current Devices From Panel {my_entities}")
+
+        # Get entity and device registry
+        entity_reg = er.async_get(self.hass)
+        device_reg = dr.async_get(self.hass)
+
+        # Get a list of Home Assistant Visonic devices asociated with this config
+        device_entries = dr.async_entries_for_config_entry(device_reg, self.entry.entry_id)
+
+        #for device in device_entries:
+        #    self.logstate_debug(f"        HA Device BEFORE {device}")
+
+        # Filter the devices for this panel ID (so we dont remove devices for other panels that may still be valid)
+        #    As we get the list of devices for this config we shouldn't need to do this but just in case
+        device_entries = filterDevicebyPanelIdent(device_entries, self.getPanelID())
         
-        self._fireHAEvent(name = event_name, event_id = event_id, datadictionary = data if data is not None else {} )
+        # Clear out all devices not created by this panel
+        for device in device_entries:
+            self.logstate_debug(f"        HA Device        {device}")
+            # Get the list of Entities associated with this Device
+            entity_entries = er.async_entries_for_device(entity_reg, device.id, True)
+            #for entity in entity_entries:
+            #    self.logstate_debug(f"             has entity {entity}")
+            for ident in device.identifiers:
+                # This is important, it has to match the identifiers return in each entity device_info
+                #    as "identifiers": {(DOMAIN, slugify(self._name))},
+                if ident[1] not in my_entities:     
+                    self.logstate_debug(f"               Deleting this device from HA")
+                    # Delete the entities in this device first
+                    for entity in entity_entries:
+                        self.logstate_debug(f"                     Deleting this entity from HA {entity}")
+                        entity_reg.async_remove(entity.entity_id)
+                    # Delete this device
+                    device_reg.async_remove_device(device.id)
+
+        # Get the entities that are associated with this config
+        entity_entries = er.async_entries_for_config_entry(entity_reg, self.entry.entry_id)
+
+        #for entity in entity_entries:
+        #    self.logstate_debug(f"        HA Entity BEFORE {entity}")
+
+        # Filter the entities for this panel ID (so we dont remove entities for other panels that may still be valid)
+        entity_entries = filterEntitybyPanelIdent(entity_entries, self.getPanelID())
+
+        # Clear out all entities not created by this panel
+        for entity in entity_entries:
+            self.logstate_debug(f"        HA Entity        {entity}")
+            if entity.unique_id not in my_entities:
+                self.logstate_debug(f"               Deleting this entity from HA")
+                entity_reg.async_remove(entity.entity_id)
+
+        # The platforms do not initially exist, but after a reload they already exist
+        #platforms = ep.async_get_platforms(self.hass, DOMAIN)
+        #self.logstate_debug(f"         platforms {platforms}")
+
+    def sendEvent(self, event_id: AlCondition | PanelCondition, data : dict):
+
+        if event_id == AlCondition.PANEL_UPDATE and data is not None and len(data) == 3:
+            self.PanelLastEventName = data[PE_NAME]
+            self.PanelLastEventAction = data[PE_EVENT]
+            self.PanelLastEventTime = data[PE_TIME]
+            
+        self._fireHAEvent(event_id = event_id, datadictionary = data if data is not None else {} )
 
         if event_id == AlCondition.DOWNLOAD_SUCCESS:        # download success        
             # Update the friendly name of the control flow
@@ -847,11 +1077,24 @@ class VisonicClient:
             # update the title
             self.hass.config_entries.async_update_entry(self.entry, title=s)
 
+        if event_id == AlCondition.STARTUP_SUCCESS:        # Startup Success
+            if not self.rationalised_ha_devices:
+                if self.getPanelMode() in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
+                    self.rationalised_ha_devices = True
+                    self.rationalise_ha_devices()
+            
+            if (p := self.getPartitionsInUse()) is not None:
+                self.logstate_debug(f"   Startup Complete, number of partitions in panel = {len(p)}   they are {p}")
+            else:
+                self.logstate_debug(f"   Startup Complete, no partitions in panel")
+            if not self._createdAlarmPanel:
+                self._setupAlarmPanel()
+            
         #if event_id == AlCondition.PANEL_UPDATE and self.getPanelMode() == AlPanelMode.POWERLINK:
         #    # Powerlink Mode
         #    self.printAllEntities()
 
-        if event_id == AlCondition.PANEL_UPDATE and self.visonicProtocol is not None and self.visonicProtocol.isSirenActive():
+        if event_id == AlCondition.PANEL_UPDATE and self.visonicProtocol is not None and self.visonicProtocol.isSirenActive()[0]:
             self.createNotification(AvailableNotifications.SIREN, "Siren is Sounding, Alarm has been Activated" )
         elif event_id == AlCondition.PANEL_RESET:
             self.createNotification(AvailableNotifications.RESET, "The Panel has been Reset" )
@@ -862,7 +1105,7 @@ class VisonicClient:
         elif event_id == AlCondition.DOWNLOAD_TIMEOUT:
             self.createNotification(AvailableNotifications.PANEL_OPERATION, "Panel Data download timeout, Standard Mode Selected" )
         elif event_id == AlCondition.WATCHDOG_TIMEOUT_GIVINGUP:
-            if self.getPanelMode() == AlPanelMode.POWERLINK:
+            if self.getPanelMode() == AlPanelMode.POWERLINK or self.getPanelMode() == AlPanelMode.POWERLINK_BRIDGED:
                 self.createNotification(AvailableNotifications.CONNECTION_PROBLEM, "Communication Timeout - Watchdog Timeout too many times within 24 hours. Dropping out of Powerlink" )
             else:
                 self.createNotification(AvailableNotifications.CONNECTION_PROBLEM, "Communication Timeout - Watchdog Timeout too many times within 24 hours." )
@@ -870,9 +1113,35 @@ class VisonicClient:
             self.createNotification(AvailableNotifications.PANEL_OPERATION, "Communication Timeout - Watchdog Timeout, restoring panel connection" )
         elif event_id == AlCondition.NO_DATA_FROM_PANEL:
             self.createNotification(AvailableNotifications.CONNECTION_PROBLEM, "Connection Problem - No data from the panel" )
-            asyncio.ensure_future(self.service_panel_stop(), loop=self.hass.loop)
+            asyncio.ensure_future(self.async_service_panel_stop(), loop=self.hass.loop)
         elif event_id == AlCondition.COMMAND_REJECTED:
-            self.createNotification(AvailableNotifications.ALWAYS, "Operation Rejected By Panel (tell the Integration Author and upload a debug log file if you're able to)" )
+            self.createNotification(AvailableNotifications.ALWAYS, "Operation Rejected By Panel" )
+
+    # This can be called from this module but it is also the callback handler for the connection
+    def onPanelChangeHandler(self, event_id: AlCondition | PanelCondition, data : dict):
+        """Generate HA Bus Event and Send Notification to Frontend."""
+        
+        if event_id == AlCondition.PANEL_UPDATE:
+            if data is not None and len(data) == 4 and PE_NAME in data and data[PE_NAME] >= 0 and PE_PARTITION in data:
+                # The panel has partitions
+                partition = data[PE_PARTITION]
+                if self.myPanelEventCoordinator is None:
+                    # initialise as a dict, the partition is the key
+                    self.myPanelEventCoordinator = {}
+                if partition not in self.myPanelEventCoordinator:
+                    self.myPanelEventCoordinator[partition] = PanelEventCoordinator(loop = self.hass.loop, callbackSender = self.sendEvent, logstate_debug = self.logstate_debug)
+                self.myPanelEventCoordinator[partition].setIsPowerMaster(self.isPowerMaster())
+                self.myPanelEventCoordinator[partition].addEvent(data)
+            elif data is not None and len(data) == 3 and PE_NAME in data and data[PE_NAME] >= 0:
+                # The panel does not have partitions
+                if self.myPanelEventCoordinator is None:
+                    self.myPanelEventCoordinator = PanelEventCoordinator(loop = self.hass.loop, callbackSender = self.sendEvent, logstate_debug = self.logstate_debug)
+                self.myPanelEventCoordinator.setIsPowerMaster(self.isPowerMaster())
+                self.myPanelEventCoordinator.addEvent(data)
+            else:
+                self.logstate_warning(f"[onPanelChangeHandler] Cannot translate panel event log data {data}")
+        else:
+            self.sendEvent(event_id, data)
 
     def toBool(self, val: Any) -> bool:
         """Convert value to boolean."""
@@ -885,6 +1154,9 @@ class VisonicClient:
             return not (v == "no" or v == "false" or v == "0")
         self.logstate_warning(f"Unable to decode boolean value {val}    type is {type(val)}")
         return False
+
+    def getSirenTriggerList(self) -> []:
+        return self.config.get(CONF_SIREN_SOUNDING, ["Intruder"])
 
     def getConfigData(self) -> PanelConfig:
         """Create a dictionary full of the configuration data."""
@@ -901,19 +1173,18 @@ class VisonicClient:
         #     self.ForceStandardMode and self.DisableAllCommands are True --> The integration interacts with the panel but commands such as arm/disarm/log/bypass are not allowed
         # The if statement above ensure these are the only supported combinations.
 
-        self.logstate_debug(f"Emulation Mode {self.config.get(CONF_EMULATION_MODE)}   so setting    ForceStandard to {self.ForceStandardMode}     DisableAllCommands to {self.DisableAllCommands}")
+        self.logstate_debug(f"[getConfigData] Emulation Mode {self.config.get(CONF_EMULATION_MODE)} so setting ForceStandard to {self.ForceStandardMode}, DisableAllCommands to {self.DisableAllCommands}")
 
         return {
             AlConfiguration.DownloadCode: self.config.get(CONF_DOWNLOAD_CODE, ""),
             AlConfiguration.ForceStandard: self.ForceStandardMode,
-            AlConfiguration.DisableAllCommands: self.DisableAllCommands,
-            AlConfiguration.PluginLanguage: self.config.get(CONF_LANGUAGE, "EN"),
-            AlConfiguration.SirenTriggerList: self.config.get(CONF_SIREN_SOUNDING, ["Intruder"])
+            AlConfiguration.DisableAllCommands: self.DisableAllCommands
+            #AlConfiguration.SirenTriggerList: self.config.get(CONF_SIREN_SOUNDING, ["Intruder"])
         }
 
     async def _checkUserPermission(self, call, perm, entity):
         user = await self.hass.auth.async_get_user(call.context.user_id)
-        self.logstate_debug(f"User check {call.context.user_id=} user={user=}")
+        #self.logstate_debug(f"User check {call.context.user_id=} user={user=}")
 
         if user is None:
             raise UnknownUser(
@@ -937,38 +1208,75 @@ class VisonicClient:
             self.visonicProtocol.updateSettings(self.getConfigData())
         self._setupSensorDelays()
 
-    def stop_subscription(self, event):
+#    def stop_subscription(self, event):
+#        """Shutdown Visonic subscriptions and subscription thread on exit."""
+#        #self.logstate_debug("Home Assistant is shutting down")
+#        if self.SystemStarted:
+#            asyncio.ensure_future(self.async_service_panel_stop(), loop=self.hass.loop)
+
+    async def async_stop_subscription(self, event = None):
         """Shutdown Visonic subscriptions and subscription thread on exit."""
         #self.logstate_debug("Home Assistant is shutting down")
         if self.SystemStarted:
-            asyncio.ensure_future(self.service_panel_stop(), loop=self.hass.loop)
+            await self.async_service_panel_stop()
 
-    def onDisconnect(self, reason : str, excep = None):
+    def onDisconnect(self, termination : AlTerminationType):
         """Disconnection Callback for connection disruption to the panel."""
-        if excep is None:
-            self.logstate_debug("Visonic has caused an exception, reason=%s, no exception information is available", reason)
-        else:
-            self.logstate_debug("Visonic has caused an exception, reason=%s %s", reason, str(excep))
+        #reason_s = reason.name.lower()
+
+        actionmap = {
+            AlTerminationType.EXTERNAL_TERMINATION               : PanelCondition.CONNECTION,
+            AlTerminationType.SAME_PACKET_ERROR                  : PanelCondition.CONNECTION,
+            AlTerminationType.CRC_ERROR                          : PanelCondition.CONNECTION,
+            AlTerminationType.NO_DATA_FROM_PANEL_NEVER_CONNECTED : AlCondition.NO_DATA_FROM_PANEL,
+            AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED    : AlCondition.NO_DATA_FROM_PANEL
+        }
+
+        statemap = {
+            AlTerminationType.EXTERNAL_TERMINATION               : "disconnected",
+            AlTerminationType.SAME_PACKET_ERROR                  : "disconnected",
+            AlTerminationType.CRC_ERROR                          : "disconnected",
+            AlTerminationType.NO_DATA_FROM_PANEL_NEVER_CONNECTED : "neverconnected",
+            AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED    : "disconnected"
+        }
+
+        reasonmap = {
+            AlTerminationType.EXTERNAL_TERMINATION               : "termination",
+            AlTerminationType.SAME_PACKET_ERROR                  : "samepacketerror",
+            AlTerminationType.CRC_ERROR                          : "crcerror",
+            AlTerminationType.NO_DATA_FROM_PANEL_NEVER_CONNECTED : None,
+            AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED    : None
+        }
+
+        action = actionmap[termination]
+        state  = statemap[termination]
+        reason = reasonmap[termination]
 
         # General update trigger
         #    0 is a disconnect, state="disconnected" means initial disconnection and (hopefully) reconnect from an exception (probably comms related)
-        self._fireHAEvent(name = ALARM_PANEL_CHANGE_EVENT, event_id = PanelCondition.CONNECTION, datadictionary = {"state": "disconnected", "reason": reason})
+        if reason is not None:
+            self.logstate_debug(f"Visonic has caused a disconnection, action={action}, state={state} reason={reason}")
+            self._fireHAEvent(event_id = action, datadictionary = {"state": state, "reason": reason})
+        else:
+            self.logstate_debug(f"Visonic has caused a disconnection, action={action}, state={state}")
+            self._fireHAEvent(event_id = action, datadictionary = {"state": state})
 
-        self.panel_exception_counter = self.panel_exception_counter + 1
-        asyncio.ensure_future(self.disconnect_callback_async(), loop=self.hass.loop)
+        #self.panel_exception_counter = self.panel_exception_counter + 1
+        self.panel_disconnection_counter = self.panel_disconnection_counter + 1
+        asyncio.ensure_future(self.async_service_panel_stop(), loop=self.hass.loop)
 
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
-    def pmGetPin(self, code: str, forcedKeypad: bool):
+    def pmGetPin(self, code: str, forcedKeypad: bool, partition : int):
         """Get code code."""
         #self.logstate_debug("Getting Pin Start")
         if code is None or code == "" or len(code) != 4:
-            psc = self.getPanelStatus()
+            psc = self.getPanelStatus(partition)
             panelmode = self.getPanelMode()
             #self.logstate_debug("Getting Pin")
             
             # Avoid the panel codes that we're not interested in, if these are set then we have no business doing any of the functions
             #    After this we can simply use DISARMED and not DISARMED for all the armed states
-            if psc == AlPanelStatus.UNKNOWN or psc == AlPanelStatus.SPECIAL or psc == AlPanelStatus.DOWNLOADING:
+            if psc == AlPanelStatus.UNKNOWN or psc == AlPanelStatus.USER_TEST or psc == AlPanelStatus.DOWNLOADING:
                 return False, None   # Return invalid as panel not in correct state to do anything
             
             if panelmode == AlPanelMode.STANDARD:
@@ -979,7 +1287,7 @@ class VisonicClient:
                     return False, None             # use keypad so invalidate the return, there should be a valid 4 code code
                 else:
                     return False, None             # use keypad so invalidate the return, there should be a valid 4 code code
-            elif panelmode == AlPanelMode.POWERLINK or panelmode == AlPanelMode.STANDARD_PLUS:  # 
+            elif panelmode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:  # 
                 if psc == AlPanelStatus.DISARMED and self.isArmWithoutCode() and forcedKeypad:
                     return True, None    
                 if forcedKeypad:
@@ -989,7 +1297,7 @@ class VisonicClient:
                 return False, None # Return invalid as panel downloading EEPROM
             else:
                 # If the panel mode is UNKNOWN, PROBLEM.
-                self.logstate_warning("Warning: Valid 4 digit PIN not found, panelmode is {0}".format(panelmode))
+                self.logstate_warning(f"Warning: Valid 4 digit PIN not found, panelmode is {panelmode}")
                 return False, None # Return invalid as panel not in correct state to do anything
         return True, code
 
@@ -1000,17 +1308,17 @@ class VisonicClient:
         #self.logstate_debug("Getting Pin Start")
         if code is None or code == "" or len(code) != 4:
             panelmode = self.getPanelMode()
-            if panelmode == AlPanelMode.POWERLINK or panelmode == AlPanelMode.STANDARD_PLUS:
+            if panelmode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
                 # Powerlink or StdPlus and so we downloaded the code codes
                 return True, None
             else:
-                self.logstate_warning("Warning: [pmGetPinSimple] Valid 4 digit PIN not found, panelmode is {0}".format(panelmode))
+                self.logstate_warning(f"Warning: [pmGetPinSimple] Valid 4 digit PIN not found, panelmode is {panelmode}")
                 return False, None
         return True, code
 
     def _populateSensorDictionary(self) -> dict:
         datadict = {}
-        datadict["ready"] = self.isPanelReady()
+        #["ready"] = self.isPanelReady(partition)
         datadict["open"] = []
         datadict["bypass"] = []
         datadict["tamper"] = []
@@ -1039,24 +1347,24 @@ class VisonicClient:
         datadict["command"] = command.title()           
         datadict["reason"] = int(reason)
         datadict["reason_str"] = reason.name.title()
-        datadict["message"] = message + " " + messageDict[reason]
+        datadict["message"] = message + " " + messageDictReason[reason]
 
-        self.onPanelChangeHandler(event_id = event_id, event_name = ALARM_COMMAND_EVENT, data = datadict)
+        self.onPanelChangeHandler(event_id = event_id, data = datadict)
 
-        #self.logstate_debug("[" + message + "] " + messageDict[reason])
+        #self.logstate_debug("[" + message + "] " + messageDictReason[reason])
 
         if reason != AlCommandStatus.SUCCESS:
-            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, message + " " + messageDict[reason])
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, message + " " + messageDictReason[reason])
 
-    def setX10(self, ident: int, state: AlX10Command):
-        """Send an X10 command to the panel."""
-        if not self.DisableAllCommands:
-            # ident in range 0 to 15, state can be one of "off", "on", "dim", "brighten"
-            if self.visonicProtocol is not None:
-                retval = self.visonicProtocol.setX10(ident, state)
-                self._generateBusEventReason(PanelCondition.CHECK_X10_COMMAND, retval, "X10", "Send X10 Command")
-        else:
-            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+#    def setX10(self, ident: int, state: AlX10Command):
+#        """Send an X10 command to the panel."""
+#        if not self.DisableAllCommands:
+#            # ident in range 0 to 15, state can be one of "off", "on", "dimmer", "brighten"
+#            if self.visonicProtocol is not None:
+#                retval = self.visonicProtocol.setX10(ident, state)
+#                self._generateBusEventReason(PanelCondition.CHECK_X10_COMMAND, retval, "X10", "Send X10 Command")
+#        else:
+#            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
 
     def isPanelConnected(self) -> bool:
@@ -1073,7 +1381,7 @@ class VisonicClient:
 
     def isCodeRequired(self) -> bool:
         """Determine if a user code is required given the panel mode and user settings."""
-        isValidPL, code = self.pmGetPin(code = None, forcedKeypad = self.isForceKeypad())
+        isValidPL, code = self.pmGetPin(code = None, forcedKeypad = self.isForceKeypad(), partition = 1)
         return not isValidPL;
 
 #    def isCodeRequiredBackup(self) -> bool:
@@ -1082,7 +1390,7 @@ class VisonicClient:
 #        panelmode = self.getPanelMode()
 #        # self.logstate_debug("code format panel mode %s", panelmode)
 #        if not self.isForceKeypad() and panelmode is not None:
-#            if panelmode == AlPanelMode.POWERLINK or panelmode == AlPanelMode.STANDARD_PLUS:
+#            if panelmode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
 #                self.logstate_debug("No Code Required as powerlink or std plus ********")
 #                return False
 #
@@ -1138,12 +1446,12 @@ class VisonicClient:
                     self.logstate_warning(f"Not making {message} request {type(call.data)} {call.data}")
                     self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
             else:
-                self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Request Command, not sent to panel")
+                self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, not sent to panel")
         else:
             self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
         return False
 
-    async def decode_code_from_call_data(self, call, message : str, cond : PanelCondition) -> (bool , str):
+    def decode_code_from_call_data(self, call, message : str, cond : PanelCondition) -> (bool , str):
         code = None
         if ATTR_CODE in call.data:
             code = call.data[ATTR_CODE]
@@ -1209,11 +1517,12 @@ class VisonicClient:
         """Service call to retrieve the event log from the panel. This currently just gets dumped in the HA log file."""
         if self.visonicProtocol is not None:
             if await self.check_the_basics(call, "event log"):
-                isValidPL, code = await self.decode_code_from_call_data(call, "EventLog", PanelCondition.CHECK_EVENT_LOG_COMMAND)
+                isValidPL, code = self.decode_code_from_call_data(call, "EventLog", PanelCondition.CHECK_EVENT_LOG_COMMAND)
                 if isValidPL:
                     self.logstate_debug("Sending event log request to panel")
                     retval = self.visonicProtocol.getEventLog(code)
                     self._generateBusEventReason(PanelCondition.CHECK_EVENT_LOG_COMMAND, retval, "EventLog", "Event Log Request")
+            # The check_the_basics and decode_code_from_call_data functions send a failure notification so no need to here
 
     def getJPG(self, ident: int, count : int):
         """Send a request to get the jpg images from a camera """
@@ -1234,6 +1543,7 @@ class VisonicClient:
                 self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, entity {eid} not found")
             else:
                 self.createNotification(AvailableNotifications.IMAGE_PROBLEM, f"Attempt to retrieve sensor image for panel {self.getPanelID()}, entity not found")
+        # The check_the_basics function sends a failure notification so no need to here
 
     def sendBypass(self, devid: int, bypass: bool, code: str) -> AlCommandStatus:
         """Send the bypass command to the panel."""
@@ -1259,11 +1569,24 @@ class VisonicClient:
             self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
         return AlCommandStatus.FAIL_USER_CONFIG_PREVENTED
 
+    def sendX10(self, devid: int, command : AlX10Command) -> AlCommandStatus:
+        """Send the x10 command to the panel."""
+        if not self.DisableAllCommands:
+            if self.visonicProtocol is not None:
+                retval = self.visonicProtocol.setX10(devid, command)
+            else:
+                retval = AlCommandStatus.FAIL_PANEL_NO_CONNECTION
+            self._generateBusEventReason(PanelCondition.CHECK_X10_COMMAND, retval, "X10", "Send X10 Command")
+            return retval
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+        return AlCommandStatus.FAIL_USER_CONFIG_PREVENTED
+
     async def service_sensor_bypass(self, call):
         """Service call to bypass a sensor in the panel."""
         if await self.check_the_basics(call, "sensor bypass"):
             if await self.is_panel_status_set_to(call, AlPanelStatus.DISARMED, "sensor bypass", AvailableNotifications.BYPASS_PROBLEM):
-                isValidPL, code = await self.decode_code_from_call_data(call, "SensorBypass", PanelCondition.CHECK_BYPASS_COMMAND)
+                isValidPL, code = self.decode_code_from_call_data(call, "SensorBypass", PanelCondition.CHECK_BYPASS_COMMAND)
                 if isValidPL:
                     devid, eid = await self.decode_entity(call, Platform.BINARY_SENSOR, "bypass a sensor", AvailableNotifications.BYPASS_PROBLEM)
                     if devid is not None and devid >= 1 and devid <= 64:
@@ -1278,14 +1601,15 @@ class VisonicClient:
                         self.sendBypass(devid, bypass, code)
                     else:
                         self.createNotification(AvailableNotifications.BYPASS_PROBLEM, f"Attempt to bypass sensor for panel {self.getPanelID()}, incorrect device {devid} for entity {eid}")
+        # The check_the_basics, is_panel_status_set_to and decode_code_from_call_data functions send a failure notification so no need to here
 
-    def sendCommand(self, message : str, command : AlPanelCommand, code : str):
+    def sendCommand(self, message : str, command : AlPanelCommand, code : str, partitions : set = {1,2,3}):
         if not self.DisableAllCommands:
             codeRequired = self.isCodeRequired()
             if (codeRequired and code is not None) or not codeRequired:
                 pcode = self.decode_code_from_dict_or_str(code) if codeRequired or (code is not None and len(code) > 0) else ""
                 if self.visonicProtocol is not None:
-                    isValidPL, code = self.pmGetPin(code = pcode, forcedKeypad = self.isForceKeypad())
+                    isValidPL, code = self.pmGetPin(code = pcode, forcedKeypad = self.isForceKeypad(), partition = 1)
 
                     if command == AlPanelCommand.DISARM or command == AlPanelCommand.ARM_HOME or command == AlPanelCommand.ARM_AWAY or command == AlPanelCommand.ARM_HOME_INSTANT or command == AlPanelCommand.ARM_AWAY_INSTANT:
 
@@ -1294,7 +1618,7 @@ class VisonicClient:
                         if isValidPL:
                             if (command == AlPanelCommand.DISARM and self.isRemoteDisarm()) or (
                                 command != AlPanelCommand.DISARM and self.isRemoteArm()):
-                                retval = self.visonicProtocol.requestPanelCommand(command, code)
+                                retval = self.visonicProtocol.requestPanelCommand(command, code, partitions)
                                 self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request Arm/Disarm")
                             else:
                                 self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_USER_CONFIG_PREVENTED , command.name, "Request Arm/Disarm")
@@ -1304,7 +1628,7 @@ class VisonicClient:
                     elif self.visonicProtocol.isPowerMaster() and (command == AlPanelCommand.MUTE or command == AlPanelCommand.TRIGGER or command == AlPanelCommand.FIRE or command == AlPanelCommand.EMERGENCY or command == AlPanelCommand.PANIC):
                         if isValidPL:
                             self.logstate_debug("Send command to Visonic Alarm Panel: %s", command)
-                            retval = self.visonicProtocol.requestPanelCommand(command, code)
+                            retval = self.visonicProtocol.requestPanelCommand(command, code, None)
                             self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request PowerMaster Panel Command")
                         else:
                             self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, command.name, "Request PowerMaster Panel Command")
@@ -1320,19 +1644,55 @@ class VisonicClient:
     async def service_panel_command(self, call):
         """Service call to send an arm/disarm command to the panel."""
         if await self.check_the_basics(call, "command"):
-            isValidPL, code = await self.decode_code_from_call_data(call, "PanelCommand", PanelCondition.CHECK_ARM_DISARM_COMMAND)
+            isValidPL, code = self.decode_code_from_call_data(call, "PanelCommand", PanelCondition.CHECK_ARM_DISARM_COMMAND)
             if isValidPL:
                 try:
                     if CONF_COMMAND in call.data:
                         command = call.data[CONF_COMMAND]
                         command_e = AlPanelCommand.value_of(command.upper());
-                        self.logstate_debug(f"   Command {command}   {command_e}")
-                        self.sendCommand("Alarm Service Call " + str(command_e), command_e, code)
-                    else:
-                        self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Attempt to send command to panel {self.getPanelID()}, command not set for entity {eid}")
+                        self.logstate_debug(f"[service_panel_command]   Sending Command: {command_e}  from raw string: {command}")
+                        
+                        if self.getPartitionsInUse() is None or ATTR_ENTITY_ID not in call.data:
+                            self.sendCommand(f"Alarm Service Call {command_e}", command_e, code)  # No partition so default to all of them
+                        else:
+                            # Not ideal but parse the entity name to get the partition number on the end
+                            eid = str(call.data[ATTR_ENTITY_ID])
+                            if PE_PARTITION in eid:
+                                p = int(eid[-1:])
+                                self.sendCommand(f"Alarm Service Call {command_e}", command_e, code, { p } )  # set the partition
+                            else:
+                                # This is an error as there are partitions defined and so the word "partition" should be in the name
+                                self.sendCommand(f"Alarm Service Call {command_e}", command_e, code)  # No partition so default to all of them
+                        return
+                    self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Attempt to send command to panel {self.getPanelID()}, command not set for entity {eid}")
+                    return
                 except Exception as ex:
                     self.logstate_warning(f"Not making command request. Exception {ex}")
+                    self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Attempt to send command to panel {self.getPanelID()}, command not set for entity {eid} due to an Exception")
+        # The check_the_basics and decode_code_from_call_data functions send a failure notification so no need to here
 
+    def sendX10Command(self, devid: int, command : AlX10Command):
+        """Send a request to set the X10 device """
+        if not self.DisableAllCommands:
+            self.sendX10(devid, command)
+        else:
+            self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
+
+    async def service_panel_x10(self, call):
+        """Service call to set an x10 device in the panel."""
+        if await self.check_the_basics(call, "x10 command"):
+            devid, eid = await self.decode_entity(call, Platform.SWITCH, "x10 switch command", AvailableNotifications.X10_PROBLEM) # ************************************************************************************************
+            if devid is not None and devid >= 1 and devid <= 16:
+                if CONF_X10_COMMAND in call.data:
+                    command = call.data[CONF_X10_COMMAND]
+                    command_x = AlX10Command.value_of(command.upper());
+                    self.logstate_debug(f"   X10 Command {command}   {command_x}")
+                    self.sendX10Command(devid, command_x)
+                else:
+                    self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Attempt to set X10 device for panel {self.getPanelID()}, command not set for entity {eid}")
+            else:
+                self.createNotification(AvailableNotifications.X10_PROBLEM, f"Attempt to set X10 device for panel {self.getPanelID()}, incorrect device {devid} for entity {eid}")
+        # The check_the_basics function sends a failure notification so no need to here
 
     # =======================================================================================================
     # =======================================================================================================
@@ -1366,7 +1726,7 @@ class VisonicClient:
             return sock
             
         except socket.error as err:
-            self.logstate_debug("Setting TCP socket Options Exception {0}".format(err))
+            self.logstate_debug(f"Setting TCP socket Options Exception {err}")
             if sock is not None:
                 sock.close()
 
@@ -1444,18 +1804,19 @@ class VisonicClient:
         if self.SystemStarted:
             return False
 
-        self.logstate_debug("connect_to_alarm self.config = %s", self.config)
+        #self.logstate_debug("connect_to_alarm self.config = %s", self.config)
+        self.logstate_debug("connect_to_alarm")
 
         # Get Visonic specific configuration.
         device_type = self.config.get(CONF_DEVICE_TYPE)
         
         self.logstate_debug("Connection Device Type is %s", device_type)
 
-        # update config parameters (local in hass[DOMAIN] mainly)
-        self.updateConfig()
-
         self.visonicTask = None
         self.visonicProtocol = None
+
+        # update config parameters (local in hass[DOMAIN] mainly)
+        #self.updateConfig()
 
         # Connect in the way defined by the user in the config file, ethernet or usb
         if device_type == "ethernet":
@@ -1509,7 +1870,7 @@ class VisonicClient:
         
         return False
 
-    async def service_panel_stop(self) -> bool:
+    async def async_service_panel_stop(self) -> bool:
         """Service call to stop the connection."""
         if not self.SystemStarted:
             self.logstate_debug("Request to Stop the HA alarm_control_panel and it is already stopped")
@@ -1540,7 +1901,7 @@ class VisonicClient:
 
         return unload_ok
         
-    async def service_panel_start(self, force : bool):
+    async def async_service_panel_start(self, force : bool):
         """Service call to start the connection."""
         # force is set True on initial connection so the self.totalAttempts (for the number of reconnections) can be set to 0. 
         #    It is forced to try at least once on integration start (or reload)
@@ -1548,21 +1909,21 @@ class VisonicClient:
             self.logstate_warning("Request to Start and the integraion is already running and connected")
             return
 
-        #self.logstate_debug(f"service_panel_start, connecting   force = {force}")
+        #self.logstate_debug(f"async_service_panel_start, connecting   force = {force}")
 
         attemptCounter = 0
         #self.logstate_debug(f"     {attemptCounter} of {self.totalAttempts}")
         while force or attemptCounter < self.totalAttempts:
-            self.logstate_debug("........... connection attempt {0} of {1}".format(attemptCounter + 1, self.totalAttempts))
+            self.logstate_debug(f"........... connection attempt {attemptCounter + 1} of {self.totalAttempts}")
             if await self.connect_to_alarm():
                 self.logstate_debug("........... connection made")
-                self._fireHAEvent(name = ALARM_PANEL_CHANGE_EVENT, event_id = PanelCondition.CONNECTION, datadictionary = {"state": "connected", "attempt": attemptCounter + 1})
+                self._fireHAEvent(event_id = PanelCondition.CONNECTION, datadictionary = {"state": "connected", "attempt": attemptCounter + 1})
                 return
-            self._fireHAEvent(name = ALARM_PANEL_CHANGE_EVENT, event_id = PanelCondition.CONNECTION, datadictionary = {"state": "failedattempt", "attempt": attemptCounter + 1})
+            self._fireHAEvent(event_id = PanelCondition.CONNECTION, datadictionary = {"state": "failedattempt", "attempt": attemptCounter + 1})
             attemptCounter = attemptCounter + 1
             force = False
             if attemptCounter < self.totalAttempts:
-                self.logstate_debug("........... connection attempt delay {0} seconds".format(self.delayBetweenAttempts))
+                self.logstate_debug(f"........... connection attempt delay {self.delayBetweenAttempts} seconds")
                 await asyncio.sleep(self.delayBetweenAttempts)
 
         self.createNotification(
@@ -1587,7 +1948,13 @@ class VisonicClient:
     async def service_panel_reconnect(self, call):
         """Service call to re-connect the connection."""
         if not self.isPanelConnected():
-            raise HomeAssistantError(f"Visonic Integration not connected to panel {self.getPanelID()}.")
+            raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="no_panel_connection",
+                    translation_placeholders={
+                        "myname": self.getAlarmPanelUniqueIdent()
+                    }
+                )
 
         if call.context.user_id:
             #self.logstate_debug(f"Checking user information for permissions: {call.context.user_id}")
@@ -1595,18 +1962,18 @@ class VisonicClient:
             await self._checkUserPermission(call, POLICY_CONTROL, Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent()))
 
         self.logstate_debug("User has requested visonic panel reconnection")
-        await self.service_panel_stop()
+        await self.async_service_panel_stop()
         await asyncio.sleep(3.0)
-        await self.service_panel_start(False)
+        await self.async_service_panel_start(False)
 
-    async def disconnect_callback_async(self):
+    async def async_disconnect_callback(self):
         """Service call to disconnect."""
         self.logstate_debug("........... terminating connection")
         await asyncio.sleep(1.0)
-        await self.service_panel_stop()
+        await self.async_service_panel_stop()
         await asyncio.sleep(3.0)
         #self.logstate_debug("........... attempting reconnection")
-        await self.service_panel_start(False)
+        await self.async_service_panel_start(False)
 
     async def connect(self):
         """Connect to the alarm panel using the pyvisonic library."""
@@ -1623,15 +1990,14 @@ class VisonicClient:
             #self.logstate_info("Client connecting.....")
             # Establish a callback to stop the component when the stop event occurs
             self.hass.bus.async_listen_once(
-                EVENT_HOMEASSISTANT_STOP, self.stop_subscription
+                EVENT_HOMEASSISTANT_STOP, self.async_stop_subscription
             )
             #self.logstate_info("Client connecting..........")
-            await self.service_panel_start(True)
+            await self.async_service_panel_start(True)
 
         except (ConnectTimeout, HTTPError) as ex:
             createNotification(
                 AvailableNotifications.CONNECTION_PROBLEM,
-                "Visonic Panel Connection Error: {}<br />"
-                "You will need to restart hass after fixing."
-                "".format(ex))
+                "Visonic Panel Connection Error: {ex}<br />"
+                "You will need to restart hass after fixing.")
         #return False
