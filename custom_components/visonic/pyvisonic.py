@@ -105,7 +105,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.4.3.4"
+PLUGIN_VERSION = "1.4.3.5"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
@@ -456,7 +456,7 @@ pmReceiveMsg = {
    0xAD     : PanelCallBack( 15,  True, False,  0, 0, False, DebugLevel.CMD  if OBFUS else RecvDebugI, "JPG Mgmt" ),            # 15 Panel responds with this when we ask for JPG images
    0xB0     : PanelCallBack(  8,  True,  True,  4, 2, False, DebugLevel.CMD  if OBFUS else RecvDebugM, "PowerMaster (B0)" ),    # The B0 message comes in varying lengths, sometimes it is shorter than what it states and the CRC is sometimes wrong
    REDIRECT : PanelCallBack(  5, False,  True,  2, 0, False, DebugLevel.FULL,                          "Redirect" ),            # TESTING: These are redirected Powerlink messages. 0D C0 len <data> cs 0A   so 5 plus the original data length
-   VISPROX  : PanelCallBack( 11, False, False,  0, 0, False, DebugLevel.FULL,                          "Proxy" ),               # VISPROX : Interaction with Visonic Proxy
+   VISPROX  : PanelCallBack( 11,  True, False,  0, 0, False, DebugLevel.FULL,                          "Proxy" ),               # VISPROX : Interaction with Visonic Proxy
    # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it. Assume a minimum length of 9, a variable length and ignore the checksum calculation.
    0xF1     : PanelCallBack(  9,  True,  True,  0, 0,  True,      RecvDebugC,                          "Unknown F1" ),          # Ignore checksum on all F1 messages
    # The F4 message comes in varying lengths. It is the image data from a PIR camera. Ignore checksum on all F4 messages
@@ -769,8 +769,8 @@ pmPanelSettingCodes = { # These are used to create the self.PanelSettings dictio
     PanelSetting.Sirens           : PanelSettingCodesType( None, "SirensPMax",       "SirensPMaster",   ""    , None, None,                          bytearray()),
     PanelSetting.AlarmLED         : PanelSettingCodesType( None, None,               "AlarmLED",        ""    , None, None,                          bytearray()),
     PanelSetting.PartitionData    : PanelSettingCodesType( None, "PartitionData",    "PartitionData",   ""    , None, None,                          bytearray()),
-    PanelSetting.ZoneNames        : PanelSettingCodesType( None, "ZoneNamePMax",     "ZoneNamePMaster", ""    , pmSendMsgB0["ZONE_NAMES"].data, 3, bytearray()),
-    PanelSetting.ZoneTypes        : PanelSettingCodesType( None, None,               None,              ""    , pmSendMsgB0["ZONE_TYPES"].data, 3, bytearray()),          # Indirectly from EPROM but needs to be calculated/extracted
+    PanelSetting.ZoneNames        : PanelSettingCodesType( None, "ZoneNamePMax",     "ZoneNamePMaster", ""    , pmSendMsgB0["ZONE_NAMES"], 3, bytearray()),
+    PanelSetting.ZoneTypes        : PanelSettingCodesType( None, None,               None,              ""    , pmSendMsgB0["ZONE_TYPES"], 3, bytearray()),          # Indirectly from EPROM but needs to be calculated/extracted
     PanelSetting.ZoneExt          : PanelSettingCodesType( None, None,               "ZoneExtPMaster",  ""    , None, None,                          bytearray()),
     PanelSetting.ZoneDelay        : PanelSettingCodesType( None, None,               "ZoneDelay",       ""    , None, None,                          bytearray()),
     PanelSetting.ZoneSignal       : PanelSettingCodesType( None, "ZoneSignalPMax",   "",                ""    , None, None,                          bytearray()),
@@ -1345,9 +1345,11 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         # restart the watchdog and keep-alive counters
         self._reset_watchdog_timeout()
         self._reset_keep_alive_messages()
-        if self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
+        if self.PowerLinkBridgeConnected:
+            self.B0_Message_Wanted.add("PANEL_STATE")        # 24
+        elif self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]:
             # Send RESTORE to the panel
-            self._addMessageToSendList("MSG_RESTORE")  # also gives status
+            self._addMessageToSendList("MSG_RESTORE")  # also gives status.  This is an AB message which we can't send to POWERLINK_BRIDGED
         else:
             self._addMessageToSendList("MSG_STATUS")
 
@@ -1419,19 +1421,19 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         if paneltime is not None and t.year > 2000:
             self.Panel_Integration_Time_Difference = t - paneltime
             d = self.Panel_Integration_Time_Difference.total_seconds()
-            log.debug(f"[setTimeInPanel]        Local time is {t}      time difference {d} seconds")   # 
+            log.debug(f"[setTimeInPanel]      Local time is {t}      time difference {d} seconds")   # 
             if abs(d) < TIME_INTERVAL_ERROR:
-                log.debug(f"[setTimeInPanel]        Not Correcting Time in Panel as less than {TIME_INTERVAL_ERROR} seconds difference.")
+                log.debug(f"[setTimeInPanel]      Not Correcting Time in Panel as less than {TIME_INTERVAL_ERROR} seconds difference.")
                 settime = False
             #else:
-            #    log.debug("[setTimeInPanel]        Correcting Time in Panel.")
+            #    log.debug("[setTimeInPanel]      Correcting Time in Panel.")
         if settime:
             # Set these as urgent to get them to the panel asap (so the time is set asap to synchronise panel and local time)
-            if self.isPowerMaster():
-                self._addMessageToSendList("MSG_BUMP", urgent = True)
-            else:
-                self._addMessageToSendList("MSG_DOWNLOAD_TIME", urgent = True, options=[ [3, convertByteArray(self.DownloadCode)] ])  # Can only set the time in the panel in DOWNLOADING state
-            log.debug(f"[setTimeInPanel]        Setting time in panel {t}")
+            #if self.isPowerMaster():
+            #    self._addMessageToSendList("MSG_BUMP", urgent = True)
+            #else:
+            self._addMessageToSendList("MSG_DOWNLOAD_TIME", urgent = True, options=[ [3, convertByteArray(self.DownloadCode)] ])  # Can only set the time in the panel in DOWNLOADING state
+            log.debug(f"[setTimeInPanel]      Setting time in panel {t}")
             timePdu = bytearray([t.second + 1, t.minute, t.hour, t.day, t.month, t.year - 2000])   # add about 2 seconds on as it takes over 1 to get to the panel to set it
             self._addMessageToSendList("MSG_SETTIME", urgent = True, options=[ [3, timePdu] ])
             self._addMessageToSendList("MSG_EXIT", urgent = True)
@@ -1667,7 +1669,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
         def _resetPanelInterface():
             """ This should re-initialise the panel """
-            log.debug("[_resetPanelInterface]   ************************************* Reset Panel Interface **************************************")
+            log.debug(f"[_resetPanelInterface]   ************************************* Reset Panel Interface **************************************  {self.PanelMode=}")
             
             # Clear the send list and empty the expected response list
             self._clearReceiveResponseList()
@@ -1677,7 +1679,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             self._addMessageToSendList("MSG_EXIT")
             self._addMessageToSendList("MSG_STOP")
 
-            if self.pmInitSupportedByPanel:
+            if self.pmInitSupportedByPanel and self.PanelMode not in [AlPanelMode.POWERLINK_BRIDGED]: # not AlPanelMode.MINIMAL_ONLY
                 self._addMessageToSendList("MSG_INIT")
 
         def _gotoStandardModeStopDownload():
@@ -2229,6 +2231,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 command = 1   # Get Status command
                                 param = 0     # Irrelevant
                                 self._addMessageToSendList("MSG_PL_BRIDGE", urgent = True, options=[ [1, command], [2, param] ])  # Tell the Bridge to send me the status
+                                self.B0_Message_Wanted.add(pmSendMsgB0["PANEL_STATE"])        # 24
 
                     #############################################################################################################################################################
                     ####### Drop through to here to do generic code for DoingStandard, DoingStandardPlus, DoingPowerlinkBridge and DoingPowerlink ###############################
@@ -2249,8 +2252,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         continue   # just do the while loop
 
                     if self.PanelMode not in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.MINIMAL_ONLY]:
-                        # By here the panel connection should be in one of the proper modes but it isn't so go back to the beginning
-                        #    Allow it for 5 seconds but then restart the sequence
+                        # By here the panel connection should be in one of the proper modes (and we've already tested for DOWNLOAD) but it isn't so go back to the beginning
+                        #    Allow it for 5 seconds (_my_panel_state_trigger_count is set to 5 by default) but then restart the sequence
                         _my_panel_state_trigger_count = _my_panel_state_trigger_count - 1
                         log.debug(f"[_sequencer] By here we should be in normal operation but we are still in {self.PanelMode.name} panel mode     {_my_panel_state_trigger_count=}")
                         if _my_panel_state_trigger_count < 0:
@@ -2427,9 +2430,12 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             return
         #log.debug('[data receiver] received data: %s', toString(data))
         self.lastRecvTimeOfPanelData = self._getUTCTimeFunction()
-        for databyte in data:
-            # process a single byte at a time
-            self._handle_received_byte(databyte)
+        try:
+            for databyte in data:
+                # process a single byte at a time
+                self._handle_received_byte(databyte)
+        except Exception as ex:
+            log.warning(f"[Data Received] Data is {data}  Exception {ex}")
 
     # Process one received byte at a time to build up the received PDU (Protocol Description Unit)
     #       self.pmIncomingPduLen is only used in this function
@@ -3126,11 +3132,11 @@ class PacketHandling(ProtocolBase):
                 updated = True
                 self.SensorList[i].motiondelaytime = motiondelaytime
 
-        if part is not None:
-            if self.SensorList[i].partition != part:
-                updated = True
-                # If we get EEPROM data, assume it is all correct and override any existing settings (as some were assumptions)
-                self.SensorList[i].partition = part
+        #if part is not None:
+        #    if self.SensorList[i].partition != part:
+        #        updated = True
+        #        # If we get EEPROM data, assume it is all correct and override any existing settings (as some were assumptions)
+        #        self.SensorList[i].partition = part
 
         # if the new value is True and the old Value is False then push change Enrolled
         enrolled_push_change = (enrolled and not self.SensorList[i].enrolled) if self.SensorList[i].enrolled is not None and enrolled is not None else False
@@ -4918,6 +4924,8 @@ class VisonicProtocol(PacketHandling):
                     armCode.append(pmArmMode[state])
                     self._addMessageToSendList("MSG_ARM", immediate = True, options=[ [3, armCode], [4, bpin] ])  #
                     self._addMessageToSendList("MSG_STATUS_SEN", immediate = True)
+                    if self.isPowerMaster():
+                        self.B0_Message_Wanted.add("PANEL_STATE")        # 24
                     return AlCommandStatus.SUCCESS
                 elif state == AlPanelCommand.MUTE:
                     self._addMessageToSendList("MSG_MUTE_SIREN", immediate = True, options=[ [4, bpin] ])  #
@@ -4949,6 +4957,8 @@ class VisonicProtocol(PacketHandling):
                         what = pmX10State[state]
                         self._addMessageToSendList("MSG_X10PGM", immediate = True, options=[ [6, what], [7, byteA], [8, byteB] ])
                         self._addMessageToSendList("MSG_STATUS_SEN", immediate = True)
+                        if self.isPowerMaster():
+                            self.B0_Message_Wanted.add("PANEL_STATE")        # 24
                         return AlCommandStatus.SUCCESS
                     return AlCommandStatus.FAIL_INVALID_STATE
                 return AlCommandStatus.FAIL_ENTITY_INCORRECT

@@ -34,7 +34,6 @@ from homeassistant.const import (
     EVENT_HOMEASSISTANT_STOP,
 )
 
-# The following 3 are only used in def printAllEntities which is only for debug
 from homeassistant.helpers import entity_platform as ep
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -122,7 +121,7 @@ from .const import (
 #    "trigger",
 #]
 
-CLIENT_VERSION = "0.9.9.6"
+CLIENT_VERSION = "0.9.9.7"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -332,6 +331,7 @@ class VisonicClient:
         return datetime.now(timezone.utc).astimezone()
 
     def _initialise(self):
+        from . import pmLogEvent_t, pmLogPowerMaxUser_t
         # panel connection
         self.logstate_debug("reset client panel variables")
         
@@ -376,8 +376,9 @@ class VisonicClient:
         self._setupSensorDelays()
 
         self.myPanelEventCoordinator = None
-        self.PanelLastEventName = "Startup"
-        self.PanelLastEventAction = "Normal"
+        self.PanelLastEventName = pmLogPowerMaxUser_t[0]  # get the language translation for "Startup", entry 0 should be the same for all panel models so just use powermax
+        self.PanelLastEventAction = pmLogEvent_t[0]       # get the language translation for "Normal"
+        #self.logstate_debug(f"client panel variables {self.PanelLastEventName}  {self.PanelLastEventAction}")
         self.PanelLastEventTime = self._getTimeFunction() # .strftime("%d/%m/%Y, %H:%M:%S")
 
         # Process the exclude sensor list
@@ -948,7 +949,7 @@ class VisonicClient:
             asyncio.ensure_future(self.create_image_entity(sensor), loop=self.hass.loop)
     
     def onSwitchChange(self, switch : AlSwitchDevice):
-        #_LOGGER.debug("onSwitchChange {0}".format(switch))
+        #_LOGGER.debug(f"onSwitchChange {switch}")
         pass
 
     def rationalise_ha_devices(self):

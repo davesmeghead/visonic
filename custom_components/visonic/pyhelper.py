@@ -167,7 +167,6 @@ class AlSensorDeviceHelper(AlSensorDevice):
         self.zname = kwargs.get("zname", "Unknown")  # str   zone name
         self.zchime = kwargs.get("zchime", "Unknown")  # str   zone chime
         self.zchimeref = kwargs.get("zchimeref", 0)  # set   partition set (could be in more than one partition)
-        self.partition = kwargs.get("partition", 0)  # set   partition set (could be in more than one partition)
         self.bypass = kwargs.get("bypass", False)  # bool  if bypass is set on this sensor
         self.lowbatt = kwargs.get("lowbatt", False)  # bool  if this sensor has a low battery
         self.status = kwargs.get("status", False)  # bool  status, as returned by the A5 message
@@ -206,7 +205,6 @@ class AlSensorDeviceHelper(AlSensorDevice):
         strn = strn + (" ztamper=--" if self.ztamper == None else f" ztamper={self.ztamper:<2}")
         strn = strn + (" ztrip=--" if self.ztrip == None else f" ztrip={self.ztrip:<2}")
         strn = strn + (" zchime=None            " if self.zchime == None else    f" zchime={self.zchime:<16}")
-        strn = strn + (" partition=None   " if self.partition == None else f" partition={pt:<7}")
         strn = strn + (" bypass=--" if self.bypass == None else f" bypass={self.bypass:<2}")
         strn = strn + (" lowbatt=--" if self.lowbatt == None else f" lowbatt={self.lowbatt:<2}")
         strn = strn + (" status=--" if self.status == None else f" status={self.status:<2}")
@@ -232,7 +230,6 @@ class AlSensorDeviceHelper(AlSensorDevice):
             and self.ztype == other.ztype
             and self.zname == other.zname
             and self.zchime == other.zchime
-            and self.partition == other.partition
             and self.bypass == other.bypass
             and self.lowbatt == other.lowbatt
             and self.status == other.status

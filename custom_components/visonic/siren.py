@@ -117,7 +117,7 @@ class VisonicSiren(SirenEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        return self._myname # + "_" + str(self._partition_id)
+        return self._myname
 
     @property
     def name(self):
