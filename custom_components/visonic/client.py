@@ -106,7 +106,7 @@ from .const import (
     PIN_REGEX,
 )
 
-CLIENT_VERSION = "0.10.0.0"
+CLIENT_VERSION = "0.10.0.1"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -281,6 +281,7 @@ class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 
     def __init__(self, client = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._transport = None
         if client is not None:
             client.tellemaboutme(self)
 
@@ -288,11 +289,18 @@ class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
         super().vp_data_received(data)
 
     def connection_made(self, transport):
-        self._transport = transport
-        super().vp_connection_made(MyTransport(t=transport))
+        self._transport = MyTransport(transport)
+        super().vp_connection_made(self._transport)
 
     def connection_lost(self, exc):
         super().vp_connection_lost(exc)
+        self._transport = None
+
+    def close(self):
+        #_LOGGER.debug("close called on protocol")
+        if self._transport is not None:
+            #_LOGGER.debug("close called on protocol => closed")
+            self._transport.close()
         self._transport = None
 
     # This is needed so we can create the class instance before giving it to the protocol handlers
@@ -1936,14 +1944,13 @@ class VisonicClient:
         """Service call to close down the current serial connection, we need to reset the whole connection."""
         if not self.SystemStarted:
             self.logstate_debug("Request to Stop the Comms and it is already stopped")
-            return
-
         # Try to get the asyncio Coroutine within the Task to shutdown the serial link connection properly
-        if self.visonicProtocol is not None:
+        elif self.visonicProtocol is not None:
             self.visonicProtocol.shutdownOperation()
-        self.visonicProtocol = None
-        await asyncio.sleep(0.5)
-        # not a mistake, wait a bit longer to make sure it's closed as we get no feedback (we only get the fact that the queue is empty)
+            self.visonicProtocol.close()
+            self.visonicProtocol = None
+            await asyncio.sleep(0.5)
+            # not a mistake, wait a bit longer to make sure it's closed as we get no feedback (we only get the fact that the queue is empty)
 
     async def service_panel_reconnect(self, call):
         """Service call to re-connect the connection."""

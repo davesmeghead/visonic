@@ -952,11 +952,11 @@ class PartitionStateClass:
             self.PanelState = pmPanelArmedStatus[sysStatus].state
 
             if pmPanelArmedStatus[sysStatus].eventmapping >= 0:
-                log.debug(f"[ProcessPanelStateUpdate]      self.PanelState is {self.PanelState}      using event mapping {pmPanelArmedStatus[sysStatus].eventmapping} for event data")
-                retval = AlPanelEventData(partition = -1, name = 0, action = pmPanelArmedStatus[sysStatus].eventmapping) # use partiton set to -1 as a dummy
+                #log.debug(f"[PanelStateUpdate]             self.PanelState is {self.PanelState}      using event mapping {pmPanelArmedStatus[sysStatus].eventmapping} for event data")
+                retval = AlPanelEventData(name = 0, action = pmPanelArmedStatus[sysStatus].eventmapping) # use partiton set to -1 as a dummy
                 
         else:
-            log.debug(f"[ProcessPanelStateUpdate]      Unknown state {hexify(sysStatus)}, assuming Panel state of Unknown")
+            log.debug(f"[PanelStateUpdate]             Unknown state {hexify(sysStatus)}, assuming Panel state of Unknown")
             disarmed = None
             armed = None
             entry = False
@@ -965,7 +965,7 @@ class PartitionStateClass:
         if PanelMode == AlPanelMode.DOWNLOAD:
             self.PanelState = AlPanelStatus.DOWNLOADING  # Downloading
 
-        log.debug(f"[ProcessPanelStateUpdate]  sysStatus={hexify(sysStatus)}    log: {self.PanelState.name}, {disarmed=}  {armed=}")
+        log.debug(f"[PanelStateUpdate]             sysStatus={hexify(sysStatus)}    log: {self.PanelState.name}, {disarmed=}  {armed=}")
 
         self.PanelReady = sysFlags & 0x01 != 0
         self.PanelAlertInMemory = sysFlags & 0x02 != 0
@@ -979,13 +979,13 @@ class PartitionStateClass:
         self.PanelBypass = sysFlags & 0x08 != 0
         
         if sysFlags & 0x10 != 0:
-            log.debug(f"[ProcessPanelStateUpdate]      sysFlags bit 4 set --> Should be last 10 seconds of entry/exit")
+            log.debug(f"[PanelStateUpdate]                 sysFlags bit 4 set --> Should be last 10 seconds of entry/exit")
             
         if sysFlags & 0x20 != 0:
-            log.debug(f"[ProcessPanelStateUpdate]      sysFlags bit 5 set --> Should be Zone Event")
+            log.debug(f"[PanelStateUpdate]                 sysFlags bit 5 set --> Should be Zone Event")
             
         if sysFlags & 0x40 != 0:
-            log.debug(f"[ProcessPanelStateUpdate]      sysFlags bit 6 set --> Should be Status Changed")
+            log.debug(f"[PanelStateUpdate]                 sysFlags bit 6 set --> Should be Status Changed")
             
         #if sysFlags & 0x10 != 0:  # last 10 seconds of entry/exit
         #    self.PanelArmed = sarm == "Arming"
@@ -998,13 +998,13 @@ class PartitionStateClass:
             #        and that the sensor that triggered it isn't an entry delay
             #   Normally this would only be directly available in Powerlink mode with A7 messages, but an assumption is made here
             if armed is not None and armed and not entry and PanelAlarmEvent:
-                log.debug("[ProcessPanelStateUpdate]      Alarm Event Assumed while in Standard Mode")
+                log.debug("[PanelStateUpdate]                     Alarm Event Assumed while in Standard Mode")
                 # Alarm Event
                 self.SirenActive = True
 
         # Clear any alarm event if the panel alarm has been triggered before (while armed) but now that the panel is disarmed (in all modes)
         if self.SirenActive and disarmed is not None and disarmed:
-            log.debug("[ProcessPanelStateUpdate] ******************** Alarm Not Sounding (Disarmed) ****************")
+            log.debug("[PanelStateUpdate] ******************** Alarm Not Sounding (Disarmed) ****************")
             self.SirenActive = False
             self.SirenActiveDeviceTrigger = None
         
@@ -1202,7 +1202,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         for ped in self.panelEventData:
             retval = True
             a = ped.asDict()
-            log.debug(f"[PanelUpdate]  ped={ped}  event data={a}")
+            log.debug(f"[PanelUpdate] ped = {ped}  event data = {a}")
             self.sendPanelUpdate(AlCondition.PANEL_UPDATE, a)
             self.lastPanelEvent = a
         self.panelEventData = [ ] # empty the list
@@ -1357,7 +1357,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 #                log.debug(f"Got Zone Event {c} {t} {e} {m} {n}")
 #                self.setLastPanelEventData(count=c, type=t, event=e, zonemode=m, name=n)
 #                for i in range(0,c):
-#                    self.addPanelEventData(AlPanelEventData(0, "System", 160 + sysStatus, pmLogEvent_t[160 + sysStatus]))
+#                    self.addPanelEventData(AlPanelEventData("System", 160 + sysStatus, pmLogEvent_t[160 + sysStatus]))
 
         return oldPanelState != self.PanelState or \
                oldPanelMode != self.PanelMode or \

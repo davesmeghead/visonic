@@ -309,14 +309,14 @@ class AlTerminationType(AlEnum):
 a = AlTerminationType()
 
 class AlPanelEventData:
-    def __init__(self, partition: int = 0, name : int = 0, action : int = 0):
-        self.partition = partition
+    def __init__(self, name : int = 0, action : int = 0):
+        self.partition = 0
         self.name_i = name
         self.action_i = action
         self.time = ""
 
     def __str__(self):
-        return f"  {self.time}   {self.partition}  {self.name_i} {self.action_i}"
+        return f"{self.time} {self.partition} {self.name_i} {self.action_i}"
 
     def setPartition(self, p):
         if 1 <= p <= 3:
