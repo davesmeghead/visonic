@@ -72,22 +72,39 @@ class MyTransport(AlTransport):
 
 class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, serial_connection, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._transport = None
+        self.serial_connection = serial_connection
 
     def data_received(self, data):
         super().vp_data_received(data)
 
     def connection_made(self, transport):
-        self.trans = MyTransport(t=transport)
-        super().vp_connection_made(self.trans)
+        self._transport = MyTransport(transport)
+        super().vp_connection_made(self._transport)
 
     def connection_lost(self, exc):
         super().vp_connection_lost(exc)
+        self.close()
+
+#    def changeSerialBaud(self, baud : int):
+#        if self.serial_connection:
+#            print(f"[ClientVisonicProtocol] ClientVisonicProtocol 1, {transport.serial.baudrate} {type(transport.serial.baudrate)}")
+#            self.transport.serial.baudrate = baud
+#            print(f"[ClientVisonicProtocol] ClientVisonicProtocol 2, {transport.serial.baudrate} {type(transport.serial.baudrate)}")
+#        else: 
+#            print("Changing the baud of the ethernet connection is not possible")
+
+    def close(self):
+        if self._transport is not None:
+            self._transport.close()
+            self._transport = None
 
     # This is needed so we can create the class instance before giving it to the protocol handlers
     def __call__(self):
         return self
+
 
 def getConfigData() -> PanelConfig:
     """ Create a dictionary full of the configuration data. """

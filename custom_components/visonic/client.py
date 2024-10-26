@@ -106,7 +106,7 @@ from .const import (
     PIN_REGEX,
 )
 
-CLIENT_VERSION = "0.10.0.1"
+CLIENT_VERSION = "0.10.0.2"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -294,7 +294,7 @@ class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 
     def connection_lost(self, exc):
         super().vp_connection_lost(exc)
-        self._transport = None
+        self.close()
 
     def close(self):
         #_LOGGER.debug("close called on protocol")

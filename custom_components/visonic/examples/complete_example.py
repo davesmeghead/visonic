@@ -174,31 +174,36 @@ class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 
     def __init__(self, serial_connection, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._transport = None
         self.serial_connection = serial_connection
 
     def data_received(self, data):
         super().vp_data_received(data)
 
     def connection_made(self, transport):
-        self.transport = transport
-        self.trans = MyTransport(t=transport)
-        super().vp_connection_made(self.trans)
+        self._transport = MyTransport(transport)
+        super().vp_connection_made(self._transport)
 
     def connection_lost(self, exc):
         super().vp_connection_lost(exc)
+        self.close()
 
-    def changeSerialBaud(self, baud : int):
-        if self.serial_connection:
-            print(f"[ClientVisonicProtocol] ClientVisonicProtocol 1, {transport.serial.baudrate} {type(transport.serial.baudrate)}")
-            self.transport.serial.baudrate = baud
-            print(f"[ClientVisonicProtocol] ClientVisonicProtocol 2, {transport.serial.baudrate} {type(transport.serial.baudrate)}")
-        else: 
-            print("Changing the baud of the ethernet connection is not possible")
+#    def changeSerialBaud(self, baud : int):
+#        if self.serial_connection:
+#            print(f"[ClientVisonicProtocol] ClientVisonicProtocol 1, {transport.serial.baudrate} {type(transport.serial.baudrate)}")
+#            self.transport.serial.baudrate = baud
+#            print(f"[ClientVisonicProtocol] ClientVisonicProtocol 2, {transport.serial.baudrate} {type(transport.serial.baudrate)}")
+#        else: 
+#            print("Changing the baud of the ethernet connection is not possible")
+
+    def close(self):
+        if self._transport is not None:
+            self._transport.close()
+            self._transport = None
 
     # This is needed so we can create the class instance before giving it to the protocol handlers
     def __call__(self):
         return self
-
 
 class VisonicClient:
     """Set up for Visonic devices."""
@@ -453,16 +458,16 @@ class VisonicClient:
         return False
 
     async def service_comms_stop(self):
-        """ Service call to close down the current serial connection, we need to reset the whole connection!!!! """
+        """Service call to close down the current serial connection, we need to reset the whole connection."""
         if not self.SystemStarted:
-            print("Request to Stop the Comms and it is already stopped")
-            return
-
+            self.logstate_debug("Request to Stop the Comms and it is already stopped")
         # Try to get the asyncio Coroutine within the Task to shutdown the serial link connection properly
-        if self.visonicProtocol is not None:
+        elif self.visonicProtocol is not None:
             self.visonicProtocol.shutdownOperation()
-        await asyncio.sleep(0.5)
-        # not a mistake, wait a bit longer to make sure it's closed as we get no feedback (we only get the fact that the queue is empty)
+            self.visonicProtocol.close()
+            self.visonicProtocol = None
+            await asyncio.sleep(0.5)
+            # not a mistake, wait a bit longer to make sure it's closed as we get no feedback (we only get the fact that the queue is empty)
 
     async def service_panel_stop(self):
         """ Service call to stop the connection """
