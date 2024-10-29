@@ -105,7 +105,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.4.3.5"
+PLUGIN_VERSION = "1.4.3.6"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
@@ -2398,10 +2398,11 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 self.B0_Message_Wanted.update(self.B0_Message_Waiting) # ask again for them
                             if len(self.B0_Message_Wanted) > 0:
                                 log.debug(f"[_sequencer] ****************************** Asking For B0_Message_Wanted **************************** {self.B0_Message_Wanted}     timediff={diff}")
-                                s = self._create_B0_Data_Request(taglist = list(self.B0_Message_Wanted))
-                                self._addMessageToSendList(s)
-                                self.B0_Message_Waiting.update(self.B0_Message_Wanted)
+                                tmp = {pmSendMsgB0[i].data if isinstance(i, str) and i in pmSendMsgB0 else i for i in self.B0_Message_Wanted}
                                 self.B0_Message_Wanted = set()
+                                s = self._create_B0_Data_Request(taglist = list(tmp))
+                                self._addMessageToSendList(s)
+                                self.B0_Message_Waiting.update(tmp)
                                 _last_B0_wanted_request_time = tnow
 
                     # Dump all sensors to the file every 60 seconds (1 minute)
