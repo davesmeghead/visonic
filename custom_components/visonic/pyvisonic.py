@@ -2398,7 +2398,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 self.B0_Message_Wanted.update(self.B0_Message_Waiting) # ask again for them
                             if len(self.B0_Message_Wanted) > 0:
                                 log.debug(f"[_sequencer] ****************************** Asking For B0_Message_Wanted **************************** {self.B0_Message_Wanted}     timediff={diff}")
-                                tmp = {pmSendMsgB0[i].data if isinstance(i, str) and i in pmSendMsgB0 else i for i in self.B0_Message_Wanted}
+                                tmp = {pmSendMsgB0[i] if isinstance(i, str) and i in pmSendMsgB0 else i for i in self.B0_Message_Wanted}
                                 self.B0_Message_Wanted = set()
                                 s = self._create_B0_Data_Request(taglist = list(tmp))
                                 self._addMessageToSendList(s)
