@@ -241,17 +241,11 @@ class VisonicBinarySensor(BinarySensorEntity):
 
             attr = {}
             attr["device_name"] = self._dname
-            if self._visonic_device.isZoneTamper() is None:
-                attr["zone_tamper"] = "undefined"
-            else:
-                attr["zone_tamper"] = self._visonic_device.isZoneTamper() 
-            if self._visonic_device.isTamper() is None:
+
+            if (t := self._visonic_device.isTamper()) is None:
                 attr["device_tamper"] = "undefined"
             else:
-                attr["device_tamper"] = self._visonic_device.isTamper()
-            
-            if stype != AlSensorType.MOTION and stype != AlSensorType.CAMERA:
-                attr["zone_open"] = self._visonic_device.isOpen()
+                attr["device_tamper"] = t
             
             if stype != AlSensorType.UNKNOWN:
                 attr["sensor_type"] = str(stype).lower()
@@ -260,18 +254,32 @@ class VisonicBinarySensor(BinarySensorEntity):
             else:
                 attr["sensor_type"] = "unknown"
 
+            if stype != AlSensorType.MOTION and stype != AlSensorType.CAMERA:
+                attr["zone_open"] = self._visonic_device.isOpen()
+
+            if (t := self._visonic_device.isZoneTamper()) is None:
+                attr["zone_tamper"] = "undefined"
+            else:
+                attr["zone_tamper"] = t
+            
             #attr["zone type"] = self.ztype
             attr["zone_name"] = self._visonic_device.getZoneLocation()
             attr["zone_type"] = self._visonic_device.getZoneType()
             attr["zone_chime"] = self._visonic_device.getChimeType()
             attr["zone_trouble"] = self._visonic_device.getProblem()
             
-            if self._client.getPartitionsInUse() is not None:   # Returns None when partitions not in use
-                attr["partition"] = list(self._visonic_device.getPartition())
+            if (l := self._visonic_device.getLux()) is not None:
+                attr["zone_lux"] = l
+
+            if (t := self._visonic_device.getTemperature()) is not None:
+                attr["zone_temperature"] = t
             
             if self._client.isPowerMaster() and self._visonic_device.getMotionDelayTime() is not None and len(str(self._visonic_device.getMotionDelayTime())) > 0:
                 attr["zone_motion_off_time"] = self._visonic_device.getMotionDelayTime()
 
+            if (p := self._client.getPartitionsInUse()) is not None:   # Returns None when partitions not in use
+                attr["partition"] = list(p)
+            
             attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()
 
             attr[ATTR_TRIPPED] = self._visonic_device.isTriggered()

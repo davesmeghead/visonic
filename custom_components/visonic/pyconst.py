@@ -202,6 +202,8 @@ class AlPanelCommand(AlEnum):
     FIRE = AlIntEnum(7)
     EMERGENCY = AlIntEnum(8)
     PANIC = AlIntEnum(9)
+    ARM_HOME_BYPASS = AlIntEnum(10)
+    ARM_AWAY_BYPASS = AlIntEnum(11)
 a = AlPanelCommand()
 
 # The set of commands that can be used to mute and trigger the siren
@@ -629,7 +631,7 @@ class AlPanelInterface(ABC):
     #    "1234" a 4 digit code for any panel mode to use that code
     #    anything else to use code "0000" (this is unlikely to work on any panel)
     @abstractmethod
-    def setSensorBypassState(self, sensor : int, bypassValue : bool, code : str = "") -> AlCommandStatus:
+    def setSensorBypassState(self, sensor : int | set, bypassValue : bool, code : str = "") -> AlCommandStatus:
         """ Set or Clear Sensor Bypass """
         return AlCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED
 

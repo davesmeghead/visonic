@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import datetime
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
@@ -69,6 +71,7 @@ class VisonicSelect(SelectEntity):
         self._is_available = self._visonic_device.isEnrolled()
         self._is_armed = not self._visonic_device.isBypass()
         self._pending_state_is_armed = None
+        self.lastCommandData = None
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
@@ -153,6 +156,11 @@ class VisonicSelect(SelectEntity):
 
     def select_option(self, option: str) -> None:
         """Change the visonic sensor armed state"""
+            
+        # get the current date and time
+        def _getUTCTime() -> datetime:
+            return datetime.now(tz=timezone.utc)
+
         if not self.isPanelConnected():
             raise HomeAssistantError(
                     translation_domain=DOMAIN,
@@ -163,12 +171,22 @@ class VisonicSelect(SelectEntity):
                 )
 
         if self._pending_state_is_armed is not None:
-            _LOGGER.debug(f"Currently Pending {self.unique_id} so ignoring request to select option")
+            interval = _getUTCTime - self.lastCommandData
+            if interval >= timedelta(seconds=3):
+                # Longer than 3 seconds so timeout and set the state to whatever the sensor state bypass/armed is
+                self._pending_state_is_armed = None
+                if self._visonic_device is not None:
+                    self._is_available = self._visonic_device.isEnrolled()
+                    self._is_armed = not self._visonic_device.isBypass()
+                _LOGGER.debug(f"Currently Pending {self.unique_id} timing out and setting to sensor bypass state {self._is_armed}")
+            else:
+                _LOGGER.debug(f"Currently Pending {self.unique_id} so ignoring request to select option")
         elif option is not None and option in self.options:
             #_LOGGER.debug(f"Sending Option {option} to {self.unique_id}")
             result = self._client.sendBypass(self._visonic_device.getDeviceID(), option == BYPASS, "") # pin code to "" to use default if set
             if result == AlCommandStatus.SUCCESS:
                 self._pending_state_is_armed = (option == ARMED)
+                self.lastCommandData = _getUTCTime()
             else:
                 # Command not sent to panel
                 _LOGGER.debug(f"Sensor Bypass: Command not sent to panel {result}")

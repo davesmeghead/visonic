@@ -3,12 +3,13 @@
 import logging
 from enum import IntEnum
 
-import homeassistant.components.alarm_control_panel as alarm
+#import homeassistant.components.alarm_control_panel as alarm
 from homeassistant.util import slugify
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.components.alarm_control_panel import DOMAIN as ALARM_PANEL_DOMAIN
+from homeassistant.components.alarm_control_panel import AlarmControlPanelEntity, AlarmControlPanelState
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers import config_validation as cv, entity_platform
 
@@ -17,16 +18,15 @@ from homeassistant.components.alarm_control_panel.const import (
     AlarmControlPanelEntityFeature,
     CodeFormat,
 )
-from homeassistant.const import (
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_ARMING,
-    STATE_ALARM_DISARMED,
-    STATE_ALARM_PENDING,
-    STATE_ALARM_TRIGGERED,
-    STATE_UNKNOWN,
-)
-
+#from homeassistant.const import (
+#    STATE_ALARM_ARMED_AWAY,
+#    STATE_ALARM_ARMED_HOME,
+#    STATE_ALARM_ARMING,
+#    STATE_ALARM_DISARMED,
+#    STATE_ALARM_PENDING,
+#    STATE_ALARM_TRIGGERED,
+#    STATE_UNKNOWN,
+#)
 from . import VisonicConfigEntry
 from .client import VisonicClient
 from .pyconst import AlPanelCommand, AlPanelStatus
@@ -74,10 +74,10 @@ async def async_setup_entry(
     )
     #_LOGGER.debug("alarm control panel async_setup_entry exit")
 
-class VisonicAlarm(alarm.AlarmControlPanelEntity):
+class VisonicAlarm(AlarmControlPanelEntity):
     """Representation of a Visonic alarm control panel."""
 
-#    _unrecorded_attributes = alarm.AlarmControlPanelEntity._unrecorded_attributes | frozenset({-})
+#    _unrecorded_attributes = AlarmControlPanelEntity._unrecorded_attributes | frozenset({-})
     _attr_translation_key: str = "alarm_panel_key"
     #_attr_has_entity_name = True
     _entity_component_unrecorded_attributes = frozenset(
@@ -91,7 +91,7 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
         self.hass = hass
         self._client = client
 
-        self._mystate = STATE_UNKNOWN
+        self._mystate = AlarmControlPanelState.DISARMED
         self._device_state_attributes = {}
         self._users = {}
         self._doneUsers = False
@@ -192,13 +192,13 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
     def update(self):
         """Get the state of the device."""
         #_LOGGER.debug(f"alarm control panel update {self.entity_id=}")
-        self._mystate = STATE_UNKNOWN
+        self._mystate = AlarmControlPanelState.DISARMED
         self._device_state_attributes = {}
 
         if self._client is not None and self.isPanelConnected():
             isa, _ = self._client.isSirenActive()
             if isa:
-                self._mystate = STATE_ALARM_TRIGGERED
+                self._mystate = AlarmControlPanelState.TRIGGERED
             else:
                 armcode = self._client.getPanelStatus(self._partition)
                 if armcode is not None and armcode in map_panel_status_to_ha_status:
@@ -224,9 +224,15 @@ class VisonicAlarm(alarm.AlarmControlPanelEntity):
             elif data is not None:
                 self._device_state_attributes = {**data}
 
+#    @property
+#    def state(self):
+#        """Return the state of the device."""
+#        #_LOGGER.debug(f"alarm control panel state {self.entity_id=}")
+#        return self._mystate
+
     @property
-    def state(self):
-        """Return the state of the device."""
+    def alarm_state(self) -> AlarmControlPanelState | None:
+        """Return the state of the alarm."""
         #_LOGGER.debug(f"alarm control panel state {self.entity_id=}")
         return self._mystate
 

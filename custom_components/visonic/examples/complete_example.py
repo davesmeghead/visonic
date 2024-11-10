@@ -93,6 +93,12 @@ def setConnectionMode(connect_mode):
         myconfig[CONF_EMULATION_MODE] = ConnectionMode.DATAONLY
         connection_mode = "Data Only (exchange of simple data with alarm panel, no ability to set alarm state)"
 
+def setupLocalLoggerBasic():
+    import logging
+    
+    return logging.getLogger()
+    
+
 def setupLocalLogger(level: str = "WARNING", empty = False):
     global logger_level
     from datetime import datetime, timedelta
@@ -208,11 +214,12 @@ class ClientVisonicProtocol(asyncio.Protocol, VisonicProtocol):
 class VisonicClient:
     """Set up for Visonic devices."""
 
-    def __init__(self, loop, config):
+    def __init__(self, loop, config, logger):
         """Initialize the Visonic Client."""
         # Get the user defined config
         self.config = config
         self.loop = loop
+        self.log = logger
 
         self.panel_exception_counter = 0
         self.visonicTask = None
@@ -266,7 +273,7 @@ class VisonicClient:
         """ This is a callback function, called from the visonic library. """
         if type(e) == AlIntEnum:
             if self.process_event is not None:
-                datadict = self.visonicProtocol.getEventData()
+                datadict = self.visonicProtocol.getEventData(None)
                 #datadict.update(self.LastPanelEventData)
                 self.process_event(e, datadict)
         else:
@@ -361,7 +368,7 @@ class VisonicClient:
             # set the timeout to infinite
             sock.settimeout(None)
 
-            vp = ClientVisonicProtocol(serial_connection = False, panelConfig=panelConfig, loop=loop)
+            vp = ClientVisonicProtocol(serial_connection = False, panelConfig=panelConfig, loop=loop, logger = self.log)
 
             #print("The vp " + str(type(vp)) + "   with value " + str(vp))
             # create the connection to the panel as an asyncio protocol handler and then set it up in a task
@@ -391,7 +398,7 @@ class VisonicClient:
         path = path
         baud = int(baud)
         try:
-            vp = ClientVisonicProtocol(serial_connection = True, panelConfig=panelConfig, loop=loop)
+            vp = ClientVisonicProtocol(serial_connection = True, panelConfig=panelConfig, loop=loop, logger = self.log)
             # create the connection to the panel as an asyncio protocol handler and then set it up in a task
             conn = create_serial_connection(loop, vp, path, baud)
             visonicTask = loop.create_task(conn)
@@ -589,6 +596,9 @@ class VisonicClient:
     def isSystemStarted(self) -> bool:
         return self.SystemStarted
 
+    def getPartitionsInUse(self) -> set:
+        return self.visonicProtocol.getPartitionsInUse() if self.visonicProtocol is not None else {1}
+
     def sendCommand(self, command : AlPanelCommand, code : str, partitions : set = {1,2,3}) -> AlCommandStatus:
         """ Send a command to the panel """
         if self.visonicProtocol is not None:
@@ -785,12 +795,20 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         prompt = prompt1
                         processedInput = True
                     elif command == 'm':
-                        for p in client.getPartitionsInUse():
-                            pready = client.isPanelReady(p)
-                            pstate = client.getPanelStatus(p)
+                        if (part := client.getPartitionsInUse()) is not None:
+                            for p in part:
+                                pready = client.isPanelReady(p)
+                                pstate = client.getPanelStatus(p)
+                                siren, _ = client.isSirenActive();
+                                mode = client.getPanelMode();
+                                console.print(f"Panel Mode={mode.name}    Partition={p}     Partition state={pstate.name}    Partition Ready={str(pready)}   Siren={str(siren)}")
+                        else:
+                            pready = client.isPanelReady(1)
+                            pstate = client.getPanelStatus(1)
                             siren, _ = client.isSirenActive();
                             mode = client.getPanelMode();
-                            console.print("Panel Mode=" + mode.name + "    Panel state=" + pstate.name + "    Panel Ready=" + str(pready) + "    Siren=" + str(siren) )
+                            console.print(f"Panel Mode={mode.name}    Partition state={pstate.name}    Partition Ready={str(pready)}   Siren={str(siren)}")
+                            
                         processedInput = True
                     elif command == 'd':
                         client.sendCommand(AlPanelCommand.DISARM, getCode(ar,1))
@@ -946,11 +964,12 @@ if __name__ == '__main__':
     asyncio.set_event_loop(testloop)
     testloop.set_exception_handler(handle_exception)
 
+    log = setupLocalLoggerBasic()
     setupLocalLogger("ERROR", empty = True)   # one of "WARNING"  "INFO"  "ERROR"   "DEBUG"
     ConfigureLogger(str(args.print).lower(), None)
     setConnectionMode(str(args.connect).lower())
 
-    client = VisonicClient(loop = testloop, config = myconfig)
+    client = VisonicClient(loop = testloop, config = myconfig, logger = log)
 
     if client is not None:
         success = True #client.connect(wait_sleep=False, wait_loop=True)

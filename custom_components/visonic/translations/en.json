@@ -464,6 +464,12 @@
 					"zone_motion_off_time": {
 						"name": "Zone Motion Off Time"
 					},
+					"zone_temperature": {
+						"name": "Zone Temperature"
+					},
+					"zone_lux": {
+						"name": "Zone Luminance"
+					},
 					"visonic_device": {
 						"name": "Zone Device ID"
 					},
@@ -682,8 +688,10 @@
                 "disarm": "Disarm",
                 "arm_home": "Arm Home",
                 "arm_home_instant": "Arm Home Instant",
+                "arm_home_bypass": "Arm Home Bypass",
                 "arm_away": "Arm Away",
                 "arm_away_instant": "Arm Away Instant",
+                "arm_away_bypass": "Arm Away Bypass",
                 "mute": "Mute Siren",
                 "trigger": "Trigger Siren",
                 "fire": "Fire Alarm",

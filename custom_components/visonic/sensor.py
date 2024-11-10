@@ -7,15 +7,16 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.components.alarm_control_panel import AlarmControlPanelState
 
 # Use the standard HA core attributes, alarm states and services to report status
 from homeassistant.const import (
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_ARMING,
-    STATE_ALARM_DISARMED,
-    STATE_ALARM_PENDING,
-    STATE_ALARM_TRIGGERED,
+#    STATE_ALARM_ARMED_AWAY,
+#    STATE_ALARM_ARMED_HOME,
+#    STATE_ALARM_ARMING,
+#    STATE_ALARM_DISARMED,
+#    STATE_ALARM_PENDING,
+#    STATE_ALARM_TRIGGERED,
     STATE_UNKNOWN,
 )
 
@@ -140,7 +141,7 @@ class VisonicSensor(Entity):
         if self.isPanelConnected():
             isa, _ = self._client.isSirenActive()
             if isa:
-                self._mystate = STATE_ALARM_TRIGGERED
+                self._mystate = AlarmControlPanelState.TRIGGERED
             else:
                 armcode = self._client.getPanelStatus()
                 if armcode is not None and armcode in map_panel_status_to_ha_status:

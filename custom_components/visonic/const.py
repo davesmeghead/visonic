@@ -1,16 +1,17 @@
 """Constants for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 from enum import Enum, IntFlag
 from .pyconst import AlPanelStatus
+from homeassistant.components.alarm_control_panel import AlarmControlPanelState
 
-from homeassistant.const import (
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_ARMING,
-    STATE_ALARM_DISARMED,
-    STATE_ALARM_PENDING,
-    STATE_ALARM_TRIGGERED,
-    STATE_UNKNOWN,
-)
+#from homeassistant.const import (
+#    STATE_ALARM_ARMED_AWAY,
+#    STATE_ALARM_ARMED_HOME,
+#    STATE_ALARM_ARMING,
+#    STATE_ALARM_DISARMED,
+#    STATE_ALARM_PENDING,
+#    STATE_ALARM_TRIGGERED,
+#    STATE_UNKNOWN,
+#)
 
 
 # The domain for the integration
@@ -127,19 +128,19 @@ available_emulation_modes = [
 
 # For alarm_control_panel and sensor, map the alarm panel states across to the Home Assistant states
 map_panel_status_to_ha_status = {
-    AlPanelStatus.UNKNOWN             : STATE_UNKNOWN,
-    AlPanelStatus.DISARMED            : STATE_ALARM_DISARMED,
-    AlPanelStatus.ARMING_HOME         : STATE_ALARM_ARMING,
-    AlPanelStatus.ARMING_AWAY         : STATE_ALARM_ARMING,
-    AlPanelStatus.ENTRY_DELAY         : STATE_ALARM_PENDING,
-    AlPanelStatus.ENTRY_DELAY_INSTANT : STATE_ALARM_PENDING,
-    AlPanelStatus.ARMED_HOME          : STATE_ALARM_ARMED_HOME,
-    AlPanelStatus.ARMED_AWAY          : STATE_ALARM_ARMED_AWAY,
-    AlPanelStatus.ARMED_HOME_BYPASS   : STATE_ALARM_ARMED_HOME,
-    AlPanelStatus.ARMED_AWAY_BYPASS   : STATE_ALARM_ARMED_AWAY,
-    AlPanelStatus.ARMED_HOME_INSTANT  : STATE_ALARM_ARMED_HOME,
-    AlPanelStatus.ARMED_AWAY_INSTANT  : STATE_ALARM_ARMED_AWAY,
-    AlPanelStatus.USER_TEST           : STATE_UNKNOWN,
-    AlPanelStatus.DOWNLOADING         : STATE_UNKNOWN,
-    AlPanelStatus.INSTALLER           : STATE_UNKNOWN
+    AlPanelStatus.UNKNOWN             : AlarmControlPanelState.DISARMED,
+    AlPanelStatus.DISARMED            : AlarmControlPanelState.DISARMED,
+    AlPanelStatus.ARMING_HOME         : AlarmControlPanelState.ARMING,
+    AlPanelStatus.ARMING_AWAY         : AlarmControlPanelState.ARMING,
+    AlPanelStatus.ENTRY_DELAY         : AlarmControlPanelState.PENDING,
+    AlPanelStatus.ENTRY_DELAY_INSTANT : AlarmControlPanelState.PENDING,
+    AlPanelStatus.ARMED_HOME          : AlarmControlPanelState.ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY          : AlarmControlPanelState.ARMED_AWAY,
+    AlPanelStatus.ARMED_HOME_BYPASS   : AlarmControlPanelState.ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY_BYPASS   : AlarmControlPanelState.ARMED_AWAY,
+    AlPanelStatus.ARMED_HOME_INSTANT  : AlarmControlPanelState.ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY_INSTANT  : AlarmControlPanelState.ARMED_AWAY,
+    AlPanelStatus.USER_TEST           : AlarmControlPanelState.DISARMED,
+    AlPanelStatus.DOWNLOADING         : AlarmControlPanelState.DISARMED,
+    AlPanelStatus.INSTALLER           : AlarmControlPanelState.DISARMED
 }

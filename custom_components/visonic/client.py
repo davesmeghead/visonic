@@ -106,7 +106,7 @@ from .const import (
     PIN_REGEX,
 )
 
-CLIENT_VERSION = "0.10.0.2"
+CLIENT_VERSION = "0.10.0.3"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -870,7 +870,7 @@ class VisonicClient:
                     self.logstate_debug("Adding Sensor %s", sensor)
                     self.sensor_list.append(sensor)
                     await self._setupVisonicEntity(Platform.BINARY_SENSOR, BINARY_SENSOR_DOMAIN, sensor)
-                    if not self.DisableAllCommands:
+                    if not self.DisableAllCommands: # and self.toBool(self.config.get(CONF_ENABLE_SENSOR_BYPASS, False))
                         # The connection to the panel allows interaction with the sensor, including the arming/bypass of the sensors
                         await self._setupVisonicEntity(Platform.SELECT, SELECT_DOMAIN, sensor)
                 else:
@@ -1170,23 +1170,23 @@ class VisonicClient:
         """Create a dictionary full of the configuration data."""
 
         v = self.config.get(CONF_EMULATION_MODE, available_emulation_modes[0])        
-        self.ForceStandardMode = v == available_emulation_modes[1]
-        self.DisableAllCommands = v == available_emulation_modes[2]
+        ForceStandardMode = v == available_emulation_modes[1]
+        DisableAllCommands = v == available_emulation_modes[2]
 
-        if self.DisableAllCommands:
-            self.ForceStandardMode = True
-        # By the time we get here there are 3 combinations of self.DisableAllCommands and self.ForceStandardMode
+        if DisableAllCommands:
+            ForceStandardMode = True
+        # By the time we get here there are 3 combinations of DisableAllCommands and ForceStandardMode
         #     Both are False --> Try to get to Powerlink 
-        #     self.ForceStandardMode is True --> Force Standard Mode, the panel can still be armed and disarmed
-        #     self.ForceStandardMode and self.DisableAllCommands are True --> The integration interacts with the panel but commands such as arm/disarm/log/bypass are not allowed
+        #     ForceStandardMode is True --> Force Standard Mode, the panel can still be armed and disarmed
+        #     ForceStandardMode and DisableAllCommands are True --> The integration interacts with the panel but commands such as arm/disarm/log/bypass are not allowed
         # The if statement above ensure these are the only supported combinations.
 
-        self.logstate_debug(f"[getConfigData] Emulation Mode {self.config.get(CONF_EMULATION_MODE)} so setting ForceStandard to {self.ForceStandardMode}, DisableAllCommands to {self.DisableAllCommands}")
+        self.logstate_debug(f"[getConfigData] Emulation Mode {self.config.get(CONF_EMULATION_MODE)} so setting ForceStandard to {ForceStandardMode}, DisableAllCommands to {DisableAllCommands}")
 
         return {
             AlConfiguration.DownloadCode: self.config.get(CONF_DOWNLOAD_CODE, ""),
-            AlConfiguration.ForceStandard: self.ForceStandardMode,
-            AlConfiguration.DisableAllCommands: self.DisableAllCommands
+            AlConfiguration.ForceStandard: ForceStandardMode,
+            AlConfiguration.DisableAllCommands: DisableAllCommands
             #AlConfiguration.SirenTriggerList: self.config.get(CONF_SIREN_SOUNDING, ["Intruder"])
         }
 
@@ -1619,13 +1619,35 @@ class VisonicClient:
                 if self.visonicProtocol is not None:
                     isValidPL, code = self.pmGetPin(code = pcode, forcedKeypad = self.isForceKeypad(), partition = 1)
 
-                    if command == AlPanelCommand.DISARM or command == AlPanelCommand.ARM_HOME or command == AlPanelCommand.ARM_AWAY or command == AlPanelCommand.ARM_HOME_INSTANT or command == AlPanelCommand.ARM_AWAY_INSTANT:
+                    if command in [AlPanelCommand.DISARM, AlPanelCommand.ARM_HOME, AlPanelCommand.ARM_AWAY, AlPanelCommand.ARM_HOME_INSTANT, \
+                                   AlPanelCommand.ARM_AWAY_INSTANT, AlPanelCommand.ARM_HOME_BYPASS, AlPanelCommand.ARM_AWAY_BYPASS]:
 
-                        self.logstate_debug("Send command to Visonic Alarm Panel: %s", command)
+                        self.logstate_debug(f"Send command to Visonic Alarm Panel: {command}")
 
                         if isValidPL:
                             if (command == AlPanelCommand.DISARM and self.isRemoteDisarm()) or (
                                 command != AlPanelCommand.DISARM and self.isRemoteArm()):
+                                
+                                if command in [AlPanelCommand.ARM_HOME_BYPASS, AlPanelCommand.ARM_AWAY_BYPASS]:
+                                    command = AlPanelCommand.ARM_HOME if command == AlPanelCommand.ARM_HOME_BYPASS else AlPanelCommand.ARM_AWAY
+                                    # for each partition, determine what non PIR sensors are open and BYPASS them
+                                    part = {1} if partitions is None or self.getPartitionsInUse() is None else partitions & self.getPartitionsInUse() # set intersection
+                                    sl = set()
+                                    for p in part:
+                                        for s in self.sensor_list:
+                                            # if the sensor is in the partition p, and not already bypassed, and is currently open
+                                            if p in s.getPartition() and not s.isBypass() and s.isOpen():
+                                                sl.add(s.getDeviceID())   # sl is a set so no repetition
+
+                                    if len(sl) > 0:
+                                        self.logstate_debug(f"         Attempting to first bypass this sensor list: {sl}")
+                                        retval = self.visonicProtocol.setSensorBypassState(sl, True, code)
+                                        if retval != AlCommandStatus.SUCCESS:
+                                            self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval , command.name, "Request Arm/Disarm")
+                                            return
+                                    else:
+                                        self.logstate_debug(f"         No sensors to bypass so not sending bypass command first")
+                                    
                                 retval = self.visonicProtocol.requestPanelCommand(command, code, partitions)
                                 self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request Arm/Disarm")
                             else:
@@ -1633,9 +1655,9 @@ class VisonicClient:
                         else:
                             self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_INVALID_CODE, command.name, "Request Arm/Disarm")
 
-                    elif self.visonicProtocol.isPowerMaster() and (command == AlPanelCommand.MUTE or command == AlPanelCommand.TRIGGER or command == AlPanelCommand.FIRE or command == AlPanelCommand.EMERGENCY or command == AlPanelCommand.PANIC):
+                    elif self.visonicProtocol.isPowerMaster() and (command in [AlPanelCommand.MUTE, AlPanelCommand.TRIGGER, AlPanelCommand.FIRE, AlPanelCommand.EMERGENCY, AlPanelCommand.PANIC]):
                         if isValidPL:
-                            self.logstate_debug("Send command to Visonic Alarm Panel: %s", command)
+                            self.logstate_debug(f"Send command to Visonic Alarm Panel: {command}")
                             retval = self.visonicProtocol.requestPanelCommand(command, code, None)
                             self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request PowerMaster Panel Command")
                         else:
@@ -1645,7 +1667,7 @@ class VisonicClient:
                 else:
                     self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, not sent to panel")
             else:
-                self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, an alarm code is required")
+                self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Error in sending {message} Command, either an alarm code is required or the panel is not in a valid mode")
         else:
             self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 

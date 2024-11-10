@@ -239,6 +239,8 @@ class AlSensorDeviceHelper(AlSensorDevice):
         self.triggertime = None     # datetime  This is used to time stamp in local time the occurance of the trigger
         self.model = kwargs.get("model", "Unknown")  # str   device model
         self.motiondelaytime = kwargs.get("motiondelaytime", None)  # int   device model
+        self.temperature = None
+        self.luminance = None
         self.hasJPG = False
         self.jpg_data = None
         self.jpg_time = None
@@ -276,6 +278,8 @@ class AlSensorDeviceHelper(AlSensorDevice):
         strn = strn + (" tamper=--" if self.tamper == None else f" tamper={self.tamper:<2}")
         strn = strn + (" enrolled=--" if self.enrolled == None else f" enrolled={self.enrolled:<2}")
         strn = strn + (" triggered=--" if self.triggered == None else f" triggered={self.triggered:<2}")
+        strn = strn + ("" if self.temperature == None else f" temperature={self.temperature:<3}")
+        strn = strn + ("" if self.luminance == None else f" luminance={self.luminance:<3}")
 
         if self.motiondelaytime is not None and (self.stype == AlSensorType.MOTION or self.stype == AlSensorType.CAMERA):
             strn = strn + f" delay={'Not Set' if self.motiondelaytime == 0xFFFF else str(self.motiondelaytime):<7}"
@@ -418,6 +422,18 @@ class AlSensorDeviceHelper(AlSensorDevice):
         # The pushchange function calls the sensors onchange function so it should have already seen triggered and status values, so we can reset triggered
         self.triggered = False
 
+    def updateLux(self, l):
+        self.luminance = l
+
+    def updateTemperature(self, t):
+        self.temperature = t
+
+    def getLux(self):
+        return self.luminance
+
+    def getTemperature(self):
+        return self.temperature
+
     def do_status(self, stat):
         self._updateContactSensor(status = stat)
 
@@ -498,8 +514,8 @@ class AlSensorDeviceHelper(AlSensorDevice):
             self.lowbatt = toBool(decode["low_battery"])
         if "enrolled" in decode:
             self.enrolled = toBool(decode["enrolled"])
-        if "sensor_type" in decode:
-            st = decode["sensor_type"]
+        if "device_type" in decode:
+            st = decode["device_type"]
             self.stype = AlSensorType.value_of(st.upper())
         if "trigger_time" in decode:
             self.triggertime = datetime.fromisoformat(decode["trigger_time"]) if str(decode["trigger_time"]) != "" else None
@@ -528,7 +544,7 @@ class AlSensorDeviceHelper(AlSensorDevice):
              "bypass": self.isBypass(),
              "low_battery": self.isLowBattery(),
              "enrolled": self.isEnrolled(),
-             "sensor_type": str(self.getSensorType()),
+             "device_type": str(self.getSensorType()),
              "trigger_time": datetime.isoformat(self.getLastTriggerTime()) if self.getLastTriggerTime() is not None else "",
              "location": str(self.getZoneLocation()),
              "zone_type": str(self.getZoneType()),
@@ -789,6 +805,12 @@ class AlImageManager:
 
 class MyChecksumCalc:
 
+    def __init__(self, logger = None) -> None:
+        """Initialize class."""
+        pass
+        #if logger is not None:
+        #    log = logger
+
     # check the checksum of received messages
     def _validatePDU(self, packet: bytearray) -> bool:
         """Verify if packet is valid.
@@ -1013,9 +1035,13 @@ class PartitionStateClass:
 
 class AlPanelInterfaceHelper(AlPanelInterface):
 
-    def __init__(self, panel_id):
+    def __init__(self, panel_id, logger = None):
         """Initialize class."""
         super().__init__()
+
+        #if logger is not None:
+        #    log = logger
+
         # Class Variables
         #self.log = vloggerclass(panel_id=panel_id)
         self.suspendAllOperations = False
@@ -1080,8 +1106,9 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         
         pm = titlecase(self.PanelMode.name.replace("_"," ")) # str(AlPanelMode()[self.PanelMode]).replace("_"," ")
         log.debug(f"   Model {self.PanelModel: <18}     PowerMaster {'Yes' if self.PowerMaster else 'No': <10}     Mode  {pm: <18}     ")
-        if self.getPartitionsInUse() is not None:
-            for piu in self.getPartitionsInUse():
+        part = self.getPartitionsInUse()
+        if part is not None:
+            for piu in part:
                 if 1 <= piu <= 3:
                     p = self.PartitionState[piu-1]
                     r = 'Yes' if p.PanelReady else 'No'
@@ -1114,8 +1141,8 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
     def isSirenActive(self) -> (bool, AlSensorDevice | None):
         if not self.suspendAllOperations:
-            if self.getPartitionsInUse() is not None:
-                for piu in self.getPartitionsInUse():
+            if (p := self.getPartitionsInUse()) is not None:
+                for piu in p:
                     if self.PartitionState[piu-1].SirenActive:
                         return (True, self.PartitionState[piu-1].SirenActiveDeviceTrigger)
             else:
@@ -1176,7 +1203,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
     #    None when we are in Powerlink or Standard Plus and to use the code code from EPROM
     #    "1234" a 4 digit code for any panel mode to use that code
     #    anything else to use code "0000" (this is unlikely to work on any panel)
-    def setSensorBypassState(self, sensor : int, bypassValue : bool, code : str = "") -> AlCommandStatus:
+    def setSensorBypassState(self, sensor : int | set, bypassValue : bool, code : str = "") -> AlCommandStatus:
         """ Set or Clear Sensor Bypass """
         return AlCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED
 

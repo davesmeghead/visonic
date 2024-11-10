@@ -464,6 +464,12 @@
 					"zone_motion_off_time": {
 						"name": "Temps d'arr\u00eat du mouvement de zone"
 					},
+					"zone_temperature": {
+						"name": "Zone Temperature"
+					},
+					"zone_lux": {
+						"name": "Zone Luminance"
+					},
 					"visonic_device": {
 						"name": "ID du p\u00e9riph\u00e9rique de zone"
 					},
@@ -682,8 +688,10 @@
                 "disarm": "D\u00e9sarmement",
                 "arm_home": "Armement Partiel",
                 "arm_home_instant": "Armement Partiel Instantan\u00e9",
+                "arm_home_bypass": "Armement Partiel By-pass",
                 "arm_away": "Armement Total",
                 "arm_away_instant": "Armement Total Instantan\u00e9",
+                "arm_away_bypass": "Armement Total By-pass",
                 "mute": "Sir\u00e8ne Silencieuse",
                 "trigger": "D\u00e9clenchement Sir\u00e8ne",
                 "fire": "Incendie Alarme",
