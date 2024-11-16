@@ -54,7 +54,6 @@
                 "title": "Alarm Panel Settings",
                 "data": {
                     "siren_sounding": "List of triggers for the siren",
-                    "sensor_event_list": "List of Sensor changes to create an Event",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "retry_connection_count": "Try this number of times to attempt the connection",
                     "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
@@ -117,7 +116,6 @@
                 "title": "Alarm Panel Settings",
                 "data": {
                     "siren_sounding": "List of triggers for the siren",
-                    "sensor_event_list": "List of Sensor changes to create an Event",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
                     "retry_connection_count": "Try this number of times to attempt the connection",
                     "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
@@ -723,14 +721,6 @@
                 "flood": "Flood",
                 "x10": "X10",
                 "panic": "Panic"                  
-            }
-        },
-        "sensor_event_list": {
-            "options": {
-				"problem":   "Problem",
-				"fire":      "Fire",
-				"emergency": "Emergency",
-				"panic":     "Panic"
             }
         },
 		"panel_state_notifications": {

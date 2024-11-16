@@ -108,7 +108,7 @@ except:
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
 
-PLUGIN_VERSION = "1.7.0.0"
+PLUGIN_VERSION = "1.7.1.0"
 
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
@@ -1592,16 +1592,10 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             #else:
             #    log.debug("[setTimeInPanel]      Correcting Time in Panel.")
         if settime:
-            # Set these as urgent to get them to the panel asap (so the time is set asap to synchronise panel and local time)
-            #if self.isPowerMaster():
-            #    self._addMessageToSendList("MSG_BUMP", priority = MessagePriority.URGENT)
-            #else:
-            
-            # Can only set the time in the panel in DOWNLOADING state
-            #    temporarily disable putting it to download mode
-            #self._addMessageToSendList("MSG_DOWNLOAD_TIME", priority = MessagePriority.URGENT, options=[ [3, convertByteArray(self.DownloadCode)] ])  
             log.debug(f"[setTimeInPanel]      Setting time in panel {t}")
-            timePdu = bytearray([t.second + 1, t.minute, t.hour, t.day, t.month, t.year - 2000])   # add about 2 seconds on as it takes over 1 to get to the panel to set it
+            timePdu = bytearray([t.second + 1, t.minute, t.hour, t.day, t.month, t.year - 2000])   # add about 1 seconds on as it takes over 1 to get to the panel to set it
+            # Set these as urgent to get them to the panel asap (so the time is set asap to synchronise panel and local time)
+            self._addMessageToSendList("MSG_DOWNLOAD_TIME", priority = MessagePriority.URGENT, options=[ [3, convertByteArray(self.DownloadCode)] ])  
             self._addMessageToSendList("MSG_SETTIME", priority = MessagePriority.URGENT, options=[ [3, timePdu] ])
             self._addMessageToSendList("MSG_EXIT", priority = MessagePriority.URGENT)
 
@@ -3952,7 +3946,7 @@ class PacketHandling(ProtocolBase):
                 self.SwitchList[i].state = bool(status)
                 # Check to see if the state has changed
                 if (oldstate and not self.SwitchList[i].state) or (not oldstate and self.SwitchList[i].state):
-                    log.debug(f"[handle_msgtypeA5]      X10 device {i} changed to {self.SwitchList[i].state} ({status})")
+                    log.debug(f"[ProcessX10StateUpdate]      X10 device {i} changed to {self.SwitchList[i].state} ({status})")
                     self.SwitchList[i].pushChange()
 
 
@@ -5511,23 +5505,25 @@ class VisonicProtocol(PacketHandling):
                     getPanelStatus()
                     return AlCommandStatus.SUCCESS
 
-                elif state == AlPanelCommand.MUTE:
-                    self._addMessageToSendList("MSG_MUTE_SIREN", priority = MessagePriority.IMMEDIATE, options=[ [4, bpin] ])  #
-                    getPanelStatus()
-                    return AlCommandStatus.SUCCESS
+                elif self.isPowerMaster():
+                        
+                    if state == AlPanelCommand.MUTE:
+                        self._addMessageToSendList("MSG_MUTE_SIREN", priority = MessagePriority.IMMEDIATE, options=[ [4, bpin] ])  #
+                        getPanelStatus()
+                        return AlCommandStatus.SUCCESS
 
-                elif state == AlPanelCommand.TRIGGER:
-                    self._addMessageToSendList("MSG_PM_SIREN", priority = MessagePriority.IMMEDIATE, options=[ [4, bpin] ])  #
-                    getPanelStatus()
-                    return AlCommandStatus.SUCCESS
+                    elif state == AlPanelCommand.TRIGGER:
+                        self._addMessageToSendList("MSG_PM_SIREN", priority = MessagePriority.IMMEDIATE, options=[ [4, bpin] ])  #
+                        getPanelStatus()
+                        return AlCommandStatus.SUCCESS
 
-                elif state in pmSirenMode:
-                    sirenCode = bytearray()
-                    # Retrieve the code to send to the panel
-                    sirenCode.append(pmSirenMode[state])
-                    self._addMessageToSendList("MSG_PM_SIREN_MODE", priority = MessagePriority.IMMEDIATE, options=[ [4, bpin], [11, sirenCode] ])  #
-                    getPanelStatus()
-                    return AlCommandStatus.SUCCESS
+                    elif state in pmSirenMode:
+                        sirenCode = bytearray()
+                        # Retrieve the code to send to the panel
+                        sirenCode.append(pmSirenMode[state])
+                        self._addMessageToSendList("MSG_PM_SIREN_MODE", priority = MessagePriority.IMMEDIATE, options=[ [4, bpin], [11, sirenCode] ])  #
+                        getPanelStatus()
+                        return AlCommandStatus.SUCCESS
 
             return AlCommandStatus.FAIL_INVALID_STATE
         return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS

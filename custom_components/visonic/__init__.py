@@ -49,7 +49,7 @@ from .const import (
     NOTIFICATION_ID,
     NOTIFICATION_TITLE,
     CONF_EMULATION_MODE,
-    CONF_SENSOR_EVENTS,
+#    CONF_SENSOR_EVENTS,
     CONF_COMMAND,
     CONF_X10_COMMAND,
     available_emulation_modes,
@@ -557,8 +557,8 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEn
             new[CONF_EMER_OFF_DELAY] = new[CONF_MOTION_OFF_DELAY]
             _LOGGER.debug("   Added additional trigger delay settings")
 
-        new[CONF_SENSOR_EVENTS] = list()
-        _LOGGER.debug("   Sensor Event List created and set to empty")
+#        new[CONF_SENSOR_EVENTS] = list()
+#        _LOGGER.debug("   Sensor Event List created and set to empty")
 
         new[CONF_ALARM_NOTIFICATIONS] = [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]
         hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)

@@ -52,7 +52,6 @@ from .pyconst import (AlEnum, AlTransport, PanelConfig, AlConfiguration, AlPanel
                       AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlSensorDevice, AlLogPanelEvent, AlSwitchDevice, AlTerminationType,
                       PE_PARTITION, PE_EVENT, PE_NAME, PE_TIME)
 from .pyvisonic import VisonicProtocol
-from .create_schema import AvailableSensorEvents
 
 from .const import (
     available_emulation_modes,
@@ -84,7 +83,7 @@ from .const import (
     CONF_MAGNET_CLOSED_DELAY,
     CONF_EMER_OFF_DELAY,
     CONF_SIREN_SOUNDING,
-    CONF_SENSOR_EVENTS,
+#    CONF_SENSOR_EVENTS,
     CONF_LOG_CSV_FN,
     CONF_LOG_CSV_TITLE,
     CONF_LOG_DONE,
@@ -106,7 +105,7 @@ from .const import (
     PIN_REGEX,
 )
 
-CLIENT_VERSION = "0.10.0.3"
+CLIENT_VERSION = "0.10.2.0"
 
 MAX_CLIENT_LOG_ENTRIES = 300
 
@@ -952,27 +951,6 @@ class VisonicClient:
 
     def onSensorChange(self, sensor : AlSensorDevice, c : AlSensorCondition):
         _LOGGER.debug(f"onSensorChange {c.name} {sensor}")
-
-        #_LOGGER.debug(f"onSensorChange event list = {self.config.get(CONF_SENSOR_EVENTS)=}")
-        
-        list_of_sensor_events = [(AvailableSensorEvents[k]) for k in AvailableSensorEvents if k in self.config.get(CONF_SENSOR_EVENTS)]
-
-        #_LOGGER.debug(f"onSensorChange event list = {list_of_sensor_events=}")
-
-        if c in list_of_sensor_events:
-            datadict = {}
-            datadict["zone"] = sensor.getDeviceID()
-            datadict["event"] = str(c).title()
-            datadict["entity_id"] = ""
-            
-            for s in self.entry.runtime_data.sensors:
-                if s.getDeviceID() == sensor.getDeviceID():
-                    #_LOGGER.debug(f"onSensorChange Got it {type(s)}  {s.unique_id}  {s.entity_id}")
-                    datadict["entity_id"] = s.entity_id
-                    break
-            
-            self._fireHAEvent(AlCondition.ZONE_UPDATE, datadict)
-
         # Check to make sure we have an image entity created for this sensor
         if not self.DisableAllCommands and sensor.getDeviceID() not in self.image_list and sensor.getSensorType() == AlSensorType.CAMERA:
             asyncio.ensure_future(self.create_image_entity(sensor), loop=self.hass.loop)

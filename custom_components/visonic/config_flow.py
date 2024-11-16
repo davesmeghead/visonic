@@ -9,7 +9,7 @@ from .const import (
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_X10,
     CONF_SIREN_SOUNDING,
-    CONF_SENSOR_EVENTS,
+#    CONF_SENSOR_EVENTS,
     CONF_PANEL_NUMBER,
     CONF_EMULATION_MODE,
     available_emulation_modes,
@@ -164,8 +164,8 @@ class MyHandlers(data_entry_flow.FlowHandler):
                 if CONF_SIREN_SOUNDING in self.config:
                     self.toList(self.config, CONF_SIREN_SOUNDING)
 
-                if CONF_SENSOR_EVENTS in self.config:
-                    self.toList(self.config, CONF_SENSOR_EVENTS)
+#                if CONF_SENSOR_EVENTS in self.config:
+#                    self.toList(self.config, CONF_SENSOR_EVENTS)
 
                 if CONF_ALARM_NOTIFICATIONS in self.config:
                     self.toList(self.config, CONF_ALARM_NOTIFICATIONS)

@@ -54,7 +54,6 @@
                 "title": "Impostazioni Pannello di Allarme",
                 "data": {
                     "siren_sounding": "Elenco dei trigger per la sirena",
-                    "sensor_event_list": "Elenco delle modifiche ai sensori per creare un evento",
                     "panel_state_notifications": "Elenco dei trigger per le notifiche di Home Assistant",
                     "retry_connection_count": "Numero di tentativi di riconnessione",
                     "retry_connection_delay": "Tempo di ritardo (secondi) tra i tentativi di riconnessione"
@@ -117,7 +116,6 @@
                 "title": "Impostazioni Pannello di Allarme",
                 "data": {
                     "siren_sounding": "Elenco dei trigger per la sirena",
-                    "sensor_event_list": "Elenco delle modifiche ai sensori per creare un evento",
                     "panel_state_notifications": "Elenco dei trigger per le notifiche di Home Assistant",
                     "retry_connection_count": "Numero di tentativi di riconnessione",
                     "retry_connection_delay": "Tempo di ritardo (secondi) tra i tentativi di riconnessione"
@@ -722,14 +720,6 @@
                 "gas": "Gas",
                 "flood": "Alluvione",
                 "x10": "X10",
-                "panic": "Panico"
-            }
-        },
-        "sensor_event_list": {
-            "options": {
-                "problem": "Problema",
-                "fire": "Incendio",
-                "emergency": "Emergenza",
                 "panic": "Panico"
             }
         },

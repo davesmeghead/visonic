@@ -45,7 +45,7 @@ from .const import (
     CONF_MAGNET_CLOSED_DELAY,
     CONF_EMER_OFF_DELAY,
     CONF_SIREN_SOUNDING,
-    CONF_SENSOR_EVENTS,
+#    CONF_SENSOR_EVENTS,
     CONF_LOG_CSV_FN,
     CONF_LOG_CSV_TITLE,
     CONF_LOG_DONE,
@@ -66,14 +66,6 @@ from .const import (
 )
 
 from .pyconst import AlSensorCondition
-
-# These need to match the "sensor_event_list" selector in the language json file
-AvailableSensorEvents = {
-    "problem" : AlSensorCondition.PROBLEM,
-    "fire" : AlSensorCondition.FIRE,
-    "emergency" : AlSensorCondition.EMERGENCY,
-    "panic" : AlSensorCondition.PANIC
-}
 
 TIME_UNITS = [
     UnitOfTime.SECONDS,
@@ -138,8 +130,8 @@ class VisonicSchema:
                 #_LOGGER.debug("      its a list")
                 if CONF_SIREN_SOUNDING == key:
                     return list(options[key])
-                if CONF_SENSOR_EVENTS == key:
-                    return list(options[key])
+#                if CONF_SENSOR_EVENTS == key:
+#                    return list(options[key])
                 if CONF_ALARM_NOTIFICATIONS == key:
                     return list(options[key])
                 if len(options[key]) > 0:
@@ -197,11 +189,10 @@ class VisonicSchema:
                 CONF_ALARM_NOTIFICATIONS,
                 default=self.create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
             ): selector.SelectSelector(selector.SelectSelectorConfig(options=strlist, multiple=True, sort=True, translation_key=CONF_ALARM_NOTIFICATIONS)),
-            vol.Optional(
-                CONF_SENSOR_EVENTS, 
-                default=self.create_default(options, CONF_SENSOR_EVENTS, ["problem"]),
-            ): selector.SelectSelector(selector.SelectSelectorConfig(options=list(AvailableSensorEvents.keys()).copy(), multiple=True, sort=True, translation_key=CONF_SENSOR_EVENTS)),
-            #): cv.multi_select(AvailableNotificationConfig),
+#            vol.Optional(
+#                CONF_SENSOR_EVENTS, 
+#                default=self.create_default(options, CONF_SENSOR_EVENTS, ["problem"]),
+#            ): selector.SelectSelector(selector.SelectSelectorConfig(options=list(AvailableSensorEvents.keys()).copy(), multiple=True, sort=True, translation_key=CONF_SENSOR_EVENTS)),
             # https://developers.home-assistant.io/docs/data_entry_flow_index/#show-form
             vol.Optional(
                 CONF_RETRY_CONNECTION_COUNT,

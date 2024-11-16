@@ -54,7 +54,6 @@
                 "title": "Param\u00e8tres de la Centrale d'Alarme",
                 "data": {
                     "siren_sounding": "Liste des d\u00e9clencheurs de la sir\u00e8ne",
-                    "sensor_event_list": "Liste des modifications du capteur pour cr\u00e9er un Ev\u00e9nement",
                     "panel_state_notifications": "Liste des d\u00e9clencheurs pour les notifications Home Assistant",
                     "retry_connection_count": "Nombre d'essai de connexion",
                     "retry_connection_delay": "D\u00e9lai (en secondes) entre les tentatives de reconnexion"
@@ -117,7 +116,6 @@
                 "title": "Centrale d'Alarme Param\u00e8tres",
                 "data": {
                     "siren_sounding": "Liste des d\u00e9clencheurs de la Sir\u00e8ne",
-                    "sensor_event_list": "Liste des modifications du capteur pour cr\u00e9er un \u00e9v\u00e9nement",
                     "panel_state_notifications": "Liste des d\u00e9clencheurs pour les notifications Home Assistant",
                     "retry_connection_count": "Nombre d'essais pour tenter la connexion",
                     "retry_connection_delay": "D\u00e9lai (en secondes) entre les tentatives de reconnexion"
@@ -723,14 +721,6 @@
                 "flood": "Inondation",
                 "x10": "X10",
                 "panic": "Panique"                  
-            }
-        },
-        "sensor_event_list": {
-            "options": {
-				"problem":   "Probl\u00e8me",
-				"fire":      "Incendie",
-				"emergency": "Urgence",
-				"panic":     "Panique"
             }
         },
 		"panel_state_notifications": {
