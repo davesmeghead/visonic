@@ -1,284 +1,284 @@
 {
-    "title": "Visonic Alarm Panel",
-    "config": {
-        "abort": {
-            "already_configured": "Alarm Panel Connection Already Configured",
-            "device_error": "Device must be either Ethernet or USB",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "settings_missing": "Import setting from yaml file but essential settings are missing",
-            "editing": "Thankyou for your edits"
-        },
-        "error": {
-            "eth_or_usb": "Must be one of Ethernet or USB",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "unknown": "Unexpected error"
-        },
-        "step": {
-            "device": {
-                "description": "Enter your Device Type and Panel Number",
-                "title": "Connection",
-                "data": {
-                    "type": "Ethernet or USB",
-                    "panel_number": "Panel Number"
-                }
-            },
-            "myethernet": {
-                "description": "Enter your Ethernet Settings",
-                "title": "Ethernet Configuration",
-                "data": {
-                    "host": "Host Address",
-                    "port": "Port"
-                }
-            },
-            "myusb": {
-                "description": "Enter your USB Settings",
-                "title": "USB Configuration",
-                "data": {
-                    "path": "USB Local Path",
-                    "baud": "Baud Rate"
-                }
-            },
-            "parameters1": {
-                "description": "",
-                "title": "Alarm Panel Settings",
-                "data": {
-                    "exclude_x10": "X10 Devices to Exclude (comma separated)",
-                    "exclude_sensor": "Sensor List to Exclude (comma separated)",
-                    "emulation_mode": "Emulation Mode",
-                    "download_code": "Download Code",
-                    "show_eeprom_attributes": "Show the EEPROM Data in the Alarm Attributes"
-                }
-            },
-            "parameters10": {
-                "description": "",
-                "title": "Alarm Panel Settings",
-                "data": {
-                    "siren_sounding": "List of triggers for the siren",
-                    "panel_state_notifications": "List of triggers for Home Assistant Notifications",
-                    "retry_connection_count": "Try this number of times to attempt the connection",
-                    "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
-                }
-            },
-            "parameters11": {
-                "description": "",
-                "title": "Alarm Panel Zone/Sensor Settings",
-                "data": {
-                    "motion_off_delay": "Motion/Camera off delay time (seconds)",
-                    "magnet_closed_delay": "Magnet/Wired closed delay time (seconds)",
-                    "emergency_off_delay": "Smoke/Fire off delay time (seconds)"
-                }
-            },
-            "parameters12": {
-                "description": "",
-                "title": "Alarm Panel Arm/Disarm Settings",
-                "data": {
-                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
-                    "force_numeric_keypad": "Force use of a Numeric Keypad",
-                    "arm_home_enabled": "Arm Home Enabled",
-                    "arm_night_enabled": "Arm Night Enabled",
-                    "arm_away_instant": "Arm Away performs an Arm Away Instant",
-                    "arm_home_instant": "Arm Home performs an Arm Home Instant",
-                    "allow_remote_arm": "Allow Panel Arm from Home Assistant",
-                    "allow_remote_disarm": "Allow Panel DisArm from Home Assistant",
-                    "allow_sensor_bypass": "Allow each sensor to be bypassed"
-                }
-            },
-            "parameters13": {
-                "description": "",
-                "title": "Alarm Panel Log File Settings",
-                "data": {
-                    "panellog_complete_event": "Generate an HA Event on Completion",
-                    "panellog_logentry_event": "Generate an HA Event for each Log entry",
-                    "panellog_csv_add_title_row": "Add a Title Row to the generated CSV file",
-                    "panellog_xml_filename": "The XML Filename (and path)",
-                    "panellog_csv_filename": "The CSV Filename (and path)",
-                    "panellog_reverse_order": "Reverse the output order",
-                    "panellog_max_entries": "Only output the most recent X log entries"
-                }
-            }
-        }
-    },
-    "options": {
-        "abort": {
-            "already_configured": "Alarm Panel Connection Already Configured",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "device_error": "Device must be either Ethernet or USB",
-            "editing": "Thankyou for your edits"
-        },
-        "error": {
-            "eth_or_usb": "Must be one of Ethernet or USB",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "unknown": "Unexpected error"
-        },
-        "step": {
-            "parameters10": {
-                "description": "",
-                "title": "Alarm Panel Settings",
-                "data": {
-                    "siren_sounding": "List of triggers for the siren",
-                    "panel_state_notifications": "List of triggers for Home Assistant Notifications",
-                    "retry_connection_count": "Try this number of times to attempt the connection",
-                    "retry_connection_delay": "Time delay (seconds) between reconnection attempts"
-                }
-            },
-            "parameters11": {
-                "description": "",
-                "title": "Alarm Panel Zone/Sensor Settings",
-                "data": {
-                    "motion_off_delay": "Motion/Camera off delay time (seconds)",
-                    "magnet_closed_delay": "Magnet/Wired closed delay time (seconds)",
-                    "emergency_off_delay": "Smoke/Fire off delay time (seconds)"
-                }
-            },
-            "parameters12": {
-                "description": "",
-                "title": "Alarm Panel Arm/Disarm Settings",
-                "data": {
-                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
-                    "force_numeric_keypad": "Force use of a Numeric Keypad",
-                    "arm_home_enabled": "Arm Home Enabled",
-                    "arm_night_enabled": "Arm Night Enabled",
-                    "arm_away_instant": "Arm Away performs an Arm Away Instant",
-                    "arm_home_instant": "Arm Home performs an Arm Home Instant",
-                    "allow_remote_arm": "Allow Panel Arm from Home Assistant",
-                    "allow_remote_disarm": "Allow Panel DisArm from Home Assistant",
-                    "allow_sensor_bypass": "Allow each sensor to be bypassed"
-                }
-            },
-            "parameters13": {
-                "description": "",
-                "title": "Alarm Panel Log File Settings",
-                "data": {
-                    "panellog_complete_event": "Generate an HA Event on Completion",
-                    "panellog_logentry_event": "Generate an HA Event for each Log entry",
-                    "panellog_csv_add_title_row": "Add a Title Row to the generated CSV file",
-                    "panellog_xml_filename": "The XML Filename (and path)",
-                    "panellog_csv_filename": "The CSV Filename (and path)",
-                    "panellog_reverse_order": "Reverse the output order",
-                    "panellog_max_entries": "Only output the most recent X log entries"
-                }
-            }
-        }
-    },    
-    "device_automation": {
-        "action_type": {
-            "arm_away": "Arm {entity_name} Away",
-            "arm_home": "Arm {entity_name} Home",
-            "arm_night": "Arm {entity_name} Night",
-            "arm_vacation": "Arm {entity_name} Vacation",
-            "disarm": "Disarm {entity_name}",
-            "trigger": "Trigger {entity_name}"
-        },
-        "condition_type": {
-            "is_triggered": "{entity_name} is Triggered",
-            "is_disarmed": "{entity_name} is Disarmed",
-            "is_armed_home": "{entity_name} is Armed Home",
-            "is_armed_away": "{entity_name} is Armed Away",
-            "is_armed_night": "{entity_name} is Armed Night",
-            "is_armed_vacation": "{entity_name} is Armed Vacation"
-        },
-        "extra_fields": {
-            "code": "Code",
-            "for": "[%key:common::device_automation::extra_fields::for%]"
-        },
-        "trigger_type": {
-            "triggered": "{entity_name} Triggered",
-            "disarmed": "{entity_name} Disarmed",
-            "armed_home": "{entity_name} Armed Home",
-            "armed_away": "{entity_name} Armed Away",
-            "armed_night": "{entity_name} Armed Night",
-            "armed_vacation": "{entity_name} Armed Vacation"
-        }
-    },
-    "services": {
-        "alarm_panel_eventlog": {
-            "name": "Retrieve Event Log",
-            "description": "Retrieve the Alarm Panel Event Log.",
-            "fields": {
-                "entity_id": {
-                    "name": "Visonic Panel",
-                    "description": "Name of the visonic panel."
-                },
-                "code": {
-                    "name": "User Code",
-                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
-                }
-            }
-        },
-        "alarm_panel_command": {
-            "name": "Send Command",
-            "description": "Send a command to the Alarm Panel.",
-            "fields": {
-                "entity_id": {
-                    "name": "Visonic Panel",
-                    "description": "Name (Entity ID) of the visonic panel."
-                },
-                "command": {
-                    "name": "Panel Command",
-                    "description": "The command to send to the panel ('Arm Away', 'Arm Away Instant', 'Arm Home', 'Arm Home Instant', 'Disarm', 'Trigger', 'Mute', 'Emergency', 'Panic', 'Fire')."
-                },
-                "code": {
-                    "name": "User Code",
-                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
-                }
-            }
-        },
-        "alarm_panel_x10": {
-            "name": "Command X10",
-            "description": "Send an X10 Command to an X10 Device.",
-            "fields": {
-                "entity_id": {
-                    "name": "Visonic X10 Switch",
-                    "description": "Name of the visonic x10 switch. This is case sensitive and a mandatory setting. The 'switch.' text is optional."
-                },
-                "x10command": {
-                    "name": "X10 Command",
-                    "description": "X10 Command: Off, On, Dimmer, Brighten."
-                }
-            }
-        },
-        "alarm_panel_reconnect": {
-            "name": "Panel Reconnection",
-            "description": "Reconnect to the Alarm Panel following a previous problem.",
-            "fields": {
-                "entity_id": {
-                    "name": "Visonic Panel",
-                    "description": "Name of the visonic panel."
-                }
-            }
-        },
-        "alarm_sensor_image": {
-            "name": "Retrieve Image from Sensor",
-            "description": "Retrieve Image from Sensor, this only works if the Sensor is a Camera PIR.",
-            "fields": {
-                "entity_id": {
-                    "name": "Visonic Sensor (Image)",
-                    "description": "Name of the visonic sensor."
-                }
-            }
-        },
-        "alarm_sensor_bypass": {
-            "name": "Sensor Bypass",
-            "description": "Bypass and Re-Arm a Visonic Sensor.",
-            "fields": {
-                "entity_id": {
-                    "name": "Visonic Sensor",
-                    "description": "Name of the visonic sensor to bypass. This is case sensitive and a mandatory setting. The 'binary_sensor.' text is optional."
-                },
-                "bypass": {
-                    "name": "Bypass Command",
-                    "description": "To bypass or re-arm a Sensor."
-                },
-                "code": {
-                    "name": "User Code",
-                    "description": "An optional alarm user code (depending on your settings) to send to the panel."
-                }
-            }
-        }
-    },
-    "entity": {
-  	    "switch": {
-	        "alarm_panel_key": {
+	"title": "Visonic Alarmpaneel",
+	"config": {
+		"abort": {
+			"already_configured": "Alarmpaneelverbinding al geconfigureerd",
+			"device_error": "Apparaat moet Ethernet of USB zijn",
+			"emulation_mode_error": "Onjuiste instelling voor emulatiemodus",
+			"settings_missing": "Instellingen importeren uit yaml-bestand, maar essentiële instellingen ontbreken",
+			"editing": "Bedankt voor uw bewerkingen"
+		},
+		"error": {
+			"eth_or_usb": "Moet Ethernet of USB zijn",
+			"emulation_mode_error": "Onjuiste instelling voor emulatiemodus",
+			"unknown": "Onverwachte fout"
+		},
+		"step": {
+			"device": {
+				"description": "Voer uw apparaattype en paneelnummer in",
+				"title": "Verbinding",
+				"data": {
+					"type": "Ethernet of USB",
+					"panel_number": "Paneelnummer"
+				}
+			},
+			"myethernet": {
+				"description": "Voer uw Ethernet-instellingen in",
+				"title": "Ethernetconfiguratie",
+				"data": {
+					"host": "Hostadres",
+					"port": "Poort"
+				}
+			},
+			"myusb": {
+				"description": "Voer uw USB-instellingen in",
+				"title": "USB-configuratie",
+				"data": {
+					"path": "Lokale USB bestandspad",
+					"baud": "Baudsnelheid"
+				}
+			},
+			"parameters1": {
+				"description": "",
+				"title": "Instellingen voor alarmpaneel",
+				"data": {
+					"exclude_x10": "Uit te sluiten X10-apparaten (komma gescheiden)",
+					"exclude_sensor": "Sensorlijst om uit te sluiten (komma gescheiden)",
+					"emulation_mode": "Emulatiemodus",
+					"download_code": "Downloadcode",
+					"show_eeprom_attributes": "Toon de EEPROM-gegevens in de alarmattributen"
+				}
+			},
+			"parameters10": {
+				"description": "",
+				"title": "Instellingen voor alarmpaneel",
+				"data": {
+					"siren_sounding": "Lijst met triggers voor de sirene",
+					"panel_state_notifications": "Lijst met triggers voor Home Assistant-meldingen",
+					"retry_connection_count": "Probeer dit aantal keren om de verbinding te proberen",
+					"retry_connection_delay": "Tijdvertraging (seconden) tussen herverbindingpogingen"
+				}
+			},
+			"parameters11": {
+				"description": "",
+				"title": "Alarm Paneel Zone/Sensor Instellingen",
+				"data": {
+					"motion_off_delay": "Vertragingstijd bij uitschakelen beweging/camera (seconden)",
+					"magnet_closed_delay": "Vertragingstijd bij sluiten magneet/bedrade verbinding (seconden)",
+					"emergency_off_delay": "Vertragingstijd bij uitschakelen rook/brand (seconden)"
+				}
+			},
+			"parameters12": {
+				"description": "",
+				"title": "Alarm Paneel In/Uit-schakel Instellingen",
+				"data": {
+					"arm_without_usercode": "Inschakelen zonder gebruikerscode (niet ondersteund door alle panelen)",
+					"force_numeric_keypad": "Gebruik van een numeriek toetsenbord forceren",
+					"arm_home_enabled": "Inschakelen voor Thuis ingeschakeld",
+					"arm_night_enabled": "Inschakelen voor Nacht ingeschakeld",
+					"arm_away_instant": "Inschakelen voor Afwezigheid voert een directe inschakeling uit",
+					"arm_home_instant": "Inschakelen voor Thuis voert een directe inschakeling uit",
+					"allow_remote_arm": "Sta inschakeling van het paneel toe via Home Assistant",
+					"allow_remote_disarm": "Sta uitschakeling van het paneel toe via Home Assistant",
+					"allow_sensor_bypass": "Sta toe dat elke sensor wordt omzeild"
+				}
+			},
+			"parameters13": {
+				"description": "",
+				"title": "Alarm Paneel Log Bestand Instellingen",
+				"data": {
+					"panellog_complete_event": "Genereer een Home Assistant-gebeurtenis bij voltooiing",
+					"panellog_logentry_event": "Genereer een Home Assistant-gebeurtenis voor elke logboekvermelding",
+					"panellog_csv_add_title_row": "Voeg een titelrij toe aan het gegenereerde CSV-bestand",
+					"panellog_xml_filename": "De XML-bestandsnaam (en bestandspad)",
+					"panellog_csv_filename": "De CSV-bestandsnaam (en bestandspad)",
+					"panellog_reverse_order": "Keer de uitvoervolgorde om",
+					"panellog_max_entries": "Geef alleen de meest recente X logboekvermeldingen weer"
+				}
+			}
+		}
+	},
+	"options": {
+		"abort": {
+			"already_configured": "Alarmpaneelverbinding al geconfigureerd",
+			"emulation_mode_error": "Onjuiste instelling voor emulatiemodus",
+			"device_error": "Apparaat moet Ethernet of USB zijn",
+			"editing": "Bedankt voor uw bewerkingen"
+		},
+		"error": {
+			"eth_or_usb": "Moet Ethernet of USB zijn",
+			"emulation_mode_error": "Onjuiste instelling voor emulatiemodus",
+			"unknown": "Onverwachte fout"
+		},
+		"step": {
+			"parameters10": {
+				"description": "",
+				"title": "Instellingen voor alarmpaneel",
+				"data": {
+					"siren_sounding": "Lijst met triggers voor de sirene",
+					"panel_state_notifications": "Lijst met triggers voor Home Assistant-meldingen",
+					"retry_connection_count": "Probeer dit aantal keren om de verbinding te maken",
+					"retry_connection_delay": "Tijdvertraging (seconden) tussen herverbindingpogingen"
+				}
+			},
+			"parameters11": {
+				"description": "",
+				"title": "Alarm Paneel Zone/Sensor Instellingen",
+				"data": {
+					"motion_off_delay": "Vertragingstijd bij uitschakelen beweging/camera (seconden)",
+					"magnet_closed_delay": "Vertragingstijd bij sluiten magneet/bedrade verbinding (seconden)",
+					"emergency_off_delay": "Vertragingstijd bij uitschakelen rook/brand (seconden)"
+				}
+			},
+			"parameters12": {
+				"description": "",
+				"title": "Alarm Paneel In/Uit-schakel Instellingen",
+				"data": {
+					"arm_without_usercode": "Inschakelen zonder gebruikerscode (niet ondersteund door alle panelen)",
+					"force_numeric_keypad": "Gebruik van een numeriek toetsenbord forceren",
+					"arm_home_enabled": "Inschakelen voor Thuis ingeschakeld",
+					"arm_night_enabled": "Inschakelen voor Nacht ingeschakeld",
+					"arm_away_instant": "Inschakelen voor Afwezigheid voert een directe inschakeling uit",
+					"arm_home_instant": "Inschakelen voor Thuis voert een directe inschakeling uit",
+					"allow_remote_arm": "Sta inschakeling van het paneel toe via Home Assistant",
+					"allow_remote_disarm": "Sta uitschakeling van het paneel toe via Home Assistant",
+					"allow_sensor_bypass": "Sta toe dat elke sensor wordt omzeild"
+				}
+			},
+			"parameters13": {
+				"description": "",
+				"title": "Alarm Paneel Log Bestand Instellingen",
+				"data": {
+					"panellog_complete_event": "Genereer een Home Assistant-gebeurtenis bij voltooiing",
+					"panellog_logentry_event": "Genereer een Home Assistant-gebeurtenis voor elke logboekvermelding",
+					"panellog_csv_add_title_row": "Voeg een titelrij toe aan het gegenereerde CSV-bestand",
+					"panellog_xml_filename": "De XML-bestandsnaam (en bestandspad)",
+					"panellog_csv_filename": "De CSV-bestandsnaam (en bestandspad)",
+					"panellog_reverse_order": "Keer de uitvoervolgorde om",
+					"panellog_max_entries": "Geef alleen de meest recente X logboekvermeldingen weer"
+				}
+			}
+		}
+	},
+	"device_automation": {
+		"action_type": {
+			"arm_away": "Schakel {entity_name} in voor Afwezigheid",
+			"arm_home": "Schakel {entity_name} in voor Thuis",
+			"arm_night": "Schakel {entity_name} in voor Nacht",
+			"arm_vacation": "Schakel {entity_name} in voor Vakantie",
+			"disarm": "Uitschakelen {entity_name}",
+			"trigger": "Activeer {entity_name}"
+		},
+		"condition_type": {
+			"is_triggered": "{entity_name} is Geactiveerd",
+			"is_disarmed": "{entity_name} is Uitgeschakeld",
+			"is_armed_home": "{entity_name} is Ingeschakeld voor Thuis",
+			"is_armed_away": "{entity_name} is Ingeschakeld voor Afwezig",
+			"is_armed_night": "{entity_name} is Ingeschakeld voor Nacht",
+			"is_armed_vacation": "{entity_name} is Ingeschakeld voor Vakantie"
+		},
+		"extra_fields": {
+			"code": "Code",
+			"for": "[%key:common::device_automation::extra_fields::for%]"
+		},
+		"trigger_type": {
+			"triggered": "{entity_name} Geactiveerd",
+			"disarmed": "{entity_name} Uitgeschakeld",
+			"armed_home": "{entity_name} Ingeschakeld voor Thuis",
+			"armed_away": "{entity_name} Ingeschakeld voor Afwezig",
+			"armed_night": "{entity_name} Ingeschakeld voor Nacht",
+			"armed_vacation": "{entity_name} Ingeschakeld voor Vakantie"
+		}
+	},
+	"services": {
+		"alarm_panel_eventlog": {
+			"name": "Haal Gebeurtenislog op",
+			"description": "Haal de gebeurtenislog van het alarmpaneel op.",
+			"fields": {
+				"entity_id": {
+					"name": "Visonic Paneel",
+					"description": "Naam van het Visonic-paneel."
+				},
+				"code": {
+					"name": "Gebruikerscode",
+					"description": "Een optionele gebruikerscode voor het alarm (afhankelijk van uw instellingen) om naar het paneel te sturen."
+				}
+			}
+		},
+		"alarm_panel_command": {
+			"name": "Stuur Commando",
+			"description": "Stuur een commando naar het alarmpaneel.",
+			"fields": {
+				"entity_id": {
+					"name": "Visonic Paneel",
+					"description": "Naam (Entiteit ID) van het Visonic-paneel."
+				},
+				"command": {
+					"name": "Paneel Commando",
+					"description": "Het commando om naar het paneel te sturen ('Inschakelen Afwezig', 'Direct Inschakelen Afwezig', 'Inschakelen Thuis', 'Direct Inschakelen Thuis', 'Uitschakelen', 'Activeren', 'Dempen', 'Noodoproep', 'Paniek', 'Brand')."
+				},
+				"code": {
+					"name": "Gebruikerscode",
+					"description": "Een optionele gebruikerscode voor het alarm (afhankelijk van uw instellingen) om naar het paneel te sturen."
+				}
+			}
+		},
+		"alarm_panel_x10": {
+			"name": "Stuur X10 Commando",
+			"description": "Stuur een X10-commando naar een X10-apparaat.",
+			"fields": {
+				"entity_id": {
+					"name": "Visonic X10 Schakelaar",
+					"description": "Naam van de Visonic X10-schakelaar. Dit is hoofdlettergevoelig en een verplichte instelling. De 'switch.' tekst is optioneel."
+				},
+				"x10command": {
+					"name": "X10 Commando",
+					"description": "X10 Commando: Uit, Aan, Dimmen, Verhelderen."
+				}
+			}
+		},
+		"alarm_panel_reconnect": {
+			"name": "Herverbinden Paneel",
+			"description": "Herverbinden met het alarmpaneel na een eerder probleem.",
+			"fields": {
+				"entity_id": {
+					"name": "Visonic Paneel",
+					"description": "Naam van het Visonic-paneel."
+				}
+			}
+		},
+		"alarm_sensor_image": {
+			"name": "Haal Afbeelding op van Sensor",
+			"description": "Haal een afbeelding op van de sensor, dit werkt alleen als de sensor een Camera PIR is.",
+			"fields": {
+				"entity_id": {
+					"name": "Visonic Sensor (Afbeelding)",
+					"description": "Naam van de Visonic-sensor."
+				}
+			}
+		},
+		"alarm_sensor_bypass": {
+			"name": "Sensor Omzeilen",
+			"description": "Omzeil en herinschakel een Visonic-sensor.",
+			"fields": {
+				"entity_id": {
+					"name": "Visonic Sensor",
+					"description": "Naam van de Visonic-sensor die moet worden omzeild. Dit is hoofdlettergevoelig en een verplichte instelling. De 'binary_sensor.' tekst is optioneel."
+				},
+				"bypass": {
+					"name": "Omzeil Commando",
+					"description": "Om een sensor te omzeilen of opnieuw in te schakelen."
+				},
+				"code": {
+					"name": "Gebruikerscode",
+					"description": "Een optionele gebruikerscode voor het alarm (afhankelijk van uw instellingen) om naar het paneel te sturen."
+				}
+			}
+		}
+	},
+	"entity": {
+		"switch": {
+			"alarm_panel_key": {
 				"state_attributes": {
 					"panel": {
 						"name": "Panel ID"
@@ -289,237 +289,237 @@
 					"type": {
 						"name": "Type",
 						"state": {
-							"dimmer" : "Dimmer Switch",
-							"onoff"  : "OnOff Switch"
+							"dimmer": "Dimmer Schakelaar",
+							"onoff": "Aan/uit Schakelaar"
 						}
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone Apparaat ID"
 					},
 					"location": {
 						"name": "Location",
 						"state": {
-							"attic"           : "Loft",
-							"back_door"       : "Back Doorway",
-							"basement"        : "Basement",
-							"bathroom"        : "Bathroom",
-							"bedroom"         : "Bedroom",
-							"child_room"      : "Child Room",
-							"conservatory"    : "Conservatory",
-							"play_room"       : "Play Room",
-							"dining_room"     : "Dining Room",
-							"downstairs"      : "Downstairs",
-							"emergency"       : "Noodtoestand",
-							"fire"            : "Brand",
-							"front_door"      : "Front Door",
-							"garage"          : "Garage",
-							"garage_door"     : "Garage Door",
-							"guest_room"      : "Guest Room",
-							"hall"            : "Hall",
-							"kitchen"         : "Kitchen",
-							"laundry_room"    : "Laundry Room",
-							"living_room"     : "Living Room",
-							"master_bathroom" : "Master Bathroom",
-							"master_bedroom"  : "Master Bedroom",
-							"office"          : "Office",
-							"upstairs"        : "Upstairs",
-							"utility_room"    : "Utility Room",
-							"yard"            : "Yard",
-							"custom_1"        : "Custom 1",
-							"custom_2"        : "Custom 2",
-							"custom_3"        : "Custom 3",
-							"custom_4"        : "Custom 4",
-							"custom_5"        : "Custom 5",
-							"not_installed"   : "Not Installed"
+							"attic": "Zolder",
+							"back_door": "Achterdeur",
+							"basement": "Kelder",
+							"bathroom": "Badkamer",
+							"bedroom": "Slaapkamer",
+							"child_room": "Kinderkamer",
+							"conservatory": "Serre",
+							"play_room": "Speelkamer",
+							"dining_room": "Eetkamer",
+							"downstairs": "Begane Grond",
+							"emergency": "Noodtoestand",
+							"fire": "Brand",
+							"front_door": "Voordeur",
+							"garage": "Garage",
+							"garage_door": "Garagedeur",
+							"guest_room": "Logeerkamer",
+							"hall": "Hal",
+							"kitchen": "Keuken",
+							"laundry_room": "Waskamer",
+							"living_room": "Woonkamer",
+							"master_bathroom": "Hoofdbadkamer",
+							"master_bedroom": "Hoofdslaapkamer",
+							"office": "Kantoor",
+							"upstairs": "Bovenverdieping",
+							"utility_room": "Bijkeuken",
+							"yard": "Tuin",
+							"custom_1": "Aangepast 1",
+							"custom_2": "Aangepast 2",
+							"custom_3": "Aangepast 3",
+							"custom_4": "Aangepast 4",
+							"custom_5": "Aangepast 5",
+							"not_installed": "Niet Geïnstalleerd"
 						}
 					}
-   			    }
+				}
 			}
 		},
-  	    "select": {
-	        "alarm_panel_key": {
+		"select": {
+			"alarm_panel_key": {
 				"state": {
-					"armed": "Armed",
-					"bypass": "Bypass"
+					"armed": "Inheschakeld",
+					"bypass": "Omzeilen"
 				},
 				"state_attributes": {
 					"panel": {
-						"name": "Panel ID"
+						"name": "Paneel ID"
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone Apparaat ID"
 					}
-   			    }
+				}
 			}
 		},
-  	    "image": {
-	        "alarm_panel_key": {
+		"image": {
+			"alarm_panel_key": {
 				"state_attributes": {
 					"panel": {
-						"name": "Panel ID"
+						"name": "Paneel ID"
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone Apparaat ID"
 					}
-   			    }
+				}
 			}
 		},
-  	    "sensor": {
-	        "alarm_panel_key": {
+		"sensor": {
+			"alarm_panel_key": {
 				"state_attributes": {
 					"panel": {
-						"name": "Panel ID"
+						"name": "Paneel ID"
 					}
-   			    }
+				}
 			}
 		},
-  	    "binary_sensor": {
-	        "alarm_panel_key": {
+		"binary_sensor": {
+			"alarm_panel_key": {
 				"state_attributes": {
 					"device_name": {
-						"name": "Device Name"
+						"name": "Apparaat Naam"
 					},
 					"zone_name": {
-						"name": "Zone Name",
+						"name": "Zone Naam",
 						"state": {
-							"attic"           : "Loft",
-							"back_door"       : "Back Doorway",
-							"basement"        : "Basement",
-							"bathroom"        : "Bathroom",
-							"bedroom"         : "Bedroom",
-							"child_room"      : "Child Room",
-							"conservatory"    : "Conservatory",
-							"play_room"       : "Play Room",
-							"dining_room"     : "Dining Room",
-							"downstairs"      : "Downstairs",
-							"emergency"       : "Noodtoestand",
-							"fire"            : "Brand",
-							"front_door"      : "Front Door",
-							"garage"          : "Garage",
-							"garage_door"     : "Garage Door",
-							"guest_room"      : "Guest Room",
-							"hall"            : "Hall",
-							"kitchen"         : "Kitchen",
-							"laundry_room"    : "Laundry Room",
-							"living_room"     : "Living Room",
-							"master_bathroom" : "Master Bathroom",
-							"master_bedroom"  : "Master Bedroom",
-							"office"          : "Office",
-							"upstairs"        : "Upstairs",
-							"utility_room"    : "Utility Room",
-							"yard"            : "Yard",
-							"custom_1"        : "Custom 1",
-							"custom_2"        : "Custom 2",
-							"custom_3"        : "Custom 3",
-							"custom_4"        : "Custom 4",
-							"custom_5"        : "Custom 5",
-							"not_installed"   : "Not Installed"
+							"attic": "Zolder",
+							"back_door": "Achterdeur",
+							"basement": "Kelder",
+							"bathroom": "Badkamer",
+							"bedroom": "Slaapkamer",
+							"child_room": "Kinderkamer",
+							"conservatory": "Serre",
+							"play_room": "Speelkamer",
+							"dining_room": "Eetkamer",
+							"downstairs": "Begane Grond",
+							"emergency": "Noodtoestand",
+							"fire": "Brand",
+							"front_door": "Voordeur",
+							"garage": "Garage",
+							"garage_door": "Garagedeur",
+							"guest_room": "Logeerkamer",
+							"hall": "Hal",
+							"kitchen": "Keuken",
+							"laundry_room": "Waskamer",
+							"living_room": "Woonkamer",
+							"master_bathroom": "Hoofdbadkamer",
+							"master_bedroom": "Hoofdslaapkamer",
+							"office": "Kantoor",
+							"upstairs": "Bovenverdieping",
+							"utility_room": "Bijkeuken",
+							"yard": "Tuin",
+							"custom_1": "Aangepast 1",
+							"custom_2": "Aangepast 2",
+							"custom_3": "Aangepast 3",
+							"custom_4": "Aangepast 4",
+							"custom_5": "Aangepast 5",
+							"not_installed": "Niet Geïnstalleerd"
 						}
 					},
 					"zone_type": {
 						"name": "Zone Type",
 						"state": {
-							"non-alarm"        : "Geen Alarm",
-							"emergency"        : "Noodtoestand",
-							"flood"            : "Water",
-							"gas"              : "Gas",
-							"delay_1"          : "Vertraagd 1",
-							"delay_2"          : "Vertraagd 2",
-							"interior_follow"  : "Interieur Volg",
-							"perimeter"        : "Omtrek",
-							"perimeter_follow" : "Omtrek Volg",
-							"24_hours_silent"  : "24 Uurs Stil",
-							"24_hours_audible" : "24 Uurs Luid",
-							"fire"             : "Brand",
-							"interior"         : "Interieur",
-							"home_delay"       : "Thuis Vertraagd",
-							"temperature"      : "Temperatuur",
-							"outdoor"          : "Buiten",
-							"undefined"        : "Ongedefinieerd"
+							"non-alarm": "Geen Alarm",
+							"emergency": "Noodtoestand",
+							"flood": "Water",
+							"gas": "Gas",
+							"delay_1": "Vertraagd 1",
+							"delay_2": "Vertraagd 2",
+							"interior_follow": "Interieur Volg",
+							"perimeter": "Omtrek",
+							"perimeter_follow": "Omtrek Volg",
+							"24_hours_silent": "24 Uurs Stil",
+							"24_hours_audible": "24 Uurs Luid",
+							"fire": "Brand",
+							"interior": "Interieur",
+							"home_delay": "Thuis Vertraagd",
+							"temperature": "Temperatuur",
+							"outdoor": "Buiten",
+							"undefined": "Ongedefinieerd"
 						}
 					},
 					"zone_trouble": {
 						"name": "Zone Problem",
 						"state": {
-							"none"         : "Geen",
-							"tamper"       : "Sabotage",
-							"jamming"      : "RF Verstoring",
-							"comm_failure" : "Communicatie probleem",
-							"line_failure" : "Lijnfout",
-							"fuse"         : "Zekering",
-							"not_active"   : "Niet actief",
-							"ac_failure"   : "AC Probleem"
+							"none": "Geen",
+							"tamper": "Sabotage",
+							"jamming": "RF Verstoring",
+							"comm_failure": "Communicatie probleem",
+							"line_failure": "Lijnfout",
+							"fuse": "Zekering",
+							"not_active": "Niet actief",
+							"ac_failure": "AC Probleem"
 						}
 					},
 					"zone_chime": {
 						"name": "Zone Chime",
 						"state": {
-							"chime_off"       : "Uit",
-							"melody_chime"    : "Muziek",
-							"zone_name_chime" : "Zone Naam Muziek"
+							"chime_off": "Uit",
+							"melody_chime": "Muziek",
+							"zone_name_chime": "Zone Naam Muziek"
 						}
 					},
 					"zone_motion_off_time": {
-						"name": "Zone Motion Off Time"
+						"name": "Zone Bewegingsuitschakeltijd"
 					},
 					"zone_temperature": {
-						"name": "Zone Temperature"
+						"name": "Zone Temperatuur"
 					},
 					"zone_lux": {
-						"name": "Zone Luminance"
+						"name": "Zone Lichtsterkte"
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone Apparaat-ID"
 					},
 					"battery_level": {
-						"name": "Battery Level"
+						"name": "Batterijniveau"
 					},
 					"last_tripped_time": {
-						"name": "Zone Tripped Time",
+						"name": "Laatste Zone Activeringstijd",
 						"state": {
-							"unknown": "Not Yet Tripped"
+							"unknown": "Nog Niet Geactiveerd"
 						}
 					},
 					"panel": {
-						"name": "Panel ID"
+						"name": "Paneel-ID"
 					},
 					"device_tamper": {
-						"name": "Device Tamper",
+						"name": "Apparaat Sabotage",
 						"state": {
-							"false": "Good",
-							"true": "Alert",
-							"undefined": "Undefined"
+							"false": "Goed",
+							"true": "Waarschuwing",
+							"undefined": "Ongedefinieerd"
 						}
 					},
 					"device_tripped": {
-						"name": "Device Tripped",
+						"name": "Apparaat Geactiveerd",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
 						}
 					},
 					"device_armed": {
-						"name": "Device Armed",
+						"name": "Apparaat Ingeschakeld",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
 						}
 					},
 					"sensor_type": {
-						"name": "Sensor Type",
+						"name": "Sensortype",
 						"state": {
-							"magnet"     : "Magnet",
-							"motion"     : "Motion PIR",
-							"camera"     : "Camera PIR",
-							"wired"      : "Wired",
-							"smoke"      : "Smoke",
-							"flood"      : "Flood",
-							"gas"        : "Gas",
-							"vibration"  : "Vibration",
-							"shock"      : "Shock",
-							"temperature": "Temperature",
-							"sound"      : "Sound",
-							"unknown"    : "Unknown"
+							"magnet": "Magneet",
+							"motion": "Beweging PIR",
+							"camera": "Camera PIR",
+							"wired": "Bedraad",
+							"smoke": "Rook",
+							"flood": "Overstroming",
+							"gas": "Gas",
+							"vibration": "Trilling",
+							"shock": "Schok",
+							"temperature": "Temperatuur",
+							"sound": "Geluid",
+							"unknown": "Onbekend"
 						}
 					},
 					"zone_open": {
@@ -530,399 +530,399 @@
 						}
 					},
 					"zone_tamper": {
-						"name": "Zone Tamper",
+						"name": "Zone Sabotage",
 						"state": {
-							"false": "Good",
-							"true": "Alert",
-							"undefined": "Undefined"
-						}
-					}
-				}				
-			}
-		},
-		"siren": {
-	        "alarm_panel_key": {
-				"state_attributes": {
-					"alarm": {
-					    "name" : "Alarm",
-						"state" : {
-							"none"     : "Geen Alarm",
-							"intruder" : "Indringer",
-							"tamper"   : "Knoeien",
-							"panic"    : "Paniek",
-							"fire"     : "Vuur",
-							"emergency": "Noodtoestand",
-							"gas"      : "Gas",
-							"flood"    : "Overstroming",
-							"external" : "HomeAssistant"
+							"false": "Goed",
+							"true": "Waarschuwing",
+							"undefined": "Ongedefinieerd"
 						}
 					}
 				}
 			}
 		},
-  	    "alarm_control_panel": {
-	        "alarm_panel_key": {
+		"siren": {
+			"alarm_panel_key": {
+				"state_attributes": {
+					"alarm": {
+						"name": "Alarm",
+						"state": {
+							"none": "Geen Alarm",
+							"intruder": "Indringer",
+							"tamper": "Sabotage",
+							"panic": "Paniek",
+							"fire": "Vuur",
+							"emergency": "Noodtoestand",
+							"gas": "Gas",
+							"flood": "Overstroming",
+							"external": "HomeAssistant"
+						}
+					}
+				}
+			}
+		},
+		"alarm_control_panel": {
+			"alarm_panel_key": {
 				"state_attributes": {
 					"code_format": {
 						"name": "Code format",
 						"state": {
-							"text": "Text",
-							"number": "Number"
+							"text": "Tekst",
+							"number": "Nummer"
 						}
 					},
 					"changed_by": {
-						"name": "Changed by"
+						"name": "Aangepast door"
 					},
 					"code_arm_required": {
-						"name": "Code for arming",
+						"name": "Code voor inschakelen",
 						"state": {
-							"true": "Required",
-							"false": "Not required"
+							"true": "Verplicht",
+							"false": "Niet verplicht"
 						}
 					},
 					"mode": {
 						"state": {
-							"unknown": "Unknown",
-							"problem": "Problem",
-							"starting": "Starting",
-							"standard": "Standard",
-							"standard_plus": "Standard Plus",
+							"unknown": "Onbekend",
+							"problem": "Probleem",
+							"starting": "Starten",
+							"standard": "Standaard",
+							"standard_plus": "Standaard Plus",
 							"powerlink": "Powerlink",
-							"powerlink_bridged": "Powerlink (Bridged)",
+							"powerlink_bridged": "Powerlink (Overbrugd)",
 							"download": "Download EPROM",
-							"stopped": "Integration Stopped",
-							"minimal_only": "Minimal Panel Connection"
+							"stopped": "Integratie gestopt",
+							"minimal_only": "Minimale Panneel Verbinding"
 						}
 					},
 					"state": {
 						"state": {
-							"unknown": "Unknown",
+							"unknown": "Onbekend",
 							"disarmed": "Uitgeschakeld",
-							"arming_home": "Deel uitloopvertraging",
-							"arming_away": "Totaal uitloopvertraging",
+							"arming_home": "Inschakelen Thuis",
+							"arming_away": "Inschakelen Afwezig",
 							"entry_delay": "Inloopvertraging",
-							"armed_home": "Deel ingeschakeld",
-							"armed_away": "Totaal ingeschakeld",
-							"armed_home_bypass": "Deel met overbrugging",
-							"armed_away_bypass": "Totaal met overbrugging",
-							"armed_home_instant": "Direct Deel",
-							"armed_away_instant": "Direct Totaal",
-							"entry_delay_instant": "Direct inloopvertraging",
-							"user_test": "Gebruiker test",
+							"armed_home": "Ingeschakeld Thuis",
+							"armed_away": "Ingeschakeld Afwezig",
+							"armed_home_bypass": "Ingeschakeld Thuis (Omzeilen)",
+							"armed_away_bypass": "Ingeschakeld Afwezig (Omzeilen)",
+							"armed_home_instant": "Ingeschakeld Thuis (Direct)",
+							"armed_away_instant": "Ingeschakeld Afwezig (Direct)",
+							"entry_delay_instant": "Inloopvertraging (Direct)",
+							"user_test": "Gebruikerstest",
 							"downloading": "Downloaden EPROM",
-							"installer": "Monteurmode",
-							"triggered": "Triggered"
+							"installer": "Installateur",
+							"triggered": "Geactiveerd"
 						}
 					},
 					"ready": {
-						"name": "Panel Ready",
+						"name": "Paneel Gereed",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
 						}
 					},
 					"tamper": {
-						"name": "Panel Sabotage alarm",
+						"name": "Paneel Sabotage alarm",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
 						}
 					},
 					"memory": {
-						"name": "Panel Alarm in geheugen",
+						"name": "Paneel Alarm in geheugen",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
 						}
 					},
 					"bypass": {
-						"name": "Panel Bypass",
+						"name": "Paneel Omzeilen",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
 						}
 					},
 					"alarm": {
-					    "name" : "Alarm",
-						"state" : {
-							"none"     : "Geen Alarm",
-							"intruder" : "Indringer",
-							"tamper"   : "Knoeien",
-							"panic"    : "Paniek",
-							"fire"     : "Vuur",
+						"name": "Alarm",
+						"state": {
+							"none": "Geen Alarm",
+							"intruder": "Indringer",
+							"tamper": "Sabotage",
+							"panic": "Paniek",
+							"fire": "Vuur",
 							"emergency": "Noodtoestand",
-							"gas"      : "Gas",
-							"flood"    : "Overstroming"
+							"gas": "Gas",
+							"flood": "Overstroming"
 						}
 					},
 					"trouble": {
-					    "name" : "Trouble",
-						"state" : {
-							"none"         : "Geen Problemen",
-							"general"      : "Algemeen",
+						"name": "Probleem",
+						"state": {
+							"none": "Geen Problemen",
+							"general": "Algemeen",
 							"communication": "Communicatie probleem",
-							"battery"      : "Batterij",
-							"power"        : "Stroom",
-							"jamming"      : "Verstoring",
-							"telephone"    : "Telefoonlijn fout"
+							"battery": "Batterij",
+							"power": "Stroom",
+							"jamming": "Verstoring",
+							"telephone": "Telefoonlijn fout"
 						}
 					},
 					"lasteventname": {
-					    "name" : "Last Event Name"
+						"name": "Naam Laatste Gebeurtenis"
 					},
-					"lasteventaction": { 
-					    "name" : "Last Event Action"
+					"lasteventaction": {
+						"name": "Actie Laatste Gebeurtenis"
 					},
-					"lasteventtime": { 
-					    "name" : "Last Event Time"
+					"lasteventtime": {
+						"name": "Tijd Laatste Gebeurtenis"
 					}
 				}
-	        }
-	    }
-	},
-    "selector": {
-        "alarm_command": {
-            "options": {
-                "disarm": "Disarm",
-                "arm_home": "Arm Home",
-                "arm_home_instant": "Arm Home Instant",
-                "arm_home_bypass": "Arm Home Bypass",
-                "arm_away": "Arm Away",
-                "arm_away_instant": "Arm Away Instant",
-                "arm_away_bypass": "Arm Away Bypass",
-                "mute": "Mute Siren",
-                "trigger": "Trigger Siren",
-                "fire": "Fire Alarm",
-                "emergency": "Emergency Alarm",
-                "panic": "Panic Alarm"
-            }
-        },
-        "bypass_command": {
-            "options": {
-                "off": "Active",
-                "on": "Bypass"
-            }
-        },
-        "x10command": {
-            "options": {
-                "off": "Off",
-                "on": "On",
-                "dimmer": "Decrease Brightness",
-                "brighten": "Increase Brightness"
-            }
-        },
-        "siren_sounding": {
-            "options": {
-                "intruder": "Indringer",
-                "tamper": "Knoeien",
-                "fire": "Brand",
-                "emergency": "Noodtoestand",
-                "gas": "Gas",
-                "flood": "Water",
-                "x10": "X10",
-                "panic": "Paniek"                  
-            }
-        },
-		"panel_state_notifications": {
-            "options": {
-				"siren_sounding": "Siren Sounding",
-				"panel_reset":  "Panel System Reset",
-				"invalid_pin": "Code Rejected By Panel",
-				"panel_operation": "Panel Operation",
-				"connection_problem": "Connection Problems",
-				"bypass_problem": "Sensor Bypass Problems",
-				"image_problem": "Image Retrieval Problems",
-				"eventlog_problem": "Event Log Problems",
-				"command_not_sent": "Command Not Sent To Panel",
-				"x10_problem": "X10 Problem"
 			}
 		}
-    },
-    "exceptions": {
-        "no_panel_connection": {
-            "message": "Visonic Integration for {myname} is not connected to the panel."
-        },
-        "invalid_arm_state": {
-            "message": "Invalid: Can't set the armed state to {option}. Allowed states are: {options}"
-        },
-        "invalid_arm_state_no_option": {
-            "message": "Armed state not defined. Allowed states are: {options}"
-        }
 	},
-	"entity_component": {
-  	    "event_name": {
-			"state": {
-			    "startup"   : "Startup",
-				"system"    : "Systeem",
-				"zone"      : "Zone",
-				"fob"       : "Fob",
-				"user"      : "Gebruiker",
-				"pad"       : "Pad",
-				"siren"     : "Siren",
-				"2pad"      : "2Pad",
-				"x10"       : "X10",
-				"pgm"       : "PGM",
-				"gsm"       : "GSM",
-				"powerlink" : "P-LINK",
-				"ptag"      : "PTag",
-				"repeater"  : "Rptr",
-				"undefined" : "Unknown"
+	"selector": {
+		"alarm_command": {
+			"options": {
+				"disarm": "Uitschakelen",
+				"arm_home": "Inschakelen Thuis",
+				"arm_home_instant": "Direct Inschakelen Thuis",
+				"arm_home_bypass": "Inschakelen Thuis (Omzeilen)",
+				"arm_away": "Inschakelen Afwezig",
+				"arm_away_instant": "Direct Inschakelen Afwezig",
+				"arm_away_bypass": "Inschakelen Afwezig (Omzeilen)",
+				"mute": "Dempen Sirene",
+				"trigger": "Activeer Sirene",
+				"fire": "Brandalarm",
+				"emergency": "Noodalarm",
+				"panic": "Paniekalarm"
 			}
 		},
-  	    "event_action": {
+		"bypass_command": {
+			"options": {
+				"off": "Actief",
+				"on": "Omzeilen"
+			}
+		},
+		"x10command": {
+			"options": {
+				"off": "Uit",
+				"on": "Aan",
+				"dimmer": "Helderheid Verlagen",
+				"brighten": "Helderheid Verhogen"
+			}
+		},
+		"siren_sounding": {
+			"options": {
+				"intruder": "Indringer",
+				"tamper": "Sabotage",
+				"fire": "Brand",
+				"emergency": "Noodtoestand",
+				"gas": "Gas",
+				"flood": "Water",
+				"x10": "X10",
+				"panic": "Paniek"
+			}
+		},
+		"panel_state_notifications": {
+			"options": {
+				"siren_sounding": "Sirene Actief",
+				"panel_reset": "Paneelsysteem Herstart",
+				"invalid_pin": "Code Geweigerd Door Paneel",
+				"panel_operation": "Paneelbewerking",
+				"connection_problem": "Verbindingsproblemen",
+				"bypass_problem": "Sensor Omzeilproblemen",
+				"image_problem": "Problemen Bij Afbeelding Ophalen",
+				"eventlog_problem": "Problemen Met Gebeurtenislog",
+				"command_not_sent": "Commando Niet Verzonden Naar Paneel",
+				"x10_problem": "X10 Probleem"
+			}
+		}
+	},
+	"exceptions": {
+		"no_panel_connection": {
+			"message": "Visonic-integratie voor {myname} is niet verbonden met het paneel."
+		},
+		"invalid_arm_state": {
+			"message": "Ongeldig: Kan de ingeschakelde status niet instellen op {option}. Toegestane statussen zijn: {options}"
+		},
+		"invalid_arm_state_no_option": {
+			"message": "Ingeschakelde status niet gedefinieerd. Toegestane statussen zijn: {options}"
+		}
+	},
+	"entity_component": {
+		"event_name": {
 			"state": {
-				"000"  : "Geen",
-				"001"  : "Interieur Alarm",
-				"002"  : "Omtrek Alarm",
-				"003"  : "Vertraging Alarm",
-				"004"  : "24uur Stil Alarm",
-				"005"  : "24uur Hoorbaar Alarm",
-				"006"  : "Sabotage Alarm",
-				"007"  : "Systeem sabotage",
-				"008"  : "Sabotage Alarm",
-				"009"  : "Add user",
-				"010"  : "Communicate fout",
-				"011"  : "Paniekalarm",
-				"012"  : "Code bedieningspaneel paniek",
-				"013"  : "Dwang",
-				"014"  : "Bevestig Alarm",
-				"015"  : "Successful U/L",
-				"016"  : "Probleem herstel",
-				"017"  : "Herstel",
-				"018"  : "Herstel",
-				"019"  : "Herstel",
-				"020"  : "Herstel",
-				"021"  : "Herstel",
-				"022"  : "Sabotage herstel",
-				"023"  : "Systeem sabotage herstel",
-				"024"  : "Sabotage herstel",
-				"025"  : "Sabotage herstel",
-				"026"  : "Communicatie herstel",
-				"027"  : "Stop Alarm",
-				"028"  : "Algemeen herstel",
-				"029"  : "Brand probleem herstel",
-				"030"  : "Systeem inactief",
-				"031"  : "Recent close",
-				"032"  : "Brand",
-				"033"  : "Brand herstel",
-				"034"  : "Niet actief",
-				"035"  : "Noodoproep",
-				"036"  : "Remove user",
-				"037"  : "Controleer code",
-				"038"  : "Bevestig Alarm",
-				"039"  : "Supervisie",
-				"040"  : "Supervisie herstel",
-				"041"  : "Batterij laag",
-				"042"  : "Batterij OK",
-				"043"  : "230VAC uitval",
-				"044"  : "230VAC herstel",
-				"045"  : "Controlepaneel batterij laag",
-				"046"  : "Controlepaneel batterij OK",
-				"047"  : "Radio jamming",
-				"048"  : "Radio herstel",
-				"049"  : "Communicatie mislukt",
-				"050"  : "Communicatie hersteld",
-				"051"  : "Telefoonlijn fout",
-				"052"  : "Telefoonlijn herstel",
-				"053"  : "Automatische test",
-				"054"  : "Zekeringsfout",
-				"055"  : "Zekering herstel",
-				"056"  : "Batterij laag",
-				"057"  : "Batterij OK",
-				"058"  : "Monteur reset",
-				"059"  : "Accu vermist",
-				"060"  : "Batterij laag",
-				"061"  : "Batterij OK",
-				"062"  : "Supervisie",
-				"063"  : "Supervisie herstel",
-				"064"  : "Lage batterij bevestiging",
-				"065"  : "Reinigen",
-				"066"  : "Probleem",
-				"067"  : "Batterij laag",
-				"068"  : "Batterij OK",
-				"069"  : "230VAC uitval",
-				"070"  : "230VAC herstel",
-				"071"  : "Supervisie",
-				"072"  : "Supervisie herstel",
-				"073"  : "Gas Alarm",
-				"074"  : "Gas herstel",
-				"075"  : "Gas probleem",
-				"076"  : "Gas probleem herstel",
-				"077"  : "Lekkage Alarm",
-				"078"  : "Lekkage herstel",
-				"079"  : "X-10 Probleem",
-				"080"  : "X-10 Probleem herstel",
-				"081"  : "Deelschakeling",
-				"082"  : "Ingeschakeld",
-				"083"  : "Snel deelschakeling",
-				"084"  : "Snel ingeschakeld",
-				"085"  : "Uitgezet",
-				"086"  : "Inschakelfout (auto)",
-				"087"  : "Test gestart",
-				"088"  : "Test gestopt",
-				"089"  : "Force aan",
-				"090"  : "Geheel in (auto)",
-				"091"  : "Onmiddelijk",
-				"092"  : "Overbruggen",
-				"093"  : "Inschakelfout",
-				"094"  : "Door Open",
-				"095"  : "Communication Established By Control Panel",
-				"096"  : "Systeem reset",
-				"097"  : "Installateur programmeert",
-				"098"  : "Foutieve code",
-				"099"  : "Not Sys Event",
-				"100"  : "Not Sys Event",
-				"101"  : "Extreme Hot Alert",
-				"102"  : "Extreme Hot Alert Restore",
-				"103"  : "Freeze Alert",
-				"104"  : "Freeze Alert Restore",
-				"105"  : "Human Cold Alert",
-				"106"  : "Human Cold Alert Restore",
-				"107"  : "Human Hot Alert",
-				"108"  : "Human Hot Alert Restore",
-				"109"  : "Temperature Sensor Trouble",
-				"110"  : "Temperature Sensor Trouble Restore",
-				"111"  : "PIR Mask",
-				"112"  : "PIR Mask Restore",
-				"113"  : "Repeater low battery",
-				"114"  : "Repeater low battery restore",
-				"115"  : "Repeater inactive",
-				"116"  : "Repeater inactive restore",
-				"117"  : "Repeater tamper",
-				"118"  : "Repeater tamper restore",
-				"119"  : "Siren test end",
-				"120"  : "Devices test end",
-				"121"  : "One way comm. trouble",
-				"122"  : "One way comm. trouble restore",
-				"123"  : "Sensor outdoor Alarm",
-				"124"  : "Sensor outdoor restore",
-				"125"  : "Guard sensor alarmed",
-				"126"  : "Guard sensor alarmed restore",
-				"127"  : "Date time change",
-				"128"  : "System shutdown",
-				"129"  : "System power up",
-				"130"  : "Missed Reminder",
-				"131"  : "Pendant test fail",
-				"132"  : "Basic KP inactive",
-				"133"  : "Basic KP inactive restore",
-				"134"  : "Basic KP tamper",
-				"135"  : "Basic KP tamper Restore",
-				"136"  : "Heat",
-				"137"  : "Heat restore",
-				"138"  : "LE Heat Trouble",
-				"139"  : "CO Alarm",
-				"140"  : "CO Alarm restore",
-				"141"  : "CO trouble",
-				"142"  : "CO trouble restore",
-				"143"  : "Exit Installer",
-				"144"  : "Enter Installer",
-				"145"  : "Self test trouble",
-				"146"  : "Self test restore",
-				"147"  : "Confirm panic event",
-				"148"  : "n/a",
-				"149"  : "Soak test fail",
-				"150"  : "Fire Soak test fail",
-				"151"  : "Gas Soak test fail"
+				"startup": "Opstarten",
+				"system": "Systeem",
+				"zone": "Zone",
+				"fob": "Fob",
+				"user": "Gebruiker",
+				"pad": "Toetsenblok",
+				"siren": "Sirene",
+				"2pad": "2Toetsenblok",
+				"x10": "X10",
+				"pgm": "PGM",
+				"gsm": "GSM",
+				"powerlink": "P-LINK",
+				"ptag": "PTag",
+				"repeater": "Repeater",
+				"undefined": "Onbekend"
+			}
+		},
+		"event_action": {
+			"state": {
+				"000": "Normaal",
+				"001": "Interieur Alarm",
+				"002": "Omtrek Alarm",
+				"003": "Vertraging Alarm",
+				"004": "24uur Stil Alarm",
+				"005": "24uur Hoorbaar Alarm",
+				"006": "Sabotage",
+				"007": "Sabotage Bedieningspaneel",
+				"008": "Sabotage Alarm",
+				"009": "Sabotage Alarm",
+				"010": "Communicatieverlies",
+				"011": "Paniek Vanaf Sleutelhanger",
+				"012": "Paniek Vanaf Bedieningspaneel",
+				"013": "Dwang",
+				"014": "Bevestig Alarm",
+				"015": "Algemeen Probleem",
+				"016": "Algemeen Probleem Herstel",
+				"017": "Interieur Herstel",
+				"018": "Omtrek Herstel",
+				"019": "Vertraging Herstel",
+				"020": "24uur Stil Herstel",
+				"021": "24u Hoorbaar Herstel",
+				"022": "Sabotage Herstel",
+				"023": "Sabotage Bedieningspaneel Herstel",
+				"024": "Sabotage Herstel",
+				"025": "Sabotage Herstel",
+				"026": "Communicatie Herstel",
+				"027": "Algemeen Herstel",
+				"028": "Annuleer Alarm",
+				"029": "Probleem Herstel",
+				"030": "Niet Gebruikt",
+				"031": "Recent Gesloten",
+				"032": "Brand",
+				"033": "Brand Herstel",
+				"034": "Niet Actief",
+				"035": "Noodoproep",
+				"036": "Gebruiker Verwijderen",
+				"037": "Uitschakelen Latchkey",
+				"038": "Bevestig Noodalarm",
+				"039": "Supervisie (Inactief)",
+				"040": "Supervisie Herstel (Actief)",
+				"041": "Batterij Laag",
+				"042": "Batterij Herstel",
+				"043": "AC Uitval",
+				"044": "AC Herstel",
+				"045": "Batterij Bedieningspaneel Laag",
+				"046": "Batterij Bedieningspaneel Herstel",
+				"047": "RF Verstoring",
+				"048": "RF Verstoring Herstel",
+				"049": "Communicatie Fout",
+				"050": "Communicatie Herstel",
+				"051": "Telefoonlijn Fout",
+				"052": "Telefoonlijn Herstel",
+				"053": "Automatische Test",
+				"054": "Zekeringsfout",
+				"055": "Zekering Herstel",
+				"056": "Sleutelhanger Batterij Laag",
+				"057": "Sleutelhanger Batterij Herstel",
+				"058": "Technicus Reset",
+				"059": "Batterij Ontkoppeld",
+				"060": "Eénrichtingspaneel Batterij Laag",
+				"061": "Eénrichtingspaneel Batterij Herstel",
+				"062": "Eénrichtingspaneel Inactief",
+				"063": "Eénrichtingspaneel Actief",
+				"064": "Lage Batterij Bevestiging",
+				"065": "Reinig Mij",
+				"066": "Brand Probleem",
+				"067": "Batterij Laag",
+				"068": "Batterij Herstel",
+				"069": "AC Uitval",
+				"070": "AC Herstel",
+				"071": "Supervisie (Inactief)",
+				"072": "Supervisie Herstel (Actief)",
+				"073": "Gas Alarm",
+				"074": "Gas Alarm Herstel",
+				"075": "Gas Probleem",
+				"076": "Gas Probleem Herstel",
+				"077": "Overstroming Alarm",
+				"078": "Overstroming Alarm Herstel",
+				"079": "X-10 Probleem",
+				"080": "X-10 Probleem Herstel",
+				"081": "Ingeschakeld Thuis",
+				"082": "Ingeschakeld Afwezig",
+				"083": "Snel Inschakelen Thuis",
+				"084": "Snel Inschakelen Afwezig",
+				"085": "Uitgeschakeld",
+				"086": "Automatisch Inschakelen Mislukt",
+				"087": "Testmodus Activeren",
+				"088": "Testmodus Verlaten",
+				"089": "Geforceerd Inschakelen",
+				"090": "Automatisch Inschakelen",
+				"091": "Direct Inschakelen",
+				"092": "Omzeilen",
+				"093": "Inschakelen Mislukt",
+				"094": "Deur Open",
+				"095": "Communicatie Opgezet Door Bedieningspaneel",
+				"096": "Systeem Reset",
+				"097": "Installateur Programmeren",
+				"098": "Foutief Wachtwoord",
+				"099": "Geen Systeemgebeurtenis",
+				"100": "Geen Systeemgebeurtenis",
+				"101": "Extreme Hitte Alarm",
+				"102": "Extreme Hitte Alarm Herstel",
+				"103": "Vriesalarm",
+				"104": "Vriesalarm Herstel",
+				"105": "Koude Waarschuwing",
+				"106": "Koude Waarschuwing Herstel",
+				"107": "Hitte Waarschuwing",
+				"108": "Hitte Waarschuwing Herstel",
+				"109": "Temperatuursensor Probleem",
+				"110": "Temperatuursensor Probleem Herstel",
+				"111": "PIR Masker",
+				"112": "PIR Masker Herstel",
+				"113": "Repeater Batterij Laag",
+				"114": "Repeater Batterij Herstel",
+				"115": "Repeater Inactief",
+				"116": "Repeater Actief Herstel",
+				"117": "Repeater Sabotage",
+				"118": "Repeater Sabotage Herstel",
+				"119": "Sirene Test Einde",
+				"120": "Apparaten Test Einde",
+				"121": "Eénrichtingscommunicatie Fout",
+				"122": "Eénrichtingscommunicatie Herstel",
+				"123": "Sensor Buiten Alarm",
+				"124": "Sensor Buiten Herstel",
+				"125": "Bewakingssensor Alarm",
+				"126": "Bewakingssensor Herstel",
+				"127": "Datum-/Tijdwijziging",
+				"128": "Systeem Uitschakeling",
+				"129": "Systeem Aanzetten",
+				"130": "Gemiste Herinnering",
+				"131": "Sleutelhanger Test Mislukt",
+				"132": "Eenvoudig Bedieningspaneel Inactief",
+				"133": "Eenvoudig Bedieningspaneel Actief",
+				"134": "Eenvoudig Bedieningspaneel Sabotage",
+				"135": "Eenvoudig Bedieningspaneel Sabotage Herstel",
+				"136": "Warmte",
+				"137": "Warmte Herstel",
+				"138": "LE Warmte Probleem",
+				"139": "CO Alarm",
+				"140": "CO Alarm Herstel",
+				"141": "CO Probleem",
+				"142": "CO Probleem Herstel",
+				"143": "Verlaat Installateurmodus",
+				"144": "Ga Naar Installateurmodus",
+				"145": "Zelftest Probleem",
+				"146": "Zelftest Herstel",
+				"147": "Bevestig Paniekevent",
+				"148": "n.v.t.",
+				"149": "Inweektijd Test Mislukt",
+				"150": "Brand Inweektijd Test Mislukt",
+				"151": "Gas Inweektijd Test Mislukt"
 			}
 		}
 	}
