@@ -9,7 +9,7 @@ alarm_panel_eventlog:
           domain: alarm_control_panel
     code:
       example: "1234"
-      default: "0000"
+      default: ""
       selector:
         text:
 
@@ -32,8 +32,10 @@ alarm_panel_command:
             - "disarm"
             - "arm_home"
             - "arm_home_instant"
+            - "arm_home_bypass"
             - "arm_away"
             - "arm_away_instant"
+            - "arm_away_bypass"
             - "mute"
             - "trigger"
             - "fire"
@@ -42,11 +44,21 @@ alarm_panel_command:
     code:
       required: false
       example: "1234"
-      default: "0000"
+      default: ""
       selector:
         text:
 
 alarm_panel_reconnect:
+  fields:
+    entity_id:
+      required: true
+      example: 'alarm_control_panel.visonic_alarm'
+      selector:
+        entity:
+          integration: visonic
+          domain: alarm_control_panel
+
+alarm_panel_zoneinfo:
   fields:
     entity_id:
       required: true
@@ -98,7 +110,7 @@ alarm_sensor_bypass:
     code:
       required: false
       example: "1234"
-      default: "0000"
+      default: ""
       selector:
         text:
 

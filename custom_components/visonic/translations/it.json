@@ -19,7 +19,7 @@
                 "title": "Connessione",
                 "data": {
                     "type": "Ethernet o USB",
-                    "panel_number": "Numero del Pannello"
+                    "panel_number": "Numero del Pannello (se hai solo 1 pannello lascia questo valore su 0)"
                 }
             },
             "myethernet": {
@@ -42,11 +42,11 @@
                 "description": "",
                 "title": "Impostazioni Pannello di Allarme",
                 "data": {
-                    "exclude_x10": "Dispositivi X10 da escludere (separati da virgole)",
-                    "exclude_sensor": "Elenco dei sensori da escludere (separati da virgole)",
+                    "exclude_x10": "Dispositivi X10 da escludere (separati da virgole e.g. 2,4,5,6)",
+                    "exclude_sensor": "Elenco dei sensori da escludere (separati da virgole e.g. 2,3,4,5)",
                     "emulation_mode": "Modalit\u00E0 Emulazione",
-                    "download_code": "Codice di Download",
-                    "show_eeprom_attributes": "Mostra i Dati EEPROM negli Attributi dell'Allarme"
+                    "download_code": "EPROM Codice di Download",
+                    "show_eeprom_attributes": "Mostra i Dati EPROM negli Attributi dell'Allarme (se scaricato)"
                 }
             },
             "parameters10": {
@@ -54,7 +54,6 @@
                 "title": "Impostazioni Pannello di Allarme",
                 "data": {
                     "siren_sounding": "Elenco dei trigger per la sirena",
-                    "sensor_event_list": "Elenco delle modifiche ai sensori per creare un evento",
                     "panel_state_notifications": "Elenco dei trigger per le notifiche di Home Assistant",
                     "retry_connection_count": "Numero di tentativi di riconnessione",
                     "retry_connection_delay": "Tempo di ritardo (secondi) tra i tentativi di riconnessione"
@@ -64,6 +63,7 @@
                 "description": "",
                 "title": "Impostazioni Pannello di Allarme",
                 "data": {
+                    "show_eeprom_attributes": "Mostra i Dati EPROM negli Attributi dell'Allarme",
                     "motion_off_delay": "Tempo di ritardo spegnimento Movimento/Telecamera (secondi)",
                     "magnet_closed_delay": "Tempo di ritardo chiusura Magnetico/Cablato (secondi)",
                     "emergency_off_delay": "Tempo di ritardo spegnimento Emergenza Incendio/Fumo (secondi)"
@@ -117,7 +117,6 @@
                 "title": "Impostazioni Pannello di Allarme",
                 "data": {
                     "siren_sounding": "Elenco dei trigger per la sirena",
-                    "sensor_event_list": "Elenco delle modifiche ai sensori per creare un evento",
                     "panel_state_notifications": "Elenco dei trigger per le notifiche di Home Assistant",
                     "retry_connection_count": "Numero di tentativi di riconnessione",
                     "retry_connection_delay": "Tempo di ritardo (secondi) tra i tentativi di riconnessione"
@@ -127,6 +126,7 @@
                 "description": "",
                 "title": "Impostazioni Pannello di Allarme",
                 "data": {
+                    "show_eeprom_attributes": "Mostra i Dati EPROM negli Attributi dell'Allarme",
                     "motion_off_delay": "Tempo di ritardo spegnimento Movimento/Telecamera (secondi)",
                     "magnet_closed_delay": "Tempo di ritardo chiusura Magnetico/Cablato (secondi)",
                     "emergency_off_delay": "Tempo di ritardo spegnimento Emergenza Incendio/Fumo (secondi)"
@@ -242,6 +242,16 @@
         "alarm_panel_reconnect": {
             "name": "Riconnessione Pannello",
             "description": "Riconnettiti al Pannello di Allarme dopo un problema precedente.",
+            "fields": {
+                "entity_id": {
+                    "name": "Pannello Visonic",
+                    "description": "Nome del pannello Visonic."
+                }
+            }
+        },
+        "alarm_panel_zoneinfo": {
+            "name": "Panel Sensor and X10 information",
+            "description": "Retrieve the Sensor list, X10 list plus Open, Battery Low and Bypassed Sensors of the Alarm Panel.",
             "fields": {
                 "entity_id": {
                     "name": "Pannello Visonic",
@@ -371,6 +381,104 @@
 				"state_attributes": {
 					"panel": {
 						"name": "Panel ID"
+					},
+					"emulationmode": {
+						"name": "Emulation Mode",
+						"state": {
+							"unknown": "Unknown",
+							"problem": "Problem",
+							"starting": "Starting",
+							"standard": "Standard",
+							"standard_plus": "Standard Plus",
+							"powerlink": "Powerlink",
+							"powerlink_bridged": "Powerlink (Bridged)",
+							"download": "Download EPROM",
+							"stopped": "Integration Stopped",
+							"minimal_only": "Minimal Panel Connection"
+						}
+					},
+					"state": {
+						"name": "Panel State",
+						"state": {
+							"unknown": "Unknown",
+							"disarmed": "Disarmed",
+							"arming_home": "Arming Home",
+							"arming_away": "Arming Away",
+							"entry_delay": "Entry Delay",
+							"armed_home": "Armed Home",
+							"armed_away": "Armed Away",
+							"armed_home_bypass": "Armed Home (Bypass)",
+							"armed_away_bypass": "Armed Away (Bypass)",
+							"armed_home_instant": "Armed Home (Instant)",
+							"armed_away_instant": "Armed Away (Instant)",
+							"entry_delay_instant": "Entry Delay (Instant)",
+							"user_test": "User Test",
+							"downloading": "Downloading EPROM",
+							"installer": "Installer",
+							"triggered": "Triggered"
+						}
+					},
+					"ready": {
+						"name": "Panel Ready",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"tamper": {
+						"name": "Panel Tamper Alarm",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"memory": {
+						"name": "Panel Alert in Memory",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"bypass": {
+						"name": "Panel Bypass",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"alarm": {
+					    "name" : "Allarme",
+						"state" : {
+							"none"     : "Nessun Allarme",
+							"intruder" : "Intruso",
+							"tamper"   : "Manomissione",
+							"panic"    : "Panico",
+							"fire"     : "Incendio",
+							"emergency": "Emergenza",
+							"gas"      : "Gas",
+							"flood"    : "Alluvione"
+						}
+					},
+					"trouble": {
+					    "name" : "Trouble",
+						"state" : {
+							"none"         : "No Trouble",
+							"general"      : "General",
+							"communication": "Communication Loss",
+							"battery"      : "Battery",
+							"power"        : "Power",
+							"jamming"      : "Jamming",
+							"telephone"    : "Telephone Line Failure"
+						}
+					},
+					"lasteventname": {
+					    "name" : "Last Event Name"
+					},
+					"lasteventaction": { 
+					    "name" : "Last Event Action"
+					},
+					"lasteventtime": { 
+					    "name" : "Last Event Time"
 					}
    			    }
 			}
@@ -380,6 +488,9 @@
 				"state_attributes": {
 					"device_name": {
 						"name": "Device Name"
+					},
+					"zone_name_panel": {
+						"name": "Zone Name (Panel)"
 					},
 					"zone_name": {
 						"name": "Zone Name",
@@ -440,6 +551,27 @@
 							"undefined"        : "Undefined"
 						}
 					},
+					"zone_missing": {
+						"name": "Zone Missing (Radio)",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"zone_oneway": {
+						"name": "Zone One-Way (Radio)",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
+					"zone_inactive": {
+						"name": "Zone Inactive (Radio)",
+						"state": {
+							"false": "No",
+							"true": "Yes"
+						}
+					},
 					"zone_trouble": {
 						"name": "Zone Problem",
 						"state": {
@@ -463,6 +595,12 @@
 					},
 					"zone_motion_off_time": {
 						"name": "Zone Motion Off Time"
+					},
+					"zone_temperature": {
+						"name": "Zone Temperature"
+					},
+					"zone_lux": {
+						"name": "Zone Luminance"
 					},
 					"visonic_device": {
 						"name": "Zone Device ID"
@@ -576,7 +714,8 @@
 							"false": "Not required"
 						}
 					},
-					"mode": {
+					"emulationmode": {
+						"name": "Emulation Mode",
 						"state": {
 							"unknown": "Unknown",
 							"problem": "Problem",
@@ -591,6 +730,7 @@
 						}
 					},
 					"state": {
+						"name": "Panel State",
 						"state": {
 							"unknown": "Unknown",
 							"disarmed": "Disarmed",
@@ -682,8 +822,10 @@
                 "disarm": "Disattiva",
                 "arm_home": "Attiva modalit\u00E0 Casa",
                 "arm_home_instant": "Attiva modalit\u00E0 Casa istantanea",
+                "arm_home_bypass": "Attiva modalit\u00E0 Casa Bypass",
                 "arm_away": "Attiva modalit\u00E0 Assente",
                 "arm_away_instant": "Attiva modalit\u00E0 Assente istantanea",
+                "arm_away_bypass": "Attiva modalit\u00E0 Assente Bypass",
                 "mute": "Mute Siren",
                 "trigger": "Trigger Siren",
                 "fire": "Incendio",
@@ -714,14 +856,6 @@
                 "gas": "Gas",
                 "flood": "Alluvione",
                 "x10": "X10",
-                "panic": "Panico"
-            }
-        },
-        "sensor_event_list": {
-            "options": {
-                "problem": "Problema",
-                "fire": "Incendio",
-                "emergency": "Emergenza",
                 "panic": "Panico"
             }
         },

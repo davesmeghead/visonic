@@ -7,6 +7,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import VisonicConfigEntry
+from .client import VisonicClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,18 +19,28 @@ async def async_get_config_entry_diagnostics(
     diagdata = {}
     cdata = entry.runtime_data
     if cdata.client is not None:
-        A = cdata.client.getPanelStatusDict()
-        B = cdata.client.getClientStatusDict()
-        visonic = { **A, **B } 
-        _LOGGER.error(f"async_get_config_entry_diagnostics {entry.as_dict()} {visonic}")
+        visonic = { } 
+        client : VisonicClient = cdata.client
+        if ( piu := client.getPartitionsInUse() ) is not None:
+            partition = {}
+            for p in piu:
+                partition[f"partition {p}"] = client.getPanelStatusDict(p)
+            B = client.getClientStatusDict()
+            visonic = { **partition, **B } 
+            #_LOGGER.error(f"async_get_config_entry_diagnostics {entry.as_dict()} {visonic}")
+        else:
+            A = client.getPanelStatusDict()
+            B = client.getClientStatusDict()
+            visonic = { **A, **B } 
+            #_LOGGER.error(f"async_get_config_entry_diagnostics {entry.as_dict()} {visonic}")
         diagdata = {
             "entry": entry.as_dict(),
             "client connected": 'yes',
-            "panel connected": 'yes' if cdata.client.isPanelConnected() else 'no',
+            "panel connected": 'yes' if client.isPanelConnected() else 'no',
             "visonic": visonic,
-            "sensor": cdata.client.dumpSensorsToStringList(),
-            "switch": cdata.client.dumpSwitchesToStringList(),
-            "clientlog": cdata.client.getStrLog(),
+            "sensor": client.dumpSensorsToStringList(),
+            "switch": client.dumpSwitchesToStringList(),
+            "clientlog": client.getStrLog(),
         }
     else:
         diagdata = {
@@ -38,4 +49,4 @@ async def async_get_config_entry_diagnostics(
             "panel connected": 'no',
         }
 
-    return async_redact_data(diagdata, ("download_code","host","port"))
+    return async_redact_data(diagdata, ("download_code","host","port","path"))

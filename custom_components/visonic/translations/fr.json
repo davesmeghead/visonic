@@ -19,7 +19,7 @@
                 "title": "Connexion",
                 "data": {
                     "type": "Ethernet ou USB",
-                    "panel_number": "Num\u00e9ro de la Centrale"
+                    "panel_number": "Num\u00e9ro de la Centrale (si vous n'avez qu'un seul panneau, laissez ce paramètre sur 0)"
                 }
             },
             "myethernet": {
@@ -42,11 +42,11 @@
                 "description": "",
                 "title": "Param\u00e8tres de la Centrale d'Alarme",
                 "data": {
-                    "exclude_x10": "Appareils X10 \u00e0 exclure (s\u00e9par\u00e9s par des virgules)",
-                    "exclude_sensor": "Liste de capteurs \u00e0 exclure (s\u00e9par\u00e9s par des virgules)",
+                    "exclude_x10": "Appareils X10 \u00e0 exclure (s\u00e9par\u00e9s par des virgules e.g. 2,4,5,6)",
+                    "exclude_sensor": "Liste de capteurs \u00e0 exclure (s\u00e9par\u00e9s par des virgules e.g. 2,3,4,5)",
                     "emulation_mode": "Mode \u00e9mulation",
-                    "download_code": "Code t\u00e9l\u00e9chargement",
-                    "show_eeprom_attributes": "Afficher les donn\u00e9es EEPROM dans les attributs d'alarme"
+                    "download_code": "EPROM Code t\u00e9l\u00e9chargement",
+                    "show_eeprom_attributes": "Afficher les donn\u00e9es EPROM dans les attributs d'alarme (si téléchargé)"
                 }
             },
             "parameters10": {
@@ -54,9 +54,8 @@
                 "title": "Param\u00e8tres de la Centrale d'Alarme",
                 "data": {
                     "siren_sounding": "Liste des d\u00e9clencheurs de la sir\u00e8ne",
-                    "sensor_event_list": "Liste des modifications du capteur pour cr\u00e9er un Ev\u00e9nement",
                     "panel_state_notifications": "Liste des d\u00e9clencheurs pour les notifications Home Assistant",
-                    "retry_connection_count": "Nombre d'essai de connexion",
+                    "retry_connection_count": "Nombre d'essai de reconnexion",
                     "retry_connection_delay": "D\u00e9lai (en secondes) entre les tentatives de reconnexion"
                 }
             },
@@ -64,6 +63,7 @@
                 "description": "",
                 "title": "Param\u00e8tres de zone/capteur de la Centrale d’alarme",
                 "data": {
+                    "show_eeprom_attributes": "Afficher les donn\u00e9es EPROM dans les attributs d'alarme",
                     "motion_off_delay": "D\u00e9lai du mouvement/de la cam\u00e9ra (secondes)",
                     "magnet_closed_delay": "D\u00e9lai de fermeture magn\u00e9tique/filaire (secondes)",
                     "emergency_off_delay": "D\u00e9lai de fum\u00e9e/incendie (secondes)"
@@ -117,9 +117,8 @@
                 "title": "Centrale d'Alarme Param\u00e8tres",
                 "data": {
                     "siren_sounding": "Liste des d\u00e9clencheurs de la Sir\u00e8ne",
-                    "sensor_event_list": "Liste des modifications du capteur pour cr\u00e9er un \u00e9v\u00e9nement",
                     "panel_state_notifications": "Liste des d\u00e9clencheurs pour les notifications Home Assistant",
-                    "retry_connection_count": "Nombre d'essais pour tenter la connexion",
+                    "retry_connection_count": "Nombre d'essais pour tenter la reconnexion",
                     "retry_connection_delay": "D\u00e9lai (en secondes) entre les tentatives de reconnexion"
                 }
             },
@@ -127,6 +126,7 @@
                 "description": "",
                 "title": "Centrale d'Alarme Zone/Capteur Param\u00e8tres",
                 "data": {
+                    "show_eeprom_attributes": "Afficher les donn\u00e9es EPROM dans les attributs d'alarme",
                     "motion_off_delay": "D\u00e9lai du mouvement/de la cam\u00e9ra (secondes)",
                     "magnet_closed_delay": "D\u00e9lai de fermeture magn\u00e9tique/filaire (secondes)",
                     "emergency_off_delay": "D\u00e9lai de fum\u00e9e/incendie (secondes)"
@@ -242,6 +242,16 @@
         "alarm_panel_reconnect": {
             "name": "Reconnexion de la centrale",
             "description": "Reconnexion \u00e0 la Centrale d'Alarme suite \u00e0 un pr\u00e9c\u00e9dent probl\u00e8me.",
+            "fields": {
+                "entity_id": {
+                    "name": "Centrale Visonic",
+                    "description": "Nom de la centrale Visonic."
+                }
+            }
+        },
+        "alarm_panel_zoneinfo": {
+            "name": "Panel Sensor and X10 information",
+            "description": "Retrieve the Sensor list, X10 list plus Open, Battery Low and Bypassed Sensors of the Alarm Panel.",
             "fields": {
                 "entity_id": {
                     "name": "Centrale Visonic",
@@ -371,6 +381,104 @@
 				"state_attributes": {
 					"panel": {
 						"name": "Centrale ID"
+					},
+					"emulationmode": {
+						"name": "Emulation Mode",
+						"state": {
+							"unknown": "Inconnu",
+							"problem": "Probl\u00e8me",
+							"starting": "D\u00e9marrage",
+							"standard": "Standard",
+							"standard_plus": "Standard Plus",
+							"powerlink": "Powerlink",
+							"powerlink_bridged": "Powerlink (Bridged)",
+							"download": "T\u00e9l\u00e9chargement EPROM",
+							"stopped": "Integration Stopp\u00e9",
+							"minimal_only": "Centrale Minimale Connexion"
+						}
+					},
+					"state": {
+						"name": "Panel State",
+						"state": {
+							"unknown": "Inconnu",
+							"disarmed": "D\u00e9sarm\u00e9",
+							"arming_home": "D\u00e9lai Armement Partiel",
+							"arming_away": "D\u00e9lai Armement Total",
+							"entry_delay": "D\u00e9lai d'Entr\u00e9e",
+							"armed_home": "Arm\u00e9 Partiel",
+							"armed_away": "Arm\u00e9 Total",
+							"armed_home_bypass": "Isolation Partielle",
+							"armed_away_bypass": "Isolation Total",
+							"armed_home_instant": "Arm\u00e9 Partiel Instantan\u00e9",
+							"armed_away_instant": "Arm\u00e9 Total Instantan\u00e9",
+							"entry_delay_instant": "Temporisation d'Entr\u00e9e Instantan\u00e9",
+							"user_test": "Test Utilisateur",
+							"downloading": "T\u00e9l\u00e9chargement EPROM",
+							"installer": "Mode Installateur",
+							"triggered": "D\u00e9clench\u00e9"
+						}
+					},
+					"ready": {
+						"name": "Centrale pr\u00eate",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"tamper": {
+						"name": "Alarme de sabotage de la centrale",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"memory": {
+						"name": "Alerte en m\u00e9moire de la centrale",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"bypass": {
+						"name": "By-pass Centrale",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"alarm": {
+					    "name" : "Alarme",
+						"state" : {
+							"none"     : "Aucune Alarme",
+							"intruder" : "Intrus",
+							"tamper"   : "Sabotage",
+							"panic"    : "Panique",
+							"fire"     : "Incendie",
+							"emergency": "Urgence",
+							"gas"      : "Gaz",
+							"flood"    : "Inondation"
+						}
+					},
+					"trouble": {
+					    "name" : "D\u00e9faut",
+						"state" : {
+							"none"         : "Aucun",
+							"general"      : "G\u00e9n\u00e9rale",
+							"communication": "Echec de Communication",
+							"battery"      : "Batterie Faible",
+							"power"        : "Echec Alimentation Secteur",
+							"jamming"      : "D\u00e9tection Brouillage Radio",
+							"telephone"    : "Echec Ligne T\u00e9l\u00e9phonique"
+						}
+					},
+					"lasteventname": {
+					    "name" : "Nom du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventaction": { 
+					    "name" : "Action du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventtime": { 
+					    "name" : "Heure du dernier \u00e9v\u00e9nement"
 					}
    			    }
 			}
@@ -380,6 +488,9 @@
 				"state_attributes": {
 					"device_name": {
 						"name": "Nom Appareil"
+					},
+					"zone_name_panel": {
+						"name": "Nom Zone (Panel)"
 					},
 					"zone_name": {
 						"name": "Nom Zone",
@@ -440,6 +551,27 @@
 							"undefined"        : "Undefined"
 						}
 					},
+					"zone_missing": {
+						"name": "Zone Missing (Radio)",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"zone_oneway": {
+						"name": "Zone One-Way (Radio)",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
+					"zone_inactive": {
+						"name": "Zone Inactive (Radio)",
+						"state": {
+							"false": "Non",
+							"true": "Oui"
+						}
+					},
 					"zone_trouble": {
 						"name": "Probl\u00e8me Zone",
 						"state": {
@@ -463,6 +595,12 @@
 					},
 					"zone_motion_off_time": {
 						"name": "Temps d'arr\u00eat du mouvement de zone"
+					},
+					"zone_temperature": {
+						"name": "Zone Temperature"
+					},
+					"zone_lux": {
+						"name": "Zone Luminance"
 					},
 					"visonic_device": {
 						"name": "ID du p\u00e9riph\u00e9rique de zone"
@@ -576,7 +714,8 @@
 							"false": "Non requis"
 						}
 					},
-					"mode": {
+					"emulationmode": {
+						"name": "Emulation Mode",
 						"state": {
 							"unknown": "Inconnu",
 							"problem": "Probl\u00e8me",
@@ -591,6 +730,7 @@
 						}
 					},
 					"state": {
+						"name": "Panel State",
 						"state": {
 							"unknown": "Inconnu",
 							"disarmed": "D\u00e9sarm\u00e9",
@@ -682,8 +822,10 @@
                 "disarm": "D\u00e9sarmement",
                 "arm_home": "Armement Partiel",
                 "arm_home_instant": "Armement Partiel Instantan\u00e9",
+                "arm_home_bypass": "Armement Partiel By-pass",
                 "arm_away": "Armement Total",
                 "arm_away_instant": "Armement Total Instantan\u00e9",
+                "arm_away_bypass": "Armement Total By-pass",
                 "mute": "Sir\u00e8ne Silencieuse",
                 "trigger": "D\u00e9clenchement Sir\u00e8ne",
                 "fire": "Incendie Alarme",
@@ -715,14 +857,6 @@
                 "flood": "Inondation",
                 "x10": "X10",
                 "panic": "Panique"                  
-            }
-        },
-        "sensor_event_list": {
-            "options": {
-				"problem":   "Probl\u00e8me",
-				"fire":      "Incendie",
-				"emergency": "Urgence",
-				"panic":     "Panique"
             }
         },
 		"panel_state_notifications": {

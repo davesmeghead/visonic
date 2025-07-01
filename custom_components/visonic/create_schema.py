@@ -1,11 +1,12 @@
 """Schema for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 
 import logging
+import re
 
 import voluptuous as vol
 from typing import Any
 
-from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT, CONF_USERNAME, CONF_PASSWORD
+from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT, CONF_USERNAME, CONF_PASSWORD, CONF_LANGUAGE
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util.yaml.objects import NodeListClass
 from homeassistant.helpers import selector
@@ -32,20 +33,16 @@ from .const import (
     CONF_ARM_NIGHT_ENABLED,
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
-#    CONF_AUTO_SYNC_TIME,
-    CONF_EEPROM_ATTRIBUTES,
+    CONF_EPROM_ATTRIBUTES,
     CONF_DEVICE_BAUD,
     CONF_PANEL_NUMBER,
     CONF_DEVICE_TYPE,
     CONF_DOWNLOAD_CODE,
-#    CONF_FORCE_AUTOENROLL,
     CONF_EMULATION_MODE,
-    CONF_LANGUAGE,
     CONF_MOTION_OFF_DELAY,
     CONF_MAGNET_CLOSED_DELAY,
     CONF_EMER_OFF_DELAY,
     CONF_SIREN_SOUNDING,
-    CONF_SENSOR_EVENTS,
     CONF_LOG_CSV_FN,
     CONF_LOG_CSV_TITLE,
     CONF_LOG_DONE,
@@ -61,26 +58,13 @@ from .const import (
     DEFAULT_DEVICE_PORT,
     DEFAULT_DEVICE_TOPIC,
     DEFAULT_DEVICE_USB,
+    DEVICE_TYPE_ETHERNET,
+    DEVICE_TYPE_USB,
     AvailableNotifications,
     available_emulation_modes,
 )
 
 from .pyconst import AlSensorCondition
-
-# These need to match the "sensor_event_list" selector in the language json file
-AvailableSensorEvents = {
-    "problem" : AlSensorCondition.PROBLEM,
-    "fire" : AlSensorCondition.FIRE,
-    "emergency" : AlSensorCondition.EMERGENCY,
-    "panic" : AlSensorCondition.PANIC
-}
-
-TIME_UNITS = [
-    UnitOfTime.SECONDS,
-    UnitOfTime.MINUTES,
-    UnitOfTime.HOURS,
-    UnitOfTime.DAYS,
-]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -96,20 +80,26 @@ available_siren_values = [
     "panic"
 ]
 
+def capitalize(s):
+    return s[0].upper() + s[1:].lower()
+
+def titlecase(s):
+    return re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda word: capitalize(word.group(0)), s)
+
 class VisonicSchema:
 
     def __init__(self):
         self.CONFIG_SCHEMA_DEVICE = {
-            vol.Required(CONF_DEVICE_TYPE, default="Ethernet"): vol.In(["Ethernet", "USB"]),
+            vol.Required(CONF_DEVICE_TYPE, default=titlecase(DEVICE_TYPE_ETHERNET)): vol.In([titlecase(DEVICE_TYPE_ETHERNET), DEVICE_TYPE_USB.upper()]),
             vol.Optional(CONF_PANEL_NUMBER, default=0): cv.positive_int,
         }
         self.CONFIG_SCHEMA_ETHERNET = {
             vol.Required(CONF_HOST, default=DEFAULT_DEVICE_HOST): str,
-            vol.Required(CONF_PORT, default=DEFAULT_DEVICE_PORT): str,
+            vol.Required(CONF_PORT, default=str(DEFAULT_DEVICE_PORT)): str,
         }
         self.CONFIG_SCHEMA_USB = {
             vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB): str,
-            vol.Optional(CONF_DEVICE_BAUD, default=DEFAULT_DEVICE_BAUD): str,
+            vol.Optional(CONF_DEVICE_BAUD, default=str(DEFAULT_DEVICE_BAUD)): str,
         }
         
         # These are the options that the user entered
@@ -137,8 +127,6 @@ class VisonicSchema:
             if isinstance(options[key], list) or isinstance(options[key], NodeListClass):
                 #_LOGGER.debug("      its a list")
                 if CONF_SIREN_SOUNDING == key:
-                    return list(options[key])
-                if CONF_SENSOR_EVENTS == key:
                     return list(options[key])
                 if CONF_ALARM_NOTIFICATIONS == key:
                     return list(options[key])
@@ -174,8 +162,8 @@ class VisonicSchema:
                 default=self.create_default(options, CONF_DOWNLOAD_CODE, "")
             ): str,
             vol.Optional(
-                CONF_EEPROM_ATTRIBUTES,
-                default=self.create_default(options, CONF_EEPROM_ATTRIBUTES, False),
+                CONF_EPROM_ATTRIBUTES,
+                default=self.create_default(options, CONF_EPROM_ATTRIBUTES, False),
             ): bool,
         }
 
@@ -197,26 +185,29 @@ class VisonicSchema:
                 CONF_ALARM_NOTIFICATIONS,
                 default=self.create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
             ): selector.SelectSelector(selector.SelectSelectorConfig(options=strlist, multiple=True, sort=True, translation_key=CONF_ALARM_NOTIFICATIONS)),
-            vol.Optional(
-                CONF_SENSOR_EVENTS, 
-                default=self.create_default(options, CONF_SENSOR_EVENTS, ["problem"]),
-            ): selector.SelectSelector(selector.SelectSelectorConfig(options=list(AvailableSensorEvents.keys()).copy(), multiple=True, sort=True, translation_key=CONF_SENSOR_EVENTS)),
-            #): cv.multi_select(AvailableNotificationConfig),
             # https://developers.home-assistant.io/docs/data_entry_flow_index/#show-form
             vol.Optional(
                 CONF_RETRY_CONNECTION_COUNT,
                 default=self.create_default(options, CONF_RETRY_CONNECTION_COUNT, 1),
-            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=1000, mode=selector.NumberSelectorMode.BOX)),
+            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=1000000, mode=selector.NumberSelectorMode.BOX)),
             vol.Optional(
                 CONF_RETRY_CONNECTION_DELAY,
                 default=self.create_default(options, CONF_RETRY_CONNECTION_DELAY, 90),
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=5, max=1000, mode=selector.NumberSelectorMode.BOX)),
         }
 
-    def create_parameters11(self, options: dict):
+    def create_parameters11(self, options: dict, isPowerlinkEmulation : bool = False):
         """Create parameter set 11."""
         # Panel settings - can be modified/edited
-        return {
+        retval = {}
+        if isPowerlinkEmulation:
+            retval = {
+                vol.Optional(
+                    CONF_EPROM_ATTRIBUTES,
+                    default=self.create_default(options, CONF_EPROM_ATTRIBUTES, False),
+                ): bool,
+            }
+        retval.update({
             vol.Optional(
                 CONF_MOTION_OFF_DELAY,
                 default=self.create_default(options, CONF_MOTION_OFF_DELAY, 120),
@@ -229,7 +220,8 @@ class VisonicSchema:
                 CONF_EMER_OFF_DELAY,
                 default=self.create_default(options, CONF_EMER_OFF_DELAY, 120),
             ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
-        }
+        })
+        return retval
 
     def create_parameters12(self, options: dict):
         """Create parameter set 12."""
@@ -323,9 +315,9 @@ class VisonicSchema:
         """Create schema parameters 10."""
         return vol.Schema(self.create_parameters10(self.options))
 
-    def create_schema_parameters11(self):
+    def create_schema_parameters11(self, isPowerlinkEmulation : bool = False):
         """Create schema parameters 11."""
-        return vol.Schema(self.create_parameters11(self.options))
+        return vol.Schema(self.create_parameters11(self.options, isPowerlinkEmulation))
 
     def create_schema_parameters12(self):
         """Create schema parameters 12."""

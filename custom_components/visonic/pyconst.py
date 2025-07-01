@@ -31,8 +31,28 @@ else:
 
 log = logging.getLogger(__name__)
 
+
+NOBYPASSSTR = "No Bypass"
+DISABLE_TEXT = "Disable"
+
+# Whether to download all the EPROM from the panel or to just download the parts that we get usable data from
+EPROM_DOWNLOAD_ALL = False
+
 PLUGIN_VERSION = "Not Implemented"
 NO_DELAY_SET = "No Delay Set"
+
+PE_PARTITION = "partition"
+PE_TIME = "time"
+PE_EVENT = "event"
+PE_NAME = "name"
+
+TEXT_PANEL_MODEL = "Panel Model"
+TEXT_WATCHDOG_TIMEOUT_TOTAL = "Watchdog Timeout (Total)"
+TEXT_WATCHDOG_TIMEOUT_DAY = "Watchdog Timeout (Past 24 Hours)"
+TEXT_DOWNLOAD_TIMEOUT = "Download Timeout"
+TEXT_DL_MESSAGE_RETRIES = "Download Message Retries"
+TEXT_PROTOCOL_VERSION = "Protocol Version"
+TEXT_POWER_MASTER = "Power Master"
 
 class AlIntEnum(int):
     ThisShouldNotHappen = "ThisShouldNotHappen"
@@ -197,6 +217,8 @@ class AlPanelCommand(AlEnum):
     FIRE = AlIntEnum(7)
     EMERGENCY = AlIntEnum(8)
     PANIC = AlIntEnum(9)
+    ARM_HOME_BYPASS = AlIntEnum(10)
+    ARM_AWAY_BYPASS = AlIntEnum(11)
 a = AlPanelCommand()
 
 # The set of commands that can be used to mute and trigger the siren
@@ -294,6 +316,14 @@ class AlSensorType(AlEnum):
     GLASS_BREAK = AlIntEnum(11)
 a = AlSensorType()
 
+# List of device types
+class AlDeviceType(AlEnum):
+    IGNORED = AlIntEnum(-2)
+    UNKNOWN = AlIntEnum(-1)
+    INTERNAL = AlIntEnum(0)
+    EXTERNAL = AlIntEnum(1)
+a = AlDeviceType()
+
 # List of termination reasons
 class AlTerminationType(AlEnum):
     NO_DATA_FROM_PANEL_NEVER_CONNECTED = AlIntEnum(1)
@@ -301,27 +331,40 @@ class AlTerminationType(AlEnum):
     CRC_ERROR = AlIntEnum(3)
     SAME_PACKET_ERROR = AlIntEnum(4)
     EXTERNAL_TERMINATION = AlIntEnum(5)
+    NO_POWERLINK_FOR_PERIOD = AlIntEnum(6)
 a = AlTerminationType()
 
 class AlPanelEventData:
-    def __init__(self, name_i : int = 0, action_i : int = 0):
-        self.name_i = name_i
-        self.action_i = action_i
+    def __init__(self, name : int = 0, action : int = 0):
+        self.partition = 0
+        self.name_i = name
+        self.action_i = action
         self.time = ""
 
     def __str__(self):
-        return f"  {self.time}   {self.name_i} {self.action_i}"
+        return f"{self.time} {self.partition} {self.name_i} {self.action_i}"
 
+    def setPartition(self, p):
+        if 1 <= p <= 3:
+            self.partition = p
+
+    def asDict(self) -> dict:
+        a = {}
+        a[PE_NAME] = self.name_i
+        a[PE_EVENT] = self.action_i
+        a[PE_TIME] = self.time
+        if 1 <= self.partition <= 3:  # if partition remains at the defailt 0 then miss it out
+            a[PE_PARTITION] = self.partition
+        return a
 
 class AlLogPanelEvent:
-    def __init__(self):
-        self.current = None
-        self.total = None
-        self.partition = None
-        self.time = None
-        self.date = None
-        self.zone = None
-        self.event = None
+    def __init__(self, total = None, current = None, partition = None, dateandtime = None, zone = None, event = None):
+        self.current = current
+        self.total = total
+        self.partition = partition
+        self.dateandtime = dateandtime
+        self.zone = zone
+        self.event = event
 
     def __str__(self):
         strn = ""
@@ -344,6 +387,10 @@ class AlSensorDevice(ABC):
     @abstractmethod
     def getDeviceID(self) -> int:
         return self.id
+
+    @abstractmethod
+    def getPartition(self) -> set:
+        return {}
 
     @abstractmethod
     def isTriggered(self) -> bool:
@@ -378,7 +425,7 @@ class AlSensorDevice(ABC):
         return AlSensorType.UNKNOWN
 
     @abstractmethod
-    def getZoneLocation(self) -> str:
+    def getZoneLocation(self) -> (str, str):
         return ""
 
     @abstractmethod
@@ -411,7 +458,7 @@ class AlSensorDevice(ABC):
     def getSensorModel(self) -> str:
         return "Unknown"
 
-    # Return the raw sensor identifier if obtained from the panels EEPROM. This is shown in the sensor attributes in HA
+    # Return the raw sensor identifier if obtained from the panels EPROM. This is shown in the sensor attributes in HA
     #     Its main use is when getSensorType() returns AlSensorType.UNKNOWN
     def getRawSensorIdentifier(self) -> int:
         return None
@@ -474,17 +521,11 @@ class AlTransport(ABC):
 class AlPanelDataStream(ABC):
 
     @abstractmethod
-    def vp_connection_made(self, transport : AlTransport):
+    def setTransportConnection(self, transport : AlTransport):
         pass
 
     @abstractmethod
-    def vp_data_received(self, data):
-        pass
-
-    def vp_eof_received(self):
-        pass
-
-    def vp_connection_lost(self, exc):
+    def data_received(self, data):
         pass
 
 
@@ -506,7 +547,7 @@ class AlPanelInterface(ABC):
         return (False, None)
 
     @abstractmethod
-    def getPanelStatus(self) -> AlPanelStatus:
+    def getPanelStatus(self, partition : int | None = None) -> AlPanelStatus:
         """ Get the panel state i.e. Disarmed, Arming Home etc. """
         return AlPanelStatus.UNKNOWN
 
@@ -521,21 +562,25 @@ class AlPanelInterface(ABC):
         return False
 
     @abstractmethod
+    def getPartitionsInUse(self) -> set | None:  # returns None if not yet known
+        return None
+
+    @abstractmethod
     def getPanelModel(self) -> str:
         return "Unknown"
 
     @abstractmethod
-    def isPanelReady(self) -> bool:
+    def isPanelReady(self, partition : int) -> bool:
         """ Get the panel ready state """
         return False
 
     @abstractmethod
-    def getPanelTrouble(self) -> AlTroubleType:
+    def getPanelTrouble(self, partition : int) -> AlTroubleType:
         """ Get the panel trouble state """
         return AlTroubleType.UNKNOWN
 
     @abstractmethod
-    def isPanelBypass(self) -> bool:
+    def isPanelBypass(self, partition : int) -> bool:
         """ Get the panel bypass state """
         return False
 
@@ -551,7 +596,7 @@ class AlPanelInterface(ABC):
     # A dictionary that is used to add to the attribute list of the Alarm Control Panel
     #     If this is overridden then please include the items in the dictionary defined here by using super()
     @abstractmethod
-    def getPanelStatusDict(self, include_extended_status : bool) -> dict:
+    def getPanelStatusDict(self, partition : int | None = None, include_extended_status : bool = None) -> dict:
         """ Get a dictionary representing the panel status. """
         return {}
 
@@ -569,7 +614,7 @@ class AlPanelInterface(ABC):
     #    "1234" a 4 digit code for any panel mode to use that code
     #    anything else to use code "0000" (this may work depending on the panel type for arming, but not for disarming)
     @abstractmethod
-    def requestPanelCommand(self, state : AlPanelCommand, code : str = "") -> AlCommandStatus:
+    def requestPanelCommand(self, state : AlPanelCommand, code : str = "", partitions : set = {1,2,3}) -> AlCommandStatus:
         """ Send a request to the panel to Arm/Disarm """
         return AlCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED
 
@@ -604,7 +649,7 @@ class AlPanelInterface(ABC):
     #    "1234" a 4 digit code for any panel mode to use that code
     #    anything else to use code "0000" (this is unlikely to work on any panel)
     @abstractmethod
-    def setSensorBypassState(self, sensor : int, bypassValue : bool, code : str = "") -> AlCommandStatus:
+    def setSensorBypassState(self, sensor : int | set, bypassValue : bool, code : str = "") -> AlCommandStatus:
         """ Set or Clear Sensor Bypass """
         return AlCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED
 
@@ -623,19 +668,19 @@ class AlPanelInterface(ABC):
     def onPanelChange(self, fn : Callable):             # onPanelChange ( event_id : AlCondition )
         pass
 
-    # Set the onDisconnect callback handlers
+    # Set the onProblem callback handlers
     @abstractmethod
-    def onDisconnect(self, fn : Callable):             # onDisconnect ( reason: str, ex : exception or None )
+    def onProblem(self, fn : Callable):             # onProblem ( reason: str, ex : exception or None )
         pass
 
     # Set the onNewSensor callback handlers
     @abstractmethod
-    def onNewSensor(self, fn : Callable):             # onNewSensor ( device : AlSensorDevice )
+    def onNewSensor(self, create : bool, fn : Callable):             # onNewSensor ( device : AlSensorDevice )
         pass
 
     # Set the onNewSwitch callback handlers
     @abstractmethod
-    def onNewSwitch(self, fn : Callable):             # onNewSwitch ( sensor : AlSwitchDevice )
+    def onNewSwitch(self, create : bool, fn : Callable):             # onNewSwitch ( sensor : AlSwitchDevice )
         pass
 
     # Set the onPanelLog callback handlers

@@ -16,11 +16,13 @@ from .client import VisonicClient
 from . import VisonicConfigEntry
 from .const import (
     DOMAIN,
+    VISONIC_TRANSLATION_KEY,
     MANUFACTURER,
     PANEL_ATTRIBUTE_NAME,
 )
 
 from .pyconst import AlPanelStatus, AlSensorDevice
+from .pyenum import EventDataEnum
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,37 +35,30 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Visonic Alarm Siren"""
-    _LOGGER.debug(f"siren async_setup_entry start")
-    client: VisonicClient = entry.runtime_data.client
+    #_LOGGER.debug(f"[async_setup_entry] start")
 
     @callback
     def async_add_siren() -> None:
         """Add Visonic Siren"""
         entities: list[Entity] = []
-        entities.append(VisonicSiren(hass, client))
-        _LOGGER.debug(f"siren adding entity")
+        entities.append(VisonicSiren(hass, entry.runtime_data.client))
+        _LOGGER.debug(f"[async_setup_entry] adding entity")
         async_add_entities(entities)
 
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass,
-            f"{DOMAIN}_{entry.entry_id}_add_{SIREN_DOMAIN}",
-            async_add_siren,
-        )
-    )
-    _LOGGER.debug("siren async_setup_entry exit")
+    entry.runtime_data.dispatchers[SIREN_DOMAIN] = async_dispatcher_connect(hass, f"{DOMAIN}_{entry.entry_id}_add_{SIREN_DOMAIN}", async_add_siren )
+    #_LOGGER.debug("[async_setup_entry] exit")
 
 class VisonicSiren(SirenEntity):
     """Representation of a visonic siren device."""
 
-    _attr_translation_key: str = "alarm_panel_key"
+    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
     _attr_should_poll = False
 
     def __init__(self, hass: HomeAssistant, client: VisonicClient):
         """Initialize a Visonic security alarm."""
         self._client = client
         self.hass = hass
-        client.onChange(self.onClientChange)
+        client.onChange(callback = self.onClientChange)
         #self._partition_id = partition_id
         self._mystate = False
         pname = client.getMyString()
@@ -71,7 +66,7 @@ class VisonicSiren(SirenEntity):
         self._device_state_attributes = {}
         self._panel = client.getPanelID()
         self.external = False
-        _LOGGER.debug(f"Initialising siren {self._myname} panel {self._panel}")
+        _LOGGER.debug(f"[VisonicSiren] panel {self._panel}, siren {self._myname}")
         self._attr_supported_features = SUPPORT_FLAGS
         self._attr_is_on = False
 #        self._attr_available_tones = None
@@ -97,8 +92,9 @@ class VisonicSiren(SirenEntity):
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
+        await super().async_will_remove_from_hass()
+        _LOGGER.debug(f"[async_will_remove_from_hass] {self._myname} panel {self._panel}")
         self._client = None
-        _LOGGER.debug(f"Removing siren {self._myname} panel {self._panel}")
 
     # The callback handler from the client. All we need to do is schedule an update.
     def onClientChange(self):
@@ -150,17 +146,39 @@ class VisonicSiren(SirenEntity):
         self._mystate = False   # If panel disconnected then set to False
         if self.isPanelConnected():
             stl = self._client.getSirenTriggerList()
-            #_LOGGER.debug(f"data {data}")
-            self._device_state_attributes = self._client.getPanelStatusDict()
+            ptu = self._client.getPartitionsInUse()
             isa, dev = self._client.isSirenActive()
             
-            reason = "undefined"
-            if "alarm" in self._device_state_attributes:
-                reason = self._device_state_attributes["alarm"]
-            
-            if isa or reason in stl:
-                self._mystate = True
-                _LOGGER.debug(f"[siren]  siren triggered")
+            if ptu is None:
+                #_LOGGER.debug(f"data {data}")
+                self._device_state_attributes = self._client.getPanelStatusDict()  # 
+                
+                reason = "undefined"
+                if EventDataEnum.ALARM in self._device_state_attributes:
+                    reason = self._device_state_attributes[EventDataEnum.ALARM]
+                
+                if isa or reason in stl:
+                    self._mystate = True
+                    _LOGGER.debug(f"[siren]  siren triggered")
+
+            else:
+                worstreason = ""
+                for p in ptu:
+                    #_LOGGER.debug(f"data {data}")
+                    A = self._client.getPanelStatusDict(p)  #
+                    
+                    if EventDataEnum.ALARM in A:
+                        reason = A[EventDataEnum.ALARM]
+                    
+                    if isa or reason in stl:
+                        self._mystate = True
+                        worstreason = reason
+                        _LOGGER.debug(f"[siren]  siren triggered due to {worstreason}")
+                        break
+
+                self._device_state_attributes = self._client.getPanelStatusDict()
+                if len(worstreason) > 0:
+                    self._device_state_attributes[EventDataEnum.ALARM] = worstreason
 
             self.trigger = ""
 
@@ -178,13 +196,14 @@ class VisonicSiren(SirenEntity):
     @property
     def extra_state_attributes(self):  #
         """Return the state attributes of the device."""
+        trigger = "trigger"
         attr = {}
-        attr["alarm"] = "none"
-        attr["trigger"] = ""
+        attr[EventDataEnum.ALARM] = "none"
+        attr[trigger] = ""
         if self.external:
-            attr["alarm"] = "external"
-        elif "alarm" in self._device_state_attributes:
-            attr["alarm"] = self._device_state_attributes["alarm"]
-            attr["trigger"] = self.trigger
+            attr[EventDataEnum.ALARM] = "external"
+        elif EventDataEnum.ALARM in self._device_state_attributes:
+            attr[EventDataEnum.ALARM] = self._device_state_attributes[EventDataEnum.ALARM]
+            attr[trigger] = self.trigger
         attr[PANEL_ATTRIBUTE_NAME] = self._panel
         return attr

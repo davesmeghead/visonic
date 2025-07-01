@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .pyconst import AlSensorDevice, AlSensorCondition
 from .client import VisonicClient
-from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME
+from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, VISONIC_TRANSLATION_KEY
 from . import VisonicConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,32 +23,24 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Visonic Image Entity for Camera PIRs"""
-
     #_LOGGER.debug(f"image async_setup_entry start")
-    client: VisonicClient = entry.runtime_data.client
 
     @callback
     def async_add_image(device: AlSensorDevice) -> None:
         """Add Visonic Image Sensor."""
         entities: list[ImageEntity] = []
-        entities.append(VisonicImage(hass, client, device))
+        entities.append(VisonicImage(hass, entry.runtime_data.client, device))
         #_LOGGER.debug(f"image adding {device.getDeviceID()}")
         async_add_entities(entities)
 
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass,
-            f"{DOMAIN}_{entry.entry_id}_add_{IMAGE_DOMAIN}",
-            async_add_image,
-        )
-    )
+    entry.runtime_data.dispatchers[IMAGE_DOMAIN] = async_dispatcher_connect(hass, f"{DOMAIN}_{entry.entry_id}_add_{IMAGE_DOMAIN}", async_add_image)
     #_LOGGER.debug("image async_setup_entry exit")
 
 
 class VisonicImage(ImageEntity):
     """A class to let you visualize the image from a PIR sensors camera."""
 
-    _attr_translation_key: str = "alarm_panel_key"
+    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
     #_attr_content_type = "image/jpg"
     #_attr_has_entity_name = True
 
@@ -75,7 +67,7 @@ class VisonicImage(ImageEntity):
         await super().async_will_remove_from_hass()
         self._visonic_device = None
         self._is_available = False
-        _LOGGER.debug("image async_will_remove_from_hass")
+        _LOGGER.debug(f"[async_will_remove_from_hass] id = {self.unique_id}")
 
     def onChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
         """Call on any change to the sensor."""

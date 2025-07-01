@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import datetime
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
@@ -14,7 +16,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from . import VisonicConfigEntry
 from .pyconst import AlSensorDevice, AlCommandStatus, AlSensorCondition
-from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME
+from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, VISONIC_TRANSLATION_KEY
 from .client import VisonicClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,31 +30,23 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Visonic Alarm Bypass/Arm Select"""
-    #_LOGGER.debug(f"select async_setup_entry start")
-    client: VisonicClient = entry.runtime_data.client
+    #_LOGGER.debug(f"[async_setup_entry] start")
 
     @callback
     def async_add_select(device: AlSensorDevice) -> None:
         """Add Visonic Select Sensor."""
         entities: list[SelectEntity] = []
-        entities.append(VisonicSelect(hass, client, device))
-        #_LOGGER.debug(f"select adding {device.getDeviceID()}")
+        entities.append(VisonicSelect(hass, entry.runtime_data.client, device))
+        #_LOGGER.debug(f"[async_setup_entry] adding {device.getDeviceID()}")
         async_add_entities(entities)
 
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass,
-            f"{DOMAIN}_{entry.entry_id}_add_{SELECT_DOMAIN}",
-            async_add_select,
-        )
-    )
-    #_LOGGER.debug("select async_setup_entry exit")
-
+    entry.runtime_data.dispatchers[SELECT_DOMAIN] = async_dispatcher_connect(hass, f"{DOMAIN}_{entry.entry_id}_add_{SELECT_DOMAIN}", async_add_select)
+    #_LOGGER.debug("[async_setup_entry] exit")
 
 class VisonicSelect(SelectEntity):
     """Representation of a visonic arm/bypass select entity."""
 
-    _attr_translation_key: str = "alarm_panel_key"
+    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
     #_attr_has_entity_name = True
 
     def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSensorDevice):
@@ -69,6 +63,7 @@ class VisonicSelect(SelectEntity):
         self._is_available = self._visonic_device.isEnrolled()
         self._is_armed = not self._visonic_device.isBypass()
         self._pending_state_is_armed = None
+        self.lastCommandData = None
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
@@ -77,7 +72,7 @@ class VisonicSelect(SelectEntity):
         self._visonic_device = None
         self._client = None
         self._is_available = False
-        _LOGGER.debug("select async_will_remove_from_hass")
+        _LOGGER.debug(f"[async_will_remove_from_hass] id = {self.unique_id}")
 
     def onChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
         """Call on any change to the sensor."""
@@ -86,10 +81,10 @@ class VisonicSelect(SelectEntity):
             self._is_available = self._visonic_device.isEnrolled()
             self._is_armed = not self._visonic_device.isBypass()
         else:
-            _LOGGER.debug("Select on change called but sensor is not defined")
+            _LOGGER.debug("[onChange] Sensor is not defined")
 
         if self._pending_state_is_armed is not None and self._pending_state_is_armed == self._is_armed:
-            #_LOGGER.debug("Change Implemented in panel")
+            #_LOGGER.debug("[onChange] Implemented in panel")
             self._pending_state_is_armed = None
 
         # Ask HA to schedule an update
@@ -146,13 +141,18 @@ class VisonicSelect(SelectEntity):
     def isPanelConnected(self) -> bool:
         """Are we connected to the Alarm Panel."""
         # If we are starting up or have been removed then assume we need a valid code
-        #_LOGGER.debug(f"alarm control panel isPanelConnected {self.entity_id=}")
+        #_LOGGER.debug(f"[isPanelConnected] id = {self.entity_id=}")
         if self._client is None:
             return False
         return self._client.isPanelConnected()
 
     def select_option(self, option: str) -> None:
         """Change the visonic sensor armed state"""
+            
+        # get the current date and time
+        def _getUTCTime() -> datetime:
+            return datetime.now(tz=timezone.utc)
+
         if not self.isPanelConnected():
             raise HomeAssistantError(
                     translation_domain=DOMAIN,
@@ -163,15 +163,25 @@ class VisonicSelect(SelectEntity):
                 )
 
         if self._pending_state_is_armed is not None:
-            _LOGGER.debug(f"Currently Pending {self.unique_id} so ignoring request to select option")
+            interval = _getUTCTime - self.lastCommandData
+            if interval >= timedelta(seconds=3):
+                # Longer than 3 seconds so timeout and set the state to whatever the sensor state bypass/armed is
+                self._pending_state_is_armed = None
+                if self._visonic_device is not None:
+                    self._is_available = self._visonic_device.isEnrolled()
+                    self._is_armed = not self._visonic_device.isBypass()
+                _LOGGER.debug(f"[select_option] Currently Pending {self.unique_id} timing out and setting to sensor bypass state {self._is_armed}")
+            else:
+                _LOGGER.debug(f"[select_option] Currently Pending {self.unique_id} so ignoring request to select option")
         elif option is not None and option in self.options:
-            #_LOGGER.debug(f"Sending Option {option} to {self.unique_id}")
+            #_LOGGER.debug(f"[select_option] Sending Option {option} to {self.unique_id}")
             result = self._client.sendBypass(self._visonic_device.getDeviceID(), option == BYPASS, "") # pin code to "" to use default if set
             if result == AlCommandStatus.SUCCESS:
                 self._pending_state_is_armed = (option == ARMED)
+                self.lastCommandData = _getUTCTime()
             else:
                 # Command not sent to panel
-                _LOGGER.debug(f"Sensor Bypass: Command not sent to panel {result}")
+                _LOGGER.debug(f"[select_option] Command not sent to panel {result}")
         elif option is None:
             raise HomeAssistantError(
                     translation_domain=DOMAIN,

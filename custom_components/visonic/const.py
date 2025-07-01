@@ -1,22 +1,17 @@
 """Constants for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 from enum import Enum, IntFlag
 from .pyconst import AlPanelStatus
-
-from homeassistant.const import (
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_ARMING,
-    STATE_ALARM_DISARMED,
-    STATE_ALARM_PENDING,
-    STATE_ALARM_TRIGGERED,
-    STATE_UNKNOWN,
-)
-
+from homeassistant.const import Platform
+from homeassistant.components.alarm_control_panel import AlarmControlPanelState
+from homeassistant.util.hass_dict import HassKey, HassEntryKey
+from dataclasses import dataclass
+from homeassistant.config_entries import ConfigEntry
 
 # The domain for the integration
 DOMAIN = "visonic"
 MANUFACTURER = "Visonic"
 VISONIC_UNIQUE_NAME = "Visonic Alarm"
+VISONIC_TRANSLATION_KEY = "alarm_panel_key"
 
 #from enum import IntFlag
 class SensorEntityFeature(IntFlag):
@@ -40,6 +35,7 @@ ALARM_PANEL_COMMAND = "alarm_panel_command"
 ALARM_PANEL_X10 = "alarm_panel_x10"
 ALARM_PANEL_EVENTLOG = "alarm_panel_eventlog"
 ALARM_PANEL_RECONNECT = "alarm_panel_reconnect"
+ALARM_PANEL_ZONEINFO = "alarm_panel_zoneinfo"
 ALARM_SENSOR_BYPASS = "alarm_sensor_bypass"
 ALARM_SENSOR_IMAGE = "alarm_sensor_image"
 
@@ -48,10 +44,12 @@ DEVICE_ATTRIBUTE_NAME = "visonic_device"
 
 # Default connection details (connection can be one of Ethernet, USB, RS232)
 DEFAULT_DEVICE_HOST = "127.0.0.1"
-DEFAULT_DEVICE_PORT = "30000"
+DEFAULT_DEVICE_PORT = 30000
 DEFAULT_DEVICE_TOPIC = "visonic/panel"
 DEFAULT_DEVICE_USB = "/dev/ttyUSB1"
-DEFAULT_DEVICE_BAUD = "9600"
+DEFAULT_DEVICE_BAUD = 9600
+DEVICE_TYPE_ETHERNET = "ethernet"
+DEVICE_TYPE_USB = "usb"
 
 # Event processing for the log files from the panel. These are the control flow names for the config variables.
 CONF_LOG_EVENT = "panellog_logentry_event"
@@ -61,6 +59,16 @@ CONF_LOG_CSV_FN = "panellog_csv_filename"
 CONF_LOG_DONE = "panellog_complete_event"
 CONF_LOG_REVERSE = "panellog_reverse_order"
 CONF_LOG_MAX_ENTRIES = "panellog_max_entries"
+
+# Text strings for entity attributes
+TEXT_DISCONNECTION_COUNT = "Disconnection Count"
+TEXT_CLIENT_VERSION = "Client Version"
+TEXT_LAST_EVENT_NAME = "lasteventname"
+TEXT_LAST_EVENT_TIME = "lasteventtime"
+TEXT_LAST_EVENT_ACTION = "lasteventaction"
+
+TEXT_XML_LOG_FILE_TEMPLATE = "visonic_template.xml"
+
 
 # Supplement the HA attributes with a bypass, this is for individual sensors in the service call. It is used as a boolean.
 ATTR_BYPASS = "bypass"
@@ -72,15 +80,9 @@ CONF_ALARM_NOTIFICATIONS = "panel_state_notifications"
 CONF_PANEL_NUMBER = "panel_number"
 CONF_DEVICE_TYPE = "type"
 CONF_DEVICE_BAUD = "baud"
-CONF_HOST = "host"
-CONF_PORT = "port"
-CONF_PATH = "path"
 CONF_EXCLUDE_SENSOR = "exclude_sensor"
 CONF_EXCLUDE_X10 = "exclude_x10"
 CONF_DOWNLOAD_CODE = "download_code"
-#CONF_FORCE_AUTOENROLL = "force_autoenroll"
-#CONF_AUTO_SYNC_TIME = "sync_time"
-CONF_LANGUAGE = "language"
 CONF_EMULATION_MODE = "emulation_mode"
 CONF_COMMAND = "command"
 CONF_X10_COMMAND = "x10command"
@@ -99,25 +101,34 @@ CONF_MOTION_OFF_DELAY = "motion_off_delay"
 CONF_MAGNET_CLOSED_DELAY = "magnet_closed_delay"
 CONF_EMER_OFF_DELAY = "emergency_off_delay"
 CONF_SIREN_SOUNDING = "siren_sounding"
-CONF_SENSOR_EVENTS = "sensor_event_list"
 CONF_RETRY_CONNECTION_COUNT = "retry_connection_count"
 CONF_RETRY_CONNECTION_DELAY = "retry_connection_delay"
-CONF_EEPROM_ATTRIBUTES = "show_eeprom_attributes"
+CONF_EPROM_ATTRIBUTES = "show_eeprom_attributes"        # leave as eeprom as this will change the config params in HA
 
 PIN_REGEX = "^[0-9]{4}$"
 
+PLATFORMS = [
+    Platform.ALARM_CONTROL_PANEL,
+    Platform.BINARY_SENSOR,
+    Platform.IMAGE,
+    Platform.SELECT,
+    Platform.SIREN,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
+
 class AvailableNotifications(str, Enum):
-    ALWAYS = 'always'
-    SIREN = 'siren_sounding'
-    RESET = 'panel_reset'
-    INVALID_PIN = 'invalid_pin'
-    PANEL_OPERATION = 'panel_operation'
-    CONNECTION_PROBLEM = 'connection_problem'
-    BYPASS_PROBLEM = 'bypass_problem'
-    IMAGE_PROBLEM = 'image_problem'
-    EVENTLOG_PROBLEM = 'eventlog_problem'
-    COMMAND_NOT_SENT = 'command_not_sent'
-    X10_PROBLEM = 'x10_problem'
+    ALWAYS = "always"
+    SIREN = "siren_sounding"
+    RESET = "panel_reset"
+    INVALID_PIN = "invalid_pin"
+    PANEL_OPERATION = "panel_operation"
+    CONNECTION_PROBLEM = "connection_problem"
+    BYPASS_PROBLEM = "bypass_problem"
+    IMAGE_PROBLEM = "image_problem"
+    EVENTLOG_PROBLEM = "eventlog_problem"
+    COMMAND_NOT_SENT = "command_not_sent"
+    X10_PROBLEM = "x10_problem"
 
 available_emulation_modes = [
     "Powerlink Emulation",
@@ -127,19 +138,31 @@ available_emulation_modes = [
 
 # For alarm_control_panel and sensor, map the alarm panel states across to the Home Assistant states
 map_panel_status_to_ha_status = {
-    AlPanelStatus.UNKNOWN             : STATE_UNKNOWN,
-    AlPanelStatus.DISARMED            : STATE_ALARM_DISARMED,
-    AlPanelStatus.ARMING_HOME         : STATE_ALARM_ARMING,
-    AlPanelStatus.ARMING_AWAY         : STATE_ALARM_ARMING,
-    AlPanelStatus.ENTRY_DELAY         : STATE_ALARM_PENDING,
-    AlPanelStatus.ENTRY_DELAY_INSTANT : STATE_ALARM_PENDING,
-    AlPanelStatus.ARMED_HOME          : STATE_ALARM_ARMED_HOME,
-    AlPanelStatus.ARMED_AWAY          : STATE_ALARM_ARMED_AWAY,
-    AlPanelStatus.ARMED_HOME_BYPASS   : STATE_ALARM_ARMED_HOME,
-    AlPanelStatus.ARMED_AWAY_BYPASS   : STATE_ALARM_ARMED_AWAY,
-    AlPanelStatus.ARMED_HOME_INSTANT  : STATE_ALARM_ARMED_HOME,
-    AlPanelStatus.ARMED_AWAY_INSTANT  : STATE_ALARM_ARMED_AWAY,
-    AlPanelStatus.USER_TEST           : STATE_UNKNOWN,
-    AlPanelStatus.DOWNLOADING         : STATE_UNKNOWN,
-    AlPanelStatus.INSTALLER           : STATE_UNKNOWN
+    AlPanelStatus.UNKNOWN             : AlarmControlPanelState.DISARMED,
+    AlPanelStatus.DISARMED            : AlarmControlPanelState.DISARMED,
+    AlPanelStatus.ARMING_HOME         : AlarmControlPanelState.ARMING,
+    AlPanelStatus.ARMING_AWAY         : AlarmControlPanelState.ARMING,
+    AlPanelStatus.ENTRY_DELAY         : AlarmControlPanelState.PENDING,
+    AlPanelStatus.ENTRY_DELAY_INSTANT : AlarmControlPanelState.PENDING,
+    AlPanelStatus.ARMED_HOME          : AlarmControlPanelState.ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY          : AlarmControlPanelState.ARMED_AWAY,
+    AlPanelStatus.ARMED_HOME_BYPASS   : AlarmControlPanelState.ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY_BYPASS   : AlarmControlPanelState.ARMED_AWAY,
+    AlPanelStatus.ARMED_HOME_INSTANT  : AlarmControlPanelState.ARMED_HOME,
+    AlPanelStatus.ARMED_AWAY_INSTANT  : AlarmControlPanelState.ARMED_AWAY,
+    AlPanelStatus.USER_TEST           : AlarmControlPanelState.DISARMED,
+    AlPanelStatus.DOWNLOADING         : AlarmControlPanelState.DISARMED,
+    AlPanelStatus.INSTALLER           : AlarmControlPanelState.DISARMED
 }
+
+# Create the types for the Configuration Parameter Entry
+VisonicConfigKey: HassEntryKey["VisonicConfigData"] = HassEntryKey(DOMAIN)
+type VisonicConfigEntry = ConfigEntry[VisonicConfigData]
+
+@dataclass
+class VisonicConfigData:
+    client: object
+    sensors: list()
+    dispatchers: dict()
+    # Made it a class just in case I want to include more parameters in future
+

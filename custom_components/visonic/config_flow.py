@@ -9,13 +9,15 @@ from .const import (
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_X10,
     CONF_SIREN_SOUNDING,
-    CONF_SENSOR_EVENTS,
     CONF_PANEL_NUMBER,
     CONF_EMULATION_MODE,
     available_emulation_modes,
     DOMAIN, 
     VISONIC_UNIQUE_NAME,
-    CONF_ALARM_NOTIFICATIONS
+    CONF_ALARM_NOTIFICATIONS,
+    DEFAULT_DEVICE_BAUD,
+    DEVICE_TYPE_ETHERNET,
+    DEVICE_TYPE_USB
 )
 
 from homeassistant import data_entry_flow
@@ -42,6 +44,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
     def __init__(self, config_entry = None):
         """Initialize the config flow."""
         # Do not call the parents init function
+        self.PowerlinkRequested = False
         self.myschema = VisonicSchema()
         self.config = {}
         self.step_sequence = []
@@ -50,6 +53,10 @@ class MyHandlers(data_entry_flow.FlowHandler):
             # convert python map to dictionary and set defaults for the options flow handler
             c = self.combineSettings(config_entry)
             self.myschema.set_default_options(options = c)
+            if CONF_EMULATION_MODE in c:
+                s = c[CONF_EMULATION_MODE]
+                self.PowerlinkRequested = s == available_emulation_modes[0]
+
 
     def create_parameters_sequence(self, s : str) -> list:
         step_sequence = []
@@ -99,7 +106,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
         elif step == "parameters10":
             ds = self.myschema.create_schema_parameters10()
         elif step == "parameters11":
-            ds = self.myschema.create_schema_parameters11()
+            ds = self.myschema.create_schema_parameters11(self.PowerlinkRequested)
         elif step == "parameters12":
             ds = self.myschema.create_schema_parameters12()
         elif step == "parameters13":
@@ -164,9 +171,6 @@ class MyHandlers(data_entry_flow.FlowHandler):
                 if CONF_SIREN_SOUNDING in self.config:
                     self.toList(self.config, CONF_SIREN_SOUNDING)
 
-                if CONF_SENSOR_EVENTS in self.config:
-                    self.toList(self.config, CONF_SENSOR_EVENTS)
-
                 if CONF_ALARM_NOTIFICATIONS in self.config:
                     self.toList(self.config, CONF_ALARM_NOTIFICATIONS)
 
@@ -221,7 +225,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry : ConfigEntry):
+    def async_get_options_flow(config_entry : ConfigEntry): #-> OptionsFlowHandler
         """Get the options flow for this handler."""
         #_LOGGER.debug("Visonic async_get_options_flow")
         return VisonicOptionsFlowHandler(config_entry)
@@ -237,9 +241,9 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
             self._abort_if_unique_id_configured()
             self.config[CONF_PANEL_NUMBER] = panel_num
             self.config[CONF_DEVICE_TYPE] = user_input[CONF_DEVICE_TYPE].lower()
-            if self.config[CONF_DEVICE_TYPE] == "ethernet":
+            if self.config[CONF_DEVICE_TYPE] == DEVICE_TYPE_ETHERNET:
                 return await self._show_form(step="myethernet")
-            elif self.config[CONF_DEVICE_TYPE] == "usb":
+            elif self.config[CONF_DEVICE_TYPE] == DEVICE_TYPE_USB:
                 return await self._show_form(step="myusb")
         errors = {}
         errors["base"] = "eth_or_usb"
@@ -250,7 +254,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         """Handle the input processing of the config flow."""
         self.config.update(user_input)
         self.config[CONF_PATH] = ""
-        self.config[CONF_DEVICE_BAUD] = int(9600)
+        self.config[CONF_DEVICE_BAUD] = DEFAULT_DEVICE_BAUD
         return await self._show_form(step="parameters1")
 
     # ask for the usb settings
@@ -313,20 +317,20 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
             for k in import_config:
                 if k == CONF_DEVICE:
                     # flatten out the structure so the data variable is a simple dictionary
-                    device_type = import_config.get(CONF_DEVICE)
-                    if device_type[CONF_DEVICE_TYPE] == "ethernet":
-                        data[CONF_DEVICE_TYPE] = "ethernet"
+                    device_type = import_config.get(CONF_DEVICE, "")  # This must be set so default to an invalid setting
+                    if device_type[CONF_DEVICE_TYPE] == DEVICE_TYPE_ETHERNET:
+                        data[CONF_DEVICE_TYPE] = DEVICE_TYPE_ETHERNET
                         data[CONF_HOST] = device_type[CONF_HOST]
                         data[CONF_PORT] = device_type[CONF_PORT]
                         data[CONF_PATH] = ""
-                        data[CONF_DEVICE_BAUD] = int(9600)
-                    elif device_type[CONF_DEVICE_TYPE] == "usb":
-                        data[CONF_DEVICE_TYPE] = "usb"
+                        data[CONF_DEVICE_BAUD] = DEFAULT_DEVICE_BAUD
+                    elif device_type[CONF_DEVICE_TYPE] == DEVICE_TYPE_USB:
+                        data[CONF_DEVICE_TYPE] = DEVICE_TYPE_USB
                         data[CONF_PATH] = device_type[CONF_PATH]
                         if CONF_DEVICE_BAUD in device_type:
                             data[CONF_DEVICE_BAUD] = device_type[CONF_DEVICE_BAUD]
                         else:
-                            data[CONF_DEVICE_BAUD] = int(9600)
+                            data[CONF_DEVICE_BAUD] = DEFAULT_DEVICE_BAUD
                         data[CONF_HOST] = ""
                         data[CONF_PORT] = ""
                 else:
@@ -348,10 +352,10 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
     VERSION = 4
     CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
-    def __init__(self, config_entry : ConfigEntry):
+    def __init__(self, config_entry: ConfigEntry):
         """Initialize options flow."""
         MyHandlers.__init__(self, config_entry)
-        OptionsFlow.__init__(self)
+        #OptionsFlow.__init__(self)
         self.config = dict(config_entry.options)
         self.entry_id = config_entry.entry_id
         #_LOGGER.debug(f"init {self.entry_id} {self.config}")
@@ -365,7 +369,7 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
         if self.config is not None and CONF_DEVICE_TYPE in self.config:
             t = self.config[CONF_DEVICE_TYPE].lower()
             #_LOGGER.debug(f"type = {type(t)}   t = {t}")
-            if t == "ethernet" or t == "usb":
+            if t == DEVICE_TYPE_ETHERNET or t == DEVICE_TYPE_USB:
 
                 self.current_pos = -1
 

@@ -8,16 +8,10 @@ import requests.exceptions
 import voluptuous as vol
 import collections
 from collections import namedtuple
-
-from dataclasses import dataclass
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, valid_entity_id
+from homeassistant.core import HomeAssistant, valid_entity_id, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.components import persistent_notification
-from homeassistant.util.hass_dict import HassKey, HassEntryKey
 from homeassistant.helpers.translation import async_translate_state
 
 from homeassistant.const import (
@@ -25,16 +19,16 @@ from homeassistant.const import (
     ATTR_CODE,
     ATTR_ENTITY_ID,
     EVENT_CORE_CONFIG_UPDATE,
-#    EVENT_HOMEASSISTANT_STARTED,
-    SERVICE_RELOAD,
 )
 
 from .pyconst import AlPanelCommand, AlX10Command
 from .client import VisonicClient
 from .const import (
     DOMAIN,
+    PLATFORMS,
     ALARM_PANEL_EVENTLOG,
     ALARM_PANEL_RECONNECT,
+    ALARM_PANEL_ZONEINFO,
     ALARM_PANEL_COMMAND,
     ALARM_PANEL_X10,
     ALARM_SENSOR_BYPASS,
@@ -42,6 +36,7 @@ from .const import (
     ATTR_BYPASS,
     CONF_PANEL_NUMBER,
     CONF_ALARM_NOTIFICATIONS,
+    CONF_RETRY_CONNECTION_COUNT,
     CONF_MOTION_OFF_DELAY,
     CONF_MAGNET_CLOSED_DELAY,
     CONF_EMER_OFF_DELAY,
@@ -49,11 +44,13 @@ from .const import (
     NOTIFICATION_ID,
     NOTIFICATION_TITLE,
     CONF_EMULATION_MODE,
-    CONF_SENSOR_EVENTS,
     CONF_COMMAND,
     CONF_X10_COMMAND,
     available_emulation_modes,
-    AvailableNotifications
+    AvailableNotifications,
+    VisonicConfigEntry,
+    VisonicConfigKey,
+    VisonicConfigData,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -97,6 +94,12 @@ ALARM_SCHEMA_BYPASS = vol.Schema(
     }
 )
 
+ALARM_SCHEMA_ZONE_INFO = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+    }
+)
+
 ALARM_SCHEMA_IMAGE = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
@@ -107,7 +110,7 @@ update_version_panel_number = 0
 translatedLanguageAlready = False
 
 ##############################################################################################################################################################################################################################################
-##########################  Known Data Strings for EEPROM and Message Decode  ################################################################################################################################################################
+##########################  Known Data Strings for EPROM and Message Decode  ################################################################################################################################################################
 ##############################################################################################################################################################################################################################################
 
 # Use English as the default values unless updated by the settings from the Integration
@@ -195,16 +198,6 @@ for v in pmLogPower:
     if v.pmas_include:
         pmLogPowerMasterUser_t.extend([f"{v.name} {i:>02}" if v.pmas_autonumber else v.name for i in range(v.pmas_start, v.pmas_stop+1)])
 
-# Create the types for the Configuration Parameter Entry
-VisonicConfigKey: HassEntryKey["VisonicConfigData"] = HassEntryKey(DOMAIN)
-type VisonicConfigEntry = ConfigEntry[VisonicConfigData]
-
-@dataclass
-class VisonicConfigData:
-    client: VisonicClient
-    sensors: list()
-    # Made it a class just in case I want to include more parameters in future
-
 def findClient(hass, panel : int) -> VisonicClient | None:
     """Look through all the configuration entries looking for the panel."""
     data = hass.data[VisonicConfigKey]
@@ -215,6 +208,18 @@ def findClient(hass, panel : int) -> VisonicClient | None:
             if panel == e.client.getPanelID():
                 #_LOGGER.info(f"findClient success, found client and panel")
                 return e.client
+    return None
+
+def findEntry(hass, panel : int):
+    """Look through all the configuration entries looking for the entry ID."""
+    data = hass.data[VisonicConfigKey]
+    for entry_id in data:
+        # Cycle through the entry IDs. Get the VisonicConfigData Entry
+        e = hass.data[VisonicConfigKey][entry_id]
+        if e.client is not None:
+            if panel == e.client.getPanelID():
+                #_LOGGER.info(f"findClient success, found client and panel")
+                return entry_id
     return None
 
 async def combineSettings(entry):
@@ -308,41 +313,55 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         _LOGGER.warning(f"getClient - Client Not Found")
         return None, None
 
-    async def service_panel_eventlog(call):
+    async def async_service_panel_eventlog(call):
         """Handler for event log service"""
         _LOGGER.info("Event log called")
         
         client, panel = getClient(call)
         if client is not None:
-            await client.service_panel_eventlog(call)
+            await client.async_service_panel_eventlog(call)
         elif panel is not None:
             sendHANotification(f"Event log failed - Panel {panel} not found")
         else:
             sendHANotification(f"Event log failed - Panel not found")
     
-    async def service_panel_reconnect(call):
+    async def async_service_panel_reconnect(call):
         """Handler for panel reconnect service"""
-        _LOGGER.info("Service Panel reconnect called")
         client, panel = getClient(call)
+        _LOGGER.info(f"Service: Visonic Panel {panel} reconnect called")
         if client is not None:
-            await client.service_panel_reconnect(call)
+            await client.async_service_panel_reconnect(call = call)    # user has explicitly asked for this
         elif panel is not None:
             sendHANotification(f"Service Panel reconnect failed - Panel {panel} not found")
         else:
             sendHANotification(f"Service Panel reconnect failed - Panel not found")
     
-    async def service_panel_command(call):
+    async def async_service_panel_command(call : ServiceCall) -> ServiceResponse:
         """Handler for panel command service"""
         _LOGGER.info(f"Service Panel command called")
         client, panel = getClient(call)
         if client is not None:
-            await client.service_panel_command(call)
+            didBypassSensor = await client.async_service_panel_command(call)
+            _LOGGER.info(f"Service Panel command called - command complete, starting delay")
+            # It takes up to a second for the command to be sent to the panel and then to get any changes in the sensor bypass state
+            await asyncio.sleep(1.0)
+            if didBypassSensor:
+                await asyncio.sleep(0.2)
+            _LOGGER.info(f"Service Panel command called - getting panel info to return to HA")
+            return await client.async_service_panel_zoneinfo(call)
         elif panel is not None:
             sendHANotification(f"Service Panel command failed - Panel {panel} not found")
         else:
             sendHANotification(f"Service Panel command failed - Panel not found")
+        return { "valid": False,
+                 "sensors": [],
+                 "batterylow" : [],
+                 "open" : [],
+                 "bypass": [],
+                 "switches": []
+               }
 
-    async def service_panel_x10(call):
+    async def async_service_panel_x10(call):
         """Handler for panel command service"""
         _LOGGER.info(f"Service Panel x10 called")
         client, panel = getClient(call)
@@ -352,19 +371,37 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
             sendHANotification(f"Service Panel x10 failed - Panel {panel} not found")
         else:
             sendHANotification(f"Service Panel x10 failed - Panel not found")
-    
-    async def service_sensor_bypass(call):
+
+    async def async_service_sensor_bypass(call):
         """Handler for sensor bypass service"""
         _LOGGER.info("Service Panel sensor bypass called")
         client, panel = getClient(call)
         if client is not None:
-            await client.service_sensor_bypass(call)
+            await client.async_service_sensor_bypass(call)
         elif panel is not None:
             sendHANotification(f"Service Panel sensor bypass failed - Panel {panel} not found")
         else:
             sendHANotification(f"Service Panel sensor bypass failed - Panel not found")
     
-    async def service_sensor_image(call):
+    async def async_service_panel_zoneinfo(call : ServiceCall) -> ServiceResponse:
+        """Handler for panel zones service"""
+        _LOGGER.info("Service Panel zones called")
+        client, panel = getClient(call)
+        if client is not None:
+            return await client.async_service_panel_zoneinfo(call)
+        elif panel is not None:
+            sendHANotification(f"Service Panel zone info failed - Panel {panel} not found")
+        else:
+            sendHANotification(f"Service Panel zone info failed - Panel not found")
+        return { "valid": False,
+                 "sensors": [],
+                 "batterylow" : [],
+                 "open" : [],
+                 "bypass": [],
+                 "switches": []
+               }
+    
+    async def async_service_sensor_image(call):
         """Handler for sensor image service"""
         _LOGGER.info("Service Panel sensor image update called")
         client, panel = getClient(call)
@@ -375,50 +412,50 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         else:
             sendHANotification(f"Service sensor image update failed - Panel not found")
  
-    async def handle_reload(call) -> None: 
-        """Handle reload service call."""
-        _LOGGER.info(f"Domain {DOMAIN} call {call} reload called: reloading integration")
-        current_entries = hass.config_entries.async_entries(DOMAIN)
-        reload_tasks = [
-            hass.config_entries.async_reload(entry.entry_id)
-            for entry in current_entries
-        ]
-        await asyncio.gather(*reload_tasks)
 
     _LOGGER.info("Starting Visonic Component")
     hass.data[VisonicConfigKey] = {}
 
-    # Install the 5 handlers for the HA service calls
+    # Install the 7 handlers for the HA service calls
     hass.services.async_register(
         domain = DOMAIN,
         service = ALARM_PANEL_EVENTLOG,
-        service_func = service_panel_eventlog,
+        service_func = async_service_panel_eventlog,
         schema = ALARM_SCHEMA_EVENTLOG,
     )
     hass.services.async_register(
         DOMAIN, 
         ALARM_PANEL_RECONNECT, 
-        service_panel_reconnect, 
+        async_service_panel_reconnect, 
         schema=ALARM_SCHEMA_RECONNECT,
     )
     hass.services.async_register(
         DOMAIN,
         ALARM_PANEL_COMMAND,
-        service_panel_command,
+        async_service_panel_command,
         schema=ALARM_SCHEMA_COMMAND,
+        supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
         DOMAIN,
         ALARM_PANEL_X10,
-        service_panel_x10,
+        async_service_panel_x10,
         schema=ALARM_SCHEMA_X10,
     )
     hass.services.async_register(
         DOMAIN,
         ALARM_SENSOR_BYPASS,
-        service_sensor_bypass,
+        async_service_sensor_bypass,
         schema=ALARM_SCHEMA_BYPASS,
     )
+    hass.services.async_register(
+        DOMAIN,
+        ALARM_PANEL_ZONEINFO,
+        async_service_panel_zoneinfo,
+        schema=ALARM_SCHEMA_ZONE_INFO,
+        supports_response=SupportsResponse.ONLY,
+    )
+    
 #    hass.services.async_register(
 #        DOMAIN,
 #        ALARM_SENSOR_IMAGE,
@@ -426,9 +463,6 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
 #        schema=ALARM_SCHEMA_IMAGE,
 #    )
     
-    # Install the reload handler
-    #    commented out as it reloads all panels, the default in the frontend only reloads the instance
-    #async_register_admin_service(hass, DOMAIN, SERVICE_RELOAD, handle_reload)
     return True
 
 
@@ -444,15 +478,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
         """Return a set of the configured hosts."""
         return len(hass.config_entries.async_entries(DOMAIN))
 
-    _LOGGER.debug(f"[Visonic Setup] ************************************ create connection ************************************")
-    #_LOGGER.debug(f"[Visonic Setup]       Entry data={entry.data}   options={entry.options}")
-    _LOGGER.debug(f"[Visonic Setup]       Entry id={entry.entry_id} in a total of {configured_hosts(hass)} previously configured panels")
-
     # Listener to handle fired events
     def handle_core_config_updated(event):
         _LOGGER.debug(f"[Visonic Setup] Core configuration has been Updated")
         #hass = async_get_hass()
         translateLanguage(hass)
+
+    _LOGGER.debug(f"[Visonic Setup] ************************************ create connection ************************************")
+    #_LOGGER.debug(f"[Visonic Setup]       Entry data={entry.data}   options={entry.options}")
+    _LOGGER.debug(f"[Visonic Setup]       Entry id={entry.entry_id} in a total of {configured_hosts(hass)} previously configured panels")
 
     if not translatedLanguageAlready:
         translatedLanguageAlready = True
@@ -478,35 +512,55 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
 
     # When here, panel_id should be unique in the panels configured so far.
     _LOGGER.debug(f"[Visonic Setup]       Panel Ident {panel_id}")
-    
+
     # push the merged data back in to HA and update the title
     hass.config_entries.async_update_entry(entry, title=f"Panel {panel_id}", options=conf)
 
+    client = None
     # create client and connect to the panel
     try:
         # create the client ready to connect to the panel, this will initialse the client but nothing more
         client = VisonicClient(hass, panel_id, conf, entry)
 
         # save the client and its task
-        hass.data.setdefault(VisonicConfigKey, {})[entry.entry_id] = entry.runtime_data = VisonicConfigData(client, list())
+        hass.data.setdefault(VisonicConfigKey, {})[entry.entry_id] = entry.runtime_data = VisonicConfigData(client, list(), dict())
 
-        # make the client connection to the panel        
-        await client.connect()
+        totalAttempts = int(conf.get(CONF_RETRY_CONNECTION_COUNT, 0))
 
-        _LOGGER.debug(f"[Visonic Setup] Setting client ID for entry id {entry.entry_id}")
+        # make the client connection to the panel
+        if totalAttempts == 0:
+            # if total attempts is 0 then wait for the connection attempt and if it fails then inform the user straight away (i.e. return False)
+            #  setting this to 0 means no retries or reconnections
+            if await client.async_connect(force=True):    # total attempts will be 0 so force a single connection for initial creation, and then 0 reconnections
 
-        # add update listener to unload.  The update listener is used when the user edits an existing configuration.
-        entry.async_on_unload(entry.add_update_listener(update_listener))
+                #_LOGGER.debug(f"[Visonic Setup] Setting client ID for entry id {entry.entry_id}")
 
-        _LOGGER.debug(f"[Visonic Setup] Returning True for entry id {entry.entry_id}")
-        # return true to indicate success
-        return True
+                # add update listener to unload.  The update listener is used when the user edits an existing configuration.
+                entry.async_on_unload(entry.add_update_listener(update_listener))
+
+                _LOGGER.debug(f"[Visonic Setup] Returning Success for entry id {entry.entry_id}")
+                # return true to indicate success
+                return True
+            else:
+                client = None
+        else:
+            # add update listener to unload.  The update listener is used when the user edits an existing configuration.
+            entry.async_on_unload(entry.add_update_listener(update_listener))
+            # if total attempts is greater than 1 then connect as a separate task, and return success (i.e. True)
+            tmp = hass.loop.create_task(client.async_connect(force=False))
+            return True
+
     except requests.exceptions.ConnectionError as error:
         _LOGGER.error("[Visonic Setup] Visonic Panel could not be reached: [%s]", error)
         raise ConfigEntryNotReady
+
+    if entry.entry_id in hass.data[VisonicConfigKey]:
+        hass.data[VisonicConfigKey].pop(entry.entry_id)
+        _LOGGER.debug(f"[Visonic Setup]     wiped {entry.entry_id}")
+
+    _LOGGER.debug(f"[Visonic Setup] Returning False for entry id {entry.entry_id}")
     return False
- 
- 
+
 async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEntry) -> bool:
     """Migrate old schema configuration entry to new."""
     global update_version_panel_number
@@ -557,9 +611,6 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEn
             new[CONF_EMER_OFF_DELAY] = new[CONF_MOTION_OFF_DELAY]
             _LOGGER.debug("   Added additional trigger delay settings")
 
-        new[CONF_SENSOR_EVENTS] = list()
-        _LOGGER.debug("   Sensor Event List created and set to empty")
-
         new[CONF_ALARM_NOTIFICATIONS] = [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]
         hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
         _LOGGER.debug("   Alarm Notification list set to default")
@@ -587,25 +638,25 @@ async def async_unload_entry(hass: HomeAssistant, entry: VisonicConfigEntry):
     """Unload visonic entry."""
     _LOGGER.debug("************* terminating connection **************")
 
+    unload_ok = True
     data = entry.runtime_data
     if data.client is not None:
         p = data.client.getPanelID()
         # stop all activity in the client
-        unload_ok = await data.client.async_service_panel_stop()
-
+        unload_ok = await data.client.async_panel_stop()
         if entry.entry_id in hass.data[VisonicConfigKey]:
             hass.data[VisonicConfigKey].pop(entry.entry_id)
         else:
             _LOGGER.debug(f"************* Panel {p} nothing to pop config key entry **********************")
-        
-        if unload_ok:
-            _LOGGER.debug(f"************* Panel {p} terminate connection success **************")
-        else:
-            _LOGGER.debug(f"************* Panel {p} terminate connection success (with platform unloading problems) **************")
-        return unload_ok
     else:
+        unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
         _LOGGER.debug("************* terminate connection fail, no client **************")
-    return False
+
+    if unload_ok:
+        _LOGGER.debug(f"************* Panel {p} terminate connection success **************")
+    else:
+        _LOGGER.debug(f"************* Panel {p} terminate connection success (with platform unloading problems) **************")
+    return unload_ok
 
 
 # This function is called when there have been changes made to the parameters in the control flow

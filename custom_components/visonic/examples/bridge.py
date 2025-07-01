@@ -11,7 +11,6 @@ import asyncio
 import concurrent
 import logging
 import sys
-import pkg_resources
 import threading
 import collections
 import time
