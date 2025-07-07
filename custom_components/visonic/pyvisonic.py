@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.1.1"
+PLUGIN_VERSION = "1.9.1.2"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -766,6 +766,7 @@ pmZoneMaster = {
    0x2C : ZoneSensorType("MC-303V PG2", AlSensorType.MAGNET),
    0x2D : ZoneSensorType("MC-302V PG2", AlSensorType.MAGNET),
    0x35 : ZoneSensorType("SD-304 PG2", AlSensorType.SHOCK),
+   0xFA : ZoneSensorType("MC-302E PG2", AlSensorType.MAGNET ),          # iaxexo
    0xFE : ZoneSensorType("Wired", AlSensorType.WIRED )
 }
 
@@ -891,6 +892,11 @@ class chunky:
         if not ok:
             return f"type {self.type:<2}  subtype {self.subtype:<3}  sequence {self.sequence:<3}  datasize {self.datasize:<3}  length {self.length:<3}  index {IndexName(self.index).name:<14}   obfus datalen = {len(self.data)}"
         return f"type {self.type:<2}  subtype {self.subtype:<3}  sequence {self.sequence:<3}  datasize {self.datasize:<3}  length {self.length:<3}  index {IndexName(self.index).name:<14}   data {toString(self.data)}"
+
+    def GetItAll(self):
+        # Get it all, ignore display setting and obfus
+        return f"type {self.type:<2}  subtype {self.subtype:<3}  sequence {self.sequence:<3}  datasize {self.datasize:<3}  length {self.length:<3}  index {IndexName(self.index).name:<14}   data {toString(self.data)}"
+
 
 # Entry in a queue of commands (and PDUs) to send to the panel
 class VisonicListEntry:
@@ -4301,17 +4307,18 @@ class PacketHandling(ProtocolBase):
                 #     data=ff 09 06 27 00 01 41 03 05 00 43
                 #     data=ff 09 06 27 00 00 41 03 05 00 43
 
+            log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
             # The first entry always looks valid, so for now, process it for reset and panel battery state            
             eventZone = int(data[2])   # 61h or 0 : For a PowerMaster panel 0x61 is decimal 97, this is "User 1" in pmLogPowerMasterUser_t, also 0 is System in pmLogPowerMasterUser_t
             eventType = int(data[3])   # Looks like an eventType but the timing of when it arrives is all wrong
 
-            if not processSpecialEntries(eventZone, eventType):
-                log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
+            #if not processSpecialEntries(eventZone, eventType):
+            #    log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
 
-            for i in range(4):
-                eventZone = int(data[2 + (2 * i)])
-                eventType = int(data[3 + (2 * i)])
-                displayit("Could be", eventZone, eventType)
+            #for i in range(4):
+            #    eventZone = int(data[2 + (2 * i)])
+            #    eventType = int(data[3 + (2 * i)])
+            #    displayit("Could be", eventZone, eventType)
 
         elif msgCnt == 255:
             log.debug(f"[handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
@@ -4319,13 +4326,13 @@ class PacketHandling(ProtocolBase):
             # The first entry always looks valid, so for now, process it for reset and panel battery state            
             eventZone = int(data[2])     # 61h or 0 : For a PowerMaster panel 0x61 is decimal 97, this is "User 1" in pmLogPowerMasterUser_t, also 0 is System in pmLogPowerMasterUser_t
             eventType = int(data[3])     # Looks like an eventType but the timing of when it arrives is all wrong
-            if not processSpecialEntries(eventZone, eventType):
-                log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
+            #if not processSpecialEntries(eventZone, eventType):
+            #    log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
 
-            for i in range(4):
-                eventZone = int(data[2 + (2 * i)])
-                eventType = int(data[3 + (2 * i)])
-                displayit("Could be", eventZone, eventType)
+            #for i in range(4):
+            #    eventZone = int(data[2 + (2 * i)])
+            #    eventType = int(data[3 + (2 * i)])
+            #    displayit("Could be", eventZone, eventType)
 
             # These are from a PowerMaster panel
             # data= ff 00 61 51 01 ff 00 0b 00 00 43
@@ -4750,7 +4757,12 @@ class PacketHandling(ProtocolBase):
 
         #####################################################################################################################################################
         dat = self.settings_data_type_formatter(datatype, ch.data[14:], data_item_size=data_item_size, byte_size=byte_size, no_of_entries=no_of_entries)
-        log.debug(f"[_extract_42_data]               dat type = {type(dat)}   dat = {dat}")
+        if dat is None:
+            log.debug(f"[_extract_42_data]               dat is NONE")
+        elif OBFUS:
+            log.debug(f"[_extract_42_data]               dat type = {type(dat)}   dat = OBFUSCATED")
+        else:
+            log.debug(f"[_extract_42_data]               dat type = {type(dat)}   dat = {dat}")
         #####################################################################################################################################################
 
         processed_data = False
@@ -4910,14 +4922,16 @@ class PacketHandling(ProtocolBase):
             log.debug(f"[handle_msgtypeB0]        Resetting beezero_024B_sensorcount st=<{st}>")
 
         if st is None:
-            log.debug(f"[handle_msgtypeB0]     Unknown chunk {ch}")
+            log.debug(f"[handle_msgtypeB0]     Unknown chunk={ch.GetItAll()}")
             return
-        
+
         ind = IndexName(ch.index) if ch.index in IndexName else IndexName.UNDEFINED
         datasize = RAW(ch.datasize) if ch.datasize in RAW else RAW.UNDEFINED
         seq_type = SEQUENCE(ch.type) if ch.type in SEQUENCE else SEQUENCE.UNDEFINED
 
         #log.debug(f"[handle_msgtypeB0]     st = {st}      chunky = {ch}      self.beezero_024B_sensorcount = {self.beezero_024B_sensorcount}") # [processChunk]                 chunky = sequence 255  datasize 40  index 3   length 140
+        if datasize == RAW.UNDEFINED:
+            log.debug(f"[handle_msgtypeB0]     datasize is undefined, chunk={ch.GetItAll()}")
 
         match (st, datasize, ind, ch.length):
 
@@ -5091,6 +5105,8 @@ class PacketHandling(ProtocolBase):
                     if ch.length > 0:
                         s = self._create_B0_Data_Request(taglist = set(ch.data))
                         self._addMessageToSendList(s, priority = MessagePriority.URGENT)
+                    else:
+                        log.debug(f"[handle_msgtypeB0]                   Empty ASK_ME_1 chunk={ch.GetItAll()}")
 
             case (B0SubType.ASK_ME_2,       RAW.BYTES, IndexName.MIXED,  _ ):
                 log.debug(f"[handle_msgtypeB0]          Received ASK_ME_2 pop message   {ch}")
@@ -5098,8 +5114,14 @@ class PacketHandling(ProtocolBase):
                     if ch.length > 0:
                         s = self._create_B0_Data_Request(taglist = set(ch.data))
                         self._addMessageToSendList(s, priority = MessagePriority.URGENT)
+                    else:
+                        #log.debug(f"[handle_msgtypeB0]                   Empty ASK_ME_2 chunk={ch.GetItAll()}   so asking for PANEL_STATE and ZONE_LAST_EVENT")
+                        #s = self._create_B0_Data_Request(taglist = {pmSendMsgB0[B0SubType.PANEL_STATE].data, pmSendMsgB0[B0SubType.ZONE_LAST_EVENT].data} )
+                        log.debug(f"[handle_msgtypeB0]                   Empty ASK_ME_2 chunk={ch.GetItAll()}   so asking for PANEL_STATE")
+                        s = self._create_B0_Data_Request(taglist = {pmSendMsgB0[B0SubType.PANEL_STATE].data} )
+                        self._addMessageToSendList(s, priority = MessagePriority.URGENT)
             
-            case (B0SubType.ZONE_LAST_EVENT,   40, IndexName.ZONES,  _ ):  # Each entry is ch.datasize=40 bits (or 5 bytes)
+            case (B0SubType.ZONE_LAST_EVENT, RAW.FIVE_BYTE, IndexName.ZONES,  _ ):  # Each entry is ch.datasize=40 bits (or 5 bytes)
                 if seq_type == SEQUENCE.SUB:    
                     # Zone Last Event
                     # PM10: I assume this does not get sent by the panel.
@@ -5132,11 +5154,11 @@ class PacketHandling(ProtocolBase):
                                 self._decode_4B(i, ch.data[o:o+5])
                     self.beezero_024B_sensorcount = None   # If theres a next time so they are coordinated
 
-            case (B0SubType.LEGACY_EVENT_LOG,  80, IndexName.MIXED,  _ ):
+            case (B0SubType.LEGACY_EVENT_LOG, RAW.TEN_BYTE, IndexName.MIXED,  _ ):
                 log.debug(f"[handle_msgtypeB0]       Got Legacy Event Log Chunk {ch}")
                 self.processB0LogEntry(1, 1, ch.data)
 
-            case (B0SubType.EVENT_LOG,         80, IndexName.MIXED,  _ ):
+            case (B0SubType.EVENT_LOG,        RAW.TEN_BYTE, IndexName.MIXED,  _ ):
                 if seq_type == SEQUENCE.SUB:    
                     log.debug(f"[handle_msgtypeB0]          Got Sub Event Log Chunk {ch}")
                     eventTotal = pmPanelConfig[CFG.EVENTS][self.PanelType]
@@ -5254,7 +5276,7 @@ class PacketHandling(ProtocolBase):
                 #while current < len(data) and (data[current] == 0xFF or (data[current] != 0xFF and current == 3 and msgType == 2)):
                 while current < len(data) - 3 and (data[current] == 0xFF or (data[current] != 0xFF and msgType == 2)):
                     length = data[current+3]
-                    if length > 0:
+                    if length >= 0:
                         d = data[current + 4 : current + length + 4]
                         c = chunky(type = msgType, subtype = subType, sequence = data[current], datasize = data[current+1], index = data[current+2], length = length, data = d)
                         retval.append(c)
@@ -5263,16 +5285,17 @@ class PacketHandling(ProtocolBase):
                     log.debug(f"[handle_msgtypeB0] ******************************************************** Message not fully processed for {msgType}   {overall_length - (current-2)} bytes not processed     control byte = {hexify(data[current])}    data is {toString(data[current:])} ********************************************************")
                 if current-2 == overall_length:
                     return retval
-            else:
-                log.debug(f"[handle_msgtypeB0] ******************************************************** Message not chunky for {msgType}  data is {toString(data)} ********************************************************")
+            #else:
+            #    log.debug(f"[handle_msgtypeB0] ******************************************************** Message not chunky for {msgType}  data is {toString(data)} ********************************************************")
             return []
 
-        def isitchunky(chunks):
+        def isitchunky(chunks) -> bool:
             if len(chunks) == 0:
-                log.debug(f"[handle_msgtypeB0]                        ++++++++++++++++++++++++++++++++ Message not chunky +++++++++++++++++++++++++++++++++++++++++++++++++")
+                log.debug(f"[handle_msgtypeB0]                        ++++++++++++++++++++++++++++++++ Message not chunky +++++++++++++++++++++++++++++++++++++++++++++++++")                
             else:
                 for chunk in chunks:
                     log.debug(f"[handle_msgtypeB0]                    Decoded Chunk {chunk}")
+            return len(chunks) > 0
 
         # A powermaster mainly interacts with B0 messages so reset watchdog on receipt
         self._reset_watchdog_timeout()
@@ -5298,12 +5321,12 @@ class PacketHandling(ProtocolBase):
         if subType in self.B0_Waiting:
             self.B0_Waiting.remove(subType)
 
-        msgInfo = pmSendMsgB0_reverseLookup[subType] if subType in pmSendMsgB0_reverseLookup else None
-
-        if not OBFUS:
-            log.debug(f"[handle_msgtypeB0] Received {self.PanelModel or "UNKNOWN_PANEL_MODEL"} message {hexify(msgType):>02}/{hexify(subType):>02} (len = {msgLen})    data = {toString(data)}")
-        else:
+        if OBFUS:
             log.debug(f"[handle_msgtypeB0] Received {self.PanelModel or "UNKNOWN_PANEL_MODEL"} message {hexify(msgType):>02}/{hexify(subType):>02} (len = {msgLen})    data = <OBFUSCATED>")
+        else:
+            log.debug(f"[handle_msgtypeB0] Received {self.PanelModel or "UNKNOWN_PANEL_MODEL"} message {hexify(msgType):>02}/{hexify(subType):>02} (len = {msgLen})    data = {toString(data)}")
+
+        msgInfo = pmSendMsgB0_reverseLookup[subType] if subType in pmSendMsgB0_reverseLookup else None
 
         log.debug(f"[handle_msgtypeB0]    msgInfo: {"unknown" if msgInfo is None else msgInfo}")
 
@@ -5334,8 +5357,11 @@ class PacketHandling(ProtocolBase):
                     command = data[3+i]
                     message = data[4+i]
                     log.debug(f"[handle_msgtypeB0]                     The Panel Indicates {hexify(command):0>2} {hexify(message):0>2}")
-                    if command == 0x0D:                       # I think this is "retry later" instruction from the panel (and if it isn't then we can still ask for the message again)
-                        self.B0_Wanted.add(message)
+                    if command == 0x0D:                             # I think this is "retry later" instruction from the panel (and if it isn't then we can still ask for the message again)
+                        if message in pmSendMsgB0_reverseLookup:    # Make sure that were asking for a message that we know about
+                            self.B0_Wanted.add(message)
+                        else:
+                            log.debug(f"[handle_msgtypeB0]                            Unknown Message type for 'retry later' {hexify(message):0>2} so not asking for it")
                     elif command == 0x02:                     # 
                         self.gotBeeZeroInvalidCommand = True
         
@@ -5344,20 +5370,26 @@ class PacketHandling(ProtocolBase):
             # 03 0f 0f 07 08 0f 00 00 00 43 03 00 87 00 87 00 07 24 43
             log.debug(f"[handle_msgtypeB0]             Panel State short (15) has been provided data={toString(data)}")
             # Check to make sure its not chunky
-            isitchunky(chunkme(data[:-2]))
+            #isitchunky(chunkme(data[:-2]))
             # process the data
-            for i in range(data[10]):                      # data[10] has the total supported partitions and not just the ones in use
-                offset = i * 2
-                # Repeat 2 bytes (11 to 12) for more than 1 partition.  Message length is 15 so we do not need to check the length.
-                self._updateSystemStatus(i, data[offset + 12], data[offset + 11], 0, 0)
-        
+            if len(chunkme(data[:-2])) == 0:                   # Check to make sure its not chunky
+                for i in range(data[10]):                      # data[10] has the total supported partitions and not just the ones in use
+                    offset = i * 2
+                    # Repeat 2 bytes (11 to 12) for more than 1 partition.  Message length is 15 so we do not need to check the length.
+                    self._updateSystemStatus(i, data[offset + 12], data[offset + 11], 0, 0)
+            else:
+                log.debug(f"[handle_msgtypeB0]             The message is chunky so I don't know how to process it:  data={toString(data)}")
+                
         elif subType == pmSendMsgB0[B0SubType.PANEL_STATE_2].data and msgLen == 11: #  This is a test, I've only seen a message length of 15 with all 3 partitions populated
             # Panel State (without zone data and not chunky)
-            log.debug(f"[handle_msgtypeB0]             Panel State short (11) has been provided data={toString(data)}  --  BIG TEST AS NEVER SEEN BEFORE")
+            log.debug(f"[handle_msgtypeB0]             Panel State short (11) has been provided data={toString(data)}")
             # Check to make sure its not chunky
-            isitchunky(chunkme(data[:-2]))
-            # process the data, assume 1 partition 
-            self._updateSystemStatus(0, data[12], data[11], 0, 0)
+            #isitchunky(chunkme(data[:-2]))
+            if len(chunkme(data[:-2])) == 0:                   # Check to make sure its not chunky
+                # process the data, assume 1 partition 
+                self._updateSystemStatus(0, data[12], data[11], 0, 0)
+            else:
+                log.debug(f"[handle_msgtypeB0]             The message is chunky so I don't know how to process it:  data={toString(data)}")
 
         else:
             # Process the messages that we know about and are not chunked

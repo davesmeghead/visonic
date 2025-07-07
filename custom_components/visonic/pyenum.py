@@ -43,6 +43,8 @@ class RAW(IntEnum):
     BITS = 1
     BYTES = 8
     WORDS = 16
+    FIVE_BYTE = 40
+    TEN_BYTE = 80
     UNDEFINED = 1000
 
 @unique

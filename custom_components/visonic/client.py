@@ -117,7 +117,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.0.0"
+CLIENT_VERSION = "0.12.0.1"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -1173,7 +1173,7 @@ class VisonicClient:
                     # The panel has partitions
                     partition = data[PE_PARTITION]
                     
-                    self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   {partition=}")
+                    #self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   {partition=}")
                     
                     if self.myPanelEventCoordinator is None:
                         # initialise as a dict, the partition is the key
@@ -1190,7 +1190,7 @@ class VisonicClient:
             
                 elif len(data) == 3 and not isinstance(self.myPanelEventCoordinator, dict):
                     # The panel does not have partitions
-                    self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   no partitions")
+                    #self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   no partitions")
                     if self.myPanelEventCoordinator is None:
                         self.myPanelEventCoordinator = PanelEventCoordinator(loop = self.hass.loop, callbackSender = self.sendEvent, logstate_debug = self.logstate_debug)
                     self.myPanelEventCoordinator.setIsPowerMaster(self.isPowerMaster())

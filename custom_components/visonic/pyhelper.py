@@ -963,15 +963,18 @@ class PartitionStateClass:
         if PanelMode == AlPanelMode.DOWNLOAD:
             self.PanelState = AlPanelStatus.DOWNLOADING  # Downloading
 
-        log.debug(f"[PanelStateUpdate]             sysStatus={hexify(sysStatus)}    log: {self.PanelState.name}, {disarmed=}  {armed=}")
+        log.debug(f"[PanelStateUpdate]             sysFlags={hexify(sysFlags)}    sysStatus={hexify(sysStatus)}    log: {self.PanelState.name}, {disarmed=}  {armed=}")
 
         self.PanelReady = sysFlags & 0x01 != 0
         self.PanelAlertInMemory = sysFlags & 0x02 != 0
 
         if (sysFlags & 0x04 != 0):                   # Trouble
             if self.PanelTroubleStatus == AlTroubleType.NONE:       # if set to NONE then set it to GENERAL, if it's already set from A& then that is more specific
+                log.debug(f"[PanelStateUpdate]                 Panel Indicates Trouble Set")
                 self.PanelTroubleStatus = AlTroubleType.GENERAL
         else:
+            if self.PanelTroubleStatus == AlTroubleType.GENERAL:       # if set to NONE then set it to GENERAL, if it's already set from A& then that is more specific
+                log.debug(f"[PanelStateUpdate]                 Panel Indicates Trouble Cleared")
             self.PanelTroubleStatus = AlTroubleType.NONE
 
         self.PanelBypass = sysFlags & 0x08 != 0
