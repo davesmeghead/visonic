@@ -184,7 +184,7 @@ class AlPanelMode(AlEnum):
 #    COMPLETE_READONLY = AlIntEnum(9)
 a = AlPanelMode()
 
-# The set of panel states
+# The set of panel states, in order of importance for multiple partitions
 class AlPanelStatus(AlEnum):
     UNKNOWN = AlIntEnum(0)
     DISARMED = AlIntEnum(1)

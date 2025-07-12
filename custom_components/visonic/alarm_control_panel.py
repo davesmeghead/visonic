@@ -63,11 +63,12 @@ async def async_setup_entry(
         p = client.getPartitionsInUse()
 
         if p is None or (p is not None and len(p) == 1):
-            entities.append(VisonicAlarm(hass, client))
+            entities.append(VisonicAlarm(hass = hass, client = client, partition = None))
         elif len(p) > 1:
+            entities.append(VisonicAlarm(hass = hass, client = client, partition = 0))                         # EXPERIMENTAL
             for i in p:
                 if i != 0:
-                    entities.append(VisonicAlarm(hass, client, i))
+                    entities.append(VisonicAlarm(hass = hass, client = client, partition = i))
 
         _LOGGER.debug(f"[async_setup_entry] adding entity for partition {p}")
         async_add_entities(entities, True)
@@ -95,10 +96,15 @@ class VisonicAlarm(AlarmControlPanelEntity):
 #        self._device_state_attributes = {}
 #        self._users = {}
 #        self._doneUsers = False
-        self._last_triggered = ""
+        self._last_triggered = None
 
         if partition is None:
             self._partition = None           # When partitions are not used then we only use partition 1 for panel state
+            self._partitionSet = {1, 2, 3}   # When partitions are not used then we command (Arm, Disarm etc) all partitions
+            self._myname = client.getAlarmPanelUniqueIdent()
+            _LOGGER.debug(f"[VisonicAlarm] Initialising alarm control panel {self._myname}    panel {self._client.getPanelID()}")
+        elif partition == 0:                 # EXPERIMENTAL
+            self._partition = 0              # When partitions are not used then we only use partition 1 for panel state
             self._partitionSet = {1, 2, 3}   # When partitions are not used then we command (Arm, Disarm etc) all partitions
             self._myname = client.getAlarmPanelUniqueIdent()
             _LOGGER.debug(f"[VisonicAlarm] Initialising alarm control panel {self._myname}    panel {self._client.getPanelID()}")
@@ -210,12 +216,10 @@ class VisonicAlarm(AlarmControlPanelEntity):
             #_LOGGER.debug(f"stat {stat}")
 
             data = None
-            if self._partition is None:
+            if self._partition is None or self._partition == 0:
                 data = self._client.getClientStatusDict()
                 if TEXT_LAST_EVENT_NAME in stat and len(stat[TEXT_LAST_EVENT_NAME]) > 2:
                     self._last_triggered = stat[TEXT_LAST_EVENT_NAME]
-            elif self._partition == 1:
-                data = self._client.getClientStatusDict()
 
             #_LOGGER.debug(f"data {data}")
                 

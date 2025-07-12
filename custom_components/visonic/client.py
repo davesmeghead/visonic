@@ -117,7 +117,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.0.1"
+CLIENT_VERSION = "0.12.1.0"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -642,15 +642,15 @@ class VisonicClient:
             if include_extended_status is None:
                 include_extended_status = self.toBool(self.config.get(CONF_EPROM_ATTRIBUTES, False))
             pd = self.visonicProtocol.getPanelStatusDict(partition, include_extended_status)
-            if partition is None:
+            if partition is None or partition == 0:
                 #self.logstate_debug(f"Client Dict {pd}")
                 #pd["lastevent"] = self.PanelLastEventName + "/" + self.PanelLastEventAction
                 pd[TEXT_LAST_EVENT_NAME] = self.PanelLastEventName
                 pd[TEXT_LAST_EVENT_ACTION] = self.PanelLastEventAction
                 pd[TEXT_LAST_EVENT_TIME] = self.PanelLastEventTime
                 pd[TEXT_CLIENT_VERSION] = CLIENT_VERSION
-            elif partition == 1:
-                pd[TEXT_CLIENT_VERSION] = CLIENT_VERSION
+            #else:
+            #    pd[TEXT_CLIENT_VERSION] = CLIENT_VERSION
             return pd
         return {}
 
@@ -880,7 +880,11 @@ class VisonicClient:
                 elif not create and dev in self.x10_list:
                     # delete
                     self.x10_list.remove(dev)
-                    self.logstate_debug(f"X10 Device {dev.getDeviceID()} to be deleted but not yet implemented")
+                    self.logstate_debug(f"X10 Device {dev.getDeviceID()} to be deleted")
+                    if self.rationalised_ha_devices and self.getPanelMode() in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
+                        # If startup has completed, the devices have already been rationalise once, and we're in an appropriate panel mode
+                        #   otherwise wait until all sensors are installed
+                        self.rationalise_ha_devices()
                 else:
                     self.logstate_debug(f"X10 Device {dev.getDeviceID()} already in the list")
 
@@ -932,9 +936,13 @@ class VisonicClient:
                 elif not create and sensor in self.sensor_list:
                     # delete
                     self.sensor_list.remove(sensor)
-                    self.logstate_debug(f"Sensor {sensor.getDeviceID()} to be deleted but not yet implemented, also need to delete the select entity if it was created")
+                    self.logstate_debug(f"Sensor Zone Z{sensor.getDeviceID():0>2} to be deleted, also need to delete the select entity if it was created")
+                    if self.rationalised_ha_devices and self.getPanelMode() in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
+                        # If startup has completed, the devices have already been rationalise once, and we're in an appropriate panel mode
+                        #   otherwise wait until all sensors are installed
+                        self.rationalise_ha_devices()
                 else:
-                    self.logstate_debug(f"Sensor {sensor.getDeviceID()} already in the lists")
+                    self.logstate_debug(f"Sensor Zone Z{sensor.getDeviceID():0>2} already in the lists")
             if not self.DisableAllCommands and sensor.getDeviceID() not in self.image_list and sensor.getSensorType() == AlSensorType.CAMERA:
                 await self.create_image_entity(sensor)
         else:
@@ -951,9 +959,9 @@ class VisonicClient:
                 await self._setupVisonicEntity(IMAGE_DOMAIN, sensor)
 
     def onChange(self, callback : Callable, partition : int | None = None, panel_entity_name : str | None = None):
-        if panel_entity_name is not None:
-            if partition is None:
-                partition = 1
+        if panel_entity_name is not None and partition is not None and 1 <= partition <= 3:
+            #if partition is None:
+            #    partition = 1
             self.panel_entity_name[partition] = panel_entity_name
         self.onChangeHandler.append(callback)
 
@@ -986,21 +994,26 @@ class VisonicClient:
                 piu = self.getPartitionsInUse()
                 self.logstate_debug(f"Client [_fireHAEvent]  Partitions in use {piu}")
                 
-                if piu is None and PE_PARTITION in datadictionary:
-                    # if no used partitions and PE_PARTITION in datadictionary then remove it
-                    del datadictionary[PE_PARTITION]
-
-                if piu is not None and len(piu) > 0 and PE_PARTITION not in datadictionary:
-                    # if partitions in use and PE_PARTITION is not in the datadictionary then add the first partition 
-                    datadictionary[PE_PARTITION] = list(piu)[0]
+                #if piu is not None and len(piu) > 0 and PE_PARTITION not in datadictionary:
+                #    # if partitions in use and PE_PARTITION is not in the datadictionary then add the first partition 
+                #    self.logstate_debug(f"Client [_fireHAEvent]      Not creating HA Event as partitions in use {piu} but PE_PARTITION not in datadictionary")
+                #    a["panel_id"] = Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent())
+                #    #datadictionary[PE_PARTITION] = list(piu)[0]
+                #    #self.logstate_debug(f"Client [_fireHAEvent]      $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$   Partition value not set correctly in HA event")
                 
-                if PE_PARTITION in datadictionary:
+                if piu is not None and len(piu) > 0 and PE_PARTITION in datadictionary:
+                    self.logstate_debug(f"Client [_fireHAEvent]      {datadictionary[PE_PARTITION]=}   {self.panel_entity_name=}")
                     if datadictionary[PE_PARTITION] in self.panel_entity_name:
                         a["panel_id"] = Platform.ALARM_CONTROL_PANEL + "." + slugify(self.panel_entity_name[datadictionary[PE_PARTITION]])   # Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent())
                     else:
-                        a["panel_id"] = Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent())
-                    self.logstate_debug(f"Client [_fireHAEvent]      Setting entity id in the event {a['panel_id']}")
+                        self.logstate_debug(f"Client [_fireHAEvent]      Not creating HA Event as Alarm Entities not fully created, partition = {datadictionary[PE_PARTITION]}")
+                        return
+                        #a["panel_id"] = Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent())
                 else:
+                    if piu is None and PE_PARTITION in datadictionary:
+                        # if no used partitions and PE_PARTITION in datadictionary then remove it
+                        self.logstate_debug(f"Client [_fireHAEvent]      Something weird going on, partition set but we think no partitions in the panel, partition = {datadictionary[PE_PARTITION]}")
+                        del datadictionary[PE_PARTITION]
                     a["panel_id"] = Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent())
 
                 b = datadictionary.copy()
@@ -1115,7 +1128,7 @@ class VisonicClient:
             self.PanelLastEventName = data[PE_NAME]
             self.PanelLastEventAction = data[PE_EVENT]
             self.PanelLastEventTime = data[PE_TIME]
-            
+        
         self._fireHAEvent(event_id = event_id, datadictionary = data if data is not None else {} )
 
         if event_id == AlCondition.DOWNLOAD_SUCCESS:        # download success        
@@ -1173,7 +1186,7 @@ class VisonicClient:
                     # The panel has partitions
                     partition = data[PE_PARTITION]
                     
-                    #self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   {partition=}")
+                    self.logstate_debug(f"[onPanelChangeHandler] {partition=}  {data=}")
                     
                     if self.myPanelEventCoordinator is None:
                         # initialise as a dict, the partition is the key
@@ -1273,6 +1286,8 @@ class VisonicClient:
         self._setupSensorDelays()
         self.delayBetweenAttempts = float(self.config.get(CONF_RETRY_CONNECTION_DELAY, 1.0))   # seconds
         self.totalAttempts = int(self.config.get(CONF_RETRY_CONNECTION_COUNT, 1))
+        forcekeypad = self.toBool(self.config.get(CONF_FORCE_KEYPAD, False))
+        self.logstate_debug(f"[updateConfig] {forcekeypad=}  {self.totalAttempts=}   {self.delayBetweenAttempts=}")
 
     def onProblem(self, termination : AlTerminationType):
         """Problem Callback for connection disruption to the panel."""
@@ -1401,7 +1416,7 @@ class VisonicClient:
 
     # This should only be called from within this module.
     #     This is Data Set C
-    def _generateBusEventReason(self, event_id: PanelCondition, reason: AlCommandStatus, command: str, message: str):
+    def _generateBusEventReason(self, event_id: PanelCondition, reason: AlCommandStatus, command: str, message: str, partition : int = None):
         """Generate an HA Bus Event with a Reason Code."""
         datadict = self._populateSensorDictionary()
         #if self.visonicProtocol is not None:
@@ -1409,6 +1424,8 @@ class VisonicClient:
         datadict["reason"] = int(reason)
         datadict["reason_str"] = reason.name.title()
         datadict["message"] = message + " " + messageDictReason[reason]
+        if partition is not None:
+            datadict[PE_PARTITION] = partition
 
         self.onPanelChangeHandler(event_id = event_id, data = datadict)
 
@@ -1723,7 +1740,7 @@ class VisonicClient:
                                 self.logstate_debug(f"         Requesting sensor bypass update")
                                 self.visonicProtocol.requestSensorBypassStateUpdate()
 
-                                self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request Arm/Disarm")
+                                self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, retval, command.name, "Request Arm/Disarm", list(partitions)[0] if len(list(partitions)) == 1 else None)
                                 return didBypassSensor
                             else:
                                 self._generateBusEventReason(PanelCondition.CHECK_ARM_DISARM_COMMAND, AlCommandStatus.FAIL_USER_CONFIG_PREVENTED , command.name, "Request Arm/Disarm")

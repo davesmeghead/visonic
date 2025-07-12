@@ -149,11 +149,12 @@ class VisonicSiren(SirenEntity):
             ptu = self._client.getPartitionsInUse()
             isa, dev = self._client.isSirenActive()
             
+            reason = "undefined"
+
             if ptu is None:
                 #_LOGGER.debug(f"data {data}")
                 self._device_state_attributes = self._client.getPanelStatusDict()  # 
                 
-                reason = "undefined"
                 if EventDataEnum.ALARM in self._device_state_attributes:
                     reason = self._device_state_attributes[EventDataEnum.ALARM]
                 

@@ -963,7 +963,7 @@ class PartitionStateClass:
         if PanelMode == AlPanelMode.DOWNLOAD:
             self.PanelState = AlPanelStatus.DOWNLOADING  # Downloading
 
-        log.debug(f"[PanelStateUpdate]             sysFlags={hexify(sysFlags)}    sysStatus={hexify(sysStatus)}    log: {self.PanelState.name}, {disarmed=}  {armed=}")
+        log.debug(f"[PanelStateUpdate]             sysFlags=0x{hexify(sysFlags)}    sysStatus=0x{hexify(sysStatus)}    log: {self.PanelState.name}, {disarmed=}  {armed=}")
 
         self.PanelReady = sysFlags & 0x01 != 0
         self.PanelAlertInMemory = sysFlags & 0x02 != 0
@@ -1122,8 +1122,18 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
     def getPanelStatus(self, partition = INVALID_PARTITION) -> AlPanelStatus:
         if not self.suspendAllOperations:
-            if partition is not None and 1 <= partition <= 3:
-                return self.PartitionState[partition-1].PanelState
+            if partition is not None:
+                if 1 <= partition <= 3:
+                    return self.PartitionState[partition-1].PanelState
+                elif partition == 0:
+                    #log.debug(f"Partition is zero {self.getPartitionsInUse()}")
+                    # Start retval at the lowest ranked setting
+                    retval = AlPanelStatus.UNKNOWN
+                    for p in self.getPartitionsInUse():
+                        if self.PartitionState[p-1].PanelState > retval:
+                            retval = self.PartitionState[p-1].PanelState
+                    #log.debug(f"Partition is zero {self.getPartitionsInUse()}   returning {retval}")
+                    return retval
             return self.PartitionState[0].PanelState
         return AlPanelStatus.UNKNOWN
 

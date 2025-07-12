@@ -26,7 +26,7 @@ class CFG(Enum):
     WIRED = auto()
     X10 = auto()
     PGM = auto()
-    AUTO_ENROLL = auto()
+    AUTO_ENROL = auto()
     AUTO_SYNCTIME = auto()
     POWERMASTER = auto()
     INIT_SUPPORT = auto()
@@ -65,8 +65,8 @@ class IndexName(IntEnum):
     PGM = 11
     PANEL = 12
     GUARDS = 13
-    EVENTS = 14
-    PARTITIONS = 15
+    PARTITIONS = 14
+    UNK15 = 15
     UNK16 = 16
     EXPANDER_33 = 17
     IOV = 18
@@ -283,7 +283,7 @@ class Send(Enum):
     GETTIME = auto()
     ALIVE = auto()
     RESTORE = auto()
-    ENROLL = auto()
+    ENROL = auto()
     IMAGE_FB = auto()
     INIT = auto()
     X10NAMES = auto()
