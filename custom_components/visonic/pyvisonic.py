@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.2.0"
+PLUGIN_VERSION = "1.9.2.1"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -3155,7 +3155,7 @@ class PacketHandling(ProtocolBase):
         #log.debug("=========================================================================================================================================================")
         #self._dumpSensorsToLogFile(True)
 
-    def _updateSensor(self, zone) -> bool:
+    def _updateSensor(self, sensor) -> bool:
         
         def getPanelStringName(zonename):
             if len(self.PanelSettings[PanelSetting.ZoneNameString]) == 21 and len(self.PanelSettings[PanelSetting.ZoneCustNameStr]) == 10 and 0 <= zonename <= 30:
@@ -3171,27 +3171,27 @@ class PacketHandling(ProtocolBase):
             log.debug(f"[_updateSensor]       Not Forcing Standard and not got all mandatory panel settings so not updating sensor {mandatory=}")
             return False
 
-        enrolled        = self.getPanelSetting(PanelSetting.ZoneEnrolled,     zone)
-        zoneType        = self.getPanelSetting(PanelSetting.ZoneTypes,        zone)
-        zoneChime       = self.getPanelSetting(PanelSetting.ZoneChime,        zone)
-        device_type     = self.getPanelSetting(PanelSetting.DeviceTypesZones, zone)
-        motiondelaytime = self.getPanelSetting(PanelSetting.ZoneDelay,        zone)
-        zn              = self.getPanelSetting(PanelSetting.ZoneNames,        zone)
-        partitionData   = self.getPanelSetting(PanelSetting.PartitionData,    zone)
+        enrolled        = self.getPanelSetting(PanelSetting.ZoneEnrolled,     sensor)
+        zoneType        = self.getPanelSetting(PanelSetting.ZoneTypes,        sensor)
+        zoneChime       = self.getPanelSetting(PanelSetting.ZoneChime,        sensor)
+        device_type     = self.getPanelSetting(PanelSetting.DeviceTypesZones, sensor)
+        motiondelaytime = self.getPanelSetting(PanelSetting.ZoneDelay,        sensor)
+        zn              = self.getPanelSetting(PanelSetting.ZoneNames,        sensor)
+        partitionData   = self.getPanelSetting(PanelSetting.PartitionData,    sensor)
         zonePanelName   = None if zn is None else getPanelStringName(zn & 0x1F)
 
         #log.debug(f"[_updateSensor]     partitiondata set as {self.PanelSettings[PanelSetting.PartitionData] if PanelSetting.PartitionData in self.PanelSettings else "Undefined"}")
 
         if enrolled is None or not enrolled:
-            if zone in self.SensorList:
-                log.info(f"[_updateSensor]       Removing sensor Z{(zone+1):0>2} as it is not enrolled in Panel EPROM Data")
+            if sensor in self.SensorList:
+                log.info(f"[_updateSensor]       Removing sensor Z{(sensor+1):0>2} as it is not enrolled in Panel EPROM Data")
                 if self.onNewSensorHandler is not None:
-                    self.onNewSensorHandler(False, self.SensorList[zone])
-                del self.SensorList[zone]
+                    self.onNewSensorHandler(False, self.SensorList[sensor])
+                del self.SensorList[sensor]
                 return True
             return False
 
-        log.debug(f"[_updateSensor]  Zone Z{(zone+1):>02} : {enrolled=} {zoneType=} {zoneChime=} {device_type=} {motiondelaytime=} {zn=} {partitionData=}")
+        log.debug(f"[_updateSensor]  Zone Z{(sensor+1):>02} : {enrolled=} {zoneType=} {zoneChime=} {device_type=} {motiondelaytime=} {zn=} {partitionData=}")
 
         part = set()
         if self.getPartitionsInUse() is not None:
@@ -3200,7 +3200,7 @@ class PacketHandling(ProtocolBase):
             if partitionData is not None and partitionCnt > 1:
                 for j in range(0, partitionCnt):  # max partitions of all panels
                     if (partitionData & (1 << j)) != 0:
-                        log.debug(f"[_updateSensor]     Adding to partition list - ref {zone}  Z{(zone+1):0>2}     Partition {(j+1)}")
+                        log.debug(f"[_updateSensor]     Adding to partition list - ref {sensor}  Z{(sensor+1):0>2}     Partition {(j+1)}")
                         part.add(j + 1)                  # partitions for this sensor
                         self.PartitionsInUse.add(j + 1)  # overall used partitions, this is a set so no repetitions allowed
             else:
@@ -3209,21 +3209,21 @@ class PacketHandling(ProtocolBase):
         updated = False
         created_new_sensor = False
 
-        if zone not in self.SensorList:
-            self.SensorList[zone] = SensorDevice( id = zone + 1 )
+        if sensor not in self.SensorList:
+            self.SensorList[sensor] = SensorDevice( id = sensor + 1 )
             created_new_sensor = True
 
         zoneName = "not_installed"
-        if zone < len(self.PanelSettings[PanelSetting.ZoneNames]):     # 
+        if sensor < len(self.PanelSettings[PanelSetting.ZoneNames]):     # 
             zoneName = pmZoneName[zn & 0x1F]
 
-        if zn is not None and self.SensorList[zone].zname != zoneName:
+        if zn is not None and self.SensorList[sensor].zname != zoneName:
             updated = True
-            self.SensorList[zone].zname = zoneName
+            self.SensorList[sensor].zname = zoneName
 
-        if zonePanelName is not None and self.SensorList[zone].zpanelname != zonePanelName:
+        if zonePanelName is not None and self.SensorList[sensor].zpanelname != zonePanelName:
             updated = True
-            self.SensorList[zone].zpanelname = zonePanelName
+            self.SensorList[sensor].zpanelname = zonePanelName
 
         if device_type is not None:
             sensorType = AlSensorType.UNKNOWN
@@ -3234,7 +3234,7 @@ class PacketHandling(ProtocolBase):
                     sensorType = pmZoneMaster[device_type].func
                     sensorModel = pmZoneMaster[device_type].name
                     if motiondelaytime is not None and motiondelaytime == 0xFFFF and (sensorType == AlSensorType.MOTION or sensorType == AlSensorType.CAMERA):
-                        log.debug(f"[_updateSensor] PowerMaster Zone Z{zone+1:0>2} has no motion delay set (Sensor will only be useful when the panel is armed)")
+                        log.debug(f"[_updateSensor] PowerMaster Zone Z{sensor+1:0>2} has no motion delay set (Sensor will only be useful when the panel is armed)")
                 else:
                     log.debug(f"[_updateSensor] Found unknown sensor type {hexify(device_type)}")
             else:  #  PowerMax models
@@ -3264,66 +3264,66 @@ class PacketHandling(ProtocolBase):
                 else:
                     log.debug(f"[_updateSensor] Found unknown sensor type {device_type}")
 
-            if self.SensorList[zone].sid != device_type:
+            if self.SensorList[sensor].sid != device_type:
                 updated = True
-                self.SensorList[zone].sid = device_type
-                self.SensorList[zone].stype = sensorType
-                self.SensorList[zone].model = sensorModel
+                self.SensorList[sensor].sid = device_type
+                self.SensorList[sensor].stype = sensorType
+                self.SensorList[sensor].model = sensorModel
 
         if zoneChime is not None and 0 <= zoneChime <= 2:
             #log.debug(f"[_updateSensor]   Setting Zone Chime {zoneChime}  {pmZoneChimeKey[zoneChime]}")
-            self.PanelSettings[PanelSetting.ZoneChime][zone] = zoneChime
-            if self.SensorList[zone].zchime != pmZoneChimeKey[zoneChime]:
+            self.PanelSettings[PanelSetting.ZoneChime][sensor] = zoneChime
+            if self.SensorList[sensor].zchime != pmZoneChimeKey[zoneChime]:
                 updated = True
-                self.SensorList[zone].zchimeref = zoneChime
+                self.SensorList[sensor].zchimeref = zoneChime
                 if zoneChime < len(pmZoneChimeKey):
-                    self.SensorList[zone].zchime = pmZoneChimeKey[zoneChime]
+                    self.SensorList[sensor].zchime = pmZoneChimeKey[zoneChime]
                 else:
-                    self.SensorList[zone].zchime = "undefined " + str(zoneChime)
+                    self.SensorList[sensor].zchime = "undefined " + str(zoneChime)
 
         if zoneType is not None:
-            self.PanelSettings[PanelSetting.ZoneTypes][zone] = zoneType
-        elif zone < len(self.PanelSettings[PanelSetting.ZoneTypes]):     # 
-            zoneType = self.PanelSettings[PanelSetting.ZoneTypes][zone]
+            self.PanelSettings[PanelSetting.ZoneTypes][sensor] = zoneType
+        elif sensor < len(self.PanelSettings[PanelSetting.ZoneTypes]):     # 
+            zoneType = self.PanelSettings[PanelSetting.ZoneTypes][sensor]
         else:
             zoneType = None
 
-        if zoneType is not None and self.SensorList[zone].ztype != zoneType:
+        if zoneType is not None and self.SensorList[sensor].ztype != zoneType:
             updated = True
-            self.SensorList[zone].ztype = zoneType
+            self.SensorList[sensor].ztype = zoneType
             if zoneType < len(pmZoneTypeKey):
-                self.SensorList[zone].ztypeName = pmZoneTypeKey[zoneType]
+                self.SensorList[sensor].ztypeName = pmZoneTypeKey[zoneType]
             else:
-                self.SensorList[zone].ztypeName = "undefined " + str(zoneType)   # undefined
+                self.SensorList[sensor].ztypeName = "undefined " + str(zoneType)   # undefined
 
         if motiondelaytime is not None and motiondelaytime != 0xFFFF:
-            if self.SensorList[zone].motiondelaytime != motiondelaytime:
+            if self.SensorList[sensor].motiondelaytime != motiondelaytime:
                 updated = True
-                self.SensorList[zone].motiondelaytime = motiondelaytime
+                self.SensorList[sensor].motiondelaytime = motiondelaytime
 
-        if self.getPartitionsInUse() is not None and self.SensorList[zone].partition != part:
+        if self.getPartitionsInUse() is not None and self.SensorList[sensor].partition != part:
             updated = True
-            log.debug(f"[_updateSensor]     Change to partition list - sensor {zone}   {part=}")
+            log.debug(f"[_updateSensor]     Change to partition list - sensor {sensor}   {part=}")
             # If we get EPROM data, assume it is all correct and override any existing settings (as some were assumptions)
-            self.SensorList[zone].partition = part.copy()
+            self.SensorList[sensor].partition = part.copy()
 
         # if the new value is True and the old Value is False then push change enrolled
-        enrolled_push_change = (enrolled and not self.SensorList[zone].enrolled) if self.SensorList[zone].enrolled is not None and enrolled is not None else False
+        enrolled_push_change = (enrolled and not self.SensorList[sensor].enrolled) if self.SensorList[sensor].enrolled is not None and enrolled is not None else False
         if enrolled is not None:
-            self.SensorList[zone].enrolled = enrolled
+            self.SensorList[sensor].enrolled = enrolled
 
         if created_new_sensor:
-            self.SensorList[zone].onChange(self.mySensorChangeHandler)
+            self.SensorList[sensor].onChange(self.mySensorChangeHandler)
             if self.onNewSensorHandler is not None:
-                self.onNewSensorHandler(True, self.SensorList[zone])
+                self.onNewSensorHandler(True, self.SensorList[sensor])
 
         # Enrolled is only sent on enrol and not on change to not enrolled
         if enrolled_push_change:
-            self.SensorList[zone].pushChange(AlSensorCondition.ENROLLED)
+            self.SensorList[sensor].pushChange(AlSensorCondition.ENROLLED)
         elif updated:
-            self.SensorList[zone].pushChange(AlSensorCondition.STATE)
+            self.SensorList[sensor].pushChange(AlSensorCondition.STATE)
         #else:
-        #    self.SensorList[zone].pushChange(AlSensorCondition.RESET)
+        #    self.SensorList[sensor].pushChange(AlSensorCondition.RESET)
 
         # Has something changed?
         return enrolled_push_change or updated
@@ -3687,7 +3687,7 @@ class PacketHandling(ProtocolBase):
             zoneCnt = self.getPanelCapability(IndexName.ZONES)
             for i in range(zoneCnt):
 
-                tmp = self._updateSensor( zone = i )
+                tmp = self._updateSensor( sensor = i )
                 retval = retval or tmp
 
                 if i in self.SensorList:
@@ -3769,7 +3769,7 @@ class PacketHandling(ProtocolBase):
 
                     x10Name = x10Names[i] & 0x1F   # PGM needs to be set by x10Enabled.  x10Names[0] i.e. PGM this is 0xFF
 
-                    if x10Enabled or (self.PanelType >= 3 and x10Name != 0x1F):   # For some reason the PowerMax+ sets the x10Names array to 0 and so creates 15 X10 devices
+                    if x10Enabled or (self.PanelType >= 3 and x10Name != 0x1F) or (self.PanelType < 3 and x10Name != 0x00):   # For some reason the PowerMax+ sets the x10Names array to 0 by default
                         x10Location = pmZoneName[x10Name]
                         x10Type = "dimmer"            # Assume PGM is onoff switch, all other devices are dimmer Switches
                         if i in self.SwitchList:
@@ -3799,7 +3799,7 @@ class PacketHandling(ProtocolBase):
 
         if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.MINIMAL_ONLY, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK] and key not in self.SensorList and eventType > 0:
             log.debug("[ProcessZoneEvent]          Got a Zone Sensor that I did not know about so creating it")
-            self._updateSensor(zone = key)
+            self._updateSensor(sensor = key)
 
         if key in self.SensorList and eventType in pmZoneEventAction:
             sf = getattr(self.SensorList[key], pmZoneEventAction[eventType].func if eventType in pmZoneEventAction else "")
@@ -4138,7 +4138,7 @@ class PacketHandling(ProtocolBase):
             # Save the Zone Name
             self.PanelSettings[PanelSetting.ZoneNames][offset+i] = data[2+i] & 0x1F
             if self.PanelMode != AlPanelMode.POWERLINK and self.PanelMode != AlPanelMode.POWERLINK_BRIDGED and (offset+i) in self.SensorList:
-                self._updateSensor(zone = offset+i)
+                self._updateSensor(sensor = offset+i)
 
     def handle_msgtypeA5(self, data):  # Status Message
         """ MsgType=A5 - Zone Data Update """
@@ -4253,7 +4253,7 @@ class PacketHandling(ProtocolBase):
             self.PanelSettings[PanelSetting.ZoneTypes][offset+i] = ((int(data[2+i])) - 0x1E) & 0x0F
             log.debug(f"                        Zone type for sensor {offset+i+1} is {hexify((int(data[2+i])) - 0x1E)} : {pmZoneTypeKey[self.PanelSettings[PanelSetting.ZoneTypes][offset+i]]}")
             if self.PanelMode != AlPanelMode.POWERLINK and self.PanelMode != AlPanelMode.POWERLINK_BRIDGED and (offset+i) in self.SensorList:
-                self._updateSensor(zone = offset+i)
+                self._updateSensor(sensor = offset+i)
 
     def handle_msgtypeA7(self, data):
         # This is a complete cheat as this library should not access this, just for debug
