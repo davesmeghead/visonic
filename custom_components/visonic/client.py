@@ -117,7 +117,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.1.1"
+CLIENT_VERSION = "0.12.1.2"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -341,7 +341,7 @@ class ClientVisonicProtocol(asyncio.Protocol):
         _LOGGER.debug(f"connection_lost Booooo")
         if self.client is not None:
             _LOGGER.debug(f"connection_lost    setup to reconnect, if allowed by the user config")
-            self.client.hass.loop.create_task(self.client.async_reconnect_and_restart(force_reconnect = False, allow_restart = False)) # Try a simple reconnect but only if user config allows
+            self.client.hass.loop.create_task(self.client.async_reconnect_and_restart(force_reconnect = False, allow_restart = True)) # Try a simple reconnect but only if user config allows
         if self._transport is not None:
             self._stop()
         _LOGGER.debug("connection_lost finished")
@@ -1586,7 +1586,7 @@ class VisonicClient:
         else:
             self.createNotification(AvailableNotifications.COMMAND_NOT_SENT, f"Visonic Alarm Panel: Panel Commands Disabled")
 
-    async def service_sensor_image(self, call):
+    async def async_service_sensor_image(self, call):
         """Service call to bypass a sensor in the panel."""
         if await self.check_the_basics(call, "sensor image"):
             devid, eid = await self.decode_entity(call, Platform.IMAGE, "retrieve sensor image", AvailableNotifications.IMAGE_PROBLEM)

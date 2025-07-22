@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.2.1"
+PLUGIN_VERSION = "1.9.2.2"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -2062,6 +2062,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             # This sequencer loop is once per second.  That is enough time between LookForPowerlinkBridge and here to make the connection and get a reply to set the variables
                             _sequencerState = SequencerType.LookForPowerlinkBridge
                             log.debug(f"[_sequencer] Waiting for Alarm Panel to connect to the Bridge")
+                            await asyncio.sleep(1.0)
                         else:
                             reset_vars()
                             _sequencerState = SequencerType.InitialisePanel
@@ -2088,16 +2089,18 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                     elif self.UnexpectedPanelKeepAlive:                             ################################################################ PanelKeepAlive          ###################################################
                         self.UnexpectedPanelKeepAlive = False
-                        log.debug("[_sequencer] Unexpected Panel Powerlink Keep Alive")
                         if (
                            not self.pmDownloadMode                                    
                            and not self.ForceStandardMode
                            and not self.allowAckToTriggerRestore
                            and self.PanelMode in [AlPanelMode.STOPPED]  # 
                         ):
-                            log.debug("[_sequencer]            Setting sequencer to LookForPowerlinkBridge")
+                            log.debug("[_sequencer] Unexpected Panel Powerlink Keep Alive, setting sequencer to LookForPowerlinkBridge")
                             _sequencerState = SequencerType.LookForPowerlinkBridge
                             delay_loops = 2
+                        else:
+                            log.debug("[_sequencer] Unexpected Panel Powerlink Keep Alive, ignoring it")
+                            
                         continue   # just do the while loop
 
                     elif _sequencerState == SequencerType.InitialisePanel:          ################################################################ Initialising            ###################################################
@@ -2621,7 +2624,19 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                         #myspecialcounter = myspecialcounter + 1
 
-                    if not (self.PowerLinkBridgeConnected and self.PowerLinkBridgeProxy) and \
+
+                    if self.PanelMode == AlPanelMode.POWERLINK_BRIDGED and self.PartitionState[0].PanelState == AlPanelStatus.DOWNLOADING:
+                        _my_panel_state_trigger_count = _my_panel_state_trigger_count - 1
+                        log.debug(f"[_sequencer] By here we should be in normal operation, we are in {self.PanelMode.name} panel mode"
+                                  f" and status is {self.PartitionState[0].PanelState}    {_my_panel_state_trigger_count=}")
+                        if _my_panel_state_trigger_count < 0:
+                            _my_panel_state_trigger_count = 10
+                            self._reset_keep_alive_messages()
+                            self._reset_watchdog_timeout()
+                            _resetPanelInterface()
+                            _clearPanelErrorMessages()
+                        continue   # just do the while loop
+                    elif not (self.PowerLinkBridgeConnected and self.PowerLinkBridgeProxy) and \
                         (self.PartitionState[0].PanelState == AlPanelStatus.DOWNLOADING or self.PanelMode == AlPanelMode.DOWNLOAD):
                         # We may still be in the downloading state or the panel is in the downloading state
                         _my_panel_state_trigger_count = _my_panel_state_trigger_count - 1
@@ -3869,7 +3884,6 @@ class PacketHandling(ProtocolBase):
         # Record all main variables to see if the message content changes any
         oldState = statelist() # make it a function so if it's changed it remains consistent
         oldPowerMaster = self.PowerMaster
-        pushchange = False
 
         if self.PanelMode == AlPanelMode.PROBLEM and not self.PowerLinkBridgeConnected:
             # A PROBLEM indicates that there has been a response timeout (either normal or trying to get to powerlink)
@@ -3889,7 +3903,20 @@ class PacketHandling(ProtocolBase):
         processNormalData = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.MINIMAL_ONLY, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]
         processB0         = self.EnableB0ReceiveProcessing or processNormalData
 
-        log.debug(f"[_processReceivedPacket] {processAB=} {processB0=} {processNormalData=}    {self.pmDownloadMode=}")
+        pushchange = self._handle_msgtype(packet, processAB, processNormalData, processB0, self.pmDownloadMode)
+
+        if self.sendPanelEventData(): # sent at least 1 event so no need to send PUSH_CHANGE
+            pushchange = False
+
+        if self.PostponeEventCounter == 0 and oldState != statelist():   # make statelist a function so if it's changed it remains consistent
+            self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
+        elif oldPowerMaster != self.PowerMaster or pushchange:
+            self.sendPanelUpdate(AlCondition.PUSH_CHANGE)
+
+    def _handle_msgtype(self, packet, processAB, processNormalData, processB0, processDownload) -> bool:
+
+        pushchange = False
+        log.debug(f"[_processReceivedPacket] {processAB=} {processB0=} {processNormalData=} {processDownload=}")
 
         # Leave this here as it needs to be created dynamically to create the condition and message columns
         DecodeMessage = collections.namedtuple('DecodeMessage', 'condition, func, pushchange, message')
@@ -3902,15 +3929,15 @@ class PacketHandling(ProtocolBase):
             Receive.EXIT_DOWNLOAD     : DecodeMessage(                True , self.handle_msgtype0F, False, None ),  # Exit
             Receive.NOT_USED          : DecodeMessage(               False , None                 , False, "WARNING: Message 0x22 is not decoded, are you using an old Powermax Panel as this is not supported?" ),
             Receive.DOWNLOAD_RETRY    : DecodeMessage(                True , self.handle_msgtype25, False, None ),  # Download retry
-            Receive.DOWNLOAD_SETTINGS : DecodeMessage( self.pmDownloadMode , self.handle_msgtype33, False, f"Received 33 Message, we are in {self.PanelMode.name} mode (so I'm ignoring the message), data: {toString(packet)}"),  # Settings send after a MSGV_START
+            Receive.DOWNLOAD_SETTINGS : DecodeMessage(     processDownload , self.handle_msgtype33, False, f"Received 33 Message, we are in {self.PanelMode.name} mode (so I'm ignoring the message), data: {toString(packet)}"),  # Settings send after a MSGV_START
             Receive.PANEL_INFO        : DecodeMessage(                True , self.handle_msgtype3C, False, None ),  # Message when start the download
-            Receive.DOWNLOAD_BLOCK    : DecodeMessage( self.pmDownloadMode , self.handle_msgtype3F, False, f"Received 3F Message, we are in {self.PanelMode.name} mode (so I'm ignoring the message), data: {toString(packet)}"),  # Download information
+            Receive.DOWNLOAD_BLOCK    : DecodeMessage(     processDownload , self.handle_msgtype3F, False, f"Received 3F Message, we are in {self.PanelMode.name} mode (so I'm ignoring the message), data: {toString(packet)}"),  # Download information
             Receive.EVENT_LOG         : DecodeMessage(   processNormalData , self.handle_msgtypeA0, False, None ),  # Event log
             Receive.ZONE_NAMES        : DecodeMessage(   processNormalData , self.handle_msgtypeA3,  True, None ),  # Zone Names
             Receive.STATUS_UPDATE     : DecodeMessage(   processNormalData , self.handle_msgtypeA5,  True, None ),  # Zone Information/Update
             Receive.ZONE_TYPES        : DecodeMessage(   processNormalData , self.handle_msgtypeA6,  True, None ),  # Zone Types
             Receive.PANEL_STATUS      : DecodeMessage(   processNormalData , self.handle_msgtypeA7,  True, None ),  # Panel Information/Update
-            Receive.POWERLINK         : DecodeMessage(           processAB , self.handle_msgtypeAB,  True, f"Received AB Message, we are in {self.PanelMode.name} mode and Download is set to {self.pmDownloadMode} (so I'm ignoring the message), data: {toString(packet)}"),  # 
+            Receive.POWERLINK         : DecodeMessage(           processAB , self.handle_msgtypeAB,  True, f"Received AB Message, we are in {self.PanelMode.name} mode and Download is set to {processDownload} (so I'm ignoring the message), data: {toString(packet)}"),  # 
             Receive.X10_NAMES         : DecodeMessage(   processNormalData , self.handle_msgtypeAC,  True, None ),  # X10 Names
             Receive.IMAGE_MGMT        : DecodeMessage(   processNormalData , self.handle_msgtypeAD,  True, None ),  # No idea what this means, it might ...  send it just before transferring F4 video data ?????
             Receive.POWERMASTER       : DecodeMessage(           processB0 , self.handle_msgtypeB0,  True, None ),  # 
@@ -3930,16 +3957,13 @@ class PacketHandling(ProtocolBase):
             elif dm.message is not None:
                 log.debug(f"[_processReceivedPacket]     {dm.message}")
             else:
-                log.debug(f"[_processReceivedPacket]     Received data not processed, 1st 4 data bytes are {toString(packet[:4])}")
-            if self.sendPanelEventData(): # sent at least 1 event so no need to send PUSH_CHANGE
-                pushchange = False
+                log.debug(f"[_processReceivedPacket]     Received data not processed, data bytes are {toString(packet)}")
         elif processNormalData or processAB:
             log.debug(f"[_processReceivedPacket] Unknown/Unhandled packet type {toString(packet)}")
-        self.sendPanelEventData()
-        if self.PostponeEventCounter == 0 and oldState != statelist():   # make statelist a function so if it's changed it remains consistent
-            self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
-        elif oldPowerMaster != self.PowerMaster or pushchange:
-            self.sendPanelUpdate(AlCondition.PUSH_CHANGE)
+        return pushchange
+
+    def handle_msgtype_testing(self, packet) -> bool:
+        return self._handle_msgtype(packet, True, True, True, True)   # process any of the messages for testing
 
     def handle_msgtype02(self, data):  # ACK
         """ Handle Acknowledges from the panel """
@@ -4462,7 +4486,8 @@ class PacketHandling(ProtocolBase):
         """ MsgType=AD - Panel Powerlink Messages """
         log.debug(f"[handle_msgtypeAD]  data {toString(data)}")
         if data[2] == 0x00: # the request was accepted by the panel
-            if self.PanelMode == AlPanelMode.POWERLINK:
+            if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
+                log.debug(f"[handle_msgtypeAD]      adding Image FB to send list")
                 self._addMessageToSendList(Send.IMAGE_FB)
 
     def _checkallsame(self, val, b : bytearray) -> []:
@@ -4687,6 +4712,7 @@ class PacketHandling(ProtocolBase):
             processed_data = True
             if not self.DownloadCodeUserSet and len(dat) == 4:
                 self.DownloadCode = dat
+                self.DownloadCodeUserSet = True    # Set to True as the download code has been obtained directly from the panel so it mist be correct
                 self.PanelSettings[PanelSetting.PanelDownload] = self.DownloadCode
                 log.debug(f"[_extract_35_data]               Setting Download Code : {self.DownloadCode}")
 
@@ -4754,7 +4780,7 @@ class PacketHandling(ProtocolBase):
         start_entry = b2i(ch.data[10:12], big_endian=False)
         no_of_entries = b2i(ch.data[12:14], big_endian=False)
 
-        log.debug(f"[_extract_42_data]               {dataContent=}   {max_data_items=}   {data_item_size=}   {start_entry=}   { DataType(datatype) }   {byte_size=}   {no_of_entries=}")
+        log.debug(f"[_extract_42_data]               {dataContent=}   {max_data_items=}   {data_item_size=}   {start_entry=}   { DataType(datatype) if datatype in DataType else "DataType is UNDEFINED" }   {byte_size=}   {no_of_entries=}")
 
         #####################################################################################################################################################
         dat = self.settings_data_type_formatter(datatype, ch.data[14:], data_item_size=data_item_size, byte_size=byte_size, no_of_entries=no_of_entries)
@@ -4799,6 +4825,7 @@ class PacketHandling(ProtocolBase):
             processed_data = True
             if not self.DownloadCodeUserSet and len(dat) == 4:
                 self.DownloadCode = dat
+                self.DownloadCodeUserSet = True    # Set to True as the download code has been obtained directly from the panel so it mist be correct
                 self.PanelSettings[PanelSetting.PanelDownload] = self.DownloadCode
                 log.debug(f"[_extract_42_data]               Setting Download Code : {self.DownloadCode}")
 
@@ -5477,7 +5504,8 @@ class PacketHandling(ProtocolBase):
                     # Assume that we are managing the interaction/protocol with the panel
                     self.ignoreF4DataMessages = False
 
-                    self._addMessageToSendList(convertByteArray('0d ab 0e 00 17 1e 00 00 03 01 05 00 43 c5 0a')) # 43 should be bytearray([Packet.POWERLINK_TERMINAL])
+                    self._addMessageToSendList(Send.IMAGE_FB)
+                    #self._addMessageToSendList(convertByteArray('0d ab 0e 00 17 1e 00 00 03 01 05 00 43 c5 0a')) # 43 should be bytearray([Packet.POWERLINK_TERMINAL])
 
                     # 0d f4 10 00 01 04 00 55 1e 01 f7 fc 0a
                     fnoseA = 0xF7

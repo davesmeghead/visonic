@@ -137,6 +137,7 @@ class DataType(IntEnum):
     FF_PADDED_STRING = 2
     DOUBLE_LE_INT = 3
     INTEGER = 4
+    UNDEFINED_1 = 5
     STRING = 6
     SPACE_PADDED_STRING = 8
     SPACE_PADDED_STRING_LIST = 10

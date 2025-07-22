@@ -9,9 +9,7 @@ import logging
 from pyvisonic import VisonicProtocol
 
 
-#d = "02 1f 94 ff 08 00 04 00 00 00 00 ff 08 01 0f 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ff 08 02 08 01 00 00 00 00 00 00 00 ff 08 03 40 04 04 2c 0c 0c 2c 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ff 08 04 20 06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 08 05 00 13 43"
-#d = "03 1d 35 ff 01 00 01 00 ff 01 01 02 00 00 ff 01 02 01 00 ff 01 03 08 22 00 00 00 00 00 42 00 ff 01 04 04 00 00 00 00 ff 01 05 04 00 00 00 00 ff 01 0a 04 00 00 00 00 f4 43"
-d = "03 0f 0b 19 08 1e 00 0e 00 41 01 00 80 74 43"
+d = "0d b0 03 42 23 ff 08 ff 1e 1e 01 02 00 80 00 00 00 05 10 00 00 01 00 04 7e 7e 4f 18 80 0a 24 00 c8 20 00 00 00 00 00 d5 43 ef 0a"
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)
 
@@ -24,4 +22,4 @@ log.addHandler(handler)
 
 visonicProtocol = VisonicProtocol(panelConfig={}, panel_id=0, loop=None)
 visonicProtocol.setLogger(log)
-visonicProtocol.handle_msgtypeB0(bytearray.fromhex(d))
+visonicProtocol.handle_msgtype_testing(bytearray.fromhex(d))

@@ -406,7 +406,7 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         _LOGGER.info("Service Panel sensor image update called")
         client, panel = getClient(call)
         if client is not None:
-            await client.service_sensor_image(call)
+            await client.async_service_sensor_image(call)
         elif panel is not None:
             sendHANotification(f"Service sensor image update - Panel {panel} not found")
         else:
@@ -456,12 +456,12 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         supports_response=SupportsResponse.ONLY,
     )
     
-#    hass.services.async_register(
-#        DOMAIN,
-#        ALARM_SENSOR_IMAGE,
-#        service_sensor_image,
-#        schema=ALARM_SCHEMA_IMAGE,
-#    )
+    hass.services.async_register(
+        DOMAIN,
+        ALARM_SENSOR_IMAGE,
+        async_service_sensor_image,
+        schema=ALARM_SCHEMA_IMAGE,
+    )
     
     return True
 
