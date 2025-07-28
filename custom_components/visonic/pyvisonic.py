@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.2.2"
+PLUGIN_VERSION = "1.9.2.3"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -200,7 +200,7 @@ POWERLINK_RETRY_DELAY = 180
 # Number of seconds delay between not getting I'm alive messages from the panel in Powerlink Mode
 POWERLINK_IMALIVE_RETRY_DELAY = 100
 
-STANDARD_STATUS_RETRY_DELAY = 90
+STANDARD_STATUS_RETRY_DELAY = 88   # must be divisible by 4
 
 # Maximum number of seconds between the panel sending I'm alive messages
 MAX_TIME_BETWEEN_POWERLINK_ALIVE = 60
@@ -223,7 +223,7 @@ LAST_RECEIVE_DATA_TIMEOUT = 240  # 4 minutes
 
 # Interval (in seconds) to get the time and for most panels to try and set it if it's out by more than TIME_INTERVAL_ERROR seconds
 #     PowerMaster uses time interval for checking motion triggers so more critical to keep it updated
-POWERMASTER_CHECK_TIME_INTERVAL =   300  # 5 minutes  (this uses B0 messages and not DOWNLOAD panel state)
+POWERMASTER_CHECK_TIME_INTERVAL =   180  # 3 minutes  (this uses B0 messages and not DOWNLOAD panel state)  Divisible by 4
 POWERMAX_CHECK_TIME_INTERVAL    = 14400  # 4 hours    (this uses the DOWNLOAD panel state)
 TIME_INTERVAL_ERROR = 3
 
@@ -313,6 +313,7 @@ pmPanelConfig = {       #     0       1       2       3       4       5       6 
    CFG.AUTO_SYNCTIME  : (  None,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False ), # Assume 360 and 360R can auto sync time
    CFG.POWERMASTER    : (  None,  False,  False,  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False ), # Panels that use and respond to the additional PowerMaster Messages
    CFG.EPROM_DOWNLOAD : (  None,   True,   True,   True,   True,   True,   True,   True,  False,  False,  False,  False,  False,  False,  False,  False,  False,   True ), # Panel does EPROM Download (True) or can do B0 Message Download (False)
+   CFG.AB_SUPPORTED   : ( False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False,  False ), # Are AB command messages supported (without a bridge)
    CFG.INIT_SUPPORT   : (  None,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False,  False )  # Panels that support the INIT command
 }
 
@@ -376,7 +377,7 @@ pmSendMsg = {  #                        data                                    
    Send.PM_REQUEST   : VisonicCommand(convertByteArray('B0 01 99 01 05 43')                           , [Receive.POWERMASTER]       ,  True, False,      SendDebugM, 0.0, "Powermaster Request Type 1" ),       # Request a message type from the panel, change 99 with the message type
    Send.PM_REQUEST54 : VisonicCommand(convertByteArray('B0 01 54 00 43')                              , [Receive.POWERMASTER]       ,  True, False,      SendDebugM, 0.0, "Powermaster Request a 54" ),         # Request a 54 message type from the panel
    Send.PM_REQUEST58 : VisonicCommand(convertByteArray('B0 01 58 00 43')                              , [Receive.POWERMASTER]       ,  True, False,      SendDebugM, 0.0, "Powermaster Request a 58" ),         # Request a 58 message type from the panel
-   Send.PM_KEEPALIVE : VisonicCommand(convertByteArray('B0 01 6A 00 43')                              , [Receive.POWERMASTER]       ,  True, False,      SendDebugM, 0.0, "Powermaster Keep Alive Request" ),   # Request a Keep Alive from the panel
+   Send.PM_KEEPALIVE : VisonicCommand(convertByteArray('B0 01 6A 00 43')                              , None                        ,  True, False,      SendDebugM, 0.0, "Powermaster Keep Alive Request" ),   # Request a Keep Alive from the panel 6A
 
    Send.PM_SIREN_MODE: VisonicCommand(convertByteArray('B0 00 47 09 99 99 00 FF 08 0C 02 99 07 43')   , None                        ,  True, False,      SendDebugM, 0.0, "Powermaster Trigger Siren Mode" ),   # Trigger Siren, the 99 99 needs to be the usercode, other 99 is Siren Type
    Send.PM_SIREN     : VisonicCommand(convertByteArray('B0 00 3E 0A 99 99 05 FF 08 02 03 00 00 01 43'), None                        ,  True, False,      SendDebugM, 0.0, "Powermaster Trigger Siren" ),        # Trigger Siren, the 99 99 needs to be the usercode
@@ -409,6 +410,7 @@ pmSendMsgB0 = {   #                                      data  chunky paged
     B0SubType.WIRELESS_DEV_CHANNEL  : B0_SendMessageTuple(0x04,  True, False),      # 
     B0SubType.INVALID_COMMAND       : B0_SendMessageTuple(0x06, False, False),      # This isn't chunked  INVALID_COMMAND
     B0SubType.ZONE_STAT07           : B0_SendMessageTuple(0x07,  True, False),
+    B0SubType.WIRELESS_DEV_UPDATING : B0_SendMessageTuple(0x08,  True, False),      # 
     B0SubType.WIRELESS_DEV_MISSING  : B0_SendMessageTuple(0x09,  True, False),      # 
     B0SubType.TAMPER_ACTIVITY       : B0_SendMessageTuple(0x0A,  True, False),      # Mark: Tamper Activities
     B0SubType.TAMPER_ALERT          : B0_SendMessageTuple(0x0B,  True, False),      # Mark: Tamper Alert
@@ -442,7 +444,7 @@ pmSendMsgB0 = {   #                                      data  chunky paged
 
     # Not currently used, experimentation only
     B0SubType.DEVICE_COUNTS         : B0_SendMessageTuple(0x52,  True, False),
-    B0SubType.WIRED_DEVICES_53      : B0_SendMessageTuple(0x53,  True, False),      # X10_DEVICES and PGM
+    B0SubType.WIRED_DEVICES         : B0_SendMessageTuple(0x53,  True, False),      # X10_DEVICES and PGM
     B0SubType.TROUBLES              : B0_SendMessageTuple(0x54,  True, False),
     B0SubType.REPEATERS_55          : B0_SendMessageTuple(0x55,  True, False),
     B0SubType.DEVICE_INFO           : B0_SendMessageTuple(0x58,  True, False),
@@ -1026,7 +1028,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     def resetVariablesForNewConnection(self):
         self.lastRecvTimeOfPanelData = self._getUTCTimeFunction()    # Do not set to None
         self.pmCrcErrorCount = 0              # The CRC Error Count for Received Messages
-        #self.PanelMode = AlPanelMode.STARTING
+        self.PanelMode = AlPanelMode.STARTING
         # keep alive counter for the timer
         self.keep_alive_counter = 0  # only used in _sequencer
         # This is the time stamp of the last Send
@@ -1055,6 +1057,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.pmDownloadByEPROM = False
         self.KeepAlivePeriod = KEEP_ALIVE_PERIOD
         self.pmInitSupportedByPanel = False
+        self.ABMessageSupported = True
 
         self.firstCmdSent = False
         self.lastPacket = None
@@ -1085,6 +1088,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
         # Time difference between Panel and Integration 
         self.Panel_Integration_Time_Difference = None
+        self.Panel_Integration_Time_Counter = 0
 
         # The last sent message
         self._clearReceiveResponseList()
@@ -1322,10 +1326,13 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self._reset_watchdog_timeout()
         self._reset_keep_alive_messages()
         if self.PowerLinkBridgeConnected:
-            self.B0_Wanted.add(B0SubType.PANEL_STATE)        # 24
+            if self.isPowerMaster():
+                self.B0_Wanted.add(B0SubType.PANEL_STATE)        # 24
+            else:
+                self._addMessageToSendList(Send.STATUS)
         elif self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]:
             # Send RESTORE to the panel
-            self._addMessageToSendList(Send.RESTORE)  # also gives status.  This is an AB message which we can't send to POWERLINK_BRIDGED
+            self._addMessageToSendList(Send.RESTORE if self.ABMessageSupported else Send.STATUS)  # also gives status.  This is an AB message which we can't send to POWERLINK_BRIDGED
         else:
             self._addMessageToSendList(Send.STATUS)
 
@@ -1342,6 +1349,10 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
     def setTimeInPanel(self, paneltime = None):
         # To set the time in the panel we need to be in DOWNLOAD Mode
+        #     One user has lots of sensors and the messages can get a bit backed up, causing delays in getting and sending messages
+        #     This is not a problem, apart from getting and setting the time, so:
+        #          I have maded the messages to set the time IMMEDIATE so they jump the queue
+        #          I have put a counter on the diff test, the time difference has to exceed the TIME_INTERVAL_ERROR for 3 times in a row.
         t = self._getTimeFunction()
         settime = self.AutoSyncTime  # should we sync time between the HA and the Alarm Panel
         if paneltime is not None and t.year > 2000:
@@ -1352,15 +1363,21 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             if abs(d) < TIME_INTERVAL_ERROR:
                 log.debug(f"[setTimeInPanel]      Not Correcting Time in Panel as less than {TIME_INTERVAL_ERROR} seconds difference.")
                 settime = False
+                self.Panel_Integration_Time_Counter = 0
             #else:
             #    log.debug("[setTimeInPanel]      Correcting Time in Panel.")
         if settime:
-            log.debug(f"[setTimeInPanel]      Setting time in panel {t}")
-            timePdu = bytearray([t.second + 1, t.minute, t.hour, t.day, t.month, t.year - 2000])   # add about 1 seconds on as it takes over 1 to get to the panel to set it
-            # Set these as urgent to get them to the panel asap (so the time is set asap to synchronise panel and local time)
-            self._addMessageToSendList(Send.DOWNLOAD_TIME, priority = MessagePriority.URGENT, options=[ [3, convertByteArray(self.DownloadCode)] ])  
-            self._addMessageToSendList(Send.SETTIME, priority = MessagePriority.URGENT, options=[ [3, timePdu] ])
-            self._addMessageToSendList(Send.EXIT, priority = MessagePriority.URGENT)
+            self.Panel_Integration_Time_Counter = self.Panel_Integration_Time_Counter + 1
+            if self.Panel_Integration_Time_Counter > 2:  # The time difference has to exceed the TIME_INTERVAL_ERROR for 3 times in a row.
+                self.Panel_Integration_Time_Counter = 0
+                log.debug(f"[setTimeInPanel]      Setting time in panel to {t}     paneltime is currently {paneltime}")
+                timePdu = bytearray([t.second + 1, t.minute, t.hour, t.day, t.month, t.year - 2000])   # add about 1 seconds on as it takes over 1 to get to the panel to set it
+                # Set these as IMMEDIATE to get them to the panel asap (so the time is set asap to synchronise panel and local time)
+                self._addMessageToSendList(Send.DOWNLOAD_TIME, priority = MessagePriority.IMMEDIATE, options=[ [3, convertByteArray(self.DownloadCode)] ])  
+                self._addMessageToSendList(Send.SETTIME, priority = MessagePriority.IMMEDIATE, options=[ [3, timePdu] ])
+                self._addMessageToSendList(Send.EXIT, priority = MessagePriority.IMMEDIATE)
+            else:
+                log.debug(f"[setTimeInPanel]      Not Correcting Time in Panel as only exceeded {TIME_INTERVAL_ERROR} seconds difference for {self.Panel_Integration_Time_Counter} times in a row.")
 
     def _create_B0_35_Data_Request(self, taglist : list = None, strlist : str = None) -> bytearray:
         if taglist is None and strlist is None:
@@ -1472,7 +1489,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 log.debug("[_despatcher] **************************************************************************************")
 
         def checkQueuePriorityLevel():
-            if not self.SendQueue.empty():
+            if not self.isSendQueueEmpty():
                 #log.debug(f"[_despatcher]  Checking The head of the queue")
                 priority, item = self.SendQueue.peek_nowait()
                 #log.debug(f"[_despatcher]  The head of the queue is priority {priority}")
@@ -1519,7 +1536,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 # First add header (Packet.HEADER), then the packet, then crc and footer (Packet.FOOTER)
                 sData = bytearray([Packet.HEADER])
                 sData += data
-                if self.isPowerMaster() and (data[0] == 0xB0 or data[0] == 0xAB):
+                if self.isPowerMaster() and (data[0] == 0xAB):
                     sData += self._calculateCRCAlt(data)
                 else:
                     sData += self._calculateCRC(data)
@@ -1568,7 +1585,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 # calc the time interval between sending the last message and now
                 interval = self._getUTCTimeFunction() - self.pmLastTransactionTime
 
-                if len(self.pmExpectedResponse) == 0 or (not self.SendQueue.empty() and checkQueuePriorityLevel() < 2):
+                if len(self.pmExpectedResponse) == 0 or (not self.isSendQueueEmpty() and checkQueuePriorityLevel() < 2):
                     # Here when either:
                     #     The expected response list is empty so we're not waiting for a specific message to be received before sending the next
                     #             in this case the get function will block waiting
@@ -1943,29 +1960,43 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             # Only attempt to auto enrol powerlink for newer panels but not the 360 or 360R.
             #       Older panels need the user to manually enrol
             #       360 and 360R can get to Standard Plus but not Powerlink as (I assume that) they already have this hardware and panel will not support 2 powerlink connections
-            if force or (self.PanelMode == AlPanelMode.STANDARD_PLUS):
-                if force or (self.PanelType is not None and self.AutoEnrol):
-                    # Only attempt to auto enrol powerlink for newer panels. Older panels need the user to manually enrol, we should be in Standard Plus by now.
-                    log.debug("[sendMsgENROL] Trigger Powerlink Attempt, sending ENROL request to the panel")
-                    # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel,
-                    #      this should kick it in to powerlink after we just enrolled
-                    self.allowAckToTriggerRestore = True
-                    # Send enrol to the panel to try powerlink
-                    self._addMessageToSendList(Send.ENROL, priority = MessagePriority.IMMEDIATE, options=[ [4, convertByteArray(self.DownloadCode)] ])
-                elif self.PanelType is not None and self.PanelType >= 1:
-                    # Powermax+ or Powermax Pro, attempt to just send a MSG_RESTORE to prompt the panel in to taking action if it is able to
-                    log.debug("[sendMsgENROL] Trigger Powerlink Prompt attempt to a Powermax+ or Powermax Pro panel")
-                    # Prevent the receipt of a powerlink ack to then send a MSG_RESTORE to the panel,
-                    self.allowAckToTriggerRestore = False
-                    # Send a MSG_RESTORE, if it sends back a powerlink acknowledge then another MSG_RESTORE will be sent,
-                    #      hopefully this will be enough to kick the panel in to sending Receive.POWERLINK Keep-Alive
-                    self._addMessageToSendList(Send.RESTORE)
+            if self.ABMessageSupported and not self.PowerLinkBridgeConnected:
+                if force or (self.PanelMode == AlPanelMode.STANDARD_PLUS):
+                    if force or (self.PanelType is not None and self.AutoEnrol):
+                        # Only attempt to auto enrol powerlink for newer panels. Older panels need the user to manually enrol, we should be in Standard Plus by now.
+                        log.debug("[sendMsgENROL] Trigger Powerlink Attempt, sending ENROL request to the panel")
+                        # Allow the receipt of a powerlink ack to then send a MSG_RESTORE to the panel,
+                        #      this should kick it in to powerlink after we just enrolled
+                        self.allowAckToTriggerRestore = True
+                        # Send enrol to the panel to try powerlink
+                        self._addMessageToSendList(Send.ENROL, priority = MessagePriority.IMMEDIATE, options=[ [4, convertByteArray(self.DownloadCode)] ])
+                    elif self.PanelType is not None and self.PanelType >= 1:
+                        # Powermax+ or Powermax Pro, attempt to just send a MSG_RESTORE to prompt the panel in to taking action if it is able to
+                        log.debug("[sendMsgENROL] Trigger Powerlink Prompt attempt to a Powermax+ or Powermax Pro panel")
+                        # Prevent the receipt of a powerlink ack to then send a MSG_RESTORE to the panel,
+                        self.allowAckToTriggerRestore = False
+                        # Send a MSG_RESTORE, if it sends back a powerlink acknowledge then another MSG_RESTORE will be sent,
+                        #      hopefully this will be enough to kick the panel in to sending Receive.POWERLINK Keep-Alive
+                        self._addMessageToSendList(Send.RESTORE)
 
+        def update_time_check_power_master(counter : int, interval : int) -> int:
+            for u in range(4):
+                offset : int = int((u * interval) / 4)
+                update_check = ((counter + offset) % interval) == 0
+                if update_check:
+                    log.debug(f"[_sequencer] Checking Panel and Sensor State requests - {u=}  {offset=}  {update_check=}")
+                    return u
+            return -1
 
         myspecialcounter = 0
 
         await waitForTransport(200)
         reset_vars()
+        # Note that PANEL_STATE is in all of them, to get it every time
+        B0_Regular_Update_Set_List = [ { B0SubType.SENSOR_ENROL, B0SubType.ZONE_NAMES, B0SubType.ZONE_TYPES, B0SubType.DEVICE_TYPES, B0SubType.PANEL_STATE }, 
+                                       { B0SubType.TAMPER_ALERT, B0SubType.WIRELESS_DEV_MISSING, B0SubType.WIRELESS_DEV_INACTIVE, B0SubType.WIRELESS_DEV_ONEWAY, B0SubType.PANEL_STATE },
+                                       { B0SubType.ZONE_TEMPERATURE, B0SubType.TAMPER_ACTIVITY, B0SubType.ZONE_OPENCLOSE, B0SubType.PANEL_STATE },                  # B0SubType.ZONE_LUX,  LUX seems to cause problems with my PM30
+                                       { B0SubType.WIRED_STATUS_1, B0SubType.WIRED_STATUS_2, B0SubType.WIRED_DEVICES, B0SubType.PANEL_STATE } ]
         while not self.suspendAllOperations:
             try:
                 changedState = _sequencerState != _sequencerStatePrev
@@ -2440,7 +2471,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     elif _sequencerState == SequencerType.WaitingForEnrolSuccess:   ################################################################ WaitingForEnrolSuccess  ###################################################
 
                         self.keep_alive_counter = self.keep_alive_counter + 1
-                        log.debug(f"[_sequencer]     WaitingForEnrolSuccess {self.SendQueue.empty()=} {self.pmDownloadMode=} {self.keep_alive_counter=}  threshold is 15")
+                        log.debug(f"[_sequencer]     WaitingForEnrolSuccess {self.isSendQueueEmpty()=} {self.pmDownloadMode=} {self.keep_alive_counter=}  threshold is 15")
                         
                         if self.PanelType is not None and not self.AutoEnrol:
                             self.PanelMode = AlPanelMode.STANDARD_PLUS                    # Cannot AutoEnrol this panel so go straight to Std+ operation
@@ -2461,10 +2492,11 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             # once we receive a powerlink acknowledge then we wait for the I'm alive message (usually every 30 seconds from the panel)
                             self.PanelMode = AlPanelMode.STANDARD_PLUS
                             _sequencerState = SequencerType.EPROMExitDownload
-                        elif self.SendQueue.empty() and not self.pmDownloadMode and self.keep_alive_counter >= 15:  #
+                        elif self.isSendQueueEmpty() and not self.pmDownloadMode and self.keep_alive_counter >= 15:  #
                             self._reset_keep_alive_messages()
                             self._addMessageToSendList (Send.EXIT)
-                            self._addMessageToSendList (Send.ALIVE)
+                            self._addMessageToSendList(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE)  # and not self.PowerLinkBridgeConnected 
+                            #self._addMessageToSendList (Send.ALIVE)
 
                         continue   # just do the while loop
 
@@ -2479,19 +2511,13 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             #log.debug("[_sequencer] Adding lots of B0 requests to wanted list")
                             #self.B0_Wanted.update([0x20, 0x21, 0x2d, 0x1f, 0x07, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x11, 0x13, 0x14, 0x15, 0x18, 0x1a, 0x19, 0x1b, 0x1d, 0x2f, 0x31, 0x33, 0x1e, 0x24, 0x02, 0x23, 0x3a, 0x4b])
 
-                            log.debug(f"[_sequencer] Aiming for standard - Adding B0 wanted data to list")
+                            log.debug(f"[_sequencer] Aiming for Standard Mode - Adding B0 wanted data to list")
                             # Request Sensor Information and State
-                            self.B0_Wanted.add(B0SubType.ZONE_NAMES)         # 21
-                            self.B0_Wanted.add(B0SubType.ZONE_TYPES)         # 2D
-                            self.B0_Wanted.add(B0SubType.DEVICE_TYPES)       # 1F
-                            self.B0_Wanted.add(B0SubType.PANEL_STATE)        # 24
-                            self.B0_Wanted.add(B0SubType.ZONE_LAST_EVENT)    # 4B
-                            self.B0_Wanted.add(B0SubType.ZONE_OPENCLOSE)     # 18
-                            self.B0_Wanted.add(B0SubType.ZONE_TEMPERATURE)   # 3D  
-                            self.B0_Wanted.add(B0SubType.SENSOR_ENROL)       # 1D
-                            self.B0_Wanted.add(B0SubType.TAMPER_ALERT)       #
-                            self.B0_Wanted.add(B0SubType.TAMPER_ACTIVITY)    #
-                            self.B0_Wanted.add(B0SubType.SYSTEM_CAP)    #
+                            self.B0_Wanted.update(B0_Regular_Update_Set_List[0]) # WIRELESS_DEV_CHANNEL
+                            self.B0_Wanted.update(B0_Regular_Update_Set_List[1])
+                            self.B0_Wanted.update(B0_Regular_Update_Set_List[2])
+                            self.B0_Wanted.update(B0_Regular_Update_Set_List[3])
+                            self.B0_Wanted.update({B0SubType.ZONE_LAST_EVENT, B0SubType.SYSTEM_CAP})
 
                         else:    # PowerMax get ZONE_NAMES, ZONE_TYPES etc
                             self._addMessageToSendList(Send.ZONENAME)
@@ -2502,7 +2528,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         # Put all the special standard mode things here
                         # Keep alive functionality
                         self.keep_alive_counter = self.keep_alive_counter + 1
-                        if self.SendQueue.empty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
+                        if self.isSendQueueEmpty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
                             self._reset_keep_alive_messages()
                             self._addMessageToSendList (Send.STATUS_SEN)
 
@@ -2528,9 +2554,10 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         # Put all the special standard plus mode things here
                         # Keep alive functionality
                         self.keep_alive_counter = self.keep_alive_counter + 1
-                        if self.SendQueue.empty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
+                        if self.isSendQueueEmpty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
                             self._reset_keep_alive_messages()
-                            self._addMessageToSendList (Send.ALIVE)
+                            self._addMessageToSendList(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE) # and not self.PowerLinkBridgeConnected 
+                            #self._addMessageToSendList (Send.ALIVE)
                             #if self.PanelType is not None and not self.AutoEnrol:
                             #    self.PanelMode = AlPanelMode.STANDARD_PLUS             # should already be but just to make sure
                             #    _sequencerState = SequencerType.EPROMExitDownload
@@ -2569,15 +2596,25 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             self._reportProblem(AlTerminationType.NO_POWERLINK_FOR_PERIOD)
                             continue   # just do the while loop
 
-                        if self.SendQueue.empty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
+                        if self.isSendQueueEmpty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
                             # Every self.KeepAlivePeriod seconds, unless watchdog has been reset
                             self._reset_keep_alive_messages()
                             # Send I'm Alive to the panel so it knows we're still here
-                            self._addMessageToSendList (Send.ALIVE)
+                            self._addMessageToSendList(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE) # and not self.PowerLinkBridgeConnected 
+                            #self._addMessageToSendList (Send.ALIVE)
 
                     elif _sequencerState == SequencerType.DoingPowerlinkBridge:     ################################################################ DoingPowerlinkBridge    ###################################################
 
                         if self.PowerLinkBridgeConnected:
+                            # Keep alive functionality
+                            self.keep_alive_counter = self.keep_alive_counter + 1    # This is for me sending to the panel
+                            if self.isSendQueueEmpty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
+                                # Every self.KeepAlivePeriod seconds, unless watchdog has been reset
+                                self._reset_keep_alive_messages()
+                                # Send I'm Alive to the panel so it knows we're still here
+                                self._addMessageToSendList(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE) # and not self.PowerLinkBridgeConnected 
+                                #self._addMessageToSendList (Send.ALIVE)
+
                             if self.PowerLinkBridgeStealth:
                                 log.debug("[_sequencer] Sending commands to Bridge to exit stealth and get status")
                                 command = 2   # Stealth command
@@ -2692,30 +2729,23 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     # If Std+ or PL then periodically check and then maybe update the time in the panel
                     if self.AutoSyncTime and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
 
-                        panel_check_time = POWERMASTER_CHECK_TIME_INTERVAL if self.isPowerMaster() else POWERMAX_CHECK_TIME_INTERVAL
-                        update_check_interval = (counter % panel_check_time == 0
-                                                or  (counter % 10 == 0
-                                                    and (self.Panel_Integration_Time_Difference is None 
-                                                        or (self.Panel_Integration_Time_Difference is not None
-                                                            and abs(self.Panel_Integration_Time_Difference.total_seconds()) > 5)
-                                                        )
+                        int_diff_interval = (counter % 10 == 0
+                                                and (self.Panel_Integration_Time_Difference is None 
+                                                    or (self.Panel_Integration_Time_Difference is not None
+                                                        and abs(self.Panel_Integration_Time_Difference.total_seconds()) > 5)
                                                     )
                                                 )
-                        
+
                         if self.isPowerMaster():
                             # PowerMaster Panels
-                            if update_check_interval:
-                                # Request Sensor Information and State
-                                #      remember that self.B0_Wanted is a set so can only be added once
-                                log.debug("[_sequencer] Adding Panel and Sensor State requests - Set A")
-                                self.B0_Wanted.update({B0SubType.SENSOR_ENROL, B0SubType.ZONE_NAMES, B0SubType.ZONE_TYPES, B0SubType.DEVICE_TYPES, B0SubType.PANEL_STATE, B0SubType.ZONE_OPENCLOSE, B0SubType.WIRED_STATUS_1, 0x53})
-                            
-                            elif (counter + (POWERMASTER_CHECK_TIME_INTERVAL / 2)) % POWERMASTER_CHECK_TIME_INTERVAL == 0:
-                                # Request Sensor Information and State
-                                #      remember that self.B0_Wanted is a set so can only be added once
-                                log.debug("[_sequencer] Adding Panel and Sensor State requests - Set B")
-                                self.B0_Wanted.update({B0SubType.ZONE_TEMPERATURE, B0SubType.TAMPER_ALERT, B0SubType.TAMPER_ACTIVITY, B0SubType.WIRELESS_DEV_MISSING, B0SubType.WIRELESS_DEV_INACTIVE, B0SubType.WIRELESS_DEV_ONEWAY, B0SubType.WIRED_STATUS_2}) # WIRELESS_DEV_CHANNEL
-                        elif update_check_interval: # counter % POWERMAX_CHECK_TIME_INTERVAL 
+                            if int_diff_interval:
+                                log.debug(f"[_sequencer] Adding Panel and Sensor State requests - Set 0 due to int_diff_interval")
+                                self.B0_Wanted.update(B0_Regular_Update_Set_List[0])  # the objective is to get the panel time, B0SubType.PANEL_STATE, so could use any of the lists as they all have it
+                            elif (u := update_time_check_power_master(counter, POWERMASTER_CHECK_TIME_INTERVAL)) >= 0:
+                                log.debug(f"[_sequencer] Adding Panel and Sensor State requests - Set {u}")
+                                self.B0_Wanted.update(B0_Regular_Update_Set_List[u])
+
+                        elif counter % POWERMAX_CHECK_TIME_INTERVAL == 0 or int_diff_interval: # counter % POWERMAX_CHECK_TIME_INTERVAL 
                             # PowerMax Panels
                             # We set the time and then check it periodically, and then set it again if different by more than 5 seconds
                             #     every 4 hours (approx) or if not set yet or a big difference (set from B0 data)
@@ -2725,17 +2755,9 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     elif self.PanelMode in [AlPanelMode.STANDARD]:
                         if self.isPowerMaster():
                             # PowerMaster Panels
-                            if (counter % STANDARD_STATUS_RETRY_DELAY) == 0:
-                                # Request Sensor Information and State
-                                #      remember that self.B0_Wanted is a set so can only be added once
-                                log.debug("[_sequencer] Adding Panel and Sensor State requests - Set A")
-                                self.B0_Wanted.update({B0SubType.SENSOR_ENROL, B0SubType.ZONE_NAMES, B0SubType.ZONE_TYPES, B0SubType.DEVICE_TYPES, B0SubType.PANEL_STATE, B0SubType.ZONE_OPENCLOSE})
-                            
-                            elif (counter + (STANDARD_STATUS_RETRY_DELAY / 2)) % STANDARD_STATUS_RETRY_DELAY == 0:
-                                # Request Sensor Information and State
-                                #      remember that self.B0_Wanted is a set so can only be added once
-                                log.debug("[_sequencer] Adding Panel and Sensor State requests - Set B")
-                                self.B0_Wanted.update({B0SubType.ZONE_TEMPERATURE, B0SubType.TAMPER_ALERT, B0SubType.TAMPER_ACTIVITY, B0SubType.WIRELESS_DEV_MISSING, B0SubType.WIRELESS_DEV_INACTIVE, B0SubType.WIRELESS_DEV_ONEWAY}) # WIRELESS_DEV_CHANNEL
+                            if (u := update_time_check_power_master(counter, STANDARD_STATUS_RETRY_DELAY)) >= 0:
+                                log.debug(f"[_sequencer] Adding Panel and Sensor State requests - Set {u}")
+                                self.B0_Wanted.update(B0_Regular_Update_Set_List[u])
 
                         elif (counter % STANDARD_STATUS_RETRY_DELAY) == 0:
                             # PowerMax Panels
@@ -2772,13 +2794,13 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 #self._emptySendQueue(pri_level = 1)
                                 dotrigger = True
                             case PanelErrorStates.DownloadRetryReceived:
-                                log.debug(f"[_sequencer] Received a Download Retry and dont know why {str(s)}")
+                                log.debug(f"[_sequencer] Received a Download Retry and dont know why")
                                 dotrigger = True
                             case PanelErrorStates.DespatcherException:
                                 # restart the despatcher task
                                 self.startDespatcher()
                             case PanelErrorStates.BeeZeroInvalidCommand:
-                                log.debug(f"[_sequencer] Received a BeeZeroInvalidCommand {str(s)}")
+                                log.debug(f"[_sequencer] Received a BeeZeroInvalidCommand")
                             case _:
                                 log.debug(f"[_sequencer] Received an unexpected panel error state and dont know why {str(s)}")
                                 dotrigger = True
@@ -2850,8 +2872,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     if self.isPowerMaster() and self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]: # not AlPanelMode.MINIMAL_ONLY
                         tnow = self._getTimeFunction()
                         diff = (tnow - _last_B0_wanted_request_time).total_seconds()
-                        if diff >= 5: # every 5 seconds (or more) do an update
-                            if len(self.B0_Waiting) > 0:  # have we received the data that we last asked for
+                        if self.isSendQueueEmpty() and diff >= 10: # There must be at least 10 seconds between subsequent requests
+                            if len(self.B0_Waiting) > 0:  # have we received the data that we last asked for last time
                                 log.debug(f"[_sequencer] ****************************** Waiting For B0_Waiting **************************** {toStringList(self.B0_Waiting)}")
                                 self.B0_Wanted.update(self.B0_Waiting) # ask again for them
                             if len(self.B0_Wanted) > 0:
@@ -3173,7 +3195,9 @@ class PacketHandling(ProtocolBase):
     def _updateSensor(self, sensor) -> bool:
         
         def getPanelStringName(zonename):
-            if len(self.PanelSettings[PanelSetting.ZoneNameString]) == 21 and len(self.PanelSettings[PanelSetting.ZoneCustNameStr]) == 10 and 0 <= zonename <= 30:
+            if len(self.PanelSettings[PanelSetting.ZoneCustNameStr]) == 31 and 0 <= zonename <= 30:
+                return self.getPanelSetting(PanelSetting.ZoneCustNameStr, zonename)
+            elif len(self.PanelSettings[PanelSetting.ZoneNameString]) == 21 and len(self.PanelSettings[PanelSetting.ZoneCustNameStr]) == 10 and 0 <= zonename <= 30:
                 return self.getPanelSetting(PanelSetting.ZoneNameString, zonename) if zonename <= 20 else self.getPanelSetting(PanelSetting.ZoneCustNameStr, zonename - 21)
             log.debug(f"[_updateSensor]    getPanelStringName  NOT OK, got missing data       {zonename=}    {len(self.PanelSettings[PanelSetting.ZoneNameString])=}    {len(self.PanelSettings[PanelSetting.ZoneCustNameStr])=}")
             log.debug(f"[_updateSensor]               {self.PanelSettings[PanelSetting.ZoneNameString]}")
@@ -3199,7 +3223,7 @@ class PacketHandling(ProtocolBase):
 
         if enrolled is None or not enrolled:
             if sensor in self.SensorList:
-                log.info(f"[_updateSensor]       Removing sensor Z{(sensor+1):0>2} as it is not enrolled in Panel EPROM Data")
+                log.info(f"[_updateSensor]       Removing sensor Z{(sensor+1):0>2} as it is not enrolled in Panel EPROM Data or B0 Enrolled Data")
                 if self.onNewSensorHandler is not None:
                     self.onNewSensorHandler(False, self.SensorList[sensor])
                 del self.SensorList[sensor]
@@ -3435,6 +3459,7 @@ class PacketHandling(ProtocolBase):
                     self.AutoSyncTime = pmPanelConfig[CFG.AUTO_SYNCTIME][self.PanelType]
                     self.KeepAlivePeriod = pmPanelConfig[CFG.KEEPALIVE][self.PanelType]
                     self.pmInitSupportedByPanel = pmPanelConfig[CFG.INIT_SUPPORT][self.PanelType]
+                    self.ABMessageSupported = pmPanelConfig[CFG.AB_SUPPORTED][self.PanelType]
                     self.pmDownloadByEPROM = FORCE_DOWNLOAD_TO_USE_EPROM or self.pmForceDownloadByEPROM or pmPanelConfig[CFG.EPROM_DOWNLOAD][self.PanelType]
                     
                     self.PanelCapabilities[IndexName.REPEATERS] = pmPanelConfig[CFG.REPEATERS][self.PanelType]
@@ -3782,9 +3807,9 @@ class PacketHandling(ProtocolBase):
                     for j in range(len(s)):
                         x10Enabled = x10Enabled or s[j][i] != DISABLE_TEXT    # look for this X10 device in all 9 EPROM settings to see if it's used in any way
 
-                    x10Name = x10Names[i] & 0x1F   # PGM needs to be set by x10Enabled.  x10Names[0] i.e. PGM this is 0xFF
+                    x10Name = x10Names[i] & 0x1F   # Ensure in range 0 to 31
 
-                    if x10Enabled or (self.PanelType >= 3 and x10Name != 0x1F) or (self.PanelType < 3 and x10Name != 0x00):   # For some reason the PowerMax+ sets the x10Names array to 0 by default
+                    if x10Enabled or x10Name != 0x1F:   # 
                         x10Location = pmZoneName[x10Name]
                         x10Type = "dimmer"            # Assume PGM is onoff switch, all other devices are dimmer Switches
                         if i in self.SwitchList:
@@ -3915,8 +3940,11 @@ class PacketHandling(ProtocolBase):
 
     def _handle_msgtype(self, packet, processAB, processNormalData, processB0, processDownload) -> bool:
 
+        if len(packet) < 4:
+            return False
+
         pushchange = False
-        log.debug(f"[_processReceivedPacket] {processAB=} {processB0=} {processNormalData=} {processDownload=}")
+        log.debug(f"[_processReceivedPacket] {Receive(packet[1]).name if packet[1] in Receive else f'Unknown Message Type {packet[1]}' } {processAB=} {processB0=} {processNormalData=} {processDownload=}")
 
         # Leave this here as it needs to be created dynamically to create the condition and message columns
         DecodeMessage = collections.namedtuple('DecodeMessage', 'condition, func, pushchange, message')
@@ -3972,11 +4000,12 @@ class PacketHandling(ProtocolBase):
         #log.debug(f"[handle_msgtype02] Ack Received  data = {toString(data)}")
 
         processAB = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]
+        self._reset_watchdog_timeout()
         if processAB and len(data) > 0 and data[0] == Packet.POWERLINK_TERMINAL:
             self.receivedPowerlinkAcknowledge = True
             if self.allowAckToTriggerRestore:
-                log.debug("[handle_msgtype02]        Received a powerlink acknowledge, I am in STANDARD_PLUS mode and sending MSG_RESTORE")
-                self._addMessageToSendList(Send.RESTORE)
+                log.debug(f"[handle_msgtype02]        Received a powerlink acknowledge, I am in {self.PanelMode.name} mode and sending Message {'RESTORE' if self.ABMessageSupported else 'STATUS'}") #  and not self.PowerLinkBridgeConnected
+                self._addMessageToSendList(Send.RESTORE if self.ABMessageSupported else Send.STATUS)   # and not self.PowerLinkBridgeConnected 
                 self.allowAckToTriggerRestore = False
 
     def handle_msgtype06(self, data):
@@ -4437,7 +4466,9 @@ class PacketHandling(ProtocolBase):
 
             if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS]:
                 self._reset_keep_alive_messages()
-                self._addMessageToSendList(Send.ALIVE)       # The Powerlink module sends this when it gets an i'm alive from the panel.
+                # A panel connected via the bridge should not be sending AB keep alive messages, but process it just in case!
+                self._addMessageToSendList(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE) # and not self.PowerLinkBridgeConnected 
+                #self._addMessageToSendList (Send.ALIVE)       # The Powerlink module sends this when it gets an i'm alive from the panel.
 
             if self.PanelMode == AlPanelMode.STANDARD_PLUS:
                 log.debug("[handle_msgtypeAB]         Got alive message while Powerlink mode pending, going to full powerlink and calling Restore")
@@ -4536,36 +4567,39 @@ class PacketHandling(ProtocolBase):
         # 02 - Closed (need to check timestamp)
         # 03 - Motion (need to check timestamp)
         # 04 - CheckedIn?  As in device checked in.     
-        if sensor in self.SensorList and (code == 0 or code == 4):
-            self.SensorList[sensor].statuslog = trigger
-        elif sensor in self.SensorList and code >= 1:
-            triggered = False
-            if self.Panel_Integration_Time_Difference is not None:  # Can only be True if AB messages are processed, therefore Std+ or Powerlink
-                tolerance = 4 # seconds
-                panelTime = t + self.Panel_Integration_Time_Difference
-                diff = abs((trigger - panelTime).total_seconds())
-                log.debug(f"[_decode_4B]           Sensor Updated = {sensor:>2}  timenow = {t}  self.Panel_Integration_Time_Difference {self.Panel_Integration_Time_Difference.total_seconds()}    diff {diff}     panelTime {panelTime}     trigger {trigger}")
-                triggered = diff <= tolerance
-
-            else:
-                log.debug(f"[_decode_4B]           Sensor Updated = {sensor:>2}  trigger {trigger}")
-                triggered = self.SensorList[sensor].statuslog is None or (trigger - self.SensorList[sensor].statuslog) >= timedelta(milliseconds=500)
-
-            if triggered:
-                log.debug(f"[_decode_4B]           Sensor Updated = {sensor:>2}  code {code}     trigger {trigger}")
-                if code == 1:
-                    self.SensorList[sensor].do_status(True)
-                elif code == 2:
-                    self.SensorList[sensor].do_status(False)
-                elif code == 3:
-                    self.SensorList[sensor].do_trigger(True)
-                else:
-                    log.debug("[_decode_4B]          ***************************** Sensor Updated with an unused code *****************************")
-                log.debug(f"[_decode_4B]                  my time {self.SensorList[sensor].triggertime}    panels time {trigger}")
-
+        if sensor in self.SensorList:
+            if code in [0,4]:
                 self.SensorList[sensor].statuslog = trigger
+            elif code in [1,2,3]:
+                triggered = False
+                if self.Panel_Integration_Time_Difference is not None:  # Can only be True if AB messages are processed, therefore Std+ or Powerlink
+                    tolerance = 4 # seconds
+                    panelTime = t + self.Panel_Integration_Time_Difference
+                    diff = abs((trigger - panelTime).total_seconds())
+                    log.debug(f"[_decode_4B]           Sensor Updated = {sensor:>2}  timenow = {t}  self.Panel_Integration_Time_Difference {self.Panel_Integration_Time_Difference.total_seconds()}    diff {diff}     panelTime {panelTime}     trigger {trigger}")
+                    triggered = diff <= tolerance
+
+                else:
+                    log.debug(f"[_decode_4B]           Sensor Updated = {sensor:>2}  trigger {trigger}")
+                    triggered = self.SensorList[sensor].statuslog is None or (trigger - self.SensorList[sensor].statuslog) >= timedelta(milliseconds=500)
+
+                if triggered:
+                    log.debug(f"[_decode_4B]           Sensor Updated = {sensor:>2}  code {code}     trigger {trigger}")
+                    if code == 1:
+                        self.SensorList[sensor].do_status(True)
+                    elif code == 2:
+                        self.SensorList[sensor].do_status(False)
+                    elif code == 3:
+                        self.SensorList[sensor].do_trigger(True)
+                    else:
+                        log.debug("[_decode_4B]          ***************************** Sensor Updated with an unused code *****************************")
+                    log.debug(f"[_decode_4B]                  my time {self.SensorList[sensor].triggertime}    panels time {trigger}")
+
+                    self.SensorList[sensor].statuslog = trigger
+                else:
+                    log.debug(f"[_decode_4B]           Sensor {sensor:>2} Not Updated as Timestamp the same   code {code}     sensor time {trigger}     {self.SensorList[sensor].statuslog}")
             else:
-                log.debug(f"[_decode_4B]           Sensor {sensor:>2} Not Updated as Timestamp the same =  code {code}     sensor time {trigger}     {self.SensorList[sensor].statuslog}")
+                log.debug(f"[_decode_4B]           Abnormal: Sensor {sensor:>2} Not Updated as data code {code} not known")
 
     def settings_data_type_formatter( self, data_type: int, data: bytes, data_item_size: int = 16, byte_size: int = 1, no_of_entries: int = 1 ) -> int | str | bytearray:
         """Format data for 35 and 42 data."""
@@ -5110,7 +5144,7 @@ class PacketHandling(ProtocolBase):
                 if ch.length >= zoneCnt:
                     for i in range(zoneCnt):
                         if i in self.SensorList and ch.data[i] != 255:
-                            temp = -40.5 + (ch.data[i] / 2)
+                            temp = (ch.data[i] / 2) - 40.5
                             log.debug(f"[handle_msgtypeB0]            Zone {i+1} has temperature raw value {ch.data[i]}     temp={temp}")
                             self.SensorList[i].updateTemperature(temp)
 

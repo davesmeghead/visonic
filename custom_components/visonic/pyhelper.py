@@ -447,11 +447,21 @@ class AlSensorDeviceHelper(AlSensorDevice):
         # The pushchange function calls the sensors onchange function so it should have already seen triggered and status values, so we can reset triggered
         self.triggered = False
 
-    def updateLux(self, l):
-        self.luminance = l
+    def updateLux(self, val) -> bool:
+        if val is not None and self.luminance != val:
+            log.debug(f"[updateLux]   Lux old {self.luminance}   new {val}")
+            self.luminance = val
+            self.pushChange(AlSensorCondition.LUX)
+            return True # The value has changed
+        return False # The value has not changed
 
-    def updateTemperature(self, t):
-        self.temperature = t
+    def updateTemperature(self, val) -> bool:
+        if val is not None and self.temperature != val:
+            # log.debug(f"[updateTemperature]   Temperature old {self.temperature}   new {val}")
+            self.temperature = val
+            self.pushChange(AlSensorCondition.TEMPERATURE)
+            return True # The value has changed
+        return False # The value has not changed
 
     def getLux(self):
         return self.luminance

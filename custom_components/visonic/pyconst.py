@@ -296,6 +296,8 @@ class AlSensorCondition(AlEnum):
     CAMERA = AlIntEnum(10)
     ARMED = AlIntEnum(11)
     RESTORE = AlIntEnum(12)
+    TEMPERATURE = AlIntEnum(13)
+    LUX = AlIntEnum(14)
 a = AlSensorCondition()
 
 # List of sensor types

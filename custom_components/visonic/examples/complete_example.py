@@ -19,6 +19,7 @@ from enum import Enum
 from pyvisonic import VisonicProtocol
 import socket
 from inspect import currentframe, getframeinfo, stack
+from functools import partial
 
 # Try to import aconsole, if it fails then print an error message
 try:
@@ -278,6 +279,10 @@ class VisonicClient:
 
     def _initialise(self):
         pass
+
+    def createNotification(self, message: str):
+        """Create a message in the log file and a notification on the HA Frontend."""
+        print(f"Notification: {message}")
 
     def onSensorChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
         if self.process_sensor is not None:
@@ -597,10 +602,7 @@ class VisonicClient:
             # Set all variables to their defaults, this means that no connection has been made
             self._initialise()
 
-            self.createNotification(
-                AvailableNotifications.CONNECTION_PROBLEM,
-                f"Failed to connect into Visonic Alarm Panel {self.getPanelID()}. Check Your Network and the Configuration Settings."
-            )
+            self.createNotification(f"Failed to connect into Visonic Alarm Panel {self.getPanelID()}. Check Your Network and the Configuration Settings.")
             print("Giving up on trying to connect, sorry")
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
@@ -608,6 +610,9 @@ class VisonicClient:
             
         self.doingReconnect = None
         return False
+        
+    def getPanelID(self):
+        return args.panel
 
     async def async_connect(self, force=True) -> bool:
         """Connect to the alarm panel using the pyvisonic library."""
@@ -641,10 +646,7 @@ class VisonicClient:
                 self.visonicProtocol = None
                     
             except (ConnectTimeout, HTTPError) as ex:
-                createNotification(
-                    AvailableNotifications.CONNECTION_PROBLEM,
-                    "Visonic Panel Connection Error: {ex}<br />"
-                    "You will need to restart hass after fixing.")
+                self.createNotification("Visonic Panel Connection Error: {ex}<br />You will need to restart hass after fixing.")
 
         if not self.SystemStarted and self.visonicProtocol is not None:
             print("........... Shutting Down Protocol")
@@ -1030,7 +1032,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                             mode=str(ar[1].strip()).lower()
                             setConnectionMode(mode)
                         console.clear_output()
-                        console.print("Attempting connection, mode is " + str(connection_mode))
+                        console.print("Attempting connection, demanded mode is " + str(connection_mode))
                         console.print("")
                         success = await client.connect()
                         if success:

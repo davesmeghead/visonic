@@ -117,7 +117,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.1.2"
+CLIENT_VERSION = "0.12.1.4"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -1834,17 +1834,19 @@ class VisonicClient:
             """Create the Socket Connection to the Device in the Panel"""
             try:
                 #self.logstate_debug(f"Setting TCP socket Options {address} {port}")
+                self.logstate_debug("Creating TCP Connection, Creating socket and setting socket options")
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
                 sock.setblocking(1)  # Set blocking to on, this is the default but just make sure
                 sock.settimeout(1.0)  # set timeout to 1 second to flush the receive buffer
+                self.logstate_debug("Creating TCP Connection, Making Connection")
                 sock.connect((address, port))
 
                 # Flush the buffer, receive any data and dump it
                 try:
                     dummy = sock.recv(10000)  # try to receive 10000 bytes
-                    self.logstate_debug("Buffer Flushed and Received some data!")
+                    self.logstate_debug("Creating TCP Connection, Buffer Flushed and Received some data!")
                 except socket.timeout:  # fail after 1 second of no activity
                     #self.logstate_debug("Buffer Flushed and Didn't receive data! [Timeout]")
                     pass
@@ -1868,16 +1870,18 @@ class VisonicClient:
                 # Create the Protocol Handler for the Panel, also handle Powerlink connection inside this protocol handler
                 cvp = ClientVisonicProtocol(vp=vp, client=self)
                 # create the connection to the panel as an asyncio protocol handler and then set it up in a task
-                coro = self.hass.loop.create_connection(cvp, sock=sock)
-                self.logstate_debug("The coro type is " + str(type(coro)) + "   with value " + str(coro))
+                conn = self.hass.loop.create_connection(cvp, sock=sock)
+                self.logstate_debug(f"Creating TCP Connection, the coro type is {type(conn)}  with value {conn}")
                 # Wrap the coroutine in a task to add it to the asyncio loop
-                vTask = self.hass.loop.create_task(coro)
+                vTask = self.hass.loop.create_task(conn)
                 # Return the task and protocol
+                self.logstate_debug(f"Creating TCP Connection success, returning Task and Protocol")
                 return vTask, cvp
 
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
-            pass
+            self.logstate_warning(f"Creating TCP Connection, TCP Connection Exception {ex}")
+        self.logstate_info(f"Creating TCP Connection problem, returning not-connected condition")
             
         return None, None
 
@@ -1886,11 +1890,13 @@ class VisonicClient:
         self.tell_em = thisisme
 
     # Create a connection using asyncio through a linux port (usb or rs232)
-    async def async_create_usb_visonic_connection(self, vp : VisonicProtocol, path, baud=str(DEFAULT_DEVICE_BAUD)):
+    async def async_create_usb_visonic_connection(self, vp : VisonicProtocol, path, baud_s=str(DEFAULT_DEVICE_BAUD)):
         """Create Visonic manager class, returns rs232 transport coroutine."""
         from serial_asyncio import create_serial_connection
 
-        self.logstate_debug("Setting USB Options")
+        # setup serial connection
+        baud = int(baud_s)
+        self.logstate_debug(f"Creating USB Connection {path=} {baud=}")
 
         # use default protocol if not specified
         protocol = partial(
@@ -1899,14 +1905,11 @@ class VisonicClient:
             client=self,
         )
 
-        # setup serial connection
-        path = path
-        baud = int(baud)
         try:
             self.tell_em = None
             # create the connection to the panel as an asyncio protocol handler and then set it up in a task
             conn = create_serial_connection(self.hass.loop, protocol, path, baud)
-            #self.logstate_debug("The coro type is " + str(type(conn)) + "   with value " + str(conn))
+            self.logstate_debug(f"Creating USB Connection, the coro type is {type(conn)}  with value {conn}")
             vTask = self.hass.loop.create_task(conn)
             if vTask is not None:
                 ctr = 0
@@ -1915,10 +1918,14 @@ class VisonicClient:
                     ctr = ctr + 1
                 if self.tell_em is not None:
                     # Return the task and protocol
+                    self.logstate_debug(f"Creating USB Connection success, returning Task and Protocol")
                     return vTask, self.tell_em
+                else:
+                    self.logstate_debug(f"Creating USB Connection failure, returning not-connected condition")
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
-            self.logstate_debug(f"Setting USB Options Exception {ex}")
+            self.logstate_warning(f"Creating USB Connection, USB Connection Exception {ex}")
+        self.logstate_info(f"Creating USB Connection problem, returning not-connected condition")
         return None, None
 
     async def _async_connect_comms(self) -> bool:
@@ -1940,7 +1947,7 @@ class VisonicClient:
             elif device_type == DEVICE_TYPE_USB:
                 path = self.config.get(CONF_PATH, "COM0")
                 baud_rate = self.config.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD)
-                (self.visonicCommsTask, self.cvp) = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud=baud_rate)
+                (self.visonicCommsTask, self.cvp) = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud_s=baud_rate)
             retval = self.cvp is not None and self.visonicCommsTask is not None
         return retval
 
@@ -2074,8 +2081,14 @@ class VisonicClient:
                     else:
                         self.logstate_debug(f"........... async_panel_stop, self.myPanelEventCoordinator of unknown type {type(self.myPanelEventCoordinator)}")
 
-                self.logstate_debug(f"........... async_panel_stop, unloading platforms")
-                success = await self.hass.config_entries.async_unload_platforms(self.entry, PLATFORMS)
+                # check to see if an Alarm Panel Entity has been loaded in to HA
+                d = self.entry.runtime_data.dispatchers.get(Platform.ALARM_CONTROL_PANEL, None)
+                if d is None:
+                    self.logstate_debug(f"........... async_panel_stop, not unloading platforms as none loaded")
+                    success = True
+                else:
+                    self.logstate_debug(f"........... async_panel_stop, unloading platforms")
+                    success = await self.hass.config_entries.async_unload_platforms(self.entry, PLATFORMS)
 
                 # Shutdown the protocol handler and any tasks it uses
                 if self.visonicProtocol is not None:
