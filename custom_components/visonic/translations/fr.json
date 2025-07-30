@@ -764,6 +764,9 @@
 							"true": "Oui"
 						}
 					},
+					"battery_level": {
+						"name": "Niveau de batterie"
+					},
 					"memory": {
 						"name": "Alerte en m\u00e9moire de la centrale",
 						"state": {

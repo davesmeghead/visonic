@@ -764,6 +764,9 @@
 							"true": "Ja"
 						}
 					},
+					"battery_level": {
+						"name": "Batterijniveau"
+					},
 					"memory": {
 						"name": "Paneel Alarm in geheugen",
 						"state": {

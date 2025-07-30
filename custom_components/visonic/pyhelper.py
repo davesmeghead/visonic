@@ -893,7 +893,7 @@ class PartitionStateClass:
         self.PanelState = AlPanelStatus.UNKNOWN
         self.PanelReady = False
         self.PanelTamper = False
-        self.PanelBattery = False
+        self.PanelBattery = True              # Assume battery in panel is OK until a message changes it
         self.PanelAlertInMemory = False
         self.PanelBypass = False
         self.SirenActive = False
@@ -914,7 +914,7 @@ class PartitionStateClass:
         datadict[EventDataEnum.BYPASS]  = self.PanelBypass
         if FullSet:
             datadict[EventDataEnum.TAMPER]  = self.PanelTamper
-            datadict[EventDataEnum.BATTERY] = self.PanelBattery
+            datadict[EventDataEnum.BATTERY] = 100 if self.PanelBattery else 0
             datadict[EventDataEnum.ALARM]   = self.PanelAlarmStatus.name.lower()
         return datadict
 

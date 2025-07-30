@@ -128,7 +128,7 @@ class EventDataEnum(StrEnum):
     BYPASS  = "bypass"
     ALARM   = "alarm" 
     TROUBLE = "trouble"
-    BATTERY = "battery"
+    BATTERY = "battery_level"
 
 @unique
 class DataType(IntEnum):

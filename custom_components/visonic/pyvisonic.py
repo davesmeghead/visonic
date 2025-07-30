@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.2.3"
+PLUGIN_VERSION = "1.9.2.4"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -4023,6 +4023,8 @@ class PacketHandling(ProtocolBase):
         log.debug(f"[handle_msgtype08] Access Denied  len {len(data)} data {toString(data)}")
         self.AccessDeniedReceived = True
         self.AccessDeniedMessage = self.pmLastSentMessage
+        if len(data) > 0 and data[0] == Packet.POWERLINK_TERMINAL:
+            log.debug(f"[handle_msgtype08]        Access Denied  from a Powerlink 0x43 command")
 
     def handle_msgtype0B(self, data):  # LOOPBACK TEST SUCCESS, STOP COMMAND (0x0B) IS THE FIRST COMMAND SENT TO THE PANEL WHEN THIS INTEGRATION STARTS
         """ Handle LOOPBACK """
