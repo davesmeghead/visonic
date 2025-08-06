@@ -162,6 +162,7 @@ type VisonicConfigEntry = ConfigEntry[VisonicConfigData]
 @dataclass
 class VisonicConfigData:
     client: object
+    alarm_entity: None      # This is the alarm control entity that is first created.  For multi partiton panels, this is changed to be the overall control entity.
     sensors: list()
     dispatchers: dict()
     # Made it a class just in case I want to include more parameters in future

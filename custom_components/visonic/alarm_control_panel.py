@@ -55,23 +55,27 @@ async def async_setup_entry(
     #_LOGGER.debug(f"[async_setup_entry] start")
 
     @callback
-    def async_add_alarm() -> None:
+    def async_add_alarm(main_one : bool = False) -> None:
         """Add Visonic Alarm Panel."""
         entities: list[Entity] = []
         client: VisonicClient = entry.runtime_data.client
 
         p = client.getPartitionsInUse()
 
-        if p is None or (p is not None and len(p) == 1):
-            entities.append(VisonicAlarm(hass = hass, client = client, partition = None))
-        elif len(p) > 1:
-            entities.append(VisonicAlarm(hass = hass, client = client, partition = 0))                         # EXPERIMENTAL
+        if main_one and entry.runtime_data.alarm_entity is None: #  or p is None or (p is not None and len(p) == 1):
+            entry.runtime_data.alarm_entity = VisonicAlarm(hass = hass, client = client, partition = None)
+            entities.append(entry.runtime_data.alarm_entity)
+            _LOGGER.debug(f"[async_setup_entry] adding main entity for panel {client.getPanelID()}")
+        elif entry.runtime_data.alarm_entity is not None and p is not None and len(p) > 1:
+            _LOGGER.debug(f"[async_setup_entry] updating main alarm control panel entity for partition set {p}")
+            entry.runtime_data.alarm_entity.resetPartition(0)
             for i in p:
                 if i != 0:
                     entities.append(VisonicAlarm(hass = hass, client = client, partition = i))
+            _LOGGER.debug(f"[async_setup_entry] adding alarm control panel entities for partition set {p}")
 
-        _LOGGER.debug(f"[async_setup_entry] adding entity for partition {p}")
-        async_add_entities(entities, True)
+        if len(entities) > 0:
+            async_add_entities(entities, True)
 
     entry.runtime_data.dispatchers[ALARM_PANEL_DOMAIN] = async_dispatcher_connect(hass, f"{DOMAIN}_{entry.entry_id}_add_{ALARM_PANEL_DOMAIN}", async_add_alarm )
     #_LOGGER.debug("[async_setup_entry] exit")
@@ -91,30 +95,28 @@ class VisonicAlarm(AlarmControlPanelEntity):
         """Initialize a Visonic security alarm."""
         self.hass = hass
         self._client = client
-
         self._mystate = AlarmControlPanelState.DISARMED
-#        self._device_state_attributes = {}
-#        self._users = {}
-#        self._doneUsers = False
         self._last_triggered = None
+        self.resetPartition(partition)
+        self._client.onChange(callback = self.onClientChange)
 
+    def resetPartition(self, partition : int | None):
         if partition is None:
             self._partition = None           # When partitions are not used then we only use partition 1 for panel state
             self._partitionSet = {1, 2, 3}   # When partitions are not used then we command (Arm, Disarm etc) all partitions
-            self._myname = client.getAlarmPanelUniqueIdent()
-            _LOGGER.debug(f"[VisonicAlarm] Initialising alarm control panel {self._myname}    panel {self._client.getPanelID()}")
+            self._myname = self._client.getAlarmPanelUniqueIdent()
+            _LOGGER.debug(f"[VisonicAlarm] Setting primary alarm control panel {self._myname}    panel {self._client.getPanelID()}")
         elif partition == 0:                 # EXPERIMENTAL
             self._partition = 0              # When partitions are not used then we only use partition 1 for panel state
             self._partitionSet = {1, 2, 3}   # When partitions are not used then we command (Arm, Disarm etc) all partitions
-            self._myname = client.getAlarmPanelUniqueIdent()
-            _LOGGER.debug(f"[VisonicAlarm] Initialising alarm control panel {self._myname}    panel {self._client.getPanelID()}")
+            self._myname = self._client.getAlarmPanelUniqueIdent()
+            _LOGGER.debug(f"[VisonicAlarm] Setting alarm control panel {self._myname}    panel {self._client.getPanelID()}")
         else:
             self._partition = partition
             self._partitionSet = { partition }
-            self._myname = client.getAlarmPanelUniqueIdent() + " Partition " + str(partition)
-            _LOGGER.debug(f"[VisonicAlarm] Initialising alarm control panel {self._myname}    panel {self._client.getPanelID()}  Partition {self._partition}")
-
-        client.onChange(callback = self.onClientChange, partition = partition, panel_entity_name = self._myname)
+            self._myname = self._client.getAlarmPanelUniqueIdent() + " Partition " + str(partition)
+            _LOGGER.debug(f"[VisonicAlarm] Setting alarm control panel {self._myname}    panel {self._client.getPanelID()}  Partition {self._partition}")
+        self._client.setPartitionNaming(partition = partition, panel_entity_name = self._myname)
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""

@@ -165,5 +165,4 @@ class VisonicSwitch(SwitchEntity):
         attr["type"] = self._visonic_device.getType()
         attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()
         attr[PANEL_ATTRIBUTE_NAME] = self._panel
-        #        attr["State"] = "on" if self.is_on() else "off"
         return attr

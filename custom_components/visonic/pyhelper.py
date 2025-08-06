@@ -622,29 +622,6 @@ class AlSwitchDeviceHelper(AlSwitchDevice):
     def isOn(self) -> bool:
         return self.state #
 
-"""
-    def fromJSON(self, decode):
-        if "enabled" in decode:
-            self.enabled = toBool(decode["enabled"])
-        if "type" in decode:
-            self.type = titlecase(decode["type"])
-        if "location" in decode:
-            self.location = titlecase(decode["location"])
-        if "state" in decode:
-            s = AlX10Command.value_of(decode["state"].upper())
-            self.state = (s == AlX10Command.ON or s == AlX10Command.BRIGHTEN or s == AlX10Command.DIMMER)
-
-    def toJSON(self) -> dict:
-        dd=json.dumps({
-             #"name": str(switch.createFriendlyName()),
-             "id": self.getDeviceID(),
-             "enabled": self.isEnabled(),
-             "type": str(self.getType()),
-             "location": str(self.getLocation()),
-             "state":  "On" if self.state else "Off" })  # , ensure_ascii=True
-        return dd
-"""
-
 class ImageRecord:
     # The details of an individual image
     
@@ -1116,9 +1093,9 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         return self.PanelModel
 
     def getPanelMode(self) -> AlPanelMode:
-        if not self.suspendAllOperations:
-            return self.PanelMode
-        return AlPanelMode.UNKNOWN
+        if self.suspendAllOperations:
+            self.PanelMode = AlPanelMode.STOPPED
+        return self.PanelMode
 
     def isSirenActive(self) -> (bool, AlSensorDevice | None):
         if not self.suspendAllOperations:

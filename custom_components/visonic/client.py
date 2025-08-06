@@ -117,7 +117,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.1.5"
+CLIENT_VERSION = "0.12.1.6"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -410,7 +410,7 @@ class VisonicClient:
         
         #self.loaded_platforms = set()
         
-        self.onChangeHandler = []
+        self.onChangeHandler = set()
         
         self.panel_entity_name = {}
 
@@ -901,8 +901,8 @@ class VisonicClient:
                     self.logstate_debug("Creating Sensor for Alarm indications")
                     await self._setupVisonicEntity(SENSOR_DOMAIN)
                 else:
-                    self.logstate_debug("Creating Alarm Panel Entity")
-                    await self._setupVisonicEntity(ALARM_PANEL_DOMAIN)
+                    self.logstate_debug("Creating Any Alarm Panel Partition Entities")
+                    await self._setupVisonicEntity(ALARM_PANEL_DOMAIN, False)
                     await self._setupVisonicEntity(SIREN_DOMAIN)
 
     def onNewSensor(self, create : bool, sensor: AlSensorDevice):
@@ -958,12 +958,14 @@ class VisonicClient:
                 # The connection to the panel allows interaction with the sensor, including asking to get the image from a camera
                 await self._setupVisonicEntity(IMAGE_DOMAIN, sensor)
 
-    def onChange(self, callback : Callable, partition : int | None = None, panel_entity_name : str | None = None):
+    def onChange(self, callback : Callable):
+        self.onChangeHandler.add(callback)
+
+    def setPartitionNaming(self, partition : int | None = None, panel_entity_name : str | None = None):
         if panel_entity_name is not None and partition is not None and 1 <= partition <= 3:
             #if partition is None:
             #    partition = 1
             self.panel_entity_name[partition] = panel_entity_name
-        self.onChangeHandler.append(callback)
 
     def _fireHAEvent(self, event_id: AlCondition | PanelCondition, datadictionary: dict):
         # Check to ensure variables are set correctly
@@ -1936,7 +1938,7 @@ class VisonicClient:
         if self.visonicProtocol is not None:
             self.visonicProtocol.resetVariablesForNewConnection()
             # Get Visonic specific configuration.
-            device_type = self.config.get(CONF_DEVICE_TYPE, "")     # This must be set so default to an invalid setting
+            device_type = self.config.get(CONF_DEVICE_TYPE, "")     # This must be set so default is an invalid setting
             self.logstate_debug("Comms Device Type is %s", device_type)
             self.cvp = None
             self.visonicCommsTask = None
@@ -2129,6 +2131,11 @@ class VisonicClient:
                     if await self._async_connect_comms():
                         # Connection to the panel has been initially successful
                         self.logstate_debug("........... connection made")
+
+                        if not self.DisableAllCommands:
+                            self.logstate_debug("Creating Main Alarm Panel Entity to report state")
+                            await self._setupVisonicEntity(ALARM_PANEL_DOMAIN, True)
+                        
                         self._fireHAEvent(event_id = PanelCondition.CONNECTION, datadictionary = {"state": "connected", "attempt": attemptCounter + 1})
                         return True
                     # Failed so set up for next loop around

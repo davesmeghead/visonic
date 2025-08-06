@@ -172,7 +172,7 @@ a = AlConfiguration()
 # The set of panel modes
 class AlPanelMode(AlEnum):
     UNKNOWN = AlIntEnum(0)
-    PROBLEM = AlIntEnum(1)
+#    PROBLEM = AlIntEnum(1)
     STARTING = AlIntEnum(2)
     STANDARD = AlIntEnum(3)
     STANDARD_PLUS = AlIntEnum(4)

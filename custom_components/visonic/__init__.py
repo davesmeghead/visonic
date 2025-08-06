@@ -523,7 +523,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
         client = VisonicClient(hass, panel_id, conf, entry)
 
         # save the client and its task
-        hass.data.setdefault(VisonicConfigKey, {})[entry.entry_id] = entry.runtime_data = VisonicConfigData(client, list(), dict())
+        hass.data.setdefault(VisonicConfigKey, {})[entry.entry_id] = entry.runtime_data = VisonicConfigData(client, None, list(), dict())
 
         totalAttempts = int(conf.get(CONF_RETRY_CONNECTION_COUNT, 0))
 

@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.2.4"
+PLUGIN_VERSION = "1.9.2.5"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -1043,7 +1043,11 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         ########################################################################
         # Global Variables that define the overall panel status
         ########################################################################
-        self.PanelMode = AlPanelMode.STARTING
+        self.resetVariablesForNewConnection()
+        # Timestamp of the last received data from the panel. If this remains set to none then we have a comms problem
+        #   Override to None from what resetVariablesForNewConnection sets it to
+        self.lastRecvTimeOfPanelData = None
+        self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
 
         # Set when the panel details have been received i.e. a 3C message
         self.pmGotPanelDetails = False
@@ -1090,18 +1094,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.Panel_Integration_Time_Difference = None
         self.Panel_Integration_Time_Counter = 0
 
-        # The last sent message
-        self._clearReceiveResponseList()
-
-        # Timestamp of the last received data from the panel. If this remains set to none then we have a comms problem
-        self.lastRecvTimeOfPanelData = None
-
-        # This is the time stamp of the last Send
-        self.pmLastTransactionTime = self._getUTCTimeFunction() - timedelta(seconds=1)  # take off 1 second so the first command goes through immediately
-
-        # This is the time stamp of the CRC error
-        self.pmFirstCRCErrorTime = self._getUTCTimeFunction() - timedelta(seconds=1)    # take off 1 second so the first command goes through immediately
-
         # When to stop trying to download the EPROM
         self.StopTryingDownload = False
 
@@ -1133,19 +1125,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         # When trying to connect in powerlink from the timer loop, this allows the receipt of a powerlink ack to trigger a MSG_RESTORE
         self.allowAckToTriggerRestore = False
         self.receivedPowerlinkAcknowledge = False
-
-        ########################################################################
-        # Variables that are only used in handle_received_message function
-        ########################################################################
-        self.pmIncomingPduLen = 0             # The length of the incoming message
-        self.pmCrcErrorCount = 0              # The CRC Error Count for Received Messages
-        self.pmCurrentPDU = pmReceiveMsg[0]   # The current receiving message type
-        self.pmFlexibleLength = 0             # How many bytes less then the proper message size do we start checking for Packet.FOOTER and a valid CRC
-        # The receive byte array for receiving a message
-        self.ReceiveData = bytearray(b"")
-
-        # keep alive counter for the timer
-        self.keep_alive_counter = 0  # only used in _sequencer
 
         self.epromManager = EPROMManager()
 
@@ -1992,7 +1971,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
         await waitForTransport(200)
         reset_vars()
-        # Note that PANEL_STATE is in all of them, to get it every time
+        oldPanelMode = self.PanelMode
+        # Note that PANEL_STATE is in all of them, to get it every time        
         B0_Regular_Update_Set_List = [ { B0SubType.SENSOR_ENROL, B0SubType.ZONE_NAMES, B0SubType.ZONE_TYPES, B0SubType.DEVICE_TYPES, B0SubType.PANEL_STATE }, 
                                        { B0SubType.TAMPER_ALERT, B0SubType.WIRELESS_DEV_MISSING, B0SubType.WIRELESS_DEV_INACTIVE, B0SubType.WIRELESS_DEV_ONEWAY, B0SubType.PANEL_STATE },
                                        { B0SubType.ZONE_TEMPERATURE, B0SubType.TAMPER_ACTIVITY, B0SubType.ZONE_OPENCLOSE, B0SubType.PANEL_STATE },                  # B0SubType.ZONE_LUX,  LUX seems to cause problems with my PM30
@@ -2015,6 +1995,12 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     counter = counter + 1 if counter < a_day - 1 else 0  # reset the counter 24 hours (approx), has to be < so 4 hour delays are OK
 
                 _sequencerStatePrev = _sequencerState
+                
+                # If the panel mode has changed then push an update through
+                if oldPanelMode != self.PanelMode:
+                    log.debug(f"[_sequencer] Panel Mode changed from {oldPanelMode} to {self.PanelMode}" )
+                    self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
+                oldPanelMode = self.PanelMode
 
                 if not self.suspendAllOperations:  ## To make sure as it could have changed in the 1 second sleep
 
@@ -2271,6 +2257,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 log.debug("[Controller] ************************************* Going to standard mode ***************************************")
                                 _sequencerState = SequencerType.AimingForStandard
                         else:
+                            self.epromManager.reset()
                             # Populate the full list of EPROM blocks
                             self.myDownloadList = self.epromManager.populatEPROMDownload(self.isPowerMaster())
                             # Send the first EPROM block to the panel to retrieve
@@ -3910,18 +3897,18 @@ class PacketHandling(ProtocolBase):
         oldState = statelist() # make it a function so if it's changed it remains consistent
         oldPowerMaster = self.PowerMaster
 
-        if self.PanelMode == AlPanelMode.PROBLEM and not self.PowerLinkBridgeConnected:
-            # A PROBLEM indicates that there has been a response timeout (either normal or trying to get to powerlink)
-            # However, we have clearly received a packet so put the panel mode back to MINIMAL_ONLY, Standard or StandardPlus and wait for a powerlink response from the panel
-            if self.DisableAllCommands:
-                log.debug("[Standard Mode] Entering MINIMAL_ONLY Mode")
-                self.PanelMode = AlPanelMode.MINIMAL_ONLY
-            elif self.pmDownloadComplete and not self.ForceStandardMode and self.gotValidUserCode():
-                log.debug("[_processReceivedPacket] Had a response timeout PROBLEM but received a data packet so entering Standard Plus Mode")
-                self.PanelMode = AlPanelMode.STANDARD_PLUS
-            else:
-                log.debug("[_processReceivedPacket] Had a response timeout PROBLEM but received a data packet and entering Standard Mode")
-                self.PanelMode = AlPanelMode.STANDARD
+        #if self.PanelMode == AlPanelMode.PROBLEM and not self.PowerLinkBridgeConnected:
+        #    # A PROBLEM indicates that there has been a response timeout (either normal or trying to get to powerlink)
+        #    # However, we have clearly received a packet so put the panel mode back to MINIMAL_ONLY, Standard or StandardPlus and wait for a powerlink response from the panel
+        #    if self.DisableAllCommands:
+        #        log.debug("[Standard Mode] Entering MINIMAL_ONLY Mode")
+        #        self.PanelMode = AlPanelMode.MINIMAL_ONLY
+        #    elif self.pmDownloadComplete and not self.ForceStandardMode and self.gotValidUserCode():
+        #        log.debug("[_processReceivedPacket] Had a response timeout PROBLEM but received a data packet so entering Standard Plus Mode")
+        #        self.PanelMode = AlPanelMode.STANDARD_PLUS
+        #    else:
+        #        log.debug("[_processReceivedPacket] Had a response timeout PROBLEM but received a data packet and entering Standard Mode")
+        #        self.PanelMode = AlPanelMode.STANDARD
 
         #processAB         = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]
         processAB         = not self.pmDownloadMode and not self.ForceStandardMode and self.PanelMode not in [AlPanelMode.POWERLINK_BRIDGED]
@@ -4499,7 +4486,7 @@ class PacketHandling(ProtocolBase):
                 log.debug(f"[handle_msgtypeAB] PowerLink Phone: Unknown Action {hex(data[1]).upper()}")
 
         elif subType == 10 and data[2] == 0 and self.PanelMode == AlPanelMode.POWERLINK:
-            log.debug(f"[handle_msgtypeAB] PowerLink telling us what the code {data[3]} {data[4]} is for downloads, currently not used as I'm not certain of this, and never seen it")
+            log.debug(f"[handle_msgtypeAB] PowerLink telling us what the code {hex(data[3]).upper()} {hex(data[4]).upper()} is for downloads, currently not used as I'm not certain of this, and never seen it")
 
         elif subType == 10 and data[2] == 1:
             if self.PanelMode == AlPanelMode.POWERLINK:
@@ -5517,7 +5504,7 @@ class PacketHandling(ProtocolBase):
                 self.ignoreF4DataMessages = True   # Ignore 0x05 data packets
                 self.ImageManager.terminateImage()
 
-            elif self.PanelMode == AlPanelMode.UNKNOWN or self.PanelMode == AlPanelMode.PROBLEM or self.PanelMode == AlPanelMode.STARTING or self.PanelMode == AlPanelMode.DOWNLOAD or self.PanelMode == AlPanelMode.STOPPED:
+            elif self.PanelMode in [AlPanelMode.UNKNOWN, AlPanelMode.STARTING, AlPanelMode.DOWNLOAD, AlPanelMode.STOPPED]: # AlPanelMode.PROBLEM, 
                 # 
                 log.debug(f"[handle_msgtypeF4]        PanelMode is {self.PanelMode} so not processing F4 data")
                 self.image_ignore.add(zone)        # Prevent the user being able to ask for this zone again until we've cleared all the current data
