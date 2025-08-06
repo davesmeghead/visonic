@@ -8,8 +8,8 @@ sys.path.insert(1000000,parentdir)
 import logging
 from pyvisonic import VisonicProtocol
 
-
-d = "0d b0 03 42 23 ff 08 ff 1e 1e 01 02 00 80 00 00 00 05 10 00 00 01 00 04 7e 7e 4f 18 80 0a 24 00 c8 20 00 00 00 00 00 d5 43 ef 0a"
+#    0d b0 03 24 22 ff 08 ff 1d 07 00 00 00 22 00 00 00 0a 06 0c 05 08 19 14 03 03 00 87 00 00 00 87 00 00 00 05 00 00 45 43 be 0a
+d = "0d b0 03 0f 0f 07 08 0f 00 00 01 43 03 00 87 00 87 00 05 40 43 31 0a"
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)
 

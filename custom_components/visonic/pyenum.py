@@ -42,8 +42,9 @@ class SEQUENCE(IntEnum):
 @unique
 class RAW(IntEnum):
     BITS = 1
-    BYTES = 8
-    WORDS = 16
+    BYTE = 8
+    WORD = 16
+    LONG_WORD = 32
     FIVE_BYTE = 40
     TEN_BYTE = 80
     UNDEFINED = 1000
@@ -192,6 +193,7 @@ class EVENT_TYPE(IntEnum):
     FIRE = 0x20
     FIRE_RESTORE = 0x21
     EMERGENCY = 0x23
+    EMERGENCY_RESTORE = 0x24            # Unconfirmed
     LOW_BATTERY = 0x29
     LOW_BATTERY_RESTORE = 0x2A
     AC_FAIL = 0x2B
@@ -410,8 +412,12 @@ class B0SubType(Enum):
     TRIGGERED_ZONE = auto()
     ASSIGNED_PARTITION = auto()
     SYSTEM_CAP = auto()
-    PANEL_STATE = auto()           # Seems to send panel state with zone data, but zone data is weird
+    PANEL_STATE_1 = auto()         # Seems to send panel state with zone data, but zone data is weird
     PANEL_STATE_2 = auto()         # Seems to send panel state without zone data
+    PANEL_STATE_3 = auto()         # Used for Panic, Emergency and Fire data from the panel
+    PANEL_STATE_4 = auto()
+    PANEL_STATE_5 = auto()
+    PANEL_STATE_6 = auto()
     PANEL_SETTINGS_35 = auto()
     PANEL_SETTINGS_42 = auto()
     EVENT_LOG = auto()

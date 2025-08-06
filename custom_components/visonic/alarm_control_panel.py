@@ -107,7 +107,7 @@ class VisonicAlarm(AlarmControlPanelEntity):
             self._myname = self._client.getAlarmPanelUniqueIdent()
             _LOGGER.debug(f"[VisonicAlarm] Setting primary alarm control panel {self._myname}    panel {self._client.getPanelID()}")
         elif partition == 0:                 # EXPERIMENTAL
-            self._partition = 0              # When partitions are not used then we only use partition 1 for panel state
+            self._partition = 0              # When partitions are not used then we only use partition 0 for panel state
             self._partitionSet = {1, 2, 3}   # When partitions are not used then we command (Arm, Disarm etc) all partitions
             self._myname = self._client.getAlarmPanelUniqueIdent()
             _LOGGER.debug(f"[VisonicAlarm] Setting alarm control panel {self._myname}    panel {self._client.getPanelID()}")
@@ -201,12 +201,13 @@ class VisonicAlarm(AlarmControlPanelEntity):
 
     def update(self) -> None:
         """Get the state of the device."""
-        #_LOGGER.debug(f"alarm control panel update {self.entity_id=}")
+        #_LOGGER.debug(f"[update] {self.entity_id=}")
         self._mystate = AlarmControlPanelState.DISARMED
         self._device_state_attributes = {}
 
         if self._client is not None and self.isPanelConnected():
-            isa, _ = self._client.isSirenActive()
+            isa, dev = self._client.isSirenActive(self._partition)
+            #_LOGGER.debug(f"[update] {self.entity_id=}  {self._partition=}  {isa=}   {dev=}")
             if isa:
                 self._mystate = AlarmControlPanelState.TRIGGERED
             else:
@@ -215,15 +216,16 @@ class VisonicAlarm(AlarmControlPanelEntity):
                     self._mystate = map_panel_status_to_ha_status[armcode]
 
             stat = self._client.getPanelStatusDict(self._partition)
-            #_LOGGER.debug(f"stat {stat}")
+            #_LOGGER.debug(f"[update] stat {stat}")
 
             data = None
             if self._partition is None or self._partition == 0:
                 data = self._client.getClientStatusDict()
                 if TEXT_LAST_EVENT_NAME in stat and len(stat[TEXT_LAST_EVENT_NAME]) > 2:
                     self._last_triggered = stat[TEXT_LAST_EVENT_NAME]
+                    #_LOGGER.debug(f"[update] {self._last_triggered=}")
 
-            #_LOGGER.debug(f"data {data}")
+            #_LOGGER.debug(f"[update] {self._mystate=}")
                 
             if data is not None and stat is not None:
                 self._device_state_attributes = {**stat, **data}

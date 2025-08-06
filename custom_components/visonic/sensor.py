@@ -156,7 +156,8 @@ class VisonicSensor(Entity):
         self._attr_extra_state_attributes = {}
 
         if self.isPanelConnected():
-            isa, _ = self._client.isSirenActive()
+            ptu = self._client.getPartitionsInUse()
+            isa, _ = self._client.isSirenActive(None if ptu is None else 0)
             if isa:
                 self._attr_state = AlarmControlPanelState.TRIGGERED
             else:

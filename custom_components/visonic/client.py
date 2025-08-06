@@ -11,6 +11,7 @@ from functools import partial
 import threading
 import collections
 from collections import namedtuple
+import contextlib
 
 from enum import IntEnum
 from requests import ConnectTimeout, HTTPError
@@ -117,7 +118,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.1.6"
+CLIENT_VERSION = "0.12.2.0"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -284,10 +285,10 @@ class PanelEventCoordinator:
                     return
                 if self.EventName == 0 and data[PE_NAME] != 0:
                     # The existing name is 0 (i.e. system) and the new name is better so replace it
-                    self.logstate_debug(f"[EC] Replacing 'system' with {data["name"]} but keeping original time {self.EventTime}")
-                    self.EventName = data["name"]
+                    self.logstate_debug(f"[EC] Replacing 'system' with {data[PE_NAME]} but keeping original time {self.EventTime}")
+                    self.EventName = data[PE_NAME]
                     #self.EventTime = data[PE_TIME]
-                    return
+                    #return
                 # Here when the existing name and the new name are different and both non-zero
                 #   Send the previous and replace with the new
                 self._send_and_replace(data)
@@ -548,13 +549,7 @@ class VisonicClient:
     #        return self.visonicProtocol.dumpStateToStringList()
     #    return []
 
-    def isSirenActive(self) -> (bool, AlSensorDevice | None):
-        """Is the siren active."""
-        if self.visonicProtocol is not None:
-            return self.visonicProtocol.isSirenActive()
-        return (False, None)
-
-    def isPanelReady(self, partition : int ) -> bool:
+    def isPanelReady(self, partition : int | None = None ) -> bool:
         """Is panel ready"""
         if self.visonicProtocol is not None:
             return self.visonicProtocol.isPanelReady(partition)
@@ -613,6 +608,12 @@ class VisonicClient:
         """Is it Remote Disarm"""
         return self.toBool(self.config.get(CONF_ENABLE_REMOTE_DISARM, False))
 
+    def isSirenActive(self, partition : int | None = None) -> (bool, AlSensorDevice | None):
+        """Is the siren active."""
+        if self.visonicProtocol is not None:
+            return self.visonicProtocol.isSirenActive(partition)
+        return (False, None)
+
     def getPanelStatus(self, partition : int | None = None) -> AlPanelStatus:
         """Get the panel status code."""
         if self.visonicProtocol is not None:
@@ -643,7 +644,6 @@ class VisonicClient:
                 include_extended_status = self.toBool(self.config.get(CONF_EPROM_ATTRIBUTES, False))
             pd = self.visonicProtocol.getPanelStatusDict(partition, include_extended_status)
             if partition is None or partition == 0:
-                #self.logstate_debug(f"Client Dict {pd}")
                 #pd["lastevent"] = self.PanelLastEventName + "/" + self.PanelLastEventAction
                 pd[TEXT_LAST_EVENT_NAME] = self.PanelLastEventName
                 pd[TEXT_LAST_EVENT_ACTION] = self.PanelLastEventAction
@@ -1156,8 +1156,9 @@ class VisonicClient:
         #if event_id == AlCondition.PANEL_UPDATE and self.getPanelMode() == AlPanelMode.POWERLINK:
         #    # Powerlink Mode
         #    self.printAllEntities()
-
-        if event_id == AlCondition.PANEL_UPDATE and self.visonicProtocol is not None and self.visonicProtocol.isSirenActive()[0]:
+        
+        isa, _ = self.isSirenActive()
+        if event_id == AlCondition.PANEL_UPDATE and isa:
             self.createNotification(AvailableNotifications.SIREN, "Siren is Sounding, Alarm has been Activated" )
         elif event_id == AlCondition.PANEL_RESET:
             self.createNotification(AvailableNotifications.RESET, "The Panel has been Reset" )
@@ -1212,7 +1213,13 @@ class VisonicClient:
                     self.myPanelEventCoordinator.addEvent(data)
 
                 elif len(data) == 3 and isinstance(self.myPanelEventCoordinator, dict):
-                    self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   nothing done as message length indicates a single partition but we know there's multiple")
+                    #self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   nothing done as message length indicates a single partition but we know there's multiple")
+                    for p in range(4):
+                        if p in self.myPanelEventCoordinator:
+                            self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   processing event through 1st valid partition which is {p}")
+                            self.myPanelEventCoordinator[p].setIsPowerMaster(self.isPowerMaster())
+                            self.myPanelEventCoordinator[p].addEvent(data)
+                            break
                     
                 else:
                     self.logstate_warning(f"[onPanelChangeHandler] Cannot translate panel event log data {data}")
@@ -1371,8 +1378,8 @@ class VisonicClient:
                 if forcedKeypad:
                     return False, None   # use keypad so invalidate the return, there should be a valid 4 code code
                 return True, None    # Usercode
-            elif panelmode == AlPanelMode.DOWNLOAD or panelmode == AlPanelMode.STARTING:  # No need to output to log file when starting or downloading EPROM as this is normal operation
-                return False, None # Return invalid as panel downloading EPROM
+            elif panelmode == AlPanelMode.DOWNLOAD or panelmode == AlPanelMode.STOPPED or panelmode == AlPanelMode.STARTING:  # No need to output to log file when starting or downloading EPROM as this is normal operation
+                return False, None # Return invalid as panel downloading EPROM, stopped or starting
             else:
                 # If the panel mode is UNKNOWN, PROBLEM.
                 self.logstate_warning(f"Warning: Valid 4 digit PIN not found, panelmode is {panelmode}")
@@ -1883,7 +1890,7 @@ class VisonicClient:
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
             self.logstate_warning(f"Creating TCP Connection, TCP Connection Exception {ex}")
-        self.logstate_info(f"Creating TCP Connection problem, returning not-connected condition")
+        self.logstate_info(f"Creating TCP has a Connection problem, returning not-connected condition")
             
         return None, None
 
@@ -2098,7 +2105,7 @@ class VisonicClient:
                     
                 self.killMyDispatchers(self.entry)
             
-            # Reset all variables, include setting self.SystemStarted to False
+            # Reset all variables, include setting self.SystemStarted to False and self.visonicProtocol to None
             self._initialise()
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
@@ -2115,6 +2122,9 @@ class VisonicClient:
                 _LOGGER.debug(f"[killMyDispatchers]  {p=}  Success")
             else:
                 _LOGGER.debug(f"[killMyDispatchers]  {p=}  Not Done")
+        # Reset the run time data parameters, keep client (and the dispatchers are all kept but set to None above)
+        entry.runtime_data.alarm_entity = None
+        entry.runtime_data.sensors = list()
 
     async def async_connect(self, force=True) -> bool:
         """Connect to the alarm panel using the pyvisonic library."""
@@ -2145,9 +2155,16 @@ class VisonicClient:
                     if attemptCounter < self.totalAttempts:
                         self.logstate_debug(f"........... connection attempt delay {self.delayBetweenAttempts} seconds")
                         try:
-                            await asyncio.sleep(self.delayBetweenAttempts)
+                            for i in range(int(self.delayBetweenAttempts)):
+                                await asyncio.sleep(1.0)
+                                if self.visonicProtocol is None:
+                                    # The connection has been stopped
+                                    return False
                         except:
                             self.logstate_debug(f"........... connection attempt delay exception")
+                    if self.visonicProtocol is None:
+                        # The connection has been stopped
+                        return False
 
                 await self.async_panel_stop()
                 # Set all variables to their defaults, this means that no connection has been made
@@ -2171,8 +2188,14 @@ class VisonicClient:
             try:
                 #self.logstate_debug(f"[async_connect]       async_forward_entry_setups")
                 # Call this before connecting to the panel to set up the platforms
-                await self.hass.config_entries.async_forward_entry_setups( self.entry, PLATFORMS )
-                #self.logstate_debug(f"[async_connect]       async_forward_entry_setups done")
+                
+                self.logstate_debug(f"[async_connect] Client connecting.....      async_forward_entry_setups")
+                try:
+                    with contextlib.suppress(ValueError):
+                        await self.hass.config_entries.async_forward_entry_setups(self.entry, PLATFORMS )
+                except ValueError:
+                    self.logstate_debug(f"[async_connect] Client connecting.....      Trapped ValueError Setups")  # do nothing!
+                self.logstate_debug(f"[async_connect] Client connecting.....      async_forward_entry_setups done")
 
                 self.visonicProtocol = VisonicProtocol(panelConfig=self.getConfigData(), panel_id=self.panelident, loop=self.hass.loop)
                 
@@ -2191,20 +2214,36 @@ class VisonicClient:
                     self.SystemStarted = True
                     return True
 
-                self.visonicProtocol = None
-                _LOGGER.debug(f"........... connection unsuccessful, unloading platforms")
-                self.killMyDispatchers(self.entry)
+                #integration = loader.async_get_loaded_integration(self.hass, DOMAIN)
+                #self.logstate_debug(f"Client not connecting.....   platforms_are_loaded = {integration.platforms_are_loaded(PLATFORMS)}")
+                
+                # The platforms do not initially exist, but after a reload they already exist
+                #platforms = ep.async_get_platforms(self.hass, DOMAIN)
+                #self.logstate_debug(f"Client not connecting.....         platforms {platforms}")
+                #fred = loader.async_get_issue_integration(self.hass, DOMAIN)
+                #self.logstate_debug(f"Client async_get_issue_integration .....         fred is {fred}")
+
+                if self.visonicProtocol is not None:
+                    self.visonicProtocol.shutdownOperation()
+                    self.killMyDispatchers(self.entry)
+                    self._initialise()
+                else:
+                    self.logstate_debug(f"........... connection unsuccessful, assume that integration has been unloaded by user (and therefore async_panel_stop has been called)")
+                #with contextlib.suppress(ValueError):
                 unload_ok = await self.hass.config_entries.async_unload_platforms(self.entry, PLATFORMS)
+                if unload_ok:
+                    self.logstate_debug(f"************* platforms unloaded ***************")
+                else:
+                    self.logstate_debug(f"************* platforms not unloaded ***********")
                     
             except (ConnectTimeout, HTTPError) as ex:
                 createNotification(
                     AvailableNotifications.CONNECTION_PROBLEM,
-                    "Visonic Panel Connection Error: {ex}<br />"
-                    "You will need to restart hass after fixing.")
+                    "Visonic Panel Connection Error: {ex}<br />You will need to restart hass after fixing.")
 
         if not self.SystemStarted and self.visonicProtocol is not None:
             self.logstate_debug("........... Shutting Down Protocol")
             self.visonicProtocol.shutdownOperation()
-            self.visonicProtocol = None
+            self._initialise()
         return False
 

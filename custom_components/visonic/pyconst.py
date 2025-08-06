@@ -544,7 +544,7 @@ class AlPanelInterface(ABC):
         pass
 
     @abstractmethod
-    def isSirenActive(self) -> (bool, AlSensorDevice | None):
+    def isSirenActive(self, partition : int | None = None) -> (bool, AlSensorDevice | None):
         """ Is the siren active. """
         return (False, None)
 
@@ -576,15 +576,15 @@ class AlPanelInterface(ABC):
         """ Get the panel ready state """
         return False
 
-    @abstractmethod
-    def getPanelTrouble(self, partition : int) -> AlTroubleType:
-        """ Get the panel trouble state """
-        return AlTroubleType.UNKNOWN
+    #@abstractmethod
+    #def getPanelTrouble(self, partition : int) -> AlTroubleType:
+    #    """ Get the panel trouble state """
+    #    return AlTroubleType.UNKNOWN
 
-    @abstractmethod
-    def isPanelBypass(self, partition : int) -> bool:
-        """ Get the panel bypass state """
-        return False
+    #@abstractmethod
+    #def isPanelBypass(self, partition : int) -> bool:
+    #    """ Get the panel bypass state """
+    #    return False
 
     #@abstractmethod
     #def getPanelLastEvent(self) -> (str, str, str):

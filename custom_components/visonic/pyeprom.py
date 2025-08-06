@@ -236,7 +236,8 @@ pmDecodePanelSettings = {                   #  show count  type     poff psize p
 
 #    "LogEventStr"      : SettingsCommand( SDumpy,160,"STRING",0xED00, 128,  16,    -1,  "Log Event Strings",                  {} ),   # Zone String Types e.g 
 
-    "AlarmLED"             : SettingsCommand( SDumpy, 64, "BYTE",  49250,   8,   1,    -1,  "Alarm LED, PowerMaster",             {} ),   # This is the Alarm LED On/OFF settings for Motion Sensors -> Dev Settings --> Alarm LED
+    "AlarmLED10"           : SettingsCommand( SDumpy, 64, "BYTE",  49250,   8,   1,    -1,  "Alarm LED, PowerMaster 10",          {} ),   # This is the Alarm LED On/OFF settings for Motion Sensors -> Dev Settings --> Alarm LED
+    "AlarmLED30"           : SettingsCommand( SDumpy, 64, "BYTE",  49735,   8,   1,    -1,  "Alarm LED, PowerMaster 30",          {} ),   # This is the Alarm LED On/OFF settings for Motion Sensors -> Dev Settings --> Alarm LED
     EPROM.ZONE_DEL_MAS     : SettingsCommand( SDumpy, 64, "BYTE",  49542,  16,   2,    -1,  "Zone Delay, PowerMaster",            {} )    # This is the Zone Delay settings for Motion Sensors -> Dev Settings --> Disarm Activity  
 }
 # 'show count type poff psize pstep pbitoff name values'
@@ -531,7 +532,7 @@ class EPROMManager:
 
         return retval
 
-    def lookupEpromSingle(self, key : EPROM | SettingsCommand ):
+    def lookupEpromSingle(self, key : EPROM | SettingsCommand | str ):
         v = self.lookupEprom(key)
         if len(v) >= 1:
             return v[0]

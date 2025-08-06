@@ -77,11 +77,6 @@ pmPanelIgnoreSet = ( EVENT_TYPE.ALARM_DELAY_RESTORE, EVENT_TYPE.CONFIRM_ALARM, E
 # These 2 dictionaries are subsets of pmLogEvent_t
 pmPanelAlarmType_t = {
    EVENT_TYPE.NONE              : AlAlarmType.NONE,
-   EVENT_TYPE.ALARM_INTERIOR    : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_PERIMETER   : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_DELAY       : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_SILENT_24H  : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_AUDIBLE_24H : AlAlarmType.INTRUDER,
    EVENT_TYPE.TAMPER_SENSOR     : AlAlarmType.TAMPER,
    EVENT_TYPE.TAMPER_PANEL      : AlAlarmType.TAMPER,
    EVENT_TYPE.TAMPER_ALARM_A    : AlAlarmType.TAMPER,
@@ -95,22 +90,72 @@ pmPanelAlarmType_t = {
 #   0x75 : AlAlarmType.TAMPER
 }
 
-pmPanelTroubleType_t = {
+pmPanelAlarmType_r = {
+   EVENT_TYPE.TAMPER_SENSOR_RESTORE     : AlAlarmType.TAMPER,
+   EVENT_TYPE.TAMPER_PANEL_RESTORE      : AlAlarmType.TAMPER,
+   EVENT_TYPE.TAMPER_ALARM_A_RESTORE    : AlAlarmType.TAMPER,
+   EVENT_TYPE.TAMPER_ALARM_B_RESTORE    : AlAlarmType.TAMPER,
+   EVENT_TYPE.FIRE_RESTORE              : AlAlarmType.FIRE,
+   EVENT_TYPE.EMERGENCY_RESTORE         : AlAlarmType.EMERGENCY,
+   EVENT_TYPE.GAS_ALERT_RESTORE         : AlAlarmType.GAS,
+   EVENT_TYPE.FLOOD_ALERT_RESTORE       : AlAlarmType.FLOOD,
+   # PANIC_KEYFOB and PANIC_PANEL from pmPanelAlarmType_t are not covered
+}
+
+pmPanelIntruderType_t = {
+   EVENT_TYPE.ALARM_INTERIOR    : AlAlarmType.INTRUDER,
+   EVENT_TYPE.ALARM_PERIMETER   : AlAlarmType.INTRUDER,
+   EVENT_TYPE.ALARM_DELAY       : AlAlarmType.INTRUDER,
+   EVENT_TYPE.ALARM_SILENT_24H  : AlAlarmType.INTRUDER,
+   EVENT_TYPE.ALARM_AUDIBLE_24H : AlAlarmType.INTRUDER,
+}
+
+pmPanelIntruderType_r = {
+   EVENT_TYPE.ALARM_INTERIOR_RESTORE    : AlAlarmType.INTRUDER,
+   EVENT_TYPE.ALARM_PERIMETER_RESTORE   : AlAlarmType.INTRUDER,
+   EVENT_TYPE.ALARM_DELAY_RESTORE       : AlAlarmType.INTRUDER,
+   EVENT_TYPE.ALARM_SILENT_24H_RESTORE  : AlAlarmType.INTRUDER,
+   EVENT_TYPE.ALARM_AUDIBLE_24H_RESTORE : AlAlarmType.INTRUDER,
+}
+
+pmPanelTroubleType_t = {    # Trouble
    EVENT_TYPE.NONE                   : AlTroubleType.NONE,
    EVENT_TYPE.COMMUNICATION_LOSS     : AlTroubleType.COMMUNICATION,
    EVENT_TYPE.GENERAL_TROUBLE        : AlTroubleType.GENERAL,
    EVENT_TYPE.LOW_BATTERY            : AlTroubleType.BATTERY,
    EVENT_TYPE.AC_FAIL                : AlTroubleType.POWER,
-   EVENT_TYPE.PANEL_LOW_BATTERY      : AlTroubleType.BATTERY,
    EVENT_TYPE.RF_JAMMING             : AlTroubleType.JAMMING,
    EVENT_TYPE.COMMUNICATION_FAILURE  : AlTroubleType.COMMUNICATION, 
    EVENT_TYPE.TELEPHONE_LINE_FAILURE : AlTroubleType.TELEPHONE,
    EVENT_TYPE.FUSE_FAILURE           : AlTroubleType.POWER,
    EVENT_TYPE.KEYFOB_LOW_BATTERY     : AlTroubleType.BATTERY,
-   EVENT_TYPE.BATTERY_DISCONNECT     : AlTroubleType.BATTERY,
    EVENT_TYPE.KEYPAD_LOW_BATTERY     : AlTroubleType.BATTERY,
-   EVENT_TYPE.LOW_BATTERY_ACK        : AlTroubleType.BATTERY,
-   EVENT_TYPE.GENERAL_LOW_BATTERY    : AlTroubleType.BATTERY,
+   #EVENT_TYPE.LOW_BATTERY_ACK        : AlTroubleType.BATTERY,
+   #EVENT_TYPE.GENERAL_LOW_BATTERY    : AlTroubleType.BATTERY,
+}
+
+pmPanelTroubleType_r = {    # Restore
+   EVENT_TYPE.COMMUNICATION_LOSS_RESTORE     : AlTroubleType.NONE,
+   EVENT_TYPE.GENERAL_TROUBLE_RESTORE        : AlTroubleType.NONE,
+   EVENT_TYPE.LOW_BATTERY_RESTORE            : AlTroubleType.NONE,
+   EVENT_TYPE.AC_FAIL_RESTORE                : AlTroubleType.NONE,
+   EVENT_TYPE.RF_JAMMING_RESTORE             : AlTroubleType.NONE,
+   EVENT_TYPE.COMMUNICATION_FAILURE_RESTORE  : AlTroubleType.NONE, 
+   EVENT_TYPE.TELEPHONE_LINE_FAILURE_RESTORE : AlTroubleType.NONE,
+   EVENT_TYPE.FUSE_FAILURE_RESTORE           : AlTroubleType.NONE,
+   EVENT_TYPE.KEYFOB_LOW_BATTERY_RESTORE     : AlTroubleType.NONE,
+   EVENT_TYPE.KEYPAD_LOW_BATTERY_RESTORE     : AlTroubleType.NONE,
+   #EVENT_TYPE.LOW_BATTERY_ACK        : AlTroubleType.NONE,
+   #EVENT_TYPE.GENERAL_LOW_BATTERY    : AlTroubleType.NONE,
+}
+
+pmPanelBatteryType_t = {
+   EVENT_TYPE.NONE                      : AlTroubleType.NONE,
+   EVENT_TYPE.PANEL_LOW_BATTERY         : AlTroubleType.BATTERY,
+}
+
+pmPanelBatteryType_r = {
+   EVENT_TYPE.PANEL_LOW_BATTERY_RESTORE : AlTroubleType.NONE,
 }
 
 PanelArmedStatusCollection = collections.namedtuple('PanelArmedStatusCollection', 'disarmed armed entry state eventmapping')
@@ -862,118 +907,180 @@ class MyChecksumCalc:
 
 class PartitionStateClass:
 
-    def __init__(self):
+    def __init__(self, loop):
         """Initialize class."""
+        self.loop = loop
         self.Reset()
 
     def Reset(self):
         self.PanelState = AlPanelStatus.UNKNOWN
+        self.PanelStateSourceData = None
         self.PanelReady = False
         self.PanelTamper = False
-        self.PanelBattery = True              # Assume battery in panel is OK until a message changes it
         self.PanelAlertInMemory = False
         self.PanelBypass = False
+        # The following 2 variable represent the INTRUDER Alarm only, and the deivce that triggered it, if available.
         self.SirenActive = False
         self.SirenActiveDeviceTrigger = None
         self.PanelAlarmStatus = AlAlarmType.NONE
+        self.PanelIntruderStatus = False
         self.PanelTroubleStatus = AlTroubleType.NONE
+        self.PartitionGeneralTrouble = False
+        self.PanelBatteryTrouble = AlTroubleType.NONE              # Assume battery in panel is OK until a message changes it
+        self.StartedAlarmTime = False
+        self.AlarmTimeTask = None
 
     def statelist(self) -> list:
         # These are the values that are used to determine if the panel state has been changed
-        return [self.SirenActive, self.PanelState, self.PanelReady, self.PanelTroubleStatus, self.PanelAlarmStatus, self.PanelBypass]
+        return [self.SirenActive, self.PanelState, self.PanelReady, self.PanelTroubleStatus, self.PanelAlarmStatus, self.PanelIntruderStatus, self.PanelBypass, self.PartitionGeneralTrouble]
 
-    def getEventData(self, FullSet) -> dict:
+    def getPartitionData(self) -> dict:
         datadict = {}
         datadict[EventDataEnum.STATE]   = "triggered" if self.SirenActive else self.PanelState.name.lower()
         datadict[EventDataEnum.READY]   = self.PanelReady
         datadict[EventDataEnum.MEMORY]  = self.PanelAlertInMemory
-        datadict[EventDataEnum.TROUBLE] = self.PanelTroubleStatus.name.lower()
         datadict[EventDataEnum.BYPASS]  = self.PanelBypass
-        if FullSet:
-            datadict[EventDataEnum.TAMPER]  = self.PanelTamper
-            datadict[EventDataEnum.BATTERY] = 100 if self.PanelBattery else 0
-            datadict[EventDataEnum.ALARM]   = self.PanelAlarmStatus.name.lower()
+        datadict[EventDataEnum.ALARM]   = AlAlarmType.INTRUDER.name.lower() if self.PanelIntruderStatus else self.PanelAlarmStatus.name.lower()
         return datadict
+
+    def determineTrouble(self) -> str:
+        if self.PanelTroubleStatus != AlTroubleType.NONE:
+            return self.PanelTroubleStatus.name.lower()
+        elif self.PartitionGeneralTrouble:
+            return AlTroubleType.GENERAL.name.lower()
+        return AlTroubleType.NONE.name.lower()
+
+    def getPanelData(self) -> dict:
+        datadict = {}
+        datadict[EventDataEnum.TROUBLE] = self.determineTrouble()
+        datadict[EventDataEnum.TAMPER]  = self.PanelTamper
+        datadict[EventDataEnum.BATTERY] = 100 if self.PanelBatteryTrouble == AlTroubleType.NONE else 100
+        return datadict
+
+    async def _AlarmStateTimer(self):
+        log.debug("[UpdatePanelState]            ******************** _AlarmStateTimer 10 seconds Started ****************")
+        await asyncio.sleep(10.0)
+        self.PanelAlarmStatus = AlAlarmType.NONE
+        self.StartedAlarmTime = False
+        self.AlarmTimeTask = None
+        log.debug("[UpdatePanelState]            ******************** _AlarmStateTimer Ended ****************")
+
+    def stopAlarmStateTimer(self):
+        if self.AlarmTimeTask is not None:
+            try:
+                log.debug("[stopAlarmStateTimer] Cancelling AlarmStateTimer")
+                self.AlarmTimeTask.cancel()
+            except Exception as ex:
+                log.debug("[stopAlarmStateTimer]     Caused an exception")
+                log.debug(f"             {ex}")
+            self.PanelAlarmStatus = AlAlarmType.NONE
+            self.StartedAlarmTime = False
+            self.AlarmTimeTask = None
 
     def UpdatePanelState(self, et : EVENT_TYPE, sensor):
         # Update tamper status
         self.PanelTamper = (et == EVENT_TYPE.TAMPER_PANEL)
+        
         # Update trouble status
         self.PanelTroubleStatus = pmPanelTroubleType_t[et] if et in pmPanelTroubleType_t else AlTroubleType.NONE
+        if et in pmPanelTroubleType_r:
+            log.debug(f"[UpdatePanelState]           The event {et} is in the pmPanelTroubleType_r dictionary {pmPanelTroubleType_r[et]}.  It is not currently used as not sure if it always comes through")
+        
         # Update alarm status
+        self.PanelIntruderStatus = bool(et in pmPanelIntruderType_t)
+        if et in pmPanelIntruderType_r:
+            log.debug(f"[UpdatePanelState]           The event {et} is in the pmPanelIntruderType_r dictionary {pmPanelIntruderType_r[et]}.  It is not currently used as not sure if it always comes through")
+        
         self.PanelAlarmStatus = pmPanelAlarmType_t[et] if et in pmPanelAlarmType_t else AlAlarmType.NONE
-            
+        if et in pmPanelAlarmType_r:
+            log.debug(f"[UpdatePanelState]           The event {et} is in the pmPanelAlarmType_r dictionary {pmPanelAlarmType_r[et]}.  It is not currently used as not sure if it always comes through")
+        
+        # Update alarm panel battery state
+        if et in pmPanelBatteryType_t: self.PanelBatteryTrouble = pmPanelBatteryType_t[et]
+        if et in pmPanelBatteryType_r: self.PanelBatteryTrouble = AlTroubleType.NONE          # Rather than using the dict, just set it to NONE
+        
         # no clauses as if siren gets true again then keep updating self.SirenActive sensor
-        if self.PanelAlarmStatus == AlAlarmType.INTRUDER:
-            self.SirenActive = True
-            self.SirenActiveDeviceTrigger = None if sensor is None else sensor
-            log.debug("[UpdatePanelState]            ******************** Alarm Active *******************")
-        elif self.SirenActive:
-            if et in pmPanelCancelSet:  # Cancel Alarm
+        if self.SirenActive:
+            if et in pmPanelCancelSet and self.PanelIntruderStatus:  # Cancel Alarm
                 # cancel alarm and the alarm has been triggered
                 self.SirenActive = False
                 self.SirenActiveDeviceTrigger = None
+                self.PanelIntruderStatus = False
                 log.debug("[UpdatePanelState]            ******************** Alarm Cancelled ****************")
             # Siren has been active but it is no longer active (probably timed out and has then been disarmed)
             elif et not in pmPanelIgnoreSet:  # Alarm Timed Out ????
                 self.SirenActive = False
                 self.SirenActiveDeviceTrigger = None
+                self.PanelIntruderStatus = False
                 log.debug("[UpdatePanelState]            ******************** Event not in Ignore Set, Cancelling Alarm Indication ****************")
+        elif self.PanelStateSourceData is not None and self.PanelIntruderStatus:
+            armed = pmPanelArmedStatus[self.PanelStateSourceData].armed
+            entry = pmPanelArmedStatus[self.PanelStateSourceData].entry
+            if armed is not None and armed and not entry:
+                self.SirenActive = True
+                self.SirenActiveDeviceTrigger = None if sensor is None else sensor
+                log.debug("[UpdatePanelState]            ******************** Alarm Active *******************")
+        elif not self.StartedAlarmTime and self.PanelAlarmStatus in [AlAlarmType.FIRE, AlAlarmType.EMERGENCY, AlAlarmType.PANIC, AlAlarmType.GAS, AlAlarmType.FLOOD]:
+            self.StartedAlarmTime = True   # Has to be here and not in the Task as could be delayed
+            self.AlarmTimeTask = self.loop.create_task(self._AlarmStateTimer())
+        elif self.AlarmTimeTask is not None and self.StartedAlarmTime and self.PanelAlarmStatus == AlAlarmType.NONE:    # if it magically gets set back to NONE
+            self.stopAlarmStateTimer()
 
-        log.debug(f"[UpdatePanelState]         System message eventType={et} i.e. {et.name}   self.PanelTamper={self.PanelTamper}   self.PanelAlarmStatus={self.PanelAlarmStatus}" +
-                  f"    self.PanelTroubleStatus={self.PanelTroubleStatus}    self.SirenActive={self.SirenActive}   siren={self.PanelAlarmStatus == AlAlarmType.INTRUDER}")
+        log.debug(f"[UpdatePanelState]         System message eventType={et} i.e. {et.name}   {self.PanelTamper=}   {self.PanelAlarmStatus.name=}   {self.PanelTroubleStatus.name=}   {self.SirenActive=}   {self.PanelIntruderStatus=}   {self.PartitionGeneralTrouble=}")
 
-
-    def ProcessPanelStateUpdate(self, sysStatus, sysFlags, PanelMode) -> AlPanelEventData | None:
+    def UpdatePartition(self, sysStatus, sysFlags, PanelMode) -> AlPanelEventData | None:
         
         retval = None
         
         sysStatus = sysStatus & 0x1F     # Mark-Mills with a PowerMax Complete Part, sometimes this has the 0x20 bit set and I'm not sure why
         
         if sysStatus in pmPanelArmedStatus:
-            disarmed = pmPanelArmedStatus[sysStatus].disarmed
-            armed    = pmPanelArmedStatus[sysStatus].armed
-            entry    = pmPanelArmedStatus[sysStatus].entry
-            self.PanelState = pmPanelArmedStatus[sysStatus].state
+            self.PanelStateSourceData = sysStatus
+            disarmed = pmPanelArmedStatus[self.PanelStateSourceData].disarmed
+            armed    = pmPanelArmedStatus[self.PanelStateSourceData].armed
+            entry    = pmPanelArmedStatus[self.PanelStateSourceData].entry
+            self.PanelState = pmPanelArmedStatus[self.PanelStateSourceData].state
 
-            if pmPanelArmedStatus[sysStatus].eventmapping >= 0:
-                #log.debug(f"[PanelStateUpdate]             self.PanelState is {self.PanelState}      using event mapping {pmPanelArmedStatus[sysStatus].eventmapping} for event data")
-                retval = AlPanelEventData(name = 0, action = pmPanelArmedStatus[sysStatus].eventmapping) # use partiton set to -1 as a dummy
+            if pmPanelArmedStatus[self.PanelStateSourceData].eventmapping >= 0:
+                #log.debug(f"[UpdatePartition]             self.PanelState is {self.PanelState}      using event mapping {pmPanelArmedStatus[sysStatus].eventmapping} for event data")
+                retval = AlPanelEventData(name = 0, action = pmPanelArmedStatus[self.PanelStateSourceData].eventmapping) # use partiton set to -1 as a dummy
                 
         else:
-            log.debug(f"[PanelStateUpdate]             Unknown state {hexify(sysStatus)}, assuming Panel state of Unknown")
+            log.debug(f"[UpdatePartition]             Unknown state {hexify(sysStatus)}, assuming Panel state of Unknown")
             disarmed = None
             armed = None
             entry = False
             self.PanelState = AlPanelStatus.UNKNOWN  # UNKNOWN
+            self.PanelStateSourceData = None
 
         if PanelMode == AlPanelMode.DOWNLOAD:
             self.PanelState = AlPanelStatus.DOWNLOADING  # Downloading
+            self.PanelStateSourceData = None
 
-        log.debug(f"[PanelStateUpdate]             sysFlags=0x{hexify(sysFlags)}    sysStatus=0x{hexify(sysStatus)}    log: {self.PanelState.name}, {disarmed=}  {armed=}")
+        log.debug(f"[UpdatePartition]             sysFlags=0x{hexify(sysFlags)}    sysStatus=0x{hexify(sysStatus)}    log: {self.PanelState.name}, {disarmed=}  {armed=}")
 
         self.PanelReady = sysFlags & 0x01 != 0
         self.PanelAlertInMemory = sysFlags & 0x02 != 0
 
         if (sysFlags & 0x04 != 0):                   # Trouble
-            if self.PanelTroubleStatus == AlTroubleType.NONE:       # if set to NONE then set it to GENERAL, if it's already set from A& then that is more specific
-                log.debug(f"[PanelStateUpdate]                 Panel Indicates Trouble Set")
-                self.PanelTroubleStatus = AlTroubleType.GENERAL
+            if not self.PartitionGeneralTrouble:    
+                log.debug(f"[UpdatePartition]                 Panel Indicates Trouble Set")
+                self.PartitionGeneralTrouble = True 
         else:
-            if self.PanelTroubleStatus == AlTroubleType.GENERAL:       # if set to NONE then set it to GENERAL, if it's already set from A& then that is more specific
-                log.debug(f"[PanelStateUpdate]                 Panel Indicates Trouble Cleared")
-            self.PanelTroubleStatus = AlTroubleType.NONE
+            if self.PartitionGeneralTrouble:       #
+                log.debug(f"[UpdatePartition]                 Panel Indicates Trouble Cleared")
+            self.PartitionGeneralTrouble = False
 
         self.PanelBypass = sysFlags & 0x08 != 0
         
         if sysFlags & 0x10 != 0:
-            log.debug(f"[PanelStateUpdate]                 sysFlags bit 4 set --> Should be last 10 seconds of entry/exit")
+            log.debug(f"[UpdatePartition]                 sysFlags bit 4 set --> Should be last 10 seconds of entry/exit")
             
         if sysFlags & 0x20 != 0:
-            log.debug(f"[PanelStateUpdate]                 sysFlags bit 5 set --> Should be Zone Event")
+            log.debug(f"[UpdatePartition]                 sysFlags bit 5 set --> Should be Zone Event")
             
         if sysFlags & 0x40 != 0:
-            log.debug(f"[PanelStateUpdate]                 sysFlags bit 6 set --> Should be Status Changed")
+            log.debug(f"[UpdatePartition]                 sysFlags bit 6 set --> Should be Status Changed")
             
         #if sysFlags & 0x10 != 0:  # last 10 seconds of entry/exit
         #    self.PanelArmed = sarm == "Arming"
@@ -986,24 +1093,35 @@ class PartitionStateClass:
             #        and that the sensor that triggered it isn't an entry delay
             #   Normally this would only be directly available in Powerlink mode with A7 messages, but an assumption is made here
             if armed is not None and armed and not entry and PanelAlarmEvent:
-                log.debug("[PanelStateUpdate]                     Alarm Event Assumed while in Standard Mode")
+                log.debug("[UpdatePartition]                  Alarm Event Assumed while in Standard Mode")
+                log.debug("[UpdatePartition]            ******************** Alarm Active *******************")
                 # Alarm Event
                 self.SirenActive = True
+                self.SirenActiveDeviceTrigger = None
 
         # Clear any alarm event if the panel alarm has been triggered before (while armed) but now that the panel is disarmed (in all modes)
-        if self.SirenActive and disarmed is not None and disarmed:
-            log.debug("[PanelStateUpdate] ******************** Alarm Not Sounding (Disarmed) ****************")
-            self.SirenActive = False
-            self.SirenActiveDeviceTrigger = None
-        
+        if disarmed is not None and disarmed:
+            if self.SirenActive:
+                log.debug("[UpdatePartition] ******************** Alarm Not Sounding (Disarmed) ****************")
+                self.SirenActive = False
+                self.SirenActiveDeviceTrigger = None
+                self.PanelIntruderStatus = False
+
         return retval
     
 
 class AlPanelInterfaceHelper(AlPanelInterface):
 
-    def __init__(self, panel_id, logger = None):
+    def __init__(self, panel_id, logger = None, loop = None):
         """Initialize class."""
         super().__init__()
+
+        if loop:
+            self.loop = loop
+            log.debug("Establishing Protocol - Using Home Assistant Loop")
+        else:
+            self.loop = asyncio.get_event_loop()
+            log.debug("Establishing Protocol - Using Asyncio Event Loop")
 
         #if logger is not None:
         #    log = logger
@@ -1033,9 +1151,9 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         
         self.partitionsEnabled = False
         self.PartitionsInUse = set()  # this is a set so no repetitions allowed
-        self.PartitionState = [PartitionStateClass(), PartitionStateClass(), PartitionStateClass()]    # Maximum of 3 partitions across all panel models
+        self.PartitionState = [PartitionStateClass(self.loop), PartitionStateClass(self.loop), PartitionStateClass(self.loop)]    # Maximum of 3 partitions across all panel models
         
-        self.lastPanelEvent = {}
+        self.lastPanelEvent = None
         self.panelEventData = []
 
         # Keep a dict of the sensors so we know if its new or existing
@@ -1073,20 +1191,22 @@ class AlPanelInterfaceHelper(AlPanelInterface):
                 if 1 <= piu <= 3:
                     p = self.PartitionState[piu-1]
                     r = 'Yes' if p.PanelReady else 'No'
-                    ts = titlecase(p.PanelTroubleStatus.name)                   # str(AlTroubleType()[self.PanelTroubleStatus]).replace("_"," ")
+                    i = 'Yes' if p.PanelIntruderStatus else 'No'
+                    ts = titlecase(p.determineTrouble())                   # str(AlTroubleType()[self.PanelTroubleStatus]).replace("_"," ")
                     al = titlecase(p.PanelAlarmStatus.name)                     # str(AlAlarmType()[self.PanelAlarmStatus]).replace("_"," ")
                     pn = titlecase(p.PanelState.name)
-                    log.debug(f"   Partition {piu:<1}    Ready {r: <13}  Status {pn: <18}      Trouble {ts: <13}      AlarmStatus {al: <12}")
+                    log.debug(f"   Partition {piu:<1}    Ready {r: <13}  Status {pn: <18}      Trouble {ts: <13}      AlarmStatus {al: <12}      IntruderStatus {i: <12}")
                 else:
                     log.debug(f"   Partition {piu:<1}    Invalid")
                     
         else:
             p = self.PartitionState[0]
             r = 'Yes' if p.PanelReady else 'No'
-            ts = titlecase(p.PanelTroubleStatus.name)                   # str(AlTroubleType()[self.PanelTroubleStatus]).replace("_"," ")
+            i = 'Yes' if p.PanelIntruderStatus else 'No'
+            ts = titlecase(p.determineTrouble())                   # str(AlTroubleType()[self.PanelTroubleStatus]).replace("_"," ")
             al = titlecase(p.PanelAlarmStatus.name)                     # str(AlAlarmType()[self.PanelAlarmStatus]).replace("_"," ")
             pn = titlecase(p.PanelState.name)
-            log.debug(f"                                      Ready {r: <13}  Status {pn: <18}      Trouble {ts: <13}      AlarmStatus {al: <12}")
+            log.debug(f"                                      Ready {r: <13}  Status {pn: <18}      Trouble {ts: <13}      AlarmStatus {al: <12}      IntruderStatus {i: <12}")
         log.debug(" ================================================================================================================================================================================")
 
     def getPanelModel(self):
@@ -1097,13 +1217,20 @@ class AlPanelInterfaceHelper(AlPanelInterface):
             self.PanelMode = AlPanelMode.STOPPED
         return self.PanelMode
 
-    def isSirenActive(self) -> (bool, AlSensorDevice | None):
+    def isSirenActive(self, partition = INVALID_PARTITION) -> (bool, AlSensorDevice | None):
         if not self.suspendAllOperations:
-            if (p := self.getPartitionsInUse()) is not None:
-                for piu in p:
-                    if self.PartitionState[piu-1].SirenActive:
-                        return (True, self.PartitionState[piu-1].SirenActiveDeviceTrigger)
+            if partition is not None and (p := self.getPartitionsInUse()) is not None:
+                if 1 <= partition <= 3:
+                    # if siren active for partition
+                    if self.PartitionState[partition-1].SirenActive:
+                        return (True, self.PartitionState[partition-1].SirenActiveDeviceTrigger)
+                else:
+                    # Asking for a summary of all partitions, if any have triggered the siren
+                    for piu in p:
+                        if self.PartitionState[piu-1].SirenActive:
+                            return (True, self.PartitionState[piu-1].SirenActiveDeviceTrigger)
             else:
+                # Single partition
                 return (self.PartitionState[0].SirenActive, self.PartitionState[0].SirenActiveDeviceTrigger)
         return (False, None)
 
@@ -1132,21 +1259,21 @@ class AlPanelInterfaceHelper(AlPanelInterface):
             return self.PartitionState[0].PanelReady
         return False
 
-    def getPanelTrouble(self, partition = INVALID_PARTITION) -> AlTroubleType:
-        """ Get the panel trouble state """
-        if not self.suspendAllOperations:
-            if partition is not None and 1 <= partition <= 3:
-                return self.PartitionState[partition-1].PanelTroubleStatus
-            return self.PartitionState[0].PanelTroubleStatus
-        return AlTroubleType.UNKNOWN
+    #def getPanelTrouble(self, partition = INVALID_PARTITION) -> AlTroubleType:
+    #    """ Get the panel trouble state """
+    #    if not self.suspendAllOperations:
+    #        if partition is not None and 1 <= partition <= 3:
+    #            return self.PartitionState[partition-1].PanelTroubleStatus
+    #        return self.PartitionState[0].PanelTroubleStatus
+    #    return AlTroubleType.UNKNOWN
 
-    def isPanelBypass(self, partition = INVALID_PARTITION) -> bool:
-        """ Get the panel bypass state """
-        if not self.suspendAllOperations:
-            if partition is not None and 1 <= partition <= 3:
-                return self.PartitionState[partition-1].PanelBypass
-            return self.PartitionState[0].PanelBypass
-        return False
+    #def isPanelBypass(self, partition = INVALID_PARTITION) -> bool:
+    #    """ Get the panel bypass state """
+    #    if not self.suspendAllOperations:
+    #        if partition is not None and 1 <= partition <= 3:
+    #            return self.PartitionState[partition-1].PanelBypass
+    #        return self.PartitionState[0].PanelBypass
+    #    return False
 
 #    def getPanelLastEvent(self) -> (str, str, str):
 #        return (self.PanelLastEventName, self.PanelLastEventAction, self.PanelLastEventTime)
@@ -1199,14 +1326,19 @@ class AlPanelInterfaceHelper(AlPanelInterface):
             a = ped.asDict()
             log.debug(f"[PanelUpdate] ped = {ped}  event data = {a}")
             self.sendPanelUpdate(AlCondition.PANEL_UPDATE, a)
-            self.lastPanelEvent = a
         self.panelEventData = [ ] # empty the list
         return retval
 
     def addPanelEventData(self, ped : AlPanelEventData):
-        #log.debug(f"[addPanelEventData] {ped}")
         ped.time = self._getTimeFunction() # .strftime("%d/%m/%Y, %H:%M:%S")
-        self.panelEventData.append(ped)  
+        self.panelEventData.append(ped) 
+        #if self.lastPanelEvent is not None and ped.name_i == 0 and ped.action_i == self.lastPanelEvent.action_i and ped.partition == self.lastPanelEvent.partition:
+        #    log.debug(f"[addPanelEventData] Not adding {ped} as matches last time {self.lastPanelEvent}")
+        #else:
+        #    log.debug(f"[addPanelEventData] {ped}")
+        #    ped.time = self._getTimeFunction() # .strftime("%d/%m/%Y, %H:%M:%S")
+        #    self.panelEventData.append(ped)  
+        #    self.lastPanelEvent = ped
 
     # Set the onProblem callback handlers
     def onProblem(self, fn : Callable):             # onProblem ( exception or string or None )

@@ -326,7 +326,6 @@ class VisonicClient:
         if type(e) == AlIntEnum:
             if self.process_event is not None:
                 datadict = self.visonicProtocol.getEventData(None)
-                #datadict.update(self.LastPanelEventData)
                 self.process_event(e, datadict)
         else:
             print(f"Visonic attempt to call onPanelChangeHandler type {type(e)}  device is {e}")
@@ -719,17 +718,17 @@ class VisonicClient:
     #        return self.visonicProtocol.getPanelLastEvent()
     #    return False
 
-    def getPanelTrouble(self, partition : int) -> AlTroubleType:
-        """ Get the panel trouble state """
-        if self.visonicProtocol is not None:
-            return self.visonicProtocol.getPanelTrouble(partition)
-        return AlTroubleType.UNKNOWN
+    #def getPanelTrouble(self, partition : int) -> AlTroubleType:
+    #    """ Get the panel trouble state """
+    #    if self.visonicProtocol is not None:
+    #        return self.visonicProtocol.getPanelTrouble(partition)
+    #    return AlTroubleType.UNKNOWN
 
-    def isPanelBypass(self, partition : int) -> bool:
-        """ Is the siren active. """
-        if self.visonicProtocol is not None:
-            return self.visonicProtocol.isPanelBypass(partition)
-        return False
+    #def isPanelBypass(self, partition : int) -> bool:
+    #    """ Is the siren active. """
+    #    if self.visonicProtocol is not None:
+    #        return self.visonicProtocol.isPanelBypass(partition)
+    #    return False
 
     def isSirenActive(self) -> (bool, AlSensorDevice | None):
         """ Is the siren active. """

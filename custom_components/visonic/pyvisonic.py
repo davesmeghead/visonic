@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.2.5"
+PLUGIN_VERSION = "1.9.3.0"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -406,16 +406,16 @@ class B0_SendMessageTuple(B0_SendMessageTupleTmp):
         return ("B0_SendMessageTuple unknown type")
 
 pmSendMsgB0 = {   #                                      data  chunky paged
-    B0SubType.WIRELESS_DEV_INACTIVE : B0_SendMessageTuple(0x02,  True, False),      # 
+    B0SubType.WIRELESS_DEV_UPDATING : B0_SendMessageTuple(0x02,  True, False),      # 
     B0SubType.WIRELESS_DEV_CHANNEL  : B0_SendMessageTuple(0x04,  True, False),      # 
     B0SubType.INVALID_COMMAND       : B0_SendMessageTuple(0x06, False, False),      # This isn't chunked  INVALID_COMMAND
     B0SubType.ZONE_STAT07           : B0_SendMessageTuple(0x07,  True, False),
-    B0SubType.WIRELESS_DEV_UPDATING : B0_SendMessageTuple(0x08,  True, False),      # 
+    B0SubType.WIRELESS_DEV_INACTIVE : B0_SendMessageTuple(0x08,  True, False),      # 
     B0SubType.WIRELESS_DEV_MISSING  : B0_SendMessageTuple(0x09,  True, False),      # 
     B0SubType.TAMPER_ACTIVITY       : B0_SendMessageTuple(0x0A,  True, False),      # Mark: Tamper Activities
     B0SubType.TAMPER_ALERT          : B0_SendMessageTuple(0x0B,  True, False),      # Mark: Tamper Alert
     B0SubType.WIRELESS_DEV_ONEWAY   : B0_SendMessageTuple(0x0E,  True, False),      # 
-    B0SubType.PANEL_STATE_2         : B0_SendMessageTuple(0x0F, False, False),      # Panel State 2
+    B0SubType.PANEL_STATE_2         : B0_SendMessageTuple(0x0F, False, False),      # Panel State 2, confirmed as not chunky
     B0SubType.TRIGGERED_ZONE        : B0_SendMessageTuple(0x13,  True, False),      # Triggered Zone ... maybe????????????????  0d b0 03 13 0d ff 01 03 08 00 00 00 00 00 00 00 00 da 43 02 0a  Decoded Chunk type 3   subtype 19   sequence 255  datasize 1    length 8    index ZONES            data 00 00 00 00 00 00 00 00
     B0SubType.ZONE_OPENCLOSE        : B0_SendMessageTuple(0x18,  True, False),      # Sensor Open/Close State
     B0SubType.ZONE_BYPASS           : B0_SendMessageTuple(0x19,  True, False),      # Sensor Bypass
@@ -425,7 +425,7 @@ pmSendMsgB0 = {   #                                      data  chunky paged
     B0SubType.ASSIGNED_PARTITION    : B0_SendMessageTuple(0x20,  True,  True),
     B0SubType.ZONE_NAMES            : B0_SendMessageTuple(0x21,  True, False),      # Zone Names
     B0SubType.SYSTEM_CAP            : B0_SendMessageTuple(0x22,  True, False),      # System
-    B0SubType.PANEL_STATE           : B0_SendMessageTuple(0x24,  True, False),      # Panel State
+    B0SubType.PANEL_STATE_1         : B0_SendMessageTuple(0x24,  True, False),      # Panel State
     B0SubType.WIRED_STATUS_1        : B0_SendMessageTuple(0x27,  True, False),
     B0SubType.WIRED_STATUS_2        : B0_SendMessageTuple(0x28,  True, False),
     B0SubType.EVENT_LOG             : B0_SendMessageTuple(0x2A,  True,  True),      # Event Log
@@ -436,16 +436,21 @@ pmSendMsgB0 = {   #                                      data  chunky paged
     B0SubType.PANEL_SETTINGS_35     : B0_SendMessageTuple(0x35,  True, False),
     B0SubType.LEGACY_EVENT_LOG      : B0_SendMessageTuple(0x36,  True, False),
     B0SubType.ASK_ME_1              : B0_SendMessageTuple(0x39,  True, False),      # Panel sending a list of message types that may have updated info
+    B0SubType.PANEL_STATE_3         : B0_SendMessageTuple(0x3B,  True, False),
     B0SubType.ZONE_TEMPERATURE      : B0_SendMessageTuple(0x3D,  True, False),      # Zone Temperatures
 #    "WIRELESS_DEVICES_40"       : B0_SendMessageTuple(0x40,  True, False),
     B0SubType.PANEL_SETTINGS_42     : B0_SendMessageTuple(0x42,  True, False),
     B0SubType.ZONE_LAST_EVENT       : B0_SendMessageTuple(0x4B,  True,  True),      # Zone Last Event. Paged for more than 30 sensors.
     B0SubType.ASK_ME_2              : B0_SendMessageTuple(0x51,  True, False),      # Panel sending a list of message types that may have updated info
 
+    B0SubType.PANEL_STATE_4         : B0_SendMessageTuple(0x37,  True, False),
+    B0SubType.PANEL_STATE_5         : B0_SendMessageTuple(0x38,  True, False),
+    #B0SubType.PANEL_STATE_6         : B0_SendMessageTuple(0x3C,  True, False),
+
     # Not currently used, experimentation only
     B0SubType.DEVICE_COUNTS         : B0_SendMessageTuple(0x52,  True, False),
     B0SubType.WIRED_DEVICES         : B0_SendMessageTuple(0x53,  True, False),      # X10_DEVICES and PGM
-    B0SubType.TROUBLES              : B0_SendMessageTuple(0x54,  True, False),
+    B0SubType.TROUBLES              : B0_SendMessageTuple(0x54,  True, False),      # 8 blocks of 9 bytes
     B0SubType.REPEATERS_55          : B0_SendMessageTuple(0x55,  True, False),
     B0SubType.DEVICE_INFO           : B0_SendMessageTuple(0x58,  True, False),
     B0SubType.GSM_STATUS            : B0_SendMessageTuple(0x59,  True, False),
@@ -488,7 +493,7 @@ pmArmMode = {
 # Data to embed in the MSG_PM_SIREN_MODE message
 # PowerMaster to command the siren mode
 pmSirenMode = {
-   AlPanelCommand.EMERGENCY : 0x23, AlPanelCommand.FIRE : 0x20, AlPanelCommand.PANIC : 0x0C
+   AlPanelCommand.EMERGENCY : EVENT_TYPE.EMERGENCY, AlPanelCommand.FIRE : EVENT_TYPE.FIRE, AlPanelCommand.PANIC : EVENT_TYPE.PANIC_PANEL
 }
 
 # Data to embed in the MSG_X10PGM message
@@ -512,7 +517,7 @@ pmReceiveMsg = {
    Receive.DUMMY_MESSAGE      : PanelCallBack(  0,  True, False, -1, 0, False, DebugLevel.NONE,                          "Dummy Message" ),       # Dummy message used in the algorithm when the message type is unknown. The -1 is used to indicate an unknown message in the algorithm
    Receive.ACKNOWLEDGE        : PanelCallBack(  0, False, False,  0, 0, False, DebugLevel.NONE,                          "Acknowledge" ),         # Ack
    Receive.TIMEOUT            : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Timeout" ),             # Timeout. See the receiver function for ACK handling
-   Receive.UNKNOWN_07         : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Unknowm 07" ),          # No idea what this means but decode it anyway
+   Receive.UNKNOWN_07         : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Unknown 07" ),          # No idea what this means but decode it anyway
    Receive.ACCESS_DENIED      : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Access Denied" ),       # Access Denied
    Receive.LOOPBACK_TEST      : PanelCallBack(  0, False, False,  0, 0, False, DebugLevel.FULL,                          "Loopback Test" ),       # THE PANEL DOES NOT SEND THIS. THIS IS USED FOR A LOOP BACK TEST
    Receive.EXIT_DOWNLOAD      : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Exit Download" ),       # The panel may send this during download to tell us to exit download 
@@ -692,6 +697,27 @@ pmPanelSettingCodes = { #                                  item mandatory PMaxEP
 # Default Sensor Zone Types
 pmZoneTypeKey = ( "non-alarm", "emergency", "flood", "gas", "delay_1", "delay_2", "interior_follow", "perimeter", "perimeter_follow",
                 "24_hours_silent", "24_hours_audible", "fire", "interior", "home_delay", "temperature", "outdoor", "undefined" )
+
+# Map them to Events. When a sensor is triggered, we can use the sensor/zone type to decide what Event to trigger. This is used for B0 B0SubType.PANEL_STATE_3 messages.
+pmMapZoneType = {
+    pmZoneTypeKey[0]  : EVENT_TYPE.NONE, 
+    pmZoneTypeKey[1]  : EVENT_TYPE.EMERGENCY, 
+    pmZoneTypeKey[2]  : EVENT_TYPE.FLOOD_ALERT, 
+    pmZoneTypeKey[3]  : EVENT_TYPE.GAS_ALERT, 
+    pmZoneTypeKey[4]  : EVENT_TYPE.ALARM_PERIMETER, 
+    pmZoneTypeKey[5]  : EVENT_TYPE.ALARM_PERIMETER, 
+    pmZoneTypeKey[6]  : EVENT_TYPE.ALARM_INTERIOR, 
+    pmZoneTypeKey[7]  : EVENT_TYPE.ALARM_PERIMETER, 
+    pmZoneTypeKey[8]  : EVENT_TYPE.ALARM_PERIMETER,
+    pmZoneTypeKey[9]  : EVENT_TYPE.NONE, 
+    pmZoneTypeKey[10] : EVENT_TYPE.NONE, 
+    pmZoneTypeKey[11] : EVENT_TYPE.FIRE, 
+    pmZoneTypeKey[12] : EVENT_TYPE.ALARM_INTERIOR, 
+    pmZoneTypeKey[13] : EVENT_TYPE.NONE, 
+    pmZoneTypeKey[14] : EVENT_TYPE.NONE, 
+    pmZoneTypeKey[15] : EVENT_TYPE.NONE, 
+    pmZoneTypeKey[16] : EVENT_TYPE.NONE
+}
 
 # Default Sensor Chime
 pmZoneChimeKey = ("chime_off", "melody_chime", "zone_name_chime")
@@ -968,7 +994,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     log.debug(f"Initialising Protocol - Protocol Version {PLUGIN_VERSION}")
 
     def __init__(self, loop=None, panelConfig : PanelConfig = None, panel_id : int = None, packet_callback: Callable = None, logger = None) -> None:
-        super().__init__(panel_id = panel_id, logger = logger)
+        super().__init__(panel_id = panel_id, logger = logger, loop = loop)
         """Initialize class."""
         
         ####################################
@@ -977,13 +1003,6 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
         #if logger is not None:
         #    log = logger
-
-        if loop:
-            self.loop = loop
-            log.debug("Establishing Protocol - Using Home Assistant Loop")
-        else:
-            self.loop = asyncio.get_event_loop()
-            log.debug("Establishing Protocol - Using Asyncio Event Loop")
 
         # install the packet callback handler
         self.packet_callback = packet_callback
@@ -1306,7 +1325,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self._reset_keep_alive_messages()
         if self.PowerLinkBridgeConnected:
             if self.isPowerMaster():
-                self.B0_Wanted.add(B0SubType.PANEL_STATE)        # 24
+                self.B0_Wanted.add(B0SubType.PANEL_STATE_1)        # 24
             else:
                 self._addMessageToSendList(Send.STATUS)
         elif self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]:
@@ -1425,8 +1444,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     def _create_B0_Data_Request(self, taglist : set = None) -> bytearray:
 
         if taglist is None or len(taglist) == 0:
-            taglist = {pmSendMsgB0[B0SubType.PANEL_STATE].data}
-            log.debug(f"[_create_B0_Data_Request] Taglist is empty so asking for PANEL_STATE")
+            taglist = {pmSendMsgB0[B0SubType.PANEL_STATE_1].data}
+            log.debug(f"[_create_B0_Data_Request] Taglist is empty so asking for PANEL_STATE_1")
 
         PM_Request_Data = bytearray(set(taglist))                          # just to make sure there are no duplicates
         PM_Request_Start = convertByteArray('b0 01 17 99 01 ff 08 ff 99')
@@ -1445,7 +1464,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
     def fetchPanelStatus(self):
         if self.isPowerMaster():
-            s = self._create_B0_Data_Request(taglist = {pmSendMsgB0[B0SubType.PANEL_STATE].data} )
+            s = self._create_B0_Data_Request(taglist = {pmSendMsgB0[B0SubType.PANEL_STATE_1].data} )
             self._addMessageToSendList(s, priority = MessagePriority.IMMEDIATE)
         else:
             self._addMessageToSendList(Send.STATUS_SEN, priority = MessagePriority.IMMEDIATE)
@@ -1972,11 +1991,11 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         await waitForTransport(200)
         reset_vars()
         oldPanelMode = self.PanelMode
-        # Note that PANEL_STATE is in all of them, to get it every time        
-        B0_Regular_Update_Set_List = [ { B0SubType.SENSOR_ENROL, B0SubType.ZONE_NAMES, B0SubType.ZONE_TYPES, B0SubType.DEVICE_TYPES, B0SubType.PANEL_STATE }, 
-                                       { B0SubType.TAMPER_ALERT, B0SubType.WIRELESS_DEV_MISSING, B0SubType.WIRELESS_DEV_INACTIVE, B0SubType.WIRELESS_DEV_ONEWAY, B0SubType.PANEL_STATE },
-                                       { B0SubType.ZONE_TEMPERATURE, B0SubType.TAMPER_ACTIVITY, B0SubType.ZONE_OPENCLOSE, B0SubType.PANEL_STATE },                  # B0SubType.ZONE_LUX,  LUX seems to cause problems with my PM30
-                                       { B0SubType.WIRED_STATUS_1, B0SubType.WIRED_STATUS_2, B0SubType.WIRED_DEVICES, B0SubType.PANEL_STATE } ]
+        # Note that PANEL_STATE_1 is in all of them, to get it every time        
+        B0_Regular_Update_Set_List = [ { B0SubType.SENSOR_ENROL, B0SubType.ZONE_NAMES, B0SubType.ZONE_TYPES, B0SubType.DEVICE_TYPES, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_4 }, 
+                                       { B0SubType.TAMPER_ALERT, B0SubType.WIRELESS_DEV_MISSING, B0SubType.WIRELESS_DEV_INACTIVE, B0SubType.WIRELESS_DEV_ONEWAY, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_5 },
+                                       { B0SubType.ZONE_TEMPERATURE, B0SubType.TAMPER_ACTIVITY, B0SubType.ZONE_OPENCLOSE, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_4 },                  # B0SubType.ZONE_LUX,  LUX seems to cause problems with my PM30
+                                       { B0SubType.WIRED_STATUS_1, B0SubType.WIRED_STATUS_2, B0SubType.WIRED_DEVICES, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_5 } ]
         while not self.suspendAllOperations:
             try:
                 changedState = _sequencerState != _sequencerStatePrev
@@ -2621,7 +2640,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             if interval >= timedelta(seconds=25):                              # every 25 seconds get the panel state
                                 log.debug("[_sequencer] Adding Panel State request to B0 wanted due to timer")
                                 self.B0_LastPanelStateTime = self._getUTCTimeFunction()        # to stop it retriggering (although its a set so it should not matter)
-                                self.B0_Wanted.add(B0SubType.PANEL_STATE)                  # Remember that it's a set so if it's already there then it will only be in once
+                                self.B0_Wanted.add(B0SubType.PANEL_STATE_1)                  # Remember that it's a set so if it's already there then it will only be in once
 
                     #############################################################################################################################################################
                     ####### Drop through to here to do generic code for DoingStandard, DoingStandardPlus, DoingPowerlinkBridge and DoingPowerlink ###############################
@@ -2727,7 +2746,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             # PowerMaster Panels
                             if int_diff_interval:
                                 log.debug(f"[_sequencer] Adding Panel and Sensor State requests - Set 0 due to int_diff_interval")
-                                self.B0_Wanted.update(B0_Regular_Update_Set_List[0])  # the objective is to get the panel time, B0SubType.PANEL_STATE, so could use any of the lists as they all have it
+                                self.B0_Wanted.update(B0_Regular_Update_Set_List[0])  # the objective is to get the panel time, B0SubType.PANEL_STATE_1, so could use any of the lists as they all have it
                             elif (u := update_time_check_power_master(counter, POWERMASTER_CHECK_TIME_INTERVAL)) >= 0:
                                 log.debug(f"[_sequencer] Adding Panel and Sensor State requests - Set {u}")
                                 self.B0_Wanted.update(B0_Regular_Update_Set_List[u])
@@ -3596,6 +3615,10 @@ class PacketHandling(ProtocolBase):
             #    log.debug(f"[Process Settings]    Master Code {toString(self.epromManager.lookupEpromSingle(EPROM.MASTERCODE))}")
             #    log.debug(f"[Process Settings]    Installer DL Code {toString(self.epromManager.lookupEpromSingle(EPROM.INSTALDLCODE))}")
 
+            #log.warning(f"[Process Settings]    AlarmLED10 {self.epromManager.lookupEprom("AlarmLED10")}")
+            #log.warning(f"[Process Settings]    AlarmLED30 {self.epromManager.lookupEprom("AlarmLED30")}")
+            #log.warning(f"[Process Settings]    bellTime {self.epromManager.lookupEprom("bellTime")}")
+
             # ------------------------------------------------------------------------------------------------------------------------------------------------
             # Process zone settings
 
@@ -4237,7 +4260,7 @@ class PacketHandling(ProtocolBase):
                     # Process sysStatus and sysFlags only if there are no partitions
                     #     The panel sends A5 messages for all partitions but we don't know the partition number. So how do we know what to decode?
                     oldPS = self.PartitionState[0].PanelState
-                    s = self.PartitionState[0].ProcessPanelStateUpdate(sysStatus=sysStatus, sysFlags=sysFlags, PanelMode=self.PanelMode)   # does not set partition in return value
+                    s = self.PartitionState[0].UpdatePartition(sysStatus=sysStatus, sysFlags=sysFlags, PanelMode=self.PanelMode)   # does not set partition in return value
                     if s is not None:
                         self.addPanelEventData(s)
                     newPS = self.PartitionState[0].PanelState
@@ -4305,14 +4328,9 @@ class PacketHandling(ProtocolBase):
         # 01 00 27 51 02 ff 00 02 00 00
         # ff 5d 00 2d 00 00 11 0c 00 00
 
-        def displayit(m, eventZone, eventType):
+        def displayEvent(m, eventZone, eventType):
             et : EVENT_TYPE = EVENT_TYPE(eventType) if eventType in EVENT_TYPE else EVENT_TYPE.NOT_DEFINED
-            eventStr = "Unknown"
-            if 0 <= eventType <= 151:
-                if len(pmLogEvent_t[eventType]) > 0:
-                    eventStr = pmLogEvent_t[eventType]
-                #else:
-                #    self.logstate_debug(f"[process_panel_event_log] Found unknown log event {entry.event}")
+            eventStr = pmLogEvent_t[eventType] if 0 <= eventType <= 151 and len(pmLogEvent_t[eventType]) > 0 else "Unknown"
             if self.isPowerMaster():
                 s = pmLogPowerMasterUser_t[eventZone] or "Unknown"
                 log.debug(f"[handle_msgtypeA7]           {m}  {eventZone}/{eventType}   {s}  {et.name}     {eventStr=}")
@@ -4327,54 +4345,84 @@ class PacketHandling(ProtocolBase):
                 log.info(f"[handle_msgtypeA7]               A7 FF message : data={toString(data)}.  Panel has been reset.")
                 self.PanelResetEvent = True
                 retval = True
-            elif eventZone == SYSTEM and eventType == EVENT_TYPE.PANEL_LOW_BATTERY:             # 0/45   System  PANEL_LOW_BATTERY
-                log.debug(f"[handle_msgtypeA7]               A7 FF message : data={toString(data)}.  Panel Low Battery.")
-                # if multiple partitions then only needed for partition 1
-                self.PartitionState[0].PanelBattery = False
-            elif eventZone == SYSTEM and eventType == EVENT_TYPE.PANEL_LOW_BATTERY_RESTORE:     # 0/46   System  PANEL_LOW_BATTERY_RESTORE
-                log.debug(f"[handle_msgtypeA7]               A7 FF message : data={toString(data)}.  Panel Low Battery Restore.")
-                # if multiple partitions then only needed for partition 1
-                self.PartitionState[0].PanelBattery = True
+            #elif eventZone == SYSTEM and eventType == EVENT_TYPE.PANEL_LOW_BATTERY:             # 0/45   System  PANEL_LOW_BATTERY
+            #    log.debug(f"[handle_msgtypeA7]               A7 FF message : data={toString(data)}.  Panel Low Battery.")
+            #    # if multiple partitions then only needed for partition 1
+            #    self.PartitionState[0].PanelBattery = False
+            #elif eventZone == SYSTEM and eventType == EVENT_TYPE.PANEL_LOW_BATTERY_RESTORE:     # 0/46   System  PANEL_LOW_BATTERY_RESTORE
+            #    log.debug(f"[handle_msgtypeA7]               A7 FF message : data={toString(data)}.  Panel Low Battery Restore.")
+            #    # if multiple partitions then only needed for partition 1
+            #    self.PartitionState[0].PanelBattery = True
             return retval
 
+
+        def processEvent(partition, eventZone, eventType):
+            et : EVENT_TYPE = EVENT_TYPE(eventType) if eventType in EVENT_TYPE else EVENT_TYPE.NOT_DEFINED
+
+            if not processSpecialEntries(eventZone, eventType):
+                self.addPanelEventData(AlPanelEventData(name = eventZone, action = int(eventType))) # assume partition -1 means a panel event not tied to a partition
+
+                if eventZone-1 in self.SensorList:                                              # only used if it decides that siren is sounding, then that is the trigger sensor
+                    self.PartitionState[partition].UpdatePanelState(et, self.SensorList[eventZone-1])   
+                else:
+                    self.PartitionState[partition].UpdatePanelState(et, None)   
+
+                if et == EVENT_TYPE.FORCE_ARM or (self.pmForceArmSetInPanel and et == EVENT_TYPE.DISARM): # Force Arm OR (ForceArm has been set and Disarm)
+                    self.pmForceArmSetInPanel = (et == EVENT_TYPE.FORCE_ARM)                                 # When the panel uses ForceArm then sensors may be automatically armed and bypassed by the panel
+                    log.debug("[handle_msgtypeA7]              Panel has been Armed using Force Arm, sensors may have been bypassed by the panel, asking panel for an update on bypassed sensors")
+                    if self.isPowerMaster():
+                        self.B0_Wanted.add(B0SubType.ZONE_BYPASS)
+                    else:
+                        self._addMessageToSendList(Send.BYPASSTAT)
+            
         msgCnt = int(data[0])
 
         # If message count is FF then it looks like the first message is valid so decode it (this is experimental)
         #if msgCnt == 0xFF:
         #    msgCnt = 1
 
-        if msgCnt == 255 and self.getPartitionsInUse() is not None:
+        if msgCnt == 255 and (piu := self.getPartitionsInUse()) is not None:
             # Looks like it's parsed differently
                 # From my PM30, the 01 and 00 alternate several times back and forth, but never the same sequentially.  Could be partition as there are 2.
                 #     data=ff 09 06 27 00 01 41 03 05 00 43
                 #     data=ff 09 06 27 00 00 41 03 05 00 43
 
+            # [handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is 0xd  : data=ff 0d 00 2d 00 01 41 0c 00 00 43
             log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
             # The first entry always looks valid, so for now, process it for reset and panel battery state            
-            eventZone = int(data[2])   # 61h or 0 : For a PowerMaster panel 0x61 is decimal 97, this is "User 1" in pmLogPowerMasterUser_t, also 0 is System in pmLogPowerMasterUser_t
-            eventType = int(data[3])   # Looks like an eventType but the timing of when it arrives is all wrong
+            eventZone = int(data[2])                     # 61h or 0 : For a PowerMaster panel 0x61 is decimal 97, this is "User 1" in pmLogPowerMasterUser_t, also 0 is System in pmLogPowerMasterUser_t
+            eventType = int(data[3])                     # Looks like an eventType but the timing of when it arrives is all wrong
+            # processEvent(0, eventZone, eventType)        # Assume all panel state goes through partition 1
 
             #if not processSpecialEntries(eventZone, eventType):
             #    log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
 
-            for i in range(4):
-                eventZone = int(data[2 + (2 * i)])
-                eventType = int(data[3 + (2 * i)])
-                displayit("Could be", eventZone, eventType)
-
-        elif msgCnt == 255:
+            control = data[1]
+            if control == 0x0D:
+                for i in range(0,1):   # only process first one   range(0,2)
+                    eventZone = int(data[2 + (4 * i)])
+                    eventType = int(data[3 + (4 * i)])
+                    displayEvent(f"Processing {i} As ", eventZone, eventType)
+                    for p in list(piu):
+                        processEvent(p-1, eventZone, eventType)
+            else:
+                for i in range(0,4):
+                    eventZone = int(data[2 + (2 * i)])
+                    eventType = int(data[3 + (2 * i)])
+                    displayEvent(f"Entry {i} Could be", eventZone, eventType)
+                    
+        elif msgCnt == 255: # no partitions
             log.debug(f"[handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
 
             # The first entry always looks valid, so for now, process it for reset and panel battery state            
-            eventZone = int(data[2])     # 61h or 0 : For a PowerMaster panel 0x61 is decimal 97, this is "User 1" in pmLogPowerMasterUser_t, also 0 is System in pmLogPowerMasterUser_t
-            eventType = int(data[3])     # Looks like an eventType but the timing of when it arrives is all wrong
-            #if not processSpecialEntries(eventZone, eventType):
-            #    log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
+            eventZone = int(data[2])                     # 61h or 0 : For a PowerMaster panel 0x61 is decimal 97, this is "User 1" in pmLogPowerMasterUser_t, also 0 is System in pmLogPowerMasterUser_t
+            eventType = int(data[3])                     # Looks like an eventType but the timing of when it arrives is all wrong
+            processEvent(0, eventZone, eventType)        # Assume all panel state goes through partition 1
 
-            for i in range(4):
+            for i in range(1,4):
                 eventZone = int(data[2 + (2 * i)])
                 eventType = int(data[3 + (2 * i)])
-                displayit("Could be", eventZone, eventType)
+                displayEvent(f"Entry {i} Could be", eventZone, eventType)
 
             # These are from a PowerMaster panel
             # data= ff 00 61 51 01 ff 00 0b 00 00 43
@@ -4406,26 +4454,13 @@ class PacketHandling(ProtocolBase):
             for i in range(msgCnt):
                 eventZone = int(data[2 + (2 * i)])
                 eventType = int(data[3 + (2 * i)])
-                displayit("Event", eventZone, eventType)
+                displayEvent("Event", eventZone, eventType)
+                processEvent(0, eventZone, eventType)        # Assume all panel state goes through partition 1
 
-                et : EVENT_TYPE = EVENT_TYPE(eventType) if eventType in EVENT_TYPE else EVENT_TYPE.NOT_DEFINED
-
-                if not processSpecialEntries(eventZone, eventType):
-                    self.addPanelEventData(AlPanelEventData(name = eventZone, action = int(eventType))) # assume partition -1 means a panel event not tied to a partition
-
-                    if eventZone-1 in self.SensorList:                                              # only used if it decides that siren is sounding, then that is the trigger sensor
-                        self.PartitionState[0].UpdatePanelState(et, self.SensorList[eventZone-1])   # Assume all panel state goes through partition 1
-
-                    if et == EVENT_TYPE.FORCE_ARM or (self.pmForceArmSetInPanel and et == EVENT_TYPE.DISARM): # Force Arm OR (ForceArm has been set and Disarm)
-                        self.pmForceArmSetInPanel = (et == EVENT_TYPE.FORCE_ARM)                                 # When the panel uses ForceArm then sensors may be automatically armed and bypassed by the panel
-                        log.debug("[handle_msgtypeA7]              Panel has been Armed using Force Arm, sensors may have been bypassed by the panel, asking panel for an update on bypassed sensors")
-                        if self.isPowerMaster():
-                            self.B0_Wanted.add(B0SubType.ZONE_BYPASS)
-                        else:
-                            self._addMessageToSendList(Send.BYPASSTAT)
         else:
             log.debug(f"[handle_msgtypeA7]      Partitions in use = {self.getPartitionsInUse()}  data={toString(data)}")
-            
+    
+    
 
     def handle_msgtypeAB(self, data) -> bool:  # PowerLink Message
         """ MsgType=AB - Panel Powerlink Messages """
@@ -4697,7 +4732,7 @@ class PacketHandling(ProtocolBase):
                             if d.sequence is not None and isinstance(d.sequence, list): # We have a list of sequence identifiers e.g. [1,2,255]
                                 # We should really check to make sure that we get all messages in the list but not yet --> TODO
                                 # I'm assuming that 0x35 messages (and 0x42 maybe) are the only messages with sequences
-                                if ch.datasize == RAW.BYTES.value and datatype == DataType.SPACE_PADDED_STRING_LIST:
+                                if ch.datasize == RAW.BYTE.value and datatype == DataType.SPACE_PADDED_STRING_LIST:
                                     if key not in self.builderData:
                                         self.builderData[key] = []                    # empty the data list to concatenate the sequenced message data
                                         self.builderMessage[key] = d.sequence         # get the list of sequences there needs to be to complete the data
@@ -4826,7 +4861,7 @@ class PacketHandling(ProtocolBase):
                         if pmPanelSettingCodes[key].PMasterB042Panel == dataContent:
                             log.debug(f"[_extract_42_data]          Matched it {key=}")
                             processed_data = True
-                            if ch.datasize == RAW.BYTES.value and datatype == DataType.SPACE_PADDED_STRING_LIST:
+                            if ch.datasize == RAW.BYTE.value and datatype == DataType.SPACE_PADDED_STRING_LIST:
                                 s = f"{self.PanelSettings[key]}"              # Save the data before the update
                                 log.debug(f"[_extract_42_data]               dat {dat}")
                                 if len(self.PanelSettings[key]) <= start_entry:
@@ -4900,7 +4935,7 @@ class PacketHandling(ProtocolBase):
 
             oldPS = self.PartitionState[partition].PanelState
             # Mask off the top bit as seems to be used to indicate overall validity
-            s = self.PartitionState[partition].ProcessPanelStateUpdate(sysStatus=sysStatus, sysFlags=sysFlags & 0x7F, PanelMode=self.PanelMode)  # does not set partition in return value
+            s = self.PartitionState[partition].UpdatePartition(sysStatus=sysStatus, sysFlags=sysFlags & 0x7F, PanelMode=self.PanelMode)  # does not set partition in return value
             if s is not None:
                 if self.getPartitionsInUse() is not None:   # we have partitions so add it in as an attribute
                     s.setPartition(partition+1)
@@ -4923,14 +4958,23 @@ class PacketHandling(ProtocolBase):
 
     def processChunk(self, ch : chunky):
 
-        def collateFromRawBits(d, s, m) -> str:
+        def stringFromRawBits(d, s, m) -> str:
             deviceStr = ""
             for i in range(0, s):
                 v = (d >> i) & 0x01
                 if v == 1:
-                    log.debug(f"[processChunk] Found an Enrolled PowerMaster {m} {i}")
+                    log.debug(f"{m} {i}")
                     deviceStr = f"{deviceStr},{i:0>2}"
             return deviceStr[1:]   # miss the first comma
+        
+        def listFromRawBits(d, s) -> list:
+            retval = []
+            for i in range(0, s):
+                v = (d >> i) & 0x01
+                if v == 1:
+                    #log.debug(f"[processChunk] Found an Enrolled PowerMaster {m} {i}")
+                    retval.append(i)
+            return retval   # miss the first comma
         
         def _decode_24(partitionCount : int, dateData: bytearray, unknownData : bytearray, partitionData : bytearray):
             
@@ -4995,37 +5039,44 @@ class PacketHandling(ProtocolBase):
                     self._extract_42_data(ch)
                     self._updateAllSensors()
 
-            case (B0SubType.PANEL_STATE,    RAW.BYTES, IndexName.MIXED,  20):
+            case (B0SubType.PANEL_STATE_1,    RAW.BYTE, IndexName.MIXED,  20):
                 # Panel state change, added just in case the panel abbreviates this message 
                 # 06 00 00 00 02 00 00 00 29 0b 10 08 0b 18 14 06 00 85 00 00
-                _decode_24(ch.data, 8, 14, 1, 17)
-                self.B0_LastPanelStateTime = self._getUTCTimeFunction()
+                #_decode_24(ch.data, 8, 14, 1, 17)
+                #self.B0_LastPanelStateTime = self._getUTCTimeFunction()
+                log.debug(f"[handle_msgtypeB0]              Got a short Panel State Message but not processing it {ch=}")
 
-            case (B0SubType.PANEL_STATE,    RAW.BYTES, IndexName.MIXED,  21):
+            case (B0SubType.PANEL_STATE_1,    RAW.BYTE, IndexName.MIXED,  21):
                 # Panel state change, no idea what bytes 0 to 7 mean.
                 # e.g. 06 00 00 00 02 00 00 00 29 0b 10 08 0b 18 14 06 01 00 85 00 00
                 if ch.data[16] == 1:   # partition count set to 1
                     # We already know that the length of the ch.data is 21 so no need to check it
                     _decode_24(1, ch.data[8:14], ch.data[14:16], ch.data[17:21])
                     self.B0_LastPanelStateTime = self._getUTCTimeFunction()
+                else: 
+                    log.debug(f"[handle_msgtypeB0]              Got a normal Panel State Message but not processing it because the partition count in the message is not 1 {ch=}")
 
-            case (B0SubType.PANEL_STATE,    RAW.BYTES, IndexName.MIXED, 28):
+            case (B0SubType.PANEL_STATE_1,    RAW.BYTE, IndexName.MIXED, 28):
                 # Panel state change, no idea what bytes 0 to 7 mean. - the user that has the panel that sends this uses all 3 partitions
                 # e.g. 0b 00 00 00 00 00 00 00 22 32 14 03 05 19 14 07 00 85 00 00 00 85 00 00 00 85 00 00
                 if self.getPartitionsInUse() is not None:              # we have a 24 message that has extended data (for the partitions) and the panel has reported it has partitions in use
                     # We already know that the length of the ch.data is 28 so no need to check it
                     _decode_24(3, ch.data[8:14], ch.data[14:16], ch.data[16:28])
                     self.B0_LastPanelStateTime = self._getUTCTimeFunction()
+                else: 
+                    log.debug(f"[handle_msgtypeB0]              Got a long Panel State Message but not processing it because the partition count is 1 {ch=}")
 
-            case (B0SubType.PANEL_STATE,    RAW.BYTES, IndexName.MIXED,  29):
+            case (B0SubType.PANEL_STATE_1,    RAW.BYTE, IndexName.MIXED,  29):
                 # Panel state change, no idea what bytes 0 to 7 mean.
                 # e.g. 07 00 00 00 02 00 00 00 10 1d 0a 0a 0b 18 14 01 03 00 87 00 00 00 87 00 00 00 07 00 00
                 if self.getPartitionsInUse() is not None:              # we have a 24 message that has extended data (for the partitions) and the panel has reported it has partitions in use
                     # We already know that the length of the ch.data is 29 so no need to check it
                     _decode_24(ch.data[16], ch.data[8:14], ch.data[14:16], ch.data[17:29])
                     self.B0_LastPanelStateTime = self._getUTCTimeFunction()
+                else: 
+                    log.debug(f"[handle_msgtypeB0]              Got a really long Panel State Message but not processing it because the partition count is 1 {ch=}")
 
-            case (B0SubType.SYSTEM_CAP, RAW.WORDS, IndexName.MIXED, _ ):
+            case (B0SubType.SYSTEM_CAP, RAW.WORD, IndexName.MIXED, _ ):
                 # System capabilities
                 ds = 2 # each entry is 2 words
                 b = ch.length // ds
@@ -5036,12 +5087,89 @@ class PacketHandling(ProtocolBase):
                     t = IndexName(i).name if i in IndexName else f'Type {i}'
                     log.debug(f"[handle_msgtypeB0]              Got {st.name:<20}   {t:<14}   {toString(ch.data[i*ds:(i+1)*ds])}    decimal {d:>4}")
                     if i in IndexName:
-                        self.PanelCapabilities[IndexName(i)] = d
-                        # make sure any mandatory capabilities are recorded as complete
-                        if IndexName(i) == IndexName.PGM:
-                            self.PanelSettings[PanelSetting.HasPGM] = [ d >= 1 ]
+                        if IndexName(i) == IndexName.ZONES:
+                            self.PanelCapabilities[IndexName.ZONES] = pmPanelConfig[CFG.WIRELESS][self.PanelType] + pmPanelConfig[CFG.WIRED][self.PanelType]
+                            if self.PanelCapabilities[IndexName.ZONES] != d:
+                                log.debug(f"[handle_msgtypeB0]                  Not updating ZONES as it may be wrong, reverting back to default value for panel {self.PanelCapabilities[IndexName.ZONES]}")
+                        else:
+                            self.PanelCapabilities[IndexName(i)] = d
+                            # make sure any mandatory capabilities are recorded as complete
+                            if IndexName(i) == IndexName.PGM:
+                                self.PanelSettings[PanelSetting.HasPGM] = [ d >= 1 ]
                 log.debug(f"[handle_msgtypeB0]             Panel Capabilities = {self.PanelCapabilities}")
 
+            case (B0SubType.TRIGGERED_ZONE, RAW.BITS,  IndexName.ZONES, _ ):
+                zoneLen = ch.length * 8     # 8 bits in a byte
+                log.debug(f"[handle_msgtypeB0]          Received message, zone trigger information, zone length = {zoneLen}")
+                self.do_sensor_update(ch.data[0:4], ZoneFunctions.DO_TRIGGER, "[handle_msgtypeB0]             Zone Trigger 32-01")
+                device_triggers = listFromRawBits(self._makeInt(ch.data[0:4]), 32)   # Sensor numbers for Zones 1 to 32 (sensors 0 to 31)
+                if zoneLen >= 33:
+                    self.do_sensor_update(ch.data[4:8], ZoneFunctions.DO_TRIGGER, f"[handle_msgtypeB0]             Zone Trigger {zoneLen}-33", 32, zoneLen)
+                    tmp = listFromRawBits(self._makeInt(ch.data[4:8]), 32)
+                    device_triggers.extend([32 + i for i in tmp])                # Add 32 on to all sensor numbers i.e. sensors 32 to 63, zones 33 to 64
+
+                if len(device_triggers) > 0:
+                    # siren triggered?
+                    log.debug(f"[handle_msgtypeB0]      ********************** B0 siren Triggered ************************ {device_triggers=}")
+                    ptu = self.getPartitionsInUse()
+                    if ptu is not None:      
+                        # partitions in use
+                        # go through list of sensors that triggered
+                        for dev in device_triggers:
+                            # Get the partitions that this sensor belongs to
+                            #     Remember that dev is the sensor, the zone is sensor+1
+                            part = self.SensorList[dev].getPartition()
+                            for p in part:
+                                if self.SensorList[dev].getZoneType() in pmMapZoneType:
+                                    ev = pmMapZoneType[self.SensorList[dev].getZoneType()]
+                                    log.debug(f"[handle_msgtypeB0]             Zone {dev+1}  {p=}    {ev.name=}")
+                                    self.PartitionState[p-1].UpdatePanelState(ev, self.SensorList[dev])
+                    else:
+                        # partitions not in use
+                        if self.SensorList[dev].getZoneType() in pmMapZoneType:
+                            ev = pmMapZoneType[self.SensorList[dev].getZoneType()]
+                            log.debug(f"[handle_msgtypeB0]             Zone {dev+1}  {p=}    {ev.name=}")
+                            self.PartitionState[0].UpdatePanelState(ev, self.SensorList[device_triggers[0]])
+
+            case (B0SubType.PANEL_STATE_3, RAW.FIVE_BYTE,  IndexName.MIXED, 6 ):
+                # e.g. 0c 00 00 03 10 14    ==>   stype.name='PANIC_PANEL'  partition=3  zone=1
+                stype = EVENT_TYPE(ch.data[0]) if ch.data[0] in EVENT_TYPE else EVENT_TYPE.NOT_DEFINED
+                sensor = ch.data[1]
+                zone = sensor + 1
+                #partition = ch.data[3]
+                partition = listFromRawBits(ch.data[3], 8)   # returns a list
+                #log.debug(f"[handle_msgtypeB0]          Received message, Panel Stuff but not sure what, looks like status info  chunk = {ch}")
+                log.debug(f"[handle_msgtypeB0]             {stype.name=}   {partition=} (not used)     {sensor=}     {self.getPartitionsInUse()=}")
+                if ch.data[2] != 0:
+                    log.debug(f"[handle_msgtypeB0]                ******************************************************* Data 2 is not zero   {ch.data[2]}")
+                    
+                # When Data[0] is 0x0C i.e. PANIC_PANEL and sensor is 0, then when Data[4] is
+                panicmap = {
+                    0x06 : EVENT_TYPE.PANIC_PANEL,
+                    0x0F : EVENT_TYPE.FIRE,
+                    0x10 : EVENT_TYPE.EMERGENCY
+                }
+                
+                if stype == EVENT_TYPE.PANIC_PANEL: # and sensor == 0:
+                    ptu = self.getPartitionsInUse() # returns a set()
+                    #if ptu is not None:
+                    #    for p in partition:    # already in 0 to X range
+                    #        if p+1 in list(ptu) and ch.data[4] in panicmap:
+                    #            self.PartitionState[p].UpdatePanelState(panicmap[ch.data[4]], None)
+                    if ptu is not None:
+                        if ch.data[4] in panicmap:
+                            for p in ptu:    # 
+                                self.PartitionState[p-1].UpdatePanelState(panicmap[ch.data[4]], None)
+                    else:
+                        # partitions not in use
+                        if ch.data[4] in panicmap:
+                            self.PartitionState[0].UpdatePanelState(panicmap[ch.data[4]], None)
+                
+                # e.g. 03 36 00 03 05 a4
+                # 2025-08-04 12:36:54.889 DEBUG (MainThread) [custom_components.visonic.pyvisonic] [handle_msgtypeB0]             stype.name='ALARM_DELAY'   partition=[0, 1]  sensor=54     self.getPartitionsInUse()={1, 2}
+
+                
+                
             case (B0SubType.ZONE_OPENCLOSE, RAW.BITS,  IndexName.ZONES,  _ ):
                 # I'm 100% sure this is correct
                 zoneLen = ch.length * 8     # 8 bits in a byte
@@ -5074,7 +5202,7 @@ class PacketHandling(ProtocolBase):
                 #if zoneLen >= 33:
                 #    self.do_sensor_update(ch.data[4:8], ZoneFunctions.DO_TAMPER, f"[handle_msgtypeB0]             Zone Tamper {zoneLen}-33", 32, zoneLen)
 
-            case (B0SubType.ASSIGNED_PARTITION, RAW.BYTES, _    ,  _ ):   # paged
+            case (B0SubType.ASSIGNED_PARTITION, RAW.BYTE, _    ,  _ ):   # paged
                 if ch.index in IndexName:
                     log.debug(f"[handle_msgtypeB0]          Got Assigned Partition, {IndexName(ch.index).name:<14}  chunk = {ch}")
                 else:
@@ -5087,46 +5215,46 @@ class PacketHandling(ProtocolBase):
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.SIRENS, _ ):
                 count = pmPanelConfig[CFG.SIRENS][self.PanelType]
                 self.PanelSettings[PanelSetting.SirenEnrolled] = [(ch.data[0] >> i) & 0x01 == 1 for i in range(min(ch.length * 8, count))]
-                self.PanelStatus[PANEL_STATUS.SIRENS] = collateFromRawBits(ch.data[0], min(ch.length * 8, count), "siren")
+                self.PanelStatus[PANEL_STATUS.SIRENS] = stringFromRawBits(ch.data[0], min(ch.length * 8, count), "[processChunk] Found an Enrolled PowerMaster siren")
                 self._updateAllSirens()
 
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.REPEATERS, _ ):
                 count = pmPanelConfig[CFG.REPEATERS][self.PanelType]
-                self.PanelStatus[PANEL_STATUS.PANIC_BUTTONS] = collateFromRawBits(ch.data[0], min(ch.length * 8, count), "repeater")
+                self.PanelStatus[PANEL_STATUS.PANIC_BUTTONS] = stringFromRawBits(ch.data[0], min(ch.length * 8, count), "[processChunk] Found an Enrolled PowerMaster repeater")
 
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.PANIC_BUTTONS, _ ):
                 #count = pmPanelConfig[CFG.PANIC_BUTTONS][self.PanelType]
-                self.PanelStatus[PANEL_STATUS.PANIC_BUTTONS] = collateFromRawBits(self._makeInt(ch.data), ch.length * 8, "panic-button")
+                self.PanelStatus[PANEL_STATUS.PANIC_BUTTONS] = stringFromRawBits(self._makeInt(ch.data), ch.length * 8, "[processChunk] Found an Enrolled PowerMaster panic-button")
 
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.KEYPADS, _ ):
                 count = pmPanelConfig[CFG.TWO_WKEYPADS][self.PanelType]
-                self.PanelStatus[PANEL_STATUS.KEYPADS] = collateFromRawBits(self._makeInt(ch.data), min(ch.length * 8, count), "keypad")
+                self.PanelStatus[PANEL_STATUS.KEYPADS] = stringFromRawBits(self._makeInt(ch.data), min(ch.length * 8, count), "[processChunk] Found an Enrolled PowerMaster keypad")
 
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.KEYFOBS, _ ):
                 count = pmPanelConfig[CFG.KEYFOBS][self.PanelType]
-                self.PanelStatus[PANEL_STATUS.KEYFOBS] = collateFromRawBits(self._makeInt(ch.data), min(ch.length * 8, count), "keyfob")
+                self.PanelStatus[PANEL_STATUS.KEYFOBS] = stringFromRawBits(self._makeInt(ch.data), min(ch.length * 8, count), "[processChunk] Found an Enrolled PowerMaster keyfob")
 
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.PROXTAGS, _ ):
                 count = pmPanelConfig[CFG.PROXTAGS][self.PanelType]
-                self.PanelStatus[PANEL_STATUS.PROXTAGS] = collateFromRawBits(self._makeInt(ch.data), min(ch.length * 8, count), "proxtag")
+                self.PanelStatus[PANEL_STATUS.PROXTAGS] = stringFromRawBits(self._makeInt(ch.data), min(ch.length * 8, count), "[processChunk] Found an Enrolled PowerMaster proxtag")
 
-            case (B0SubType.DEVICE_TYPES,   RAW.BYTES, IndexName.SIRENS,  _ ):
+            case (B0SubType.DEVICE_TYPES,   RAW.BYTE, IndexName.SIRENS,  _ ):
                 # I'm 1% sure this is correct ie. it might be wrong
                 self._updateAllSirens()
 
-            case (B0SubType.DEVICE_TYPES,   RAW.BYTES, IndexName.ZONES,  _ ):
+            case (B0SubType.DEVICE_TYPES,   RAW.BYTE, IndexName.ZONES,  _ ):
                 # I'm 100% sure this is correct
                 self._updateAllSensors()
 
-            case (B0SubType.ZONE_NAMES,     RAW.BYTES, IndexName.ZONES,  _ ):
+            case (B0SubType.ZONE_NAMES,     RAW.BYTE, IndexName.ZONES,  _ ):
                 # I'm 100% sure this is correct
                 self._updateAllSensors()
 
-            case (B0SubType.ZONE_TYPES,     RAW.BYTES, IndexName.ZONES,  _ ):
+            case (B0SubType.ZONE_TYPES,     RAW.BYTE, IndexName.ZONES,  _ ):
                 # I'm 100% sure this is correct
                 self._updateAllSensors()
 
-            case (B0SubType.ZONE_TEMPERATURE, RAW.BYTES, IndexName.ZONES,  _ ):
+            case (B0SubType.ZONE_TEMPERATURE, RAW.BYTE, IndexName.ZONES,  _ ):
                 #log.debug(f"[handle_msgtypeB0]          Got Zone Temperatures Chunk {ch}")
                 #zoneCnt = self.getPanelCapability(IndexName.ZONES)
                 zoneCnt = self.getPanelCapability(IndexName.ZONES)
@@ -5137,7 +5265,7 @@ class PacketHandling(ProtocolBase):
                             log.debug(f"[handle_msgtypeB0]            Zone {i+1} has temperature raw value {ch.data[i]}     temp={temp}")
                             self.SensorList[i].updateTemperature(temp)
 
-            case (B0SubType.ZONE_LUX  ,     RAW.BYTES, IndexName.ZONES,  _ ):
+            case (B0SubType.ZONE_LUX  ,     RAW.BYTE, IndexName.ZONES,  _ ):
                 #log.debug(f"[handle_msgtypeB0]          Got Zone Luminance Chunk {ch}")
                 #zoneCnt = pmPanelConfig[CFG.WIRELESS][self.PanelType] + pmPanelConfig[CFG.WIRED][self.PanelType]
                 zoneCnt = self.getPanelCapability(IndexName.ZONES)
@@ -5147,7 +5275,7 @@ class PacketHandling(ProtocolBase):
                             log.debug(f"[handle_msgtypeB0]               Zone {i+1} has luminance value {ch.data[i]} --> not sure what the value means")
                             self.SensorList[i].updateLux(ch.data[i])
 
-            case (B0SubType.ASK_ME_1,       RAW.BYTES, IndexName.MIXED,  _ ):
+            case (B0SubType.ASK_ME_1,       RAW.BYTE, IndexName.MIXED,  _ ):
                 log.debug(f"[handle_msgtypeB0]          Received ASK_ME_1 pop message   {ch}")
                 if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS, AlPanelMode.STANDARD]:
                     if ch.length > 0:
@@ -5156,17 +5284,17 @@ class PacketHandling(ProtocolBase):
                     else:
                         log.debug(f"[handle_msgtypeB0]                   Empty ASK_ME_1 chunk={ch.GetItAll()}")
 
-            case (B0SubType.ASK_ME_2,       RAW.BYTES, IndexName.MIXED,  _ ):
+            case (B0SubType.ASK_ME_2,       RAW.BYTE, IndexName.MIXED,  _ ):
                 log.debug(f"[handle_msgtypeB0]          Received ASK_ME_2 pop message   {ch}")
                 if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS, AlPanelMode.STANDARD]:
                     if ch.length > 0:
                         s = self._create_B0_Data_Request(taglist = set(ch.data))
                         self._addMessageToSendList(s, priority = MessagePriority.URGENT)
                     else:
-                        #log.debug(f"[handle_msgtypeB0]                   Empty ASK_ME_2 chunk={ch.GetItAll()}   so asking for PANEL_STATE and ZONE_LAST_EVENT")
-                        #s = self._create_B0_Data_Request(taglist = {pmSendMsgB0[B0SubType.PANEL_STATE].data, pmSendMsgB0[B0SubType.ZONE_LAST_EVENT].data} )
-                        log.debug(f"[handle_msgtypeB0]                   Empty ASK_ME_2 chunk={ch.GetItAll()}   so asking for PANEL_STATE")
-                        s = self._create_B0_Data_Request(taglist = {pmSendMsgB0[B0SubType.PANEL_STATE].data} )
+                        #log.debug(f"[handle_msgtypeB0]                   Empty ASK_ME_2 chunk={ch.GetItAll()}   so asking for PANEL_STATE_1 and ZONE_LAST_EVENT")
+                        #s = self._create_B0_Data_Request(taglist = {pmSendMsgB0[B0SubType.PANEL_STATE_1].data, pmSendMsgB0[B0SubType.ZONE_LAST_EVENT].data} )
+                        log.debug(f"[handle_msgtypeB0]                   Empty ASK_ME_2 chunk={ch.GetItAll()}   so asking for PANEL_STATE_1")
+                        s = self._create_B0_Data_Request(taglist = {pmSendMsgB0[B0SubType.PANEL_STATE_1].data} )
                         self._addMessageToSendList(s, priority = MessagePriority.URGENT)
             
             case (B0SubType.ZONE_LAST_EVENT, RAW.FIVE_BYTE, IndexName.ZONES,  _ ):  # Each entry is ch.datasize=40 bits (or 5 bytes)
@@ -5258,7 +5386,7 @@ class PacketHandling(ProtocolBase):
                 if zoneLen >= 33:
                     self.do_sensor_update(ch.data[4:8], ZoneFunctions.DO_ONEWAY, f"[handle_msgtypeB0]             Zone One Way {zoneLen}-33", 32, zoneLen)
 
-            case (B0SubType.WIRELESS_DEV_CHANNEL,    RAW.BYTES, IndexName.ZONES,  _ ):
+            case (B0SubType.WIRELESS_DEV_CHANNEL,    RAW.BYTE, IndexName.ZONES,  _ ):
                 # Something about Zone information (probably) but I'm not sure
                 # The values after the ch.length represents something about the zone but I'm not sure what, the values change but I can't work out the pattern/sequence
                 #   Received PowerMaster10 message 3/4 (len = 35)    data = 03 04 23 ff 08 03 1e 26 00 00 01 00 00 <24 * 00> 0c 43
@@ -5275,7 +5403,7 @@ class PacketHandling(ProtocolBase):
                             s = int(ch.data[z])
                             log.debug(f"[handle_msgtypeB0]             Zone {z}  State(hex) {hex(s)}")
 
-            case (B0SubType.ZONE_STAT07,    RAW.BYTES, IndexName.ZONES,  _ ):
+            case (B0SubType.ZONE_STAT07,    RAW.BYTE, IndexName.ZONES,  _ ):
                 #  Received PowerMaster10 message 3/7 (len = 35)    data = 03 07 23 ff 08 03 1e 03 00 00 03 00 00 <24 * 00> 0d 43
                 #  Received PowerMaster30 message 3/7 (len = 69)    data = 03 07 45 ff 08 03 40 03 03 03 03 03 03 <58 * 00> 92 43
                 #  My PM30:  data = 03 07 45 ff 08 03 40 00 00 00 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 03 00 00 03 00 1d 43
@@ -5292,7 +5420,6 @@ class PacketHandling(ProtocolBase):
                 if beezerodebug:
                     #log.debug(f"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
                     #log.debug(f"[handle_msgtypeB0]        Received message chunk for  {st}, dont know what this is, chunk = {str(ch)}")
-
                     if ch.index == IndexName.MIXED: # Some kind of panel settings
                         b = -1
                         if ch.datasize > 8 and ch.datasize % 8 == 0:  # if it's exactly divisible by 8 then
@@ -5672,9 +5799,13 @@ class VisonicProtocol(PacketHandling):
     def getEventData(self, partition : int | None) -> dict:
         if partition is not None:
             if 1 <= partition <= 3:
-                return self.PartitionState[partition-1].getEventData(False)
+                return self.PartitionState[partition-1].getPartitionData()
+            elif partition == 0 and (piu := self.getPartitionsInUse()) is not None:
+                return self.PartitionState[list(piu)[0]].getPanelData()
             return {}
-        return self.PartitionState[0].getEventData(True)
+        a = self.PartitionState[0].getPartitionData()
+        self.merge(a, self.PartitionState[0].getPanelData())
+        return a
 
     # A dictionary that is used to add to the attribute list of the Alarm Control Panel
     #     If this is overridden then please include the items in the dictionary defined here by using super()
@@ -5790,7 +5921,7 @@ class VisonicProtocol(PacketHandling):
                         self._addMessageToSendList(Send.X10PGM, priority = MessagePriority.IMMEDIATE, options=[ [6, what], [7, byteA], [8, byteB] ])
                         self._addMessageToSendList(Send.STATUS_SEN, priority = MessagePriority.IMMEDIATE)
                         if self.isPowerMaster():
-                            self.B0_Wanted.add(B0SubType.PANEL_STATE)        # 24
+                            self.B0_Wanted.add(B0SubType.PANEL_STATE_1)        # 24
                         return AlCommandStatus.SUCCESS
                     return AlCommandStatus.FAIL_INVALID_STATE
                 return AlCommandStatus.FAIL_ENTITY_INCORRECT

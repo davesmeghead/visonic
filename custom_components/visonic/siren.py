@@ -4,6 +4,7 @@ from typing import Any
 
 import logging
 from enum import IntEnum
+from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import Entity
 from homeassistant.core import HomeAssistant, callback
@@ -41,7 +42,7 @@ async def async_setup_entry(
     def async_add_siren() -> None:
         """Add Visonic Siren"""
         entities: list[Entity] = []
-        entities.append(VisonicSiren(hass, entry.runtime_data.client))
+        entities.append(VisonicSiren(hass = hass, client = entry.runtime_data.client))
         _LOGGER.debug(f"[async_setup_entry] adding entity")
         async_add_entities(entities)
 
@@ -63,9 +64,10 @@ class VisonicSiren(SirenEntity):
         self._mystate = False
         pname = client.getMyString()
         self._myname = pname + "s01"
-        self._device_state_attributes = {}
         self._panel = client.getPanelID()
         self.external = False
+        self.trigger = ""
+        self.alarmReason = ""
         _LOGGER.debug(f"[VisonicSiren] panel {self._panel}, siren {self._myname}")
         self._attr_supported_features = SUPPORT_FLAGS
         self._attr_is_on = False
@@ -111,14 +113,24 @@ class VisonicSiren(SirenEntity):
         return self._client.isPanelConnected()
 
     @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        #_LOGGER.debug(f"alarm control panel available {self.entity_id=}")
+        if self._client is None:
+            return False
+        return self._client.isPanelConnected()
+
+    @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        return self._myname
+        #_LOGGER.debug(f"alarm control panel unique_id {self.entity_id=}")
+        return slugify(self._myname)
 
     @property
     def name(self):
         """Return the name of the alarm."""
-        return self._myname  # partition 1 but eventually differentiate partitions
+        #_LOGGER.debug(f"alarm control panel name {self.entity_id=}")
+        return self._myname
 
     @property
     def device_info(self):
@@ -139,55 +151,51 @@ class VisonicSiren(SirenEntity):
             # "model": "Alarm Panel",
             # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
         }
-        
+
     def update(self):
         """Get the state of the device."""
-        #_LOGGER.debug(f"alarm control update available {self.entity_id=}")
+        #_LOGGER.debug(f"[update] {self.entity_id=}")
+        oldstate = self._mystate
         self._mystate = False   # If panel disconnected then set to False
         if self.isPanelConnected():
             stl = self._client.getSirenTriggerList()
             ptu = self._client.getPartitionsInUse()
-            isa, dev = self._client.isSirenActive()
             
-            reason = "undefined"
+            self.alarmReason = ""
 
             if ptu is None:
-                #_LOGGER.debug(f"data {data}")
-                self._device_state_attributes = self._client.getPanelStatusDict()  # 
-                
-                if EventDataEnum.ALARM in self._device_state_attributes:
-                    reason = self._device_state_attributes[EventDataEnum.ALARM]
-                
-                if isa or reason in stl:
-                    self._mystate = True
-                    _LOGGER.debug(f"[siren]  siren triggered")
-
+                isa, dev = self._client.isSirenActive()
+                psd = self._client.getPanelStatusDict()
+                #_LOGGER.debug(f"[update]    dict {psd}")
+                if EventDataEnum.ALARM in psd:
+                    self.alarmReason = psd[EventDataEnum.ALARM]
             else:
-                worstreason = ""
+                isa = False
+                dev = None
                 for p in ptu:
-                    #_LOGGER.debug(f"data {data}")
-                    A = self._client.getPanelStatusDict(p)  #
-                    
-                    if EventDataEnum.ALARM in A:
-                        reason = A[EventDataEnum.ALARM]
-                    
-                    if isa or reason in stl:
-                        self._mystate = True
-                        worstreason = reason
-                        _LOGGER.debug(f"[siren]  siren triggered due to {worstreason}")
-                        break
+                    a, b = self._client.isSirenActive(p)
+                    #_LOGGER.debug(f"[update]    {self.entity_id=}  {p=}  {a=}  {b}")
+                    if a:
+                        isa = True
+                        dev = b
+                    psd = self._client.getPanelStatusDict(p)
+                    #_LOGGER.debug(f"[update]    partition {p}  dict {psd}")
+                    if EventDataEnum.ALARM in psd and psd[EventDataEnum.ALARM] in stl:
+                        self.alarmReason = psd[EventDataEnum.ALARM]
+                #_LOGGER.debug(f"[update]    {self.entity_id=}  {isa=}   {dev=}")
 
-                self._device_state_attributes = self._client.getPanelStatusDict()
-                if len(worstreason) > 0:
-                    self._device_state_attributes[EventDataEnum.ALARM] = worstreason
+            if isa or self.alarmReason in stl:
+                self._mystate = True
+                _LOGGER.debug(f"[update]    siren triggered due to {isa=} or {self.alarmReason}")
 
-            self.trigger = ""
-
-            if isa and dev is not None:
-                self._dname = dev.createFriendlyName()
-                pname = self._client.getMyString()
-                name = pname.lower() + self._dname.lower()
-                self.trigger = name
+            if not oldstate and self._mystate:
+                self.trigger = ""
+                # only set this when self._mystate goes from False to True
+                if isa and dev is not None:
+                    dname = dev.createFriendlyName()
+                    pname = self._client.getMyString()
+                    name = pname.lower() + dname.lower()
+                    self.trigger = name
 
     @property
     def is_on(self) -> bool:
@@ -203,8 +211,9 @@ class VisonicSiren(SirenEntity):
         attr[trigger] = ""
         if self.external:
             attr[EventDataEnum.ALARM] = "external"
-        elif EventDataEnum.ALARM in self._device_state_attributes:
-            attr[EventDataEnum.ALARM] = self._device_state_attributes[EventDataEnum.ALARM]
+        elif self._mystate:
+            attr[EventDataEnum.ALARM] = self.alarmReason
             attr[trigger] = self.trigger
+            
         attr[PANEL_ATTRIBUTE_NAME] = self._panel
         return attr
