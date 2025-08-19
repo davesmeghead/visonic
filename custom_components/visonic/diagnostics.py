@@ -5,11 +5,15 @@ from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
+from homeassistant.const import CONF_HOST, CONF_PATH, CONF_PORT
 
 from . import VisonicConfigEntry
+from .const import CONF_DOWNLOAD_CODE
 from .client import VisonicClient
 
 _LOGGER = logging.getLogger(__name__)
+
+REDACT_ME = (CONF_DOWNLOAD_CODE, CONF_HOST, CONF_PORT, CONF_PATH)
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant,
@@ -21,16 +25,16 @@ async def async_get_config_entry_diagnostics(
     if cdata.client is not None:
         visonic = { } 
         client : VisonicClient = cdata.client
+        B = client.getClientStatusDict()
         if ( piu := client.getPartitionsInUse() ) is not None:
             partition = {}
+            partition["panel"] = client.getPanelStatusDict(0)
             for p in piu:
                 partition[f"partition {p}"] = client.getPanelStatusDict(p)
-            B = client.getClientStatusDict()
             visonic = { **partition, **B } 
             #_LOGGER.error(f"async_get_config_entry_diagnostics {entry.as_dict()} {visonic}")
         else:
             A = client.getPanelStatusDict()
-            B = client.getClientStatusDict()
             visonic = { **A, **B } 
             #_LOGGER.error(f"async_get_config_entry_diagnostics {entry.as_dict()} {visonic}")
         diagdata = {
@@ -49,4 +53,4 @@ async def async_get_config_entry_diagnostics(
             "panel connected": 'no',
         }
 
-    return async_redact_data(diagdata, ("download_code","host","port","path"))
+    return async_redact_data(diagdata, REDACT_ME)

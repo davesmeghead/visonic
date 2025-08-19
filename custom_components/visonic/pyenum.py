@@ -46,6 +46,7 @@ class RAW(IntEnum):
     WORD = 16
     LONG_WORD = 32
     FIVE_BYTE = 40
+    SIX_BYTE = 48
     TEN_BYTE = 80
     UNDEFINED = 1000
 
@@ -317,6 +318,7 @@ class Receive(IntEnum):
     ACCESS_DENIED     = 0x08     
     LOOPBACK_TEST     = 0x0B
     EXIT_DOWNLOAD     = 0x0F     
+    UNKNOWN_1F        = 0x1F
     NOT_USED          = 0x22     
     DOWNLOAD_RETRY    = 0x25     
     DOWNLOAD_SETTINGS = 0x33     

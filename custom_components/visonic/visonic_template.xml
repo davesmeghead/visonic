@@ -6,7 +6,7 @@
         <link>https://github.com/davesmeghead/visonic</link>
         {%for entry in entries %}
         <item>
-            <description>Partition {{entry.partition}},  Date {{entry.date}},  Time {{entry.time}},  Current {{entry.current}},  Zone {{entry.zone}},  Event {{entry.event}}</description>
+            <description>Partition {{entry.partition}},  Date {{entry.date}},  Current {{entry.current}},  Zone {{entry.zone}},  Event {{entry.event}}</description>
         </item>
         {%endfor%}
     </channel>

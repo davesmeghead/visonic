@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.3.0"
+PLUGIN_VERSION = "1.9.5.0"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -233,6 +233,9 @@ PACKET_MAX_SIZE = 0xF0
 #ACK_MESSAGE = 0x02
 
 log = mylog
+
+# This string is used in the log file to indicate that I have no idea what it means, and that I'm investigating it.  If has to be unique so I can search all log files for it.
+notknown = ":NotKnown:"
 
 #from .pyhelper import vloggerclass
 #log = vloggerclass(mylog, 0, False)
@@ -374,13 +377,13 @@ pmSendMsg = {  #                        data                                    
    Send.ACK_PLINK    : VisonicCommand(convertByteArray('02 43')                                       , None                        , False, False, DebugLevel.NONE, 0.0, "Ack Powerlink" ),
 
    # PowerMaster specific 
-   Send.PM_REQUEST   : VisonicCommand(convertByteArray('B0 01 99 01 05 43')                           , [Receive.POWERMASTER]       ,  True, False,      SendDebugM, 0.0, "Powermaster Request Type 1" ),       # Request a message type from the panel, change 99 with the message type
-   Send.PM_REQUEST54 : VisonicCommand(convertByteArray('B0 01 54 00 43')                              , [Receive.POWERMASTER]       ,  True, False,      SendDebugM, 0.0, "Powermaster Request a 54" ),         # Request a 54 message type from the panel
-   Send.PM_REQUEST58 : VisonicCommand(convertByteArray('B0 01 58 00 43')                              , [Receive.POWERMASTER]       ,  True, False,      SendDebugM, 0.0, "Powermaster Request a 58" ),         # Request a 58 message type from the panel
+   #Send.PM_REQUEST   : VisonicCommand(convertByteArray('B0 01 99 01 05 43')                           , [Receive.POWERMASTER]       ,  True, False,      SendDebugM, 0.0, "Powermaster Request Type 1" ),       # Request a message type from the panel, change 99 with the message type
+   #Send.PM_REQUEST54 : VisonicCommand(convertByteArray('B0 01 54 00 43')                              , [Receive.POWERMASTER]       ,  True, False,      SendDebugM, 0.0, "Powermaster Request a 54" ),         # Request a 54 message type from the panel
+   #Send.PM_REQUEST58 : VisonicCommand(convertByteArray('B0 01 58 00 43')                              , [Receive.POWERMASTER]       ,  True, False,      SendDebugM, 0.0, "Powermaster Request a 58" ),         # Request a 58 message type from the panel
    Send.PM_KEEPALIVE : VisonicCommand(convertByteArray('B0 01 6A 00 43')                              , None                        ,  True, False,      SendDebugM, 0.0, "Powermaster Keep Alive Request" ),   # Request a Keep Alive from the panel 6A
 
    Send.PM_SIREN_MODE: VisonicCommand(convertByteArray('B0 00 47 09 99 99 00 FF 08 0C 02 99 07 43')   , None                        ,  True, False,      SendDebugM, 0.0, "Powermaster Trigger Siren Mode" ),   # Trigger Siren, the 99 99 needs to be the usercode, other 99 is Siren Type
-   Send.PM_SIREN     : VisonicCommand(convertByteArray('B0 00 3E 0A 99 99 05 FF 08 02 03 00 00 01 43'), None                        ,  True, False,      SendDebugM, 0.0, "Powermaster Trigger Siren" ),        # Trigger Siren, the 99 99 needs to be the usercode
+   Send.PM_SIREN     : VisonicCommand(convertByteArray('B0 00 3E 0A 99 99 05 FF 08 02 03 00 00 01 43'), None                        ,  True, False,      SendDebugM, 1.0, "Powermaster Trigger Siren" ),        # Trigger Siren, the 99 99 needs to be the usercode
    Send.PL_BRIDGE    : VisonicCommand(convertByteArray('E1 99 99 43')                                 , None                        , False, False,      SendDebugM, 0.0, "Powerlink Bridge" ),                 # Command to the Bridge
 
 #   Send.PM_SETBAUD   : VisonicCommand(convertByteArray('B0 00 41 0D AA AA 01 FF 28 0C 05 01 00 BB BB 00 05 43'), None   ,  True, False,   CMD, 2.5, "Powermaster Set Serial Baud Rate" ),
@@ -521,6 +524,7 @@ pmReceiveMsg = {
    Receive.ACCESS_DENIED      : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Access Denied" ),       # Access Denied
    Receive.LOOPBACK_TEST      : PanelCallBack(  0, False, False,  0, 0, False, DebugLevel.FULL,                          "Loopback Test" ),       # THE PANEL DOES NOT SEND THIS. THIS IS USED FOR A LOOP BACK TEST
    Receive.EXIT_DOWNLOAD      : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Exit Download" ),       # The panel may send this during download to tell us to exit download 
+   Receive.UNKNOWN_1F         : PanelCallBack(  0,  True, False,  0, 0, False, DebugLevel.FULL,                          "Do not know what this is" ), # My Powermaster 30 sent this
    Receive.NOT_USED           : PanelCallBack( 14,  True, False,  0, 0, False, DebugLevel.FULL,                          "Not Used" ),            # 14 Panel Info (older visonic powermax panels so not used by this integration)
    Receive.DOWNLOAD_RETRY     : PanelCallBack( 14,  True, False,  0, 0, False, DebugLevel.CMD  if OBFUS else RecvDebugD, "Download Retry" ),      # 14 Download Retry
    Receive.DOWNLOAD_SETTINGS  : PanelCallBack( 14,  True, False,  0, 0, False, DebugLevel.NONE if OBFUS else RecvDebugD, "Download Settings" ),   # 14 Download Settings
@@ -1034,6 +1038,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         self.PowerLinkBridgeStealth = False     # The server is in stealth mode (giving this integration sole access to the panel)
         self.PowerLinkBridgeProxy = False       # The server is acting in proxy mode i.e. it supports a Visonic Go connection to an external site)
 
+        self.unknownLog = {}
+
         self.resetGlobals()
 
         # Now that the defaults have been set, update them from the panel config dictionary (that may not have all settings in)
@@ -1043,6 +1049,15 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     def setLogger(self, loggy):
         super().setLogger(loggy)
         log = loggy
+
+    def checkUnknown(self, message : str, key : str, value):
+        # {notknown}
+        if key in self.unknownLog:
+            if self.unknownLog[key] != value:
+                log.debug(f"{notknown} {message} {key=}  old={self.unknownLog[key]}   new={value}")
+                self.unknownLog[key] = value
+        else:
+            self.unknownLog[key] = value
 
     def resetVariablesForNewConnection(self):
         self.lastRecvTimeOfPanelData = self._getUTCTimeFunction()    # Do not set to None
@@ -1183,6 +1198,13 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             log.debug("[Controller] ********************************************************************************")
             log.debug("[Controller] ********************************************************************************")
 
+    def getPartitionsInUse(self) -> set | None:
+        # if partitions are enabled in the panel then return the partition set, 
+        #     note that the set could only be a single partition (if that is what is set in the panel)
+        if self.partitionsEnabled:
+            return self.PartitionsInUse
+        return None
+        
     def updateSettings(self, newdata: PanelConfig):
         if newdata is not None:
             # log.debug(f"[updateSettings] Settings refreshed - Using panel config {newdata}")
@@ -2206,10 +2228,10 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                         self.EnableB0ReceiveProcessing = True
 
-                        (mandatory, optional) = self.checkPanelDataPresent(checkAllPanelData)
+                        (mandatory, optional) = self._checkPanelDataPresent(forceall = checkAllPanelData, output_to_log = True)
                         missing = mandatory | optional
                         
-                        log.debug(f"[_sequencer]   checkPanelDataPresent {checkAllPanelData=}    missing items {mandatory=}  {optional=}")
+                        log.debug(f"[_sequencer]   _checkPanelDataPresent {checkAllPanelData=}    missing items {mandatory=}  {optional=}")
                         checkAllPanelData = False
 
                         #zoneCnt = pmPanelConfig[CFG.WIRELESS][self.PanelType] + pmPanelConfig[CFG.WIRED][self.PanelType]
@@ -2578,7 +2600,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         self.PanelMode = AlPanelMode.POWERLINK
 
                         # by here we should have all mandatory panel settings but maybe not all optional
-                        (mandatory, optional) = self.checkPanelDataPresent()
+                        (mandatory, optional) = self._checkPanelDataPresent(forceall = False, output_to_log = True)
                         missing = mandatory | optional
                         
                         if len(mandatory) > 0:
@@ -3210,7 +3232,7 @@ class PacketHandling(ProtocolBase):
             log.debug(f"[_updateSensor]               {self.PanelSettings[PanelSetting.ZoneCustNameStr]}")
             return None
 
-        (mandatory, optional) = self.checkPanelDataPresent()
+        (mandatory, optional) = self._checkPanelDataPresent(forceall = False, output_to_log = False)
         #m = mandatory | optional
         if not self.ForceStandardMode and len(mandatory) > 0:
             log.debug(f"[_updateSensor]       Not Forcing Standard and not got all mandatory panel settings so not updating sensor {mandatory=}")
@@ -3245,9 +3267,10 @@ class PacketHandling(ProtocolBase):
             if partitionData is not None and partitionCnt > 1:
                 for j in range(0, partitionCnt):  # max partitions of all panels
                     if (partitionData & (1 << j)) != 0:
-                        log.debug(f"[_updateSensor]     Adding to partition list - ref {sensor}  Z{(sensor+1):0>2}     Partition {(j+1)}")
                         part.add(j + 1)                  # partitions for this sensor
-                        self.PartitionsInUse.add(j + 1)  # overall used partitions, this is a set so no repetitions allowed
+                        if j + 1 not in self.PartitionsInUse:
+                            log.debug(f"[_updateSensor]     Adding to main partition list - ref {sensor}  Z{(sensor+1):0>2}     Partition {(j+1)}")
+                            self.PartitionsInUse.add(j + 1)  # overall used partitions, this is a set so no repetitions allowed
             else:
                 part.add(1)
 
@@ -3281,7 +3304,7 @@ class PacketHandling(ProtocolBase):
                     if motiondelaytime is not None and motiondelaytime == 0xFFFF and (sensorType == AlSensorType.MOTION or sensorType == AlSensorType.CAMERA):
                         log.debug(f"[_updateSensor] PowerMaster Zone Z{sensor+1:0>2} has no motion delay set (Sensor will only be useful when the panel is armed)")
                 else:
-                    log.debug(f"[_updateSensor] Found unknown sensor type {hexify(device_type)}")
+                    log.debug(f"[_updateSensor] {notknown} Found unknown sensor type {hexify(device_type)}")
             else:  #  PowerMax models
                 tmpid = device_type & 0x0F
                 #sensorType = "UNKNOWN " + str(tmpid)
@@ -3307,7 +3330,7 @@ class PacketHandling(ProtocolBase):
                     # if tmpid in pmZoneMaxGeneric:
                     sensorType = pmZoneMaxGeneric[tmpid]
                 else:
-                    log.debug(f"[_updateSensor] Found unknown sensor type {device_type}")
+                    log.debug(f"[_updateSensor] {notknown} Found unknown sensor type {device_type}")
 
             if self.SensorList[sensor].sid != device_type:
                 updated = True
@@ -3325,6 +3348,7 @@ class PacketHandling(ProtocolBase):
                     self.SensorList[sensor].zchime = pmZoneChimeKey[zoneChime]
                 else:
                     self.SensorList[sensor].zchime = "undefined " + str(zoneChime)
+                    log.debug(f"[_updateSensor] {notknown} Found unknown chime type {zoneChime}")
 
         if zoneType is not None:
             self.PanelSettings[PanelSetting.ZoneTypes][sensor] = zoneType
@@ -3340,6 +3364,7 @@ class PacketHandling(ProtocolBase):
                 self.SensorList[sensor].ztypeName = pmZoneTypeKey[zoneType]
             else:
                 self.SensorList[sensor].ztypeName = "undefined " + str(zoneType)   # undefined
+                log.debug(f"[_updateSensor] {notknown} Found unknown zonetype type {zoneType}")
 
         if motiondelaytime is not None and motiondelaytime != 0xFFFF:
             if self.SensorList[sensor].motiondelaytime != motiondelaytime:
@@ -3447,7 +3472,7 @@ class PacketHandling(ProtocolBase):
             self.PanelType = p
 
             if self.DownloadCodeUserSet:
-                log.debug(f"[_setDataFromPanelType] Using the user defined Download Code {self.DownloadCode if not OBFUS else "OBFUSCATED"}")
+                log.debug(f"[_setDataFromPanelType] Using the defined Download Code {self.DownloadCode if not OBFUS else "OBFUSCATED"}")
             elif self.DownloadCode == DEFAULT_DL_CODE:
                 # If the panel still has its startup default Download Code, or if it hasn't been set by the user to something different
                 self.DownloadCode = pmPanelConfig[CFG.DLCODE_1][self.PanelType]
@@ -3498,7 +3523,7 @@ class PacketHandling(ProtocolBase):
         log.error(f"Lookup of Visonic Panel type {p} reveals that this is a new Panel Type that is unknown to this Software. Please contact the Author of this software")
         return False
 
-    def checkPanelDataPresent(self, forceall = False) -> (set, set):
+    def _checkPanelDataPresent(self, forceall, output_to_log) -> (set, set):
         #zoneCnt = pmPanelConfig[CFG.WIRELESS][self.PanelType] + pmPanelConfig[CFG.WIRED][self.PanelType]
         zoneCnt = self.getPanelCapability(IndexName.ZONES)
         if self.isPowerMaster():
@@ -3530,18 +3555,18 @@ class PacketHandling(ProtocolBase):
         if not self.ForceStandardMode:
             need_these[PanelSetting.UserCodes] = 2 * self.getPanelCapability(IndexName.USERS)
 
-        if forceall:
-            log.debug(f"[checkPanelDataPresent]  forceall is True")
+        if output_to_log and forceall:
+            log.debug(f"[_checkPanelDataPresent]  forceall is True")
         optional = set()
         mandatory = set()
         for s,v in need_these.items():
             m = pmPanelSettingCodes[s].mandatory
-            if not OBFUS:
+            if output_to_log and not OBFUS:
                 if s in self.PanelSettings:
                     if forceall or v > len(self.PanelSettings[s]):
-                        log.debug(f"[checkPanelDataPresent]     {s.name:<15}   want {v}  got {len(self.PanelSettings[s])}    {'mandatory' if m else 'optional'}")
+                        log.debug(f"[_checkPanelDataPresent]     {s.name:<15}   want {v}  got {len(self.PanelSettings[s])}    {'mandatory' if m else 'optional'}")
                 else:
-                    log.debug(f"[checkPanelDataPresent]     {s.name:<15}   want {v}  s not in panelsettings    {'mandatory' if m else 'optional'}")
+                    log.debug(f"[_checkPanelDataPresent]     {s.name:<15}   want {v}  s not in panelsettings    {'mandatory' if m else 'optional'}")
             if forceall or not (s in self.PanelSettings and len(self.PanelSettings[s]) >= v):
                 if m:
                     mandatory.add(s)
@@ -3617,7 +3642,12 @@ class PacketHandling(ProtocolBase):
 
             #log.warning(f"[Process Settings]    AlarmLED10 {self.epromManager.lookupEprom("AlarmLED10")}")
             #log.warning(f"[Process Settings]    AlarmLED30 {self.epromManager.lookupEprom("AlarmLED30")}")
-            #log.warning(f"[Process Settings]    bellTime {self.epromManager.lookupEprom("bellTime")}")
+            bell = self.epromManager.lookupEpromSingle("bellTime")
+            log.debug(f"[Process Settings] Bell Time {type(bell)=}   {bell=}")
+            # Set all partitions regardless of which are actually used for panel status
+            self.PartitionState[0].setBellTime(bell * 60)
+            self.PartitionState[1].setBellTime(bell * 60)
+            self.PartitionState[2].setBellTime(bell * 60)
 
             # ------------------------------------------------------------------------------------------------------------------------------------------------
             # Process zone settings
@@ -3703,8 +3733,8 @@ class PacketHandling(ProtocolBase):
         for i in range(min(count, len(se), len(dt))):
             if se[i]:
                 log.debug(f"[Process Settings]       Siren {i} enrolled, device type {dt[i]}    {pmSirenMaster[dt[i]].name if dt[i] in pmSirenMaster else "Unknown Device"}")
-            else:
-                log.debug(f"[Process Settings]       Siren {i} not enrolled")
+            #else:
+            #    log.debug(f"[Process Settings]       Siren {i} not enrolled")
         return False
 
     def _updateAllSensors(self) -> bool:
@@ -3712,16 +3742,13 @@ class PacketHandling(ProtocolBase):
         if self.PanelType is None:
             return False
 
-        (mandatory, optional) = self.checkPanelDataPresent()
+        (mandatory, optional) = self._checkPanelDataPresent(forceall = False, output_to_log = False)
 
         retval = False
         # Do not create or update sensors until all mandatory data has been obtained
         if self.ForceStandardMode or len(mandatory) == 0:
             # Only when we have all EPROM or B0 Zone Data, or we're in Standard Emulation Mode
             
-            # this gets updated in self._updateSensor
-            #self.PartitionsInUse = set()
-
             # List of door/window sensors
             doorZoneStr = ""
             # List of motion sensors
@@ -3751,7 +3778,6 @@ class PacketHandling(ProtocolBase):
                     else:
                         otherZoneStr = f"{otherZoneStr},Z{i+1:0>2}"
 
-            #log.debug(f"[Process Settings]          self.PartitionsInUse = {self.PartitionsInUse}")
             if (piu := self.getPartitionsInUse()) is not None:
                 log.debug(f"[Process Settings]                I see that you have {piu} partition(s) set in the panel")
             else:
@@ -3763,7 +3789,7 @@ class PacketHandling(ProtocolBase):
             self.PanelStatus[PANEL_STATUS.OTHER_ZONES] = otherZoneStr[1:]
 
         else:
-            log.debug(f"[_updateAllSensors]   checkPanelDataPresent missing mandatory items {mandatory=}")
+            log.debug(f"[_updateAllSensors]   _checkPanelDataPresent missing mandatory items {mandatory=}")
 
         return retval # return True if any of the sensor data has been changed because of this function
 
@@ -3965,6 +3991,7 @@ class PacketHandling(ProtocolBase):
             Receive.ACCESS_DENIED     : DecodeMessage(                True , self.handle_msgtype08, False, None ),  # Access Denied
             Receive.LOOPBACK_TEST     : DecodeMessage(                True , self.handle_msgtype0B, False, None ),  # # LOOPBACK TEST, STOP (0x0B) IS THE FIRST COMMAND SENT TO THE PANEL WHEN THIS INTEGRATION STARTS
             Receive.EXIT_DOWNLOAD     : DecodeMessage(                True , self.handle_msgtype0F, False, None ),  # Exit
+            Receive.UNKNOWN_1F        : DecodeMessage(               False , None                 , False, "WARNING: Message 0x1F is not decoded" ),
             Receive.NOT_USED          : DecodeMessage(               False , None                 , False, "WARNING: Message 0x22 is not decoded, are you using an old Powermax Panel as this is not supported?" ),
             Receive.DOWNLOAD_RETRY    : DecodeMessage(                True , self.handle_msgtype25, False, None ),  # Download retry
             Receive.DOWNLOAD_SETTINGS : DecodeMessage(     processDownload , self.handle_msgtype33, False, f"Received 33 Message, we are in {self.PanelMode.name} mode (so I'm ignoring the message), data: {toString(packet)}"),  # Settings send after a MSGV_START
@@ -4027,6 +4054,7 @@ class PacketHandling(ProtocolBase):
     def handle_msgtype07(self, data):
         """MsgType=07 - No idea what this means"""
         log.debug(f"[handle_msgtype07] No idea what this message means, data = {toString(data)}")
+        self.checkUnknown("    and its different", "handle_msgtype07", toString(data))
         # Assume that we need to send an ack
 
     def handle_msgtype08(self, data):
@@ -4245,7 +4273,7 @@ class PacketHandling(ProtocolBase):
                     #log.debug("[handle_msgtypeA5] Got A5 04 message, resetting watchdog")
                     self._reset_watchdog_timeout()
 
-                sysStatus = data[2]  # Mark-Mills with a PowerMax Complete Part, sometimes this has 0x20 bit set and I'm not sure why
+                sysStatus = data[2]
                 sysFlags = data[3]
                 eventZone = data[4]
                 eventType = data[5]
@@ -4253,10 +4281,16 @@ class PacketHandling(ProtocolBase):
                 dummy1 = data[6]
                 dummy2 = data[7]
                 log.debug(f"[handle_msgtypeA5]      sysStatus=0x{hexify(sysStatus)}    sysFlags=0x{hexify(sysFlags)}    eventZone=0x{hexify(eventZone)}    eventType=0x{hexify(eventType)}    unknowns are 0x{hexify(dummy1)} 0x{hexify(dummy2)}")
+                self.checkUnknown("    A5 4 data[6] is different to last time", "handle_msgtypeA5_4_6", data[6])
+                self.checkUnknown("    A5 4 data[7] is different to last time", "handle_msgtypeA5_4_7", data[7])
 
-                #last10seconds = sysFlags & 0x10
-
+                if sysStatus > 0x1F:  # Mark-Mills with a PowerMax Complete Part, sometimes this has the 0x20 bit set and I'm not sure why
+                    log.debug(f"[handle_msgtypeA5]           {notknown} -->  sysStatus is a large number, what does bit 6 mean?")
+                
                 if self.getPartitionsInUse() is None:   
+                    sysStatus = sysStatus & 0x1F     # Mark-Mills with a PowerMax Complete Part, sometimes this has the 0x20 bit set and I'm not sure why
+                    #last10seconds = sysFlags & 0x10
+
                     # Process sysStatus and sysFlags only if there are no partitions
                     #     The panel sends A5 messages for all partitions but we don't know the partition number. So how do we know what to decode?
                     oldPS = self.PartitionState[0].PanelState
@@ -4302,7 +4336,7 @@ class PacketHandling(ProtocolBase):
                 if vala != 0 or valb != 0:
                     log.debug(f"[handle_msgtypeA5]      Unknown A5 Message: {toString(data)}")
                     # [handle_msgtypeA5]      Unknown A5 Message: 10 05 00 00 00 00 00 00 43 21 43        # 4321 is the 1st account number
-
+                self.checkUnknown("[handle_msgtypeA5]              This A5 Message is different to last time", f"handle_msgtypeA5_{eventType}", toString(data))
         self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
 
     def handle_msgtypeA6(self, data):
@@ -4328,9 +4362,15 @@ class PacketHandling(ProtocolBase):
         # 01 00 27 51 02 ff 00 02 00 00
         # ff 5d 00 2d 00 00 11 0c 00 00
 
+        def getType(eventType) -> EVENT_TYPE:
+            return EVENT_TYPE(eventType) if eventType in EVENT_TYPE else EVENT_TYPE.NOT_DEFINED
+
+        def getTypeStr(eventType) -> str:
+            return pmLogEvent_t[eventType] if 0 <= eventType <= 151 and len(pmLogEvent_t[eventType]) > 0 else "Unknown"
+
         def displayEvent(m, eventZone, eventType):
-            et : EVENT_TYPE = EVENT_TYPE(eventType) if eventType in EVENT_TYPE else EVENT_TYPE.NOT_DEFINED
-            eventStr = pmLogEvent_t[eventType] if 0 <= eventType <= 151 and len(pmLogEvent_t[eventType]) > 0 else "Unknown"
+            et : EVENT_TYPE = getType(eventType)
+            eventStr = getTypeStr(eventType)
             if self.isPowerMaster():
                 s = pmLogPowerMasterUser_t[eventZone] or "Unknown"
                 log.debug(f"[handle_msgtypeA7]           {m}  {eventZone}/{eventType}   {s}  {et.name}     {eventStr=}")
@@ -4338,42 +4378,25 @@ class PacketHandling(ProtocolBase):
                 s = pmLogPowerMaxUser_t[int(eventZone & 0x7F)] or "Unknown"
                 log.debug(f"[handle_msgtypeA7]           {m}  {eventZone}/{eventType}   {s}  {et.name}     {eventStr=}")
         
-        def processSpecialEntries(eventZone, eventType) -> bool:
-            retval = False
-            SYSTEM = 0
-            if eventZone == SYSTEM and eventType == EVENT_TYPE.SYSTEM_RESET:  # panel reset
-                log.info(f"[handle_msgtypeA7]               A7 FF message : data={toString(data)}.  Panel has been reset.")
-                self.PanelResetEvent = True
-                retval = True
-            #elif eventZone == SYSTEM and eventType == EVENT_TYPE.PANEL_LOW_BATTERY:             # 0/45   System  PANEL_LOW_BATTERY
-            #    log.debug(f"[handle_msgtypeA7]               A7 FF message : data={toString(data)}.  Panel Low Battery.")
-            #    # if multiple partitions then only needed for partition 1
-            #    self.PartitionState[0].PanelBattery = False
-            #elif eventZone == SYSTEM and eventType == EVENT_TYPE.PANEL_LOW_BATTERY_RESTORE:     # 0/46   System  PANEL_LOW_BATTERY_RESTORE
-            #    log.debug(f"[handle_msgtypeA7]               A7 FF message : data={toString(data)}.  Panel Low Battery Restore.")
-            #    # if multiple partitions then only needed for partition 1
-            #    self.PartitionState[0].PanelBattery = True
-            return retval
-
-
         def processEvent(partition, eventZone, eventType):
+
+            #if not processSpecialEntries(eventZone, eventType):
+                
             et : EVENT_TYPE = EVENT_TYPE(eventType) if eventType in EVENT_TYPE else EVENT_TYPE.NOT_DEFINED
+            self.addPanelEventData(AlPanelEventData(name = eventZone, action = int(eventType))) # assume partition -1 means a panel event not tied to a partition
 
-            if not processSpecialEntries(eventZone, eventType):
-                self.addPanelEventData(AlPanelEventData(name = eventZone, action = int(eventType))) # assume partition -1 means a panel event not tied to a partition
+            if eventZone-1 in self.SensorList:                                              # only used if it decides that siren is sounding, then that is the trigger sensor
+                self.PartitionState[partition].UpdatePanelState(et, self.SensorList[eventZone-1])   
+            else:
+                self.PartitionState[partition].UpdatePanelState(et)   
 
-                if eventZone-1 in self.SensorList:                                              # only used if it decides that siren is sounding, then that is the trigger sensor
-                    self.PartitionState[partition].UpdatePanelState(et, self.SensorList[eventZone-1])   
+            if et == EVENT_TYPE.FORCE_ARM or (self.pmForceArmSetInPanel and et == EVENT_TYPE.DISARM): # Force Arm OR (ForceArm has been set and Disarm)
+                self.pmForceArmSetInPanel = (et == EVENT_TYPE.FORCE_ARM)                                 # When the panel uses ForceArm then sensors may be automatically armed and bypassed by the panel
+                log.debug("[handle_msgtypeA7]              Panel has been Armed using Force Arm, sensors may have been bypassed by the panel, asking panel for an update on bypassed sensors")
+                if self.isPowerMaster():
+                    self.B0_Wanted.add(B0SubType.ZONE_BYPASS)
                 else:
-                    self.PartitionState[partition].UpdatePanelState(et, None)   
-
-                if et == EVENT_TYPE.FORCE_ARM or (self.pmForceArmSetInPanel and et == EVENT_TYPE.DISARM): # Force Arm OR (ForceArm has been set and Disarm)
-                    self.pmForceArmSetInPanel = (et == EVENT_TYPE.FORCE_ARM)                                 # When the panel uses ForceArm then sensors may be automatically armed and bypassed by the panel
-                    log.debug("[handle_msgtypeA7]              Panel has been Armed using Force Arm, sensors may have been bypassed by the panel, asking panel for an update on bypassed sensors")
-                    if self.isPowerMaster():
-                        self.B0_Wanted.add(B0SubType.ZONE_BYPASS)
-                    else:
-                        self._addMessageToSendList(Send.BYPASSTAT)
+                    self._addMessageToSendList(Send.BYPASSTAT)
             
         msgCnt = int(data[0])
 
@@ -4382,66 +4405,84 @@ class PacketHandling(ProtocolBase):
         #    msgCnt = 1
 
         if msgCnt == 255 and (piu := self.getPartitionsInUse()) is not None:
+            log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions), cannot rely on anything in this message for a powermaster with partitions, data={toString(data)}")
+            ## I have tried for many hours to make sense of this message data for my PowerMAster 30 panel with 2 partitons set up for testing.
+            ## It looked like I had it with the code below and then it gave me ARMED_AWAY and DISARMED messages when they were not commanded, not even within the same hour.
+            ## It looks like other messages that come in slow time e.g. low battery, maybe system reset, may be able to be processed.  Need to think about this more!
+            ##     i.e. Although when i exit installer on the panel it sends a system reset, how do i know that the panel isn't going to send a random system reset message at any time?
             # Looks like it's parsed differently
-                # From my PM30, the 01 and 00 alternate several times back and forth, but never the same sequentially.  Could be partition as there are 2.
-                #     data=ff 09 06 27 00 01 41 03 05 00 43
-                #     data=ff 09 06 27 00 00 41 03 05 00 43
+            # I cannot process this data until I know what it means:
+            #    byte 1 seems to be a counter
+            #    byte 2 is Zone --> as per usual, but it doesn't match the B0 data or the panel itself
+            #    byte 3 is Type --> as per usual, but it doesn't match the B0 data or the panel itself
+            #    byte 4 could be partition
+            #    byte 5 -->  00 or 01 or FF.  I'm using FF as validity
+            #    byte 6 is this the reason for the Type in byte 3
+            #    byte 7 is 03 or 06 or 0C            0011    0110    1100
+            #    byte 8 is 00 or 36
+            #    byte 9 always 00
 
-            # [handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is 0xd  : data=ff 0d 00 2d 00 01 41 0c 00 00 43
-            log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
-            # The first entry always looks valid, so for now, process it for reset and panel battery state            
-            eventZone = int(data[2])                     # 61h or 0 : For a PowerMaster panel 0x61 is decimal 97, this is "User 1" in pmLogPowerMasterUser_t, also 0 is System in pmLogPowerMasterUser_t
-            eventType = int(data[3])                     # Looks like an eventType but the timing of when it arrives is all wrong
-            # processEvent(0, eventZone, eventType)        # Assume all panel state goes through partition 1
+            # 23:34:58.595 [handle_msgtypeA7]      A7 FF message (partitions) NOT CURRENTLY PROCESSED IN THIS INTEGRATION - contains data=ff dc 06 01 02 ff 40 03 05 00 43     Zone 6 Partition 2 ALARM_INTERIOR     byte 8 is 1 less than byte 2 i.e. zone
+            # 23:34:58.746 [handle_msgtypeA7]      A7 FF message (partitions) NOT CURRENTLY PROCESSED IN THIS INTEGRATION - contains data=ff d8 37 01 01 ff 40 03 36 00 43     Zone 56 Partition 1 ALARM_INTERIOR    byte 8 is 1 less than byte 2 i.e. zone
+            
+            #eventZone = int(data[2])          # Looks like event zone
+            #eventType = int(data[3])          # Looks like an eventType but the timing of when it arrives is all wrong
+            #partition = int(data[4])          # Looks like the partition, 0 = all
+            #valid = int(data[5]) == 0xFF      # data[5] is 0xFF so process the data, it looks like the rest of the data is valid to process
+            #eventReason = int(data[6])
 
-            #if not processSpecialEntries(eventZone, eventType):
-            #    log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
-
-            control = data[1]
-            if control == 0x0D:
-                for i in range(0,1):   # only process first one   range(0,2)
-                    eventZone = int(data[2 + (4 * i)])
-                    eventType = int(data[3 + (4 * i)])
-                    displayEvent(f"Processing {i} As ", eventZone, eventType)
-                    for p in list(piu):
-                        processEvent(p-1, eventZone, eventType)
-            else:
-                for i in range(0,4):
-                    eventZone = int(data[2 + (2 * i)])
-                    eventType = int(data[3 + (2 * i)])
-                    displayEvent(f"Entry {i} Could be", eventZone, eventType)
-                    
+            #log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains data={toString(data)}")
+            #self.checkUnknown("[handle_msgtypeA7]              A7 Message unknown byte is different to last time", f"handle_msgtypeA7_{msgCnt}", data[1])
+            #if valid:
+            #    et = getType(eventReason)
+            #    es = getTypeStr(eventReason)
+            #    displayEvent("Assuming that it is", eventZone, eventType)
+            #    log.debug(f"[handle_msgtypeA7]                 May be linked with byte 6: {et.name}        String={es}")
+            #    log.debug(f"[handle_msgtypeA7]                 Partition: {partition}")
+            #    log.debug(f"[handle_msgtypeA7]                 Counter: {data[1]}")
+            #    if partition == 0: # assume all partitions
+            #        for p in list(piu):
+            #            processEvent(p-1, eventZone, eventType)
+            #    else:
+            #        #processEvent(partition-1, eventZone, eventType)
+            #        partitionCnt = self.getPanelCapability(IndexName.PARTITIONS)
+            #        if partition is not None and partitionCnt > 1:
+            #            for j in range(0, partitionCnt):  # max partitions of all panels
+            #                if (partition & (1 << j)) != 0:
+            #                    processEvent(j, eventZone, eventType)
+            #else:
+            #    displayEvent("Not sure what this represents, is it historical, or perhaps 'live'", eventZone, eventType)
+                
         elif msgCnt == 255: # no partitions
-            log.debug(f"[handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
+            # Not from any of my panels:
+            #  10:40:41.179 [handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is 0x51  : data=ff 51 61 51 01 00 11 06 00 00 43
+            #  10:40:41.480 [handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is 0x51  : data=ff 51 61 51 01 ff 10 06 00 00 43
+            #  10:40:42.722 [handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is 0x52  : data=ff 52 61 55 01 ff 10 06 00 00 43
+            #  10:41:36.070 [handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is 0x51  : data=ff 51 61 51 01 00 11 06 00 00 43
+            #  10:42:31.053 [handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is 0x51  : data=ff 51 61 51 01 00 11 06 00 00 43
+            #  10:43:26.033 [handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is 0x51  : data=ff 51 61 51 01 00 11 06 00 00 43
+            #  10:45:04.772 [handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is 0x53  : data=ff 53 00 61 00 ff 00 0c 00 00 43
 
-            # The first entry always looks valid, so for now, process it for reset and panel battery state            
-            eventZone = int(data[2])                     # 61h or 0 : For a PowerMaster panel 0x61 is decimal 97, this is "User 1" in pmLogPowerMasterUser_t, also 0 is System in pmLogPowerMasterUser_t
+            log.debug(f"[handle_msgtypeA7]      A7 FF message (no partitions) contains,   unknown byte is {hex(int(data[1]))}  : data={toString(data)}")
+            self.checkUnknown("[handle_msgtypeA7]              A7 Message unknown byte is different to last time", f"handle_msgtypeA7_{msgCnt}", data[1])
+
+            # The first entry always looks valid, so for now, process it          
+            eventZone = int(data[2])                     # 
             eventType = int(data[3])                     # Looks like an eventType but the timing of when it arrives is all wrong
             processEvent(0, eventZone, eventType)        # Assume all panel state goes through partition 1
 
-            for i in range(1,4):
-                eventZone = int(data[2 + (2 * i)])
-                eventType = int(data[3 + (2 * i)])
-                displayEvent(f"Entry {i} Could be", eventZone, eventType)
+            partition = int(data[4])
+            eventReason = int(data[6])
+            et = getType(eventReason)
+            es = getTypeStr(eventReason)
+            log.debug(f"[handle_msgtypeA7]                 May be linked with byte 6: {et.name}        String={es}")
+            log.debug(f"[handle_msgtypeA7]                 Partition may be: {partition}")
+            log.debug(f"[handle_msgtypeA7]                 Counter: {data[1]}")
 
-            # These are from a PowerMaster panel
-            # data= ff 00 61 51 01 ff 00 0b 00 00 43
-            # data= ff 00 61 55 01 ff 00 0b 00 00 43
-            # data= ff 00 61 51 01 ff 00 0b 00 00 43
-            # data= ff 00 61 55 01 ff 00 00 00 00 43
-            # data= ff 00 61 51 01 ff 00 0b 00 00 43
-            # data= ff 00 61 55 01 ff 00 00 00 00 43
-            # Different powermaster panel
-            # data= ff 44 00 60 00 ff 00 0c 00 00 43
-            # data[3] could be an event type
-            #        ARMED_HOME = 0x51
-            #        ARMED_AWAY = 0x52
-            #        QUICK_ARMED_HOME = 0x53
-            #        QUICK_ARMED_AWAY = 0x54
-            #        DISARM = 0x55
-            #        SYSTEM_RESET = 0x60
-            # data[2] could be from pmLogPowerMasterUser_t
-            #   For a PowerMaster panel 0x61 is decimal 97, this is "User 1" in pmLogPowerMasterUser_t
+            #for i in range(1,4):
+            #    eventZone = int(data[2 + (2 * i)])
+            #    eventType = int(data[3 + (2 * i)])
+            #    displayEvent(f"Entry {i} Could be", eventZone, eventType)
 
         elif msgCnt > 4:
             log.warning(f"[handle_msgtypeA7]      A7 message contains too many messages to process : {msgCnt}   data={toString(data)}")
@@ -4450,6 +4491,8 @@ class PacketHandling(ProtocolBase):
             # 0d a7 01 00 1f 52 01 ff 00 01 00 00 43 a0 0a
             #             03 00 01 03 08 0e 01 13
             #             03 00 2f 55 2f 1b 00 1c
+            self.checkUnknown("[handle_msgtypeA7]              A7 Message, count is different to last time", "handle_msgtypeA7_msgCnt", msgCnt)
+            self.checkUnknown("[handle_msgtypeA7]              A7 Message unknown byte is different to last time", "handle_msgtypeA7_norm", data[1])
             log.debug(f"[handle_msgtypeA7]      A7 message (no partitions) contains {msgCnt} messages,   unknown byte is {hex(int(data[1]))}    data={toString(data)}")
             for i in range(msgCnt):
                 eventZone = int(data[2 + (2 * i)])
@@ -4458,8 +4501,7 @@ class PacketHandling(ProtocolBase):
                 processEvent(0, eventZone, eventType)        # Assume all panel state goes through partition 1
 
         else:
-            log.debug(f"[handle_msgtypeA7]      Partitions in use = {self.getPartitionsInUse()}  data={toString(data)}")
-    
+            log.warning(f"[handle_msgtypeA7]      DATA NOT PROCESSED AND NEVER SEEN THIS BEFORE. Partitions in use = {self.getPartitionsInUse()} and received a msgCnt in range 0 to 4, data={toString(data)}")
     
 
     def handle_msgtypeAB(self, data) -> bool:  # PowerLink Message
@@ -4477,10 +4519,12 @@ class PacketHandling(ProtocolBase):
             pt = datetime(2000 + data[7], data[6], data[5], data[4], data[3], data[2]).astimezone()            
             log.debug(f"[handle_msgtypeAB]    Panel time is {pt}")
             self.setTimeInPanel(pt)
+            self.checkUnknown("[handle_msgtypeAB]              AB Message 1 unknown byte is different to last time", f"handle_msgtypeAB_{subType}", data[1])
 
         elif subType == 3 and self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS]:  # keepalive message
             # Example 0D AB 03 00 1E 00 31 2E 31 35 00 00 43 2A 0A
             #               03 00 1e 00 33 33 31 34 00 00 43        From a Powermax+     PanelType=1, Model=33
+            self.checkUnknown("[handle_msgtypeAB]              AB Message 3 message is different to last time", f"handle_msgtypeAB_{subType}", toString(data))
 
             log.debug("[handle_msgtypeAB] ***************************** Got PowerLink Keep-Alive ****************************")
             # It is possible to receive this between enrolling (when the panel accepts the enrol successfully) and the EPROM download
@@ -4504,8 +4548,10 @@ class PacketHandling(ProtocolBase):
             log.debug("[handle_msgtypeAB] ***************************** Got PowerLink Keep-Alive ****************************")
             log.debug("[handle_msgtypeAB] ********************* Panel Mode not Powerlink / Standard Plus **********************")
             self.UnexpectedPanelKeepAlive = True    
+            self.checkUnknown("[handle_msgtypeAB]              AB Message 3 message is different to last time", f"handle_msgtypeAB_{subType}", toString(data))
 
         elif subType == 5 and self.PanelMode == AlPanelMode.POWERLINK:  # -- phone message
+            self.checkUnknown("[handle_msgtypeAB]              AB Message 5 message is different to last time", f"handle_msgtypeAB_{subType}", toString(data))
             action = data[2]
             if action == 1:
                 log.debug("[handle_msgtypeAB] PowerLink Phone: Calling User")
@@ -4522,8 +4568,10 @@ class PacketHandling(ProtocolBase):
 
         elif subType == 10 and data[2] == 0 and self.PanelMode == AlPanelMode.POWERLINK:
             log.debug(f"[handle_msgtypeAB] PowerLink telling us what the code {hex(data[3]).upper()} {hex(data[4]).upper()} is for downloads, currently not used as I'm not certain of this, and never seen it")
+            self.checkUnknown("[handle_msgtypeAB]              AB Message 5 message is different to last time", f"handle_msgtypeAB_{subType}_A", toString(data))
 
         elif subType == 10 and data[2] == 1:
+            self.checkUnknown("[handle_msgtypeAB]              AB Message 5 message is different to last time", f"handle_msgtypeAB_{subType}_B", toString(data))
             if self.PanelMode == AlPanelMode.POWERLINK:
                 log.debug("[handle_msgtypeAB] ************************** PowerLink, Panel wants to auto-enrol but not acted on (already in powerlink) **************************")
             elif not self.ForceStandardMode:
@@ -4536,6 +4584,7 @@ class PacketHandling(ProtocolBase):
     def handle_msgtypeAC(self, data):  # PowerLink Message
         """ MsgType=AC - ??? """
         log.debug(f"[handle_msgtypeAC]  data {toString(data)}")
+        self.checkUnknown("[handle_msgtypeAC]              AC Message is different to last time", f"handle_msgtypeAC", toString(data))
 
     def handle_msgtypeAD(self, data):  # PowerLink Message
         """ MsgType=AD - Panel Powerlink Messages """
@@ -4608,7 +4657,7 @@ class PacketHandling(ProtocolBase):
                     triggered = self.SensorList[sensor].statuslog is None or (trigger - self.SensorList[sensor].statuslog) >= timedelta(milliseconds=500)
 
                 if triggered:
-                    log.debug(f"[_decode_4B]           Sensor Updated = {sensor:>2}  code {code}     trigger {trigger}")
+                    log.debug(f"[_decode_4B]           Sensor Updated = {sensor:>2}  code {code}")
                     if code == 1:
                         self.SensorList[sensor].do_status(True)
                     elif code == 2:
@@ -4922,17 +4971,18 @@ class PacketHandling(ProtocolBase):
 #            if not OBFUS:
             log.debug(f"[_extract_42_data]               NOT PROCESSED dat = {dat}")
 
-    def _updateSystemStatus(self, partition, sysFlags, sysStatus, sysStatus2, unknown4):
+    def _updatePartitionStatus(self, partition, sysStatus, sysFlags, sysStatus2, unknown4):
         piu = self.getPartitionsInUse()
         if sysFlags & 0x80 != 0:  # This seems to be a "partition enabled" indication
-            #sysStatus = data[offset + 17]
-            #sysStatus2 = data[offset + 19]  # Bit 0 represents the "last 10 seconds" bit, not sure about the rest.
-            #unknown4 = data[offset + 20]
+            log.debug(f"[_updatePartitionStatus]        Partition={partition+1} with data sysStatus=0x{hexify(sysStatus)}  sysFlags=0x{hexify(sysFlags)}  X=0x{hexify(sysStatus2)}  Y=0x{hexify(unknown4)}")
+            for i in range(4,8):
+                v = bool((sysStatus & (0x01 << i)) != 0)
+                if v: 
+                    log.debug(f"[_updatePartitionStatus]             {notknown}: sysStatus bit {i} is set and I don't know what it means")
 
-            log.debug(f"[_updateSystemStatus]        Partition={partition+1} with data sysStatus=0x{hexify(sysStatus)}  sysFlags=0x{hexify(sysFlags)}  X=0x{hexify(sysStatus2)}  Y=0x{hexify(unknown4)}")
             # I believe that bit 0 of sysStatus2 represents the "Instant" indication for armed home and armed away (and maybe disarm etc) i.e. all the PanelState values above 0x0F
-            sysStatus = (sysStatus & 0xF) | (( sysStatus2 << 4 ) & 0x10 )
-
+            sysStatus = (sysStatus & 0x0F) | (( sysStatus2 << 4 ) & 0x10 )
+            
             oldPS = self.PartitionState[partition].PanelState
             # Mask off the top bit as seems to be used to indicate overall validity
             s = self.PartitionState[partition].UpdatePartition(sysStatus=sysStatus, sysFlags=sysFlags & 0x7F, PanelMode=self.PanelMode)  # does not set partition in return value
@@ -4948,12 +4998,14 @@ class PacketHandling(ProtocolBase):
                 #self._addMessageToSendList(Send.BYPASSTAT)
 
             if sysFlags & 0x20 != 0:  # Zone Event
-                log.debug(f"[_updateSystemStatus]                 It also claims to have a zone event with data (hex) {hex(sysStatus2)} possibly with this data {hex(unknown4)}")
+                log.debug(f"[_updatePartitionStatus]                 It also claims to have a zone event with data (hex) {hex(sysStatus2)} possibly with this data {hex(unknown4)}")
+            if sysFlags & 0x40 != 0:  # 
+                log.debug(f"[_updatePartitionStatus]                 It also claims to have a status changed event with data (hex) {hex(sysStatus2)} possibly with this data {hex(unknown4)}")
                 #self.ProcessZoneEvent(eventZone=eventZone, eventType=eventType)
         elif piu is not None and partition+1 in piu:
-            log.debug(f"[_updateSystemStatus]        Partition={partition+1}  Not Enabled but it is in the current Partition set {piu}, that's a problem")
+            log.debug(f"[_updatePartitionStatus]        Partition={partition+1}  Not Enabled but it is in the current Partition set {piu}, that's a problem")
         else:
-            log.debug(f"[_updateSystemStatus]        Partition={partition+1}  Not Enabled")
+            log.debug(f"[_updatePartitionStatus]        Partition={partition+1}  Not Enabled")
         
 
     def processChunk(self, ch : chunky):
@@ -4992,16 +5044,16 @@ class PacketHandling(ProtocolBase):
 
             unknown1 = unknownData[0]
             unknown2 = unknownData[1]
+            self.checkUnknown("[handle_msgtypeB0]              Decode 24 Message unknownData is different to last time", f"handle_msgtypeB0_24", toString(unknownData))
 
             log.debug(f"[_decode_24]    Panel time is {pt}  date={messagedate}    data (hex) 14={hex(unknown1)}  15={hex(unknown2)}  PartitionCount={partitionCount}")
 
             for i in range(partitionCount):
                 offset = i * 4
                 # Repeat 4 bytes (17 to 20) for more than 1 partition, assume 19 and 20 are zone data
-                self._updateSystemStatus(i, partitionData[offset + 1], partitionData[offset], partitionData[offset + 2], partitionData[offset + 3])
+                self._updatePartitionStatus(i, partitionData[offset], partitionData[offset + 1], partitionData[offset + 2], partitionData[offset + 3])
 
         # Whether to process the experimental code (and associated B0 message data) or not
-        experimental = True
         beezerodebug = True
         beezerodebug2 = True
         beezerodebug4 = True
@@ -5014,7 +5066,7 @@ class PacketHandling(ProtocolBase):
             log.debug(f"[handle_msgtypeB0]        Resetting beezero_024B_sensorcount st=<{st}>")
 
         if st is None:
-            log.debug(f"[handle_msgtypeB0]     Unknown chunk={ch.GetItAll()}")
+            log.debug(f"[handle_msgtypeB0]     {notknown} chunk={ch.GetItAll()}")
             return
 
         ind = IndexName(ch.index) if ch.index in IndexName else IndexName.UNDEFINED
@@ -5023,7 +5075,7 @@ class PacketHandling(ProtocolBase):
 
         #log.debug(f"[handle_msgtypeB0]     st = {st}      chunky = {ch}      self.beezero_024B_sensorcount = {self.beezero_024B_sensorcount}") # [processChunk]                 chunky = sequence 255  datasize 40  index 3   length 140
         if datasize == RAW.UNDEFINED:
-            log.debug(f"[handle_msgtypeB0]     datasize is undefined, chunk={ch.GetItAll()}")
+            log.debug(f"[handle_msgtypeB0]     {notknown} - datasize is undefined, chunk={ch.GetItAll()}")
 
         match (st, datasize, ind, ch.length):
 
@@ -5035,16 +5087,15 @@ class PacketHandling(ProtocolBase):
 
             case (B0SubType.PANEL_SETTINGS_42, _    , _    ,  _ ):
                 #log.debug(f"[handle_msgtypeB0]          Got PANEL_SETTINGS_42 {ch}")
-                if experimental:    
-                    self._extract_42_data(ch)
-                    self._updateAllSensors()
+                self._extract_42_data(ch)
+                self._updateAllSensors()
 
             case (B0SubType.PANEL_STATE_1,    RAW.BYTE, IndexName.MIXED,  20):
                 # Panel state change, added just in case the panel abbreviates this message 
                 # 06 00 00 00 02 00 00 00 29 0b 10 08 0b 18 14 06 00 85 00 00
                 #_decode_24(ch.data, 8, 14, 1, 17)
                 #self.B0_LastPanelStateTime = self._getUTCTimeFunction()
-                log.debug(f"[handle_msgtypeB0]              Got a short Panel State Message but not processing it {ch=}")
+                log.debug(f"[handle_msgtypeB0]              {notknown} Got a short Panel State Message but not processing it ch={ch}")
 
             case (B0SubType.PANEL_STATE_1,    RAW.BYTE, IndexName.MIXED,  21):
                 # Panel state change, no idea what bytes 0 to 7 mean.
@@ -5054,7 +5105,8 @@ class PacketHandling(ProtocolBase):
                     _decode_24(1, ch.data[8:14], ch.data[14:16], ch.data[17:21])
                     self.B0_LastPanelStateTime = self._getUTCTimeFunction()
                 else: 
-                    log.debug(f"[handle_msgtypeB0]              Got a normal Panel State Message but not processing it because the partition count in the message is not 1 {ch=}")
+                    log.debug(f"[handle_msgtypeB0]              {notknown} Got a normal Panel State Message but not processing it because the partition count in the message is not 1 ch={ch}")
+                self.checkUnknown("[handle_msgtypeB0]              B0 Message PANEL_STATE_1 and the first 8 bytes", f"handle_msgtypeB0_PANEL_STATE_1_21", toString(ch.data[0:8]))
 
             case (B0SubType.PANEL_STATE_1,    RAW.BYTE, IndexName.MIXED, 28):
                 # Panel state change, no idea what bytes 0 to 7 mean. - the user that has the panel that sends this uses all 3 partitions
@@ -5064,7 +5116,10 @@ class PacketHandling(ProtocolBase):
                     _decode_24(3, ch.data[8:14], ch.data[14:16], ch.data[16:28])
                     self.B0_LastPanelStateTime = self._getUTCTimeFunction()
                 else: 
-                    log.debug(f"[handle_msgtypeB0]              Got a long Panel State Message but not processing it because the partition count is 1 {ch=}")
+                    log.debug(f"[handle_msgtypeB0]              {notknown} Got a long Panel State Message but the partition count is 1, processing it anyway ch={ch}")
+                    _decode_24(3, ch.data[8:14], ch.data[14:16], ch.data[16:28])
+                    self.B0_LastPanelStateTime = self._getUTCTimeFunction()
+                self.checkUnknown("[handle_msgtypeB0]              B0 Message PANEL_STATE_1 and the first 8 bytes", f"handle_msgtypeB0_PANEL_STATE_1_28", toString(ch.data[0:8]))
 
             case (B0SubType.PANEL_STATE_1,    RAW.BYTE, IndexName.MIXED,  29):
                 # Panel state change, no idea what bytes 0 to 7 mean.
@@ -5074,7 +5129,10 @@ class PacketHandling(ProtocolBase):
                     _decode_24(ch.data[16], ch.data[8:14], ch.data[14:16], ch.data[17:29])
                     self.B0_LastPanelStateTime = self._getUTCTimeFunction()
                 else: 
-                    log.debug(f"[handle_msgtypeB0]              Got a really long Panel State Message but not processing it because the partition count is 1 {ch=}")
+                    log.debug(f"[handle_msgtypeB0]              {notknown} Got a really long Panel State Message but the partition count is 1, processing it anyway ch={ch}")
+                    _decode_24(ch.data[16], ch.data[8:14], ch.data[14:16], ch.data[17:29])
+                    self.B0_LastPanelStateTime = self._getUTCTimeFunction()
+                self.checkUnknown("[handle_msgtypeB0]              B0 Message PANEL_STATE_1 and the first 8 bytes", f"handle_msgtypeB0_PANEL_STATE_1_29", toString(ch.data[0:8]))
 
             case (B0SubType.SYSTEM_CAP, RAW.WORD, IndexName.MIXED, _ ):
                 # System capabilities
@@ -5112,25 +5170,27 @@ class PacketHandling(ProtocolBase):
                     # siren triggered?
                     log.debug(f"[handle_msgtypeB0]      ********************** B0 siren Triggered ************************ {device_triggers=}")
                     ptu = self.getPartitionsInUse()
-                    if ptu is not None:      
-                        # partitions in use
+                    for dev in device_triggers:
                         # go through list of sensors that triggered
-                        for dev in device_triggers:
-                            # Get the partitions that this sensor belongs to
-                            #     Remember that dev is the sensor, the zone is sensor+1
-                            part = self.SensorList[dev].getPartition()
-                            for p in part:
-                                if self.SensorList[dev].getZoneType() in pmMapZoneType:
-                                    ev = pmMapZoneType[self.SensorList[dev].getZoneType()]
-                                    log.debug(f"[handle_msgtypeB0]             Zone {dev+1}  {p=}    {ev.name=}")
+                        if dev in self.SensorList:
+                            ev = EVENT_TYPE.NONE
+                            if (zt := self.SensorList[dev].getZoneType()) in pmMapZoneType:
+                                ev = pmMapZoneType[zt]
+                            if ptu is not None:      
+                                # partitions in use
+                                    # Get the partitions that this sensor belongs to
+                                    #     Remember that dev is the sensor, the zone is sensor+1
+                                part = self.SensorList[dev].getPartition()
+                                for p in part:
+                                    log.debug(f"[handle_msgtypeB0]             Zone {dev+1}  partition,{p=}    {ev.name=}")
                                     self.PartitionState[p-1].UpdatePanelState(ev, self.SensorList[dev])
-                    else:
-                        # partitions not in use
-                        if self.SensorList[dev].getZoneType() in pmMapZoneType:
-                            ev = pmMapZoneType[self.SensorList[dev].getZoneType()]
-                            log.debug(f"[handle_msgtypeB0]             Zone {dev+1}  {p=}    {ev.name=}")
-                            self.PartitionState[0].UpdatePanelState(ev, self.SensorList[device_triggers[0]])
-
+                            else:
+                                # partitions not in use
+                                log.debug(f"[handle_msgtypeB0]             Zone {dev+1}   {ev.name=}")
+                                self.PartitionState[0].UpdatePanelState(ev, self.SensorList[dev])
+                        else:
+                            log.debug(f"[handle_msgtypeB0]               Device {dev}   Zone {dev+1}   not in the current sensor list")
+                            
             case (B0SubType.PANEL_STATE_3, RAW.FIVE_BYTE,  IndexName.MIXED, 6 ):
                 # e.g. 0c 00 00 03 10 14    ==>   stype.name='PANIC_PANEL'  partition=3  zone=1
                 stype = EVENT_TYPE(ch.data[0]) if ch.data[0] in EVENT_TYPE else EVENT_TYPE.NOT_DEFINED
@@ -5142,7 +5202,8 @@ class PacketHandling(ProtocolBase):
                 log.debug(f"[handle_msgtypeB0]             {stype.name=}   {partition=} (not used)     {sensor=}     {self.getPartitionsInUse()=}")
                 if ch.data[2] != 0:
                     log.debug(f"[handle_msgtypeB0]                ******************************************************* Data 2 is not zero   {ch.data[2]}")
-                    
+                self.checkUnknown("[handle_msgtypeB0]              B0 Message PANEL_STATE_3 data[2] is different to last time", f"handle_msgtypeB0_PANEL_STATE_3", ch.data[2])
+
                 # When Data[0] is 0x0C i.e. PANIC_PANEL and sensor is 0, then when Data[4] is
                 panicmap = {
                     0x06 : EVENT_TYPE.PANIC_PANEL,
@@ -5159,17 +5220,27 @@ class PacketHandling(ProtocolBase):
                     if ptu is not None:
                         if ch.data[4] in panicmap:
                             for p in ptu:    # 
-                                self.PartitionState[p-1].UpdatePanelState(panicmap[ch.data[4]], None)
+                                self.PartitionState[p-1].UpdatePanelState(panicmap[ch.data[4]])
                     else:
                         # partitions not in use
                         if ch.data[4] in panicmap:
-                            self.PartitionState[0].UpdatePanelState(panicmap[ch.data[4]], None)
+                            self.PartitionState[0].UpdatePanelState(panicmap[ch.data[4]])
                 
                 # e.g. 03 36 00 03 05 a4
                 # 2025-08-04 12:36:54.889 DEBUG (MainThread) [custom_components.visonic.pyvisonic] [handle_msgtypeB0]             stype.name='ALARM_DELAY'   partition=[0, 1]  sensor=54     self.getPartitionsInUse()={1, 2}
 
-                
-                
+            case (B0SubType.PANEL_STATE_4, RAW.SIX_BYTE,  IndexName.MIXED, 1 ):
+                b = -1
+                if ch.datasize > 8 and ch.datasize % 8 == 0:  # if it's exactly divisible by 8 then
+                    ds = ch.datasize // 8
+                    if ch.length % ds == 0:  # If it's exactly divisible
+                        b = ch.length // ds
+                        for i in range(0, b):
+                            log.debug(f"[handle_msgtypeB0]                     Got Unprocessed {st:<20}   MIXED     Block {i:<3}   {toString(ch.data[i*ds:(i+1)*ds])}")
+                if b < 0:      
+                    log.debug(f"[handle_msgtypeB0]                     Got Unprocessed {st:<20}  MIXED   data = {toString(ch.data)}")
+                self.checkUnknown("[handle_msgtypeB0]              B0 Message PANEL_STATE_4 is different to last time", f"handle_msgtypeB0_PANEL_STATE_4", toString(ch.data))
+
             case (B0SubType.ZONE_OPENCLOSE, RAW.BITS,  IndexName.ZONES,  _ ):
                 # I'm 100% sure this is correct
                 zoneLen = ch.length * 8     # 8 bits in a byte
@@ -5206,7 +5277,7 @@ class PacketHandling(ProtocolBase):
                 if ch.index in IndexName:
                     log.debug(f"[handle_msgtypeB0]          Got Assigned Partition, {IndexName(ch.index).name:<14}  chunk = {ch}")
                 else:
-                    log.debug(f"[handle_msgtypeB0]          Got Assigned Partition, Index unknown    chunk = {ch}")
+                    log.debug(f"[handle_msgtypeB0]          Got Assigned Partition, {notknown} Index unknown    chunk = {ch}")
 
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.ZONES,  _ ):
                 # I'm 100% sure this is correct
@@ -5489,7 +5560,7 @@ class PacketHandling(ProtocolBase):
 
         # The data <Length> value is 4 bytes less then the length of the data block (as the <MessageCounter> is part of the data count)
         if len(data) != msgLen + 4:
-            log.debug("[handle_msgtypeB0]              Invalid Length, not processing")
+            log.debug(f"[handle_msgtypeB0]              Invalid Length, {notknown} not processing")
             # Do not process this B0 message as it seems to be incorrect
             return
 
@@ -5503,11 +5574,11 @@ class PacketHandling(ProtocolBase):
 
         msgInfo = pmSendMsgB0_reverseLookup[subType] if subType in pmSendMsgB0_reverseLookup else None
 
-        log.debug(f"[handle_msgtypeB0]    msgInfo: {"unknown" if msgInfo is None else msgInfo}")
+        log.debug(f"[handle_msgtypeB0]    msgInfo: {'unknown' if msgInfo is None else msgInfo}")
 
         if msgInfo is None:
             # Message unknown
-            log.debug(f"[handle_msgtypeB0]             Message {msgType=} {subType=} not known about, lets see if its chunky.   data = {toString(data)}")
+            log.debug(f"[handle_msgtypeB0]             Message {notknown} {msgType=} {subType=} not known about, lets see if its chunky.   data = {toString(data)}")
             isitchunky(chunkme(data[:-2]))
 
         elif msgInfo.chunky:
@@ -5551,7 +5622,7 @@ class PacketHandling(ProtocolBase):
                 for i in range(data[10]):                      # data[10] has the total supported partitions and not just the ones in use
                     offset = i * 2
                     # Repeat 2 bytes (11 to 12) for more than 1 partition.  Message length is 15 so we do not need to check the length.
-                    self._updateSystemStatus(i, data[offset + 12], data[offset + 11], 0, 0)
+                    self._updatePartitionStatus(i, data[offset + 11], data[offset + 12], 0, 0)
             else:
                 log.debug(f"[handle_msgtypeB0]             The message is chunky so I don't know how to process it:  data={toString(data)}")
                 
@@ -5562,7 +5633,7 @@ class PacketHandling(ProtocolBase):
             #isitchunky(chunkme(data[:-2]))
             if len(chunkme(data[:-2])) == 0:                   # Check to make sure its not chunky
                 # process the data, assume 1 partition 
-                self._updateSystemStatus(0, data[12], data[11], 0, 0)
+                self._updatePartitionStatus(0, data[11], data[12], 0, 0)
             else:
                 log.debug(f"[handle_msgtypeB0]             The message is chunky so I don't know how to process it:  data={toString(data)}")
 

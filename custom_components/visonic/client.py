@@ -118,7 +118,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.2.0"
+CLIENT_VERSION = "0.12.3.0"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -183,9 +183,9 @@ class PanelEventCoordinator:
         self.logstate_debug(f"[EC] Starting")
         self.loop = loop
         self.isPowerMaster = ispm
-        self.init_vars()
+        self._init_vars()
 
-    def init_vars(self):
+    def _init_vars(self):
         self.EventTime = 0
         self.EventName = 0
         self.EventAction = -100
@@ -197,7 +197,7 @@ class PanelEventCoordinator:
         try:
             if self._event_timer_task is not None:
                 self._event_timer_task.cancel()
-            self.init_vars()
+            self._init_vars()
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
             self.logstate_debug("[PanelEventCoordinator]     Close Caused an exception")
@@ -263,16 +263,15 @@ class PanelEventCoordinator:
                  f"name = {self._convert()[PE_NAME]}    event = {self._convert()[PE_EVENT]}")  # e.g. {'name': 0, 'event': 28, 'time': '04/10/2024, 22:46:04'}
         self._event_timer_task = self.loop.create_task(self._event_timer())
     
-    def setIsPowerMaster(self, pm):
+    def addEvent(self, pm, data : dict) -> bool:
         self.isPowerMaster = pm
-
-    def addEvent(self, data : dict):
         if data is not None:
             #self.logstate_debug(f"[EC] addEvent {data}")
             
             if self.EventAction != data[PE_EVENT]:
                 # If the action is not the same
                 self._send_and_replace(data)
+                return True
             else:
                 # If the action is the same
                 if self.EventName == data[PE_NAME]:   # exactly the same event as last time then do not send it
@@ -282,17 +281,17 @@ class PanelEventCoordinator:
                 if self.EventName != 0 and data[PE_NAME] == 0:
                     # Existing Name is better than new one
                     self.logstate_debug(f"[EC] Panel event data {data} is the same Event but I already have a better name")
-                    return
+                    return False
                 if self.EventName == 0 and data[PE_NAME] != 0:
                     # The existing name is 0 (i.e. system) and the new name is better so replace it
                     self.logstate_debug(f"[EC] Replacing 'system' with {data[PE_NAME]} but keeping original time {self.EventTime}")
                     self.EventName = data[PE_NAME]
                     #self.EventTime = data[PE_TIME]
-                    #return
                 # Here when the existing name and the new name are different and both non-zero
                 #   Send the previous and replace with the new
                 self._send_and_replace(data)
-                
+                return True
+        return False
 
 class MyTransport(AlTransport):
 
@@ -643,14 +642,15 @@ class VisonicClient:
             if include_extended_status is None:
                 include_extended_status = self.toBool(self.config.get(CONF_EPROM_ATTRIBUTES, False))
             pd = self.visonicProtocol.getPanelStatusDict(partition, include_extended_status)
-            if partition is None or partition == 0:
-                #pd["lastevent"] = self.PanelLastEventName + "/" + self.PanelLastEventAction
+            if partition is None:
+                # Only add these when there are no partitions at all
+                #    The A7 data from the panel is not reliable enough, and I can't find an equivalent B0 message
                 pd[TEXT_LAST_EVENT_NAME] = self.PanelLastEventName
                 pd[TEXT_LAST_EVENT_ACTION] = self.PanelLastEventAction
                 pd[TEXT_LAST_EVENT_TIME] = self.PanelLastEventTime
+            if partition is None or partition == 0:
+                # Only add this to the main alarm panel entity
                 pd[TEXT_CLIENT_VERSION] = CLIENT_VERSION
-            #else:
-            #    pd[TEXT_CLIENT_VERSION] = CLIENT_VERSION
             return pd
         return {}
 
@@ -738,6 +738,7 @@ class VisonicClient:
 
         #self._exc_info = None
         #finish_event = asyncio.Event()
+        piu = self.getPartitionsInUse()
 
         reverse = self.toBool(self.config.get(CONF_LOG_REVERSE, False))
         total = 0
@@ -778,16 +779,24 @@ class VisonicClient:
                               "total": total,
                               "date": entry.dateandtime,
                               #"time": entry.time,
-                              "partition": entry.partition,
+                              "partition": 0,
                               "zone": zoneStr,
                               "event": eventStr,
             }
+            
+            if piu is not None and len(piu) > 0:
+                datadictionary["partition"] = entry.partition
+            
             self._fireHAEvent(event_id = PanelCondition.PANEL_LOG_ENTRY, datadictionary = datadictionary)
             #self.logstate_debug(f"    Event Log {entry.current} of {entry.total}   event {datadictionary}")
         
         if self.csvdata is not None and self.templatedata is not None:
             # Accumulating CSV Data
-            csvtemp = (f"{current}, {total}, {entry.partition}, {entry.dateandtime}, {zoneStr}, {eventStr}\n")
+            if piu is not None and len(piu) > 0:
+                csvtemp = (f"{current}, {total}, {entry.partition}, {entry.dateandtime}, {zoneStr}, {eventStr}\n")
+            else:
+                csvtemp = (f"{current}, {total}, 0, {entry.dateandtime}, {zoneStr}, {eventStr}\n")
+            
             if reverse:
                 self.csvdata = csvtemp + self.csvdata
             else:
@@ -795,13 +804,16 @@ class VisonicClient:
 
             # Accumulating Data for the XML generation
             dd = {
-                "partition": f"{entry.partition}",
+                "partition": "0",
                 "current": f"{current}",
                 "date": f"{entry.dateandtime}",
                 #"time": f"{entry.time}",
                 "zone": f"{zoneStr}",
                 "event": f"{eventStr}",
             }
+
+            if piu is not None and len(piu) > 0:
+                dd["partition"] = f"{entry.partition}"
 
             self.templatedata.append(dd)
 
@@ -846,12 +858,12 @@ class VisonicClient:
         platforms = ep.async_get_platforms(self.hass, DOMAIN)
         _LOGGER.debug(f"         platforms {platforms}")
    
-    async def _setupVisonicEntity(self, sensor_domain, param = None):
+    async def _setupVisonicEntity(self, specific_domain, param = None):
         """Setup a platform and add an entity using the dispatcher."""
         if param is None:
-            async_dispatcher_send( self.hass, f"{DOMAIN}_{self.getEntryID()}_add_{sensor_domain}" )
+            async_dispatcher_send( self.hass, f"{DOMAIN}_{self.getEntryID()}_add_{specific_domain}" )
         else:
-            async_dispatcher_send( self.hass, f"{DOMAIN}_{self.getEntryID()}_add_{sensor_domain}", param )
+            async_dispatcher_send( self.hass, f"{DOMAIN}_{self.getEntryID()}_add_{specific_domain}", param )
 
     def onNewSwitch(self, create : bool, dev: AlSwitchDevice): 
         self.hass.loop.create_task(self.async_onNewSwitch(create, dev))
@@ -899,7 +911,7 @@ class VisonicClient:
                 self._createdAlarmPanel = True
                 if self.DisableAllCommands:
                     self.logstate_debug("Creating Sensor for Alarm indications")
-                    await self._setupVisonicEntity(SENSOR_DOMAIN)
+                    await self._setupVisonicEntity(SENSOR_DOMAIN, False)
                 else:
                     self.logstate_debug("Creating Any Alarm Panel Partition Entities")
                     await self._setupVisonicEntity(ALARM_PANEL_DOMAIN, False)
@@ -1189,8 +1201,6 @@ class VisonicClient:
                     # The panel has partitions
                     partition = data[PE_PARTITION]
                     
-                    self.logstate_debug(f"[onPanelChangeHandler] {partition=}  {data=}")
-                    
                     if self.myPanelEventCoordinator is None:
                         # initialise as a dict, the partition is the key
                         self.myPanelEventCoordinator = {}
@@ -1201,26 +1211,23 @@ class VisonicClient:
 
                     if partition not in self.myPanelEventCoordinator:
                         self.myPanelEventCoordinator[partition] = PanelEventCoordinator(loop = self.hass.loop, callbackSender = self.sendEvent, logstate_debug = self.logstate_debug)
-                    self.myPanelEventCoordinator[partition].setIsPowerMaster(self.isPowerMaster())
-                    self.myPanelEventCoordinator[partition].addEvent(data)
+                    if self.myPanelEventCoordinator[partition].addEvent(pm = self.isPowerMaster(), data = data):
+                        self.logstate_debug(f"[onPanelChangeHandler] {partition=}  {data=}")
             
                 elif len(data) == 3 and not isinstance(self.myPanelEventCoordinator, dict):
                     # The panel does not have partitions
-                    #self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   no partitions")
                     if self.myPanelEventCoordinator is None:
                         self.myPanelEventCoordinator = PanelEventCoordinator(loop = self.hass.loop, callbackSender = self.sendEvent, logstate_debug = self.logstate_debug)
-                    self.myPanelEventCoordinator.setIsPowerMaster(self.isPowerMaster())
-                    self.myPanelEventCoordinator.addEvent(data)
+                    if self.myPanelEventCoordinator.addEvent(pm = self.isPowerMaster(), data = data):
+                        self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   no partitions")
 
                 elif len(data) == 3 and isinstance(self.myPanelEventCoordinator, dict):
                     #self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   nothing done as message length indicates a single partition but we know there's multiple")
                     for p in range(4):
                         if p in self.myPanelEventCoordinator:
-                            self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   processing event through 1st valid partition which is {p}")
-                            self.myPanelEventCoordinator[p].setIsPowerMaster(self.isPowerMaster())
-                            self.myPanelEventCoordinator[p].addEvent(data)
+                            if self.myPanelEventCoordinator[p].addEvent(pm = self.isPowerMaster(), data = data):
+                                self.logstate_debug(f"[onPanelChangeHandler] {type(self.myPanelEventCoordinator)}   set to {self.myPanelEventCoordinator}   processing event through 1st valid partition which is {p}")
                             break
-                    
                 else:
                     self.logstate_warning(f"[onPanelChangeHandler] Cannot translate panel event log data {data}")
             else:
@@ -2142,7 +2149,10 @@ class VisonicClient:
                         # Connection to the panel has been initially successful
                         self.logstate_debug("........... connection made")
 
-                        if not self.DisableAllCommands:
+                        if self.DisableAllCommands:
+                            self.logstate_debug("Creating Main Sensor Entity to report state for Alarm indications")
+                            await self._setupVisonicEntity(SENSOR_DOMAIN, True)
+                        else:
                             self.logstate_debug("Creating Main Alarm Panel Entity to report state")
                             await self._setupVisonicEntity(ALARM_PANEL_DOMAIN, True)
                         

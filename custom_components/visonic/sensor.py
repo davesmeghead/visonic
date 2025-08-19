@@ -2,6 +2,7 @@
 
 import logging
 from enum import IntEnum
+from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import Entity
 from homeassistant.core import HomeAssistant, callback
@@ -44,23 +45,27 @@ async def async_setup_entry(
     #_LOGGER.debug(f"[async_setup_entry] start")
 
     @callback
-    def async_add_sensor() -> None:
+    def async_add_sensor(main_one : bool = False) -> None:
         """Add Visonic Sensor (to behave instead of the alarm panel when all comms is prevented)."""
         entities: list[Entity] = []
         client: VisonicClient = entry.runtime_data.client
 
         p = client.getPartitionsInUse()
 
-        if p is None or (p is not None and len(p) == 1):
-            entities.append(VisonicSensor(hass, client))
-        elif len(p) > 1:
+        if main_one and entry.runtime_data.alarm_entity is None: #  or p is None or (p is not None and len(p) == 1):
+            entry.runtime_data.alarm_entity = VisonicSensor(hass, client)
+            entities.append(entry.runtime_data.alarm_entity)
+            _LOGGER.debug(f"[async_setup_entry] adding main entity for panel {client.getPanelID()}")
+        elif entry.runtime_data.alarm_entity is not None and p is not None and len(p) > 1:
+            _LOGGER.debug(f"[async_setup_entry] updating main alarm control panel entity for partition set {p}")
+            entry.runtime_data.alarm_entity.resetPartition(0)
             for i in p:
                 if i != 0:
                     entities.append(VisonicSensor(hass, client, i))
+            _LOGGER.debug(f"[async_setup_entry] adding sensor panel entities for partition set {p}")
 
-        _LOGGER.debug(f"[async_setup_entry] adding entity for partition {p}")
-        #_LOGGER.debug(f"[async_setup_entry] adding entity")
-        async_add_entities(entities)
+        if len(entities) > 0:
+            async_add_entities(entities, True)
 
     entry.runtime_data.dispatchers[SENSOR_DOMAIN] = async_dispatcher_connect(hass, f"{DOMAIN}_{entry.entry_id}_add_{SENSOR_DOMAIN}", async_add_sensor)
     #_LOGGER.debug("[async_setup_entry] exit")
@@ -76,27 +81,33 @@ class VisonicSensor(Entity):
         self._client = client
         self.hass = hass
         self._attr_state = STATE_UNKNOWN
-        #self._myname = client.getAlarmPanelUniqueIdent()
         self._last_triggered = ""
+        self.resetPartition(partition)
+        self._client.onChange(callback = self.onClientChange)
+        #_LOGGER.debug(f"[VisonicSensor] Initialising alarm sensor {self._myname}")
 
+    def resetPartition(self, partition : int | None):
         if partition is None:
             self._partition = None           # When partitions are not used then we only use partition 1 for panel state
             self._partitionSet = {1, 2, 3}   # When partitions are not used then we command (Arm, Disarm etc) all partitions
-            self._myname = client.getAlarmPanelUniqueIdent()
-            _LOGGER.debug(f"[VisonicAlarm] Initialising alarm control panel {self._myname}    panel {self._client.getPanelID()}")
+            self._myname = self._client.getAlarmPanelUniqueIdent()
+            _LOGGER.debug(f"[VisonicAlarm] Setting primary sensor {self._myname}      {self.unique_id=}")
+        elif partition == 0:                 # EXPERIMENTAL
+            self._partition = 0              # When partitions are not used then we only use partition 0 for panel state
+            self._partitionSet = {1, 2, 3}   # When partitions are not used then we command (Arm, Disarm etc) all partitions
+            self._myname = self._client.getAlarmPanelUniqueIdent()
+            _LOGGER.debug(f"[VisonicAlarm] Setting sensor {self._myname}      {self.unique_id=}")
         else:
             self._partition = partition
             self._partitionSet = { partition }
-            self._myname = client.getAlarmPanelUniqueIdent() + " Partition " + str(partition)
-            _LOGGER.debug(f"[VisonicAlarm] Initialising alarm control panel {self._myname}    panel {self._client.getPanelID()}  Partition {self._partition}")
-
-        _LOGGER.debug(f"[VisonicSensor] Initialising alarm panel sensor {self._myname} panel {self._client.getPanelID()}")
-        client.onChange(self.onClientChange)
+            self._myname = self._client.getAlarmPanelUniqueIdent() + " Partition " + str(partition)
+            _LOGGER.debug(f"[VisonicAlarm] Setting alarm sensor {self._myname}      {self.unique_id=}")
+        self._client.setPartitionNaming(partition = partition, panel_entity_name = self._myname)
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
         await super().async_will_remove_from_hass()
-        _LOGGER.debug(f"[async_will_remove_from_hass] Removing sensor {self._myname} panel {self._client.getPanelID()}")
+        _LOGGER.debug(f"[async_will_remove_from_hass] Removing alarm panel sensor {self._myname} panel {self._client.getPanelID()}")
         self._client = None
 
     def isPanelConnected(self) -> bool:
@@ -110,12 +121,12 @@ class VisonicSensor(Entity):
     def onClientChange(self):
         """HA Event Callback."""
         if self.hass is not None and self.entity_id is not None:
-            self.schedule_update_ha_state(False)
+            self.schedule_update_ha_state(True)
 
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        return self._myname
+        return slugify(self._myname)
 
     @property
     def name(self):
@@ -149,29 +160,31 @@ class VisonicSensor(Entity):
             # "model": "Alarm Panel",
             # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
         }
-        
+
     def update(self):
         """Get the state of the device."""
+        #_LOGGER.debug(f"[update] before {self._attr_state=}")
         self._attr_state = STATE_UNKNOWN
         self._attr_extra_state_attributes = {}
 
-        if self.isPanelConnected():
+        if self._client is not None and self.isPanelConnected():
             ptu = self._client.getPartitionsInUse()
             isa, _ = self._client.isSirenActive(None if ptu is None else 0)
             if isa:
                 self._attr_state = AlarmControlPanelState.TRIGGERED
             else:
-                armcode = self._client.getPanelStatus()
+                armcode = self._client.getPanelStatus(self._partition)
                 if armcode is not None and armcode in map_panel_status_to_ha_status:
                     self._attr_state = map_panel_status_to_ha_status[armcode]
 
-                # _LOGGER.debug("[update] alarm armcode is %s", str(armcode))
+            stat = self._client.getPanelStatusDict(self._partition)
+            #_LOGGER.debug(f"[update] stat {stat}")
 
-            # Currently may only contain Exception Count"
-            data = self._client.getClientStatusDict()
-            #_LOGGER.debug("[update] data {data}")
-            stat = self._client.getPanelStatusDict()
-            #_LOGGER.debug("[update] stat {stat}")
+            data = None
+            if self._partition is None or self._partition == 0:
+                data = self._client.getClientStatusDict()
+                if TEXT_LAST_EVENT_NAME in stat and len(stat[TEXT_LAST_EVENT_NAME]) > 2:
+                    self._last_triggered = stat[TEXT_LAST_EVENT_NAME]
 
             if data is not None and stat is not None:
                 self._attr_extra_state_attributes = {**stat, **data}
@@ -180,19 +193,7 @@ class VisonicSensor(Entity):
             elif data is not None:
                 self._attr_extra_state_attributes = data
             
-            if TEXT_LAST_EVENT_NAME in self._attr_extra_state_attributes and len(self._attr_extra_state_attributes[TEXT_LAST_EVENT_NAME]) > 2:
-                self._last_triggered = self._attr_extra_state_attributes[TEXT_LAST_EVENT_NAME]
-
             self._attr_extra_state_attributes[PANEL_ATTRIBUTE_NAME] = self._client.getPanelID()
+            #_LOGGER.debug(f"[update] _attr_extra_state_attributes {self._attr_extra_state_attributes=}")
 
-#    @property
-#    def state(self):
-#        """Return the state of the device."""
-#        return self._mystate
-
-#    @property
-#    def extra_state_attributes(self):  #
-#        """Return the state attributes of the device."""
-#        attr = self._device_state_attributes
-#        attr[PANEL_ATTRIBUTE_NAME] = self._client.getPanelID()
-#        return attr
+        #_LOGGER.debug(f"[update] after {self._attr_state=}")

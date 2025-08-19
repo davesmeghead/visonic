@@ -72,54 +72,56 @@ pmPanelCancelSet = ( EVENT_TYPE.DISARM, EVENT_TYPE.ALARM_CANCEL, EVENT_TYPE.GENE
 # The reasons to ignore (not cancel) the siren
 pmPanelIgnoreSet = ( EVENT_TYPE.ALARM_DELAY_RESTORE, EVENT_TYPE.CONFIRM_ALARM, EVENT_TYPE.ALARM_INTERIOR_RESTORE, EVENT_TYPE.ALARM_PERIMETER_RESTORE )
 
-#pmPanelTamperSet = ( EVENT_TYPE.TAMPER_SENSOR, EVENT_TYPE.TAMPER_PANEL, EVENT_TYPE.TAMPER_ALARM_A, EVENT_TYPE.TAMPER_ALARM_B)
+# These dictionaries are subsets of EVENT_TYPE
+# ENGINEER_RESET
+# BATTERY_DISCONNECT
+# LOW_BATTERY_ACK
+# GENERAL_LOW_BATTERY
 
-# These 2 dictionaries are subsets of pmLogEvent_t
-pmPanelAlarmType_t = {
-   EVENT_TYPE.NONE              : AlAlarmType.NONE,
-   EVENT_TYPE.TAMPER_SENSOR     : AlAlarmType.TAMPER,
-   EVENT_TYPE.TAMPER_PANEL      : AlAlarmType.TAMPER,
-   EVENT_TYPE.TAMPER_ALARM_A    : AlAlarmType.TAMPER,
-   EVENT_TYPE.TAMPER_ALARM_B    : AlAlarmType.TAMPER,
-   EVENT_TYPE.PANIC_KEYFOB      : AlAlarmType.PANIC,
-   EVENT_TYPE.PANIC_PANEL       : AlAlarmType.PANIC,
-   EVENT_TYPE.FIRE              : AlAlarmType.FIRE,
-   EVENT_TYPE.EMERGENCY         : AlAlarmType.EMERGENCY,
-   EVENT_TYPE.GAS_ALERT         : AlAlarmType.GAS,
-   EVENT_TYPE.FLOOD_ALERT       : AlAlarmType.FLOOD,
-#   0x75 : AlAlarmType.TAMPER
+pmPanelAlarmType_t = {      # Alarm Triggers (except Intruder which is separate)
+   EVENT_TYPE.NONE         : AlAlarmType.NONE,
+   EVENT_TYPE.PANIC_KEYFOB : AlAlarmType.PANIC,
+   EVENT_TYPE.PANIC_PANEL  : AlAlarmType.PANIC,
+   EVENT_TYPE.DURESS       : AlAlarmType.PANIC,
+   EVENT_TYPE.FIRE         : AlAlarmType.FIRE,
+   EVENT_TYPE.EMERGENCY    : AlAlarmType.EMERGENCY,
+   EVENT_TYPE.GAS_ALERT    : AlAlarmType.GAS,
+   EVENT_TYPE.FLOOD_ALERT  : AlAlarmType.FLOOD,
 }
 
-pmPanelAlarmType_r = {
-   EVENT_TYPE.TAMPER_SENSOR_RESTORE     : AlAlarmType.TAMPER,
-   EVENT_TYPE.TAMPER_PANEL_RESTORE      : AlAlarmType.TAMPER,
-   EVENT_TYPE.TAMPER_ALARM_A_RESTORE    : AlAlarmType.TAMPER,
-   EVENT_TYPE.TAMPER_ALARM_B_RESTORE    : AlAlarmType.TAMPER,
-   EVENT_TYPE.FIRE_RESTORE              : AlAlarmType.FIRE,
-   EVENT_TYPE.EMERGENCY_RESTORE         : AlAlarmType.EMERGENCY,
-   EVENT_TYPE.GAS_ALERT_RESTORE         : AlAlarmType.GAS,
-   EVENT_TYPE.FLOOD_ALERT_RESTORE       : AlAlarmType.FLOOD,
-   # PANIC_KEYFOB and PANIC_PANEL from pmPanelAlarmType_t are not covered
-}
+pmPanelAlarmType_r = [       # Alarm Restore (except Intruder which is separate)
+   EVENT_TYPE.GENERAL_RESTORE,
+   EVENT_TYPE.FIRE_RESTORE,
+   EVENT_TYPE.EMERGENCY_RESTORE,
+   EVENT_TYPE.GAS_ALERT_RESTORE,
+   EVENT_TYPE.FLOOD_ALERT_RESTORE,
+   EVENT_TYPE.ALARM_CANCEL
+   # PANIC_KEYFOB and PANIC_PANEL from pmPanelAlarmType_t are not covered, are they covered by the more general ALARM_CANCEL
+]
 
-pmPanelIntruderType_t = {
-   EVENT_TYPE.ALARM_INTERIOR    : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_PERIMETER   : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_DELAY       : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_SILENT_24H  : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_AUDIBLE_24H : AlAlarmType.INTRUDER,
-}
+pmPanelIntruderType_t = [     # Intruder Alarm
+   EVENT_TYPE.ALARM_INTERIOR,
+   EVENT_TYPE.ALARM_PERIMETER,
+   EVENT_TYPE.ALARM_DELAY,
+   EVENT_TYPE.ALARM_SILENT_24H,
+   EVENT_TYPE.ALARM_AUDIBLE_24H
+]
 
-pmPanelIntruderType_r = {
-   EVENT_TYPE.ALARM_INTERIOR_RESTORE    : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_PERIMETER_RESTORE   : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_DELAY_RESTORE       : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_SILENT_24H_RESTORE  : AlAlarmType.INTRUDER,
-   EVENT_TYPE.ALARM_AUDIBLE_24H_RESTORE : AlAlarmType.INTRUDER,
-}
+pmPanelIntruderType_r = [     # Intruder Restore
+   EVENT_TYPE.GENERAL_RESTORE,
+   EVENT_TYPE.DISARM,
+   EVENT_TYPE.ALARM_CANCEL,
+   EVENT_TYPE.ALARM_INTERIOR_RESTORE,
+   EVENT_TYPE.ALARM_PERIMETER_RESTORE,
+   EVENT_TYPE.ALARM_DELAY_RESTORE,
+   EVENT_TYPE.ALARM_SILENT_24H_RESTORE,
+   EVENT_TYPE.ALARM_AUDIBLE_24H_RESTORE
+]
 
 pmPanelTroubleType_t = {    # Trouble
    EVENT_TYPE.NONE                   : AlTroubleType.NONE,
+   EVENT_TYPE.X10_TROUBLE            : AlTroubleType.GENERAL,         # Should we add X10 to AlTroubleType, and add it to the language translations
+   EVENT_TYPE.GAS_TROUBLE            : AlTroubleType.GENERAL,         # Should we add GAS to AlTroubleType, and add it to the language translations
    EVENT_TYPE.COMMUNICATION_LOSS     : AlTroubleType.COMMUNICATION,
    EVENT_TYPE.GENERAL_TROUBLE        : AlTroubleType.GENERAL,
    EVENT_TYPE.LOW_BATTERY            : AlTroubleType.BATTERY,
@@ -130,60 +132,76 @@ pmPanelTroubleType_t = {    # Trouble
    EVENT_TYPE.FUSE_FAILURE           : AlTroubleType.POWER,
    EVENT_TYPE.KEYFOB_LOW_BATTERY     : AlTroubleType.BATTERY,
    EVENT_TYPE.KEYPAD_LOW_BATTERY     : AlTroubleType.BATTERY,
-   #EVENT_TYPE.LOW_BATTERY_ACK        : AlTroubleType.BATTERY,
-   #EVENT_TYPE.GENERAL_LOW_BATTERY    : AlTroubleType.BATTERY,
 }
 
-pmPanelTroubleType_r = {    # Restore
-   EVENT_TYPE.COMMUNICATION_LOSS_RESTORE     : AlTroubleType.NONE,
-   EVENT_TYPE.GENERAL_TROUBLE_RESTORE        : AlTroubleType.NONE,
-   EVENT_TYPE.LOW_BATTERY_RESTORE            : AlTroubleType.NONE,
-   EVENT_TYPE.AC_FAIL_RESTORE                : AlTroubleType.NONE,
-   EVENT_TYPE.RF_JAMMING_RESTORE             : AlTroubleType.NONE,
-   EVENT_TYPE.COMMUNICATION_FAILURE_RESTORE  : AlTroubleType.NONE, 
-   EVENT_TYPE.TELEPHONE_LINE_FAILURE_RESTORE : AlTroubleType.NONE,
-   EVENT_TYPE.FUSE_FAILURE_RESTORE           : AlTroubleType.NONE,
-   EVENT_TYPE.KEYFOB_LOW_BATTERY_RESTORE     : AlTroubleType.NONE,
-   EVENT_TYPE.KEYPAD_LOW_BATTERY_RESTORE     : AlTroubleType.NONE,
-   #EVENT_TYPE.LOW_BATTERY_ACK        : AlTroubleType.NONE,
-   #EVENT_TYPE.GENERAL_LOW_BATTERY    : AlTroubleType.NONE,
-}
+pmPanelTroubleType_r = [    # Trouble Restore
+   EVENT_TYPE.GAS_TROUBLE_RESTORE,
+   EVENT_TYPE.X10_TROUBLE_RESTORE,
+   EVENT_TYPE.GENERAL_RESTORE,
+   EVENT_TYPE.COMMUNICATION_LOSS_RESTORE,
+   EVENT_TYPE.GENERAL_TROUBLE_RESTORE,
+   EVENT_TYPE.LOW_BATTERY_RESTORE,
+   EVENT_TYPE.AC_FAIL_RESTORE,
+   EVENT_TYPE.RF_JAMMING_RESTORE,
+   EVENT_TYPE.COMMUNICATION_FAILURE_RESTORE, 
+   EVENT_TYPE.TELEPHONE_LINE_FAILURE_RESTORE,
+   EVENT_TYPE.FUSE_FAILURE_RESTORE,
+   EVENT_TYPE.KEYFOB_LOW_BATTERY_RESTORE,
+   EVENT_TYPE.KEYPAD_LOW_BATTERY_RESTORE,
+]
 
-pmPanelBatteryType_t = {
-   EVENT_TYPE.NONE                      : AlTroubleType.NONE,
-   EVENT_TYPE.PANEL_LOW_BATTERY         : AlTroubleType.BATTERY,
-}
+pmPanelTamperType_t = [
+   EVENT_TYPE.NONE, 
+   EVENT_TYPE.TAMPER_SENSOR,
+   EVENT_TYPE.TAMPER_ALARM_A,
+   EVENT_TYPE.TAMPER_ALARM_B,
+   EVENT_TYPE.TAMPER_PANEL
+]
 
-pmPanelBatteryType_r = {
-   EVENT_TYPE.PANEL_LOW_BATTERY_RESTORE : AlTroubleType.NONE,
-}
+pmPanelTamperType_r = [
+   EVENT_TYPE.GENERAL_RESTORE, 
+   EVENT_TYPE.TAMPER_SENSOR_RESTORE,
+   EVENT_TYPE.TAMPER_ALARM_A_RESTORE,
+   EVENT_TYPE.TAMPER_ALARM_B_RESTORE,
+   EVENT_TYPE.TAMPER_PANEL_RESTORE
+]
+
+pmPanelBatteryType_t = [
+   EVENT_TYPE.PANEL_LOW_BATTERY
+]
+
+pmPanelBatteryType_r = [
+   EVENT_TYPE.GENERAL_RESTORE,
+   EVENT_TYPE.PANEL_LOW_BATTERY_RESTORE
+]
+
 
 PanelArmedStatusCollection = collections.namedtuple('PanelArmedStatusCollection', 'disarmed armed entry state eventmapping')
 pmPanelArmedStatus = {               # disarmed armed entry         state
-   0x00 : PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , 85),  # Disarmed
-   0x01 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , -1),  # Arming Home
-   0x02 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , -1),  # Arming Away
-   0x03 : PanelArmedStatusCollection( False,  True,  True, AlPanelStatus.ENTRY_DELAY        , -1),  # Entry Delay
-   0x04 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME         , 81),  # Armed Home
-   0x05 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY         , 82),  # Armed Away
-   0x06 : PanelArmedStatusCollection(  True, False, False, AlPanelStatus.USER_TEST          , -1),  # User Test  (assume can only be done when panel is disarmed)
+   0x00 : PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , EVENT_TYPE.DISARM),                 # Disarmed
+   0x01 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , EVENT_TYPE.NOT_DEFINED),            # Arming Home
+   0x02 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , EVENT_TYPE.NOT_DEFINED),            # Arming Away
+   0x03 : PanelArmedStatusCollection( False,  True,  True, AlPanelStatus.ENTRY_DELAY        , EVENT_TYPE.NOT_DEFINED),            # Entry Delay
+   0x04 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME         , EVENT_TYPE.ARMED_HOME),             # Armed Home
+   0x05 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY         , EVENT_TYPE.ARMED_AWAY),             # Armed Away
+   0x06 : PanelArmedStatusCollection(  True, False, False, AlPanelStatus.USER_TEST          , EVENT_TYPE.NOT_DEFINED),            # User Test  (assume can only be done when panel is disarmed)
 
-   0x07 : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DOWNLOADING        , -1),  # Downloading
-   0x08 : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.INSTALLER          , -1),  # Programming
-   0x09 : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.INSTALLER          , -1),  # Installer
-   0x0A : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME         , 81),  # Armed Home Bypass   AlPanelStatus.ARMED_HOME_BYPASS
-   0x0B : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY         , 82),  # Armed Away Bypass   AlPanelStatus.ARMED_AWAY_BYPASS
-   0x0C : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DISARMED           , 85),  # Ready
-   0x0D : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DISARMED           , 85),  # Not Ready  (assume can only be done when panel is disarmed)
-   0x0E : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.UNKNOWN            , 85),  # 
-   0x0F : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.UNKNOWN            , 85),  # 
+   0x07 : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DOWNLOADING        , EVENT_TYPE.NOT_DEFINED),            # Downloading
+   0x08 : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.INSTALLER          , EVENT_TYPE.INSTALLER_PROGRAMMING),  # Programming
+   0x09 : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.INSTALLER          , EVENT_TYPE.INSTALLER_PROGRAMMING),  # Installer
+   0x0A : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME         , EVENT_TYPE.ARMED_HOME),             # Armed Home Bypass   AlPanelStatus.ARMED_HOME_BYPASS
+   0x0B : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY         , EVENT_TYPE.ARMED_AWAY),             # Armed Away Bypass   AlPanelStatus.ARMED_AWAY_BYPASS
+   0x0C : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DISARMED           , EVENT_TYPE.DISARM),                 # Ready
+   0x0D : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DISARMED           , EVENT_TYPE.DISARM),                 # Not Ready  (assume can only be done when panel is disarmed)
+   0x0E : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.UNKNOWN            , EVENT_TYPE.DISARM),                 # ?
+   0x0F : PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.UNKNOWN            , EVENT_TYPE.DISARM),                 # ?
    # I don't think that the B0 message can command higher than 15            
-   0x10 : PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , 85),  # Disarmed Instant
-   0x11 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , -1),  # Arming Home Last 10 Seconds             ####### armed was False
-   0x12 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , -1),  # Arming Away Last 10 Seconds             ####### armed was False
-   0x13 : PanelArmedStatusCollection( False,  True,  True, AlPanelStatus.ENTRY_DELAY_INSTANT, -1),  # Entry Delay Instant
-   0x14 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME_INSTANT , 81),  # Armed Home Instant
-   0x15 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY_INSTANT , 82)   # Armed Away Instant
+   0x10 : PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , EVENT_TYPE.DISARM),                 # Disarmed Instant
+   0x11 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , EVENT_TYPE.NOT_DEFINED),            # Arming Home Last 10 Seconds             ####### armed was False
+   0x12 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , EVENT_TYPE.NOT_DEFINED),            # Arming Away Last 10 Seconds             ####### armed was False
+   0x13 : PanelArmedStatusCollection( False,  True,  True, AlPanelStatus.ENTRY_DELAY_INSTANT, EVENT_TYPE.NOT_DEFINED),            # Entry Delay Instant
+   0x14 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME_INSTANT , EVENT_TYPE.ARMED_HOME),             # Armed Home Instant
+   0x15 : PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY_INSTANT , EVENT_TYPE.ARMED_AWAY)              # Armed Away Instant
 }
 
 INVALID_PARTITION = None
@@ -910,6 +928,7 @@ class PartitionStateClass:
     def __init__(self, loop):
         """Initialize class."""
         self.loop = loop
+        self.bellTime = 20 * 60      # belltime 20 minutes
         self.Reset()
 
     def Reset(self):
@@ -926,13 +945,22 @@ class PartitionStateClass:
         self.PanelIntruderStatus = False
         self.PanelTroubleStatus = AlTroubleType.NONE
         self.PartitionGeneralTrouble = False
-        self.PanelBatteryTrouble = AlTroubleType.NONE              # Assume battery in panel is OK until a message changes it
-        self.StartedAlarmTime = False
+        self.PanelBatteryTrouble = False              # Assume battery in panel is OK until a message changes it
         self.AlarmTimeTask = None
+        self.IntruderTimeTask = None
+
+    def shutdownOperation(self):
+        self.stopAlarmStateTimer()
+        self.stopIntruderStateTimer()
+        self.Reset()
 
     def statelist(self) -> list:
         # These are the values that are used to determine if the panel state has been changed
         return [self.SirenActive, self.PanelState, self.PanelReady, self.PanelTroubleStatus, self.PanelAlarmStatus, self.PanelIntruderStatus, self.PanelBypass, self.PartitionGeneralTrouble]
+
+    def setBellTime(self, bt):
+        log.debug(f"[setBellTime]   Setting bell time to {bt}")
+        self.bellTime = bt
 
     def getPartitionData(self) -> dict:
         datadict = {}
@@ -954,16 +982,15 @@ class PartitionStateClass:
         datadict = {}
         datadict[EventDataEnum.TROUBLE] = self.determineTrouble()
         datadict[EventDataEnum.TAMPER]  = self.PanelTamper
-        datadict[EventDataEnum.BATTERY] = 100 if self.PanelBatteryTrouble == AlTroubleType.NONE else 100
+        datadict[EventDataEnum.BATTERY] = 0 if self.PanelBatteryTrouble else 100
         return datadict
 
     async def _AlarmStateTimer(self):
-        log.debug("[UpdatePanelState]            ******************** _AlarmStateTimer 10 seconds Started ****************")
-        await asyncio.sleep(10.0)
+        log.debug(f"[UpdatePanelState]            ******************** Alarm State Timer for {self.bellTime} seconds Started ****************")
+        await asyncio.sleep(self.bellTime)
         self.PanelAlarmStatus = AlAlarmType.NONE
-        self.StartedAlarmTime = False
         self.AlarmTimeTask = None
-        log.debug("[UpdatePanelState]            ******************** _AlarmStateTimer Ended ****************")
+        log.debug("[UpdatePanelState]            ******************** Alarm State Timer Ended ****************")
 
     def stopAlarmStateTimer(self):
         if self.AlarmTimeTask is not None:
@@ -974,56 +1001,96 @@ class PartitionStateClass:
                 log.debug("[stopAlarmStateTimer]     Caused an exception")
                 log.debug(f"             {ex}")
             self.PanelAlarmStatus = AlAlarmType.NONE
-            self.StartedAlarmTime = False
             self.AlarmTimeTask = None
 
-    def UpdatePanelState(self, et : EVENT_TYPE, sensor):
+    async def _IntruderStateTimer(self):
+        log.debug(f"[UpdatePanelState]            ******************** Intruder State Timer for {self.bellTime} seconds Started ****************")
+        await asyncio.sleep(self.bellTime)
+        self.PanelIntruderStatus = False
+        self.IntruderTimeTask = None
+        self.SirenActive = False
+        self.SirenActiveDeviceTrigger = None
+        log.debug("[UpdatePanelState]            ******************** Intruder State Timer Ended ****************")
+
+    def stopIntruderStateTimer(self):
+        if self.IntruderTimeTask is not None:
+            try:
+                log.debug("[stopIntruderStateTimer] Cancelling IntruderStateTimer")
+                self.IntruderTimeTask.cancel()
+            except Exception as ex:
+                log.debug("[stopIntruderStateTimer]     Caused an exception")
+                log.debug(f"             {ex}")
+            self.PanelIntruderStatus = False
+            self.IntruderTimeTask = None
+            self.SirenActive = False
+            self.SirenActiveDeviceTrigger = None
+
+    def UpdatePanelState(self, et : EVENT_TYPE, sensor = None):
+        
+        oldAlarmStatus = self.PanelAlarmStatus
+        
+        # I have split the known EventTypes in to those that affect Tamper, Intruder, Panel Alarm, Panel Battery and Panel Trouble
+        # So just because the panel sets battery trouble, that doesnt mean it could also set others as well.
+        #     These can be set by subsequent messages
+        #     Each has a dict of Events to set it "_t" and a list of Events to reset it "_r"
+        
         # Update tamper status
-        self.PanelTamper = (et == EVENT_TYPE.TAMPER_PANEL)
-        
-        # Update trouble status
-        self.PanelTroubleStatus = pmPanelTroubleType_t[et] if et in pmPanelTroubleType_t else AlTroubleType.NONE
-        if et in pmPanelTroubleType_r:
-            log.debug(f"[UpdatePanelState]           The event {et} is in the pmPanelTroubleType_r dictionary {pmPanelTroubleType_r[et]}.  It is not currently used as not sure if it always comes through")
-        
+        #self.PanelTamper = (et == EVENT_TYPE.TAMPER_PANEL)
+        if et in pmPanelTamperType_t: self.PanelTamper = True      # event in trigger set
+        if et in pmPanelTamperType_r: self.PanelTamper = False     # event in restore set
+
+        # Update intruder status
+        #self.PanelIntruderStatus = bool(et in pmPanelIntruderType_t)
+        if et in pmPanelIntruderType_t: self.PanelIntruderStatus = True      # event in trigger set
+        if et in pmPanelIntruderType_r: self.PanelIntruderStatus = False     # event in restore set
+
         # Update alarm status
-        self.PanelIntruderStatus = bool(et in pmPanelIntruderType_t)
-        if et in pmPanelIntruderType_r:
-            log.debug(f"[UpdatePanelState]           The event {et} is in the pmPanelIntruderType_r dictionary {pmPanelIntruderType_r[et]}.  It is not currently used as not sure if it always comes through")
-        
-        self.PanelAlarmStatus = pmPanelAlarmType_t[et] if et in pmPanelAlarmType_t else AlAlarmType.NONE
-        if et in pmPanelAlarmType_r:
-            log.debug(f"[UpdatePanelState]           The event {et} is in the pmPanelAlarmType_r dictionary {pmPanelAlarmType_r[et]}.  It is not currently used as not sure if it always comes through")
-        
+        #self.PanelAlarmStatus = pmPanelAlarmType_t[et] if et in pmPanelAlarmType_t else AlAlarmType.NONE
+        if et in pmPanelAlarmType_t: self.PanelAlarmStatus = pmPanelAlarmType_t[et]      # event in trigger set
+        if et in pmPanelAlarmType_r: self.PanelAlarmStatus = AlAlarmType.NONE            # event in restore set. When the panel is disarmed and it is FIRE etc, then it sends an ALARM_CANCEL Event
+
         # Update alarm panel battery state
-        if et in pmPanelBatteryType_t: self.PanelBatteryTrouble = pmPanelBatteryType_t[et]
-        if et in pmPanelBatteryType_r: self.PanelBatteryTrouble = AlTroubleType.NONE          # Rather than using the dict, just set it to NONE
-        
+        if et in pmPanelBatteryType_t: self.PanelBatteryTrouble = True             # event in trigger set
+        if et in pmPanelBatteryType_r: self.PanelBatteryTrouble = False            # event in restore set
+
+        # Update trouble status
+        #self.PanelTroubleStatus = pmPanelTroubleType_t[et] if et in pmPanelTroubleType_t else AlTroubleType.NONE
+        if et in pmPanelTroubleType_t: self.PanelTroubleStatus = pmPanelTroubleType_t[et]       # event in trigger set
+        if et in pmPanelTroubleType_r: AlTroubleType.NONE                                       # event in restore set
+
         # no clauses as if siren gets true again then keep updating self.SirenActive sensor
         if self.SirenActive:
-            if et in pmPanelCancelSet and self.PanelIntruderStatus:  # Cancel Alarm
-                # cancel alarm and the alarm has been triggered
+            if not self.PanelIntruderStatus:  # Cancel Alarm
+                # Intruder: cancel siren and the siren has been triggered
                 self.SirenActive = False
                 self.SirenActiveDeviceTrigger = None
-                self.PanelIntruderStatus = False
-                log.debug("[UpdatePanelState]            ******************** Alarm Cancelled ****************")
-            # Siren has been active but it is no longer active (probably timed out and has then been disarmed)
-            elif et not in pmPanelIgnoreSet:  # Alarm Timed Out ????
-                self.SirenActive = False
-                self.SirenActiveDeviceTrigger = None
-                self.PanelIntruderStatus = False
-                log.debug("[UpdatePanelState]            ******************** Event not in Ignore Set, Cancelling Alarm Indication ****************")
+                self.stopIntruderStateTimer()
+                log.debug("[UpdatePanelState]            ******************** Intruder Cancelled ****************")
+                
+            #elif et not in pmPanelIgnoreSet:  # Alarm Timed Out ????
+            #    # Siren has been active but it is no longer active (probably timed out and has then been disarmed)
+            #    self.SirenActive = False
+            #    self.SirenActiveDeviceTrigger = None
+            #    self.PanelIntruderStatus = False
+            #    log.debug("[UpdatePanelState]            ******************** Event not in Ignore Set, Cancelling Alarm Indication ****************")
         elif self.PanelStateSourceData is not None and self.PanelIntruderStatus:
             armed = pmPanelArmedStatus[self.PanelStateSourceData].armed
             entry = pmPanelArmedStatus[self.PanelStateSourceData].entry
             if armed is not None and armed and not entry:
                 self.SirenActive = True
                 self.SirenActiveDeviceTrigger = None if sensor is None else sensor
-                log.debug("[UpdatePanelState]            ******************** Alarm Active *******************")
-        elif not self.StartedAlarmTime and self.PanelAlarmStatus in [AlAlarmType.FIRE, AlAlarmType.EMERGENCY, AlAlarmType.PANIC, AlAlarmType.GAS, AlAlarmType.FLOOD]:
-            self.StartedAlarmTime = True   # Has to be here and not in the Task as could be delayed
+                self.IntruderTimeTask = self.loop.create_task(self._IntruderStateTimer())
+                log.debug("[UpdatePanelState]            ******************** Intruder Active *******************")
+        
+        self.alarmTimerList = [AlAlarmType.FIRE, AlAlarmType.EMERGENCY, AlAlarmType.PANIC, AlAlarmType.GAS, AlAlarmType.FLOOD]
+        if self.AlarmTimeTask is not None and self.PanelAlarmStatus in self.alarmTimerList and oldAlarmStatus in self.alarmTimerList and oldAlarmStatus != self.PanelAlarmStatus:
+            # timer already running, oldalarm and newalarm in the list and they are different, there's been a change
+            # kill and restart the timer task
+            self.stopAlarmStateTimer()
             self.AlarmTimeTask = self.loop.create_task(self._AlarmStateTimer())
-        elif self.AlarmTimeTask is not None and self.StartedAlarmTime and self.PanelAlarmStatus == AlAlarmType.NONE:    # if it magically gets set back to NONE
+        elif self.AlarmTimeTask is None and self.PanelAlarmStatus in self.alarmTimerList:
+            self.AlarmTimeTask = self.loop.create_task(self._AlarmStateTimer())
+        elif self.AlarmTimeTask is not None and self.PanelAlarmStatus == AlAlarmType.NONE:
             self.stopAlarmStateTimer()
 
         log.debug(f"[UpdatePanelState]         System message eventType={et} i.e. {et.name}   {self.PanelTamper=}   {self.PanelAlarmStatus.name=}   {self.PanelTroubleStatus.name=}   {self.SirenActive=}   {self.PanelIntruderStatus=}   {self.PartitionGeneralTrouble=}")
@@ -1032,21 +1099,17 @@ class PartitionStateClass:
         
         retval = None
         
-        sysStatus = sysStatus & 0x1F     # Mark-Mills with a PowerMax Complete Part, sometimes this has the 0x20 bit set and I'm not sure why
-        
         if sysStatus in pmPanelArmedStatus:
             self.PanelStateSourceData = sysStatus
             disarmed = pmPanelArmedStatus[self.PanelStateSourceData].disarmed
             armed    = pmPanelArmedStatus[self.PanelStateSourceData].armed
             entry    = pmPanelArmedStatus[self.PanelStateSourceData].entry
             self.PanelState = pmPanelArmedStatus[self.PanelStateSourceData].state
-
-            if pmPanelArmedStatus[self.PanelStateSourceData].eventmapping >= 0:
+            if pmPanelArmedStatus[self.PanelStateSourceData].eventmapping != EVENT_TYPE.NOT_DEFINED:
                 #log.debug(f"[UpdatePartition]             self.PanelState is {self.PanelState}      using event mapping {pmPanelArmedStatus[sysStatus].eventmapping} for event data")
-                retval = AlPanelEventData(name = 0, action = pmPanelArmedStatus[self.PanelStateSourceData].eventmapping) # use partiton set to -1 as a dummy
-                
+                retval = AlPanelEventData(name = 0, action = pmPanelArmedStatus[self.PanelStateSourceData].eventmapping.value) # use partiton set to -1 as a dummy
         else:
-            log.debug(f"[UpdatePartition]             Unknown state {hexify(sysStatus)}, assuming Panel state of Unknown")
+            log.debug(f"[UpdatePartition]             Unknown state 0x{hexify(sysStatus)}, assuming Panel state of Unknown")
             disarmed = None
             armed = None
             entry = False
@@ -1076,8 +1139,8 @@ class PartitionStateClass:
         if sysFlags & 0x10 != 0:
             log.debug(f"[UpdatePartition]                 sysFlags bit 4 set --> Should be last 10 seconds of entry/exit")
             
-        if sysFlags & 0x20 != 0:
-            log.debug(f"[UpdatePartition]                 sysFlags bit 5 set --> Should be Zone Event")
+        #if sysFlags & 0x20 != 0:
+        #    log.debug(f"[UpdatePartition]                 sysFlags bit 5 set --> Should be Zone Event")
             
         if sysFlags & 0x40 != 0:
             log.debug(f"[UpdatePartition]                 sysFlags bit 6 set --> Should be Status Changed")
@@ -1149,8 +1212,6 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         self.PanelModel = "Unknown"
         self.PanelType = None
         
-        self.partitionsEnabled = False
-        self.PartitionsInUse = set()  # this is a set so no repetitions allowed
         self.PartitionState = [PartitionStateClass(self.loop), PartitionStateClass(self.loop), PartitionStateClass(self.loop)]    # Maximum of 3 partitions across all panel models
         
         self.lastPanelEvent = None
@@ -1167,14 +1228,9 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
     def shutdownOperation(self):
         self._initVars()
+        for p in range(3):
+            self.PartitionState[p].shutdownOperation()
 
-    def getPartitionsInUse(self) -> set | None:
-        # if partitions are enabled in the panel then return the partition set, 
-        #     note that the set could only be a single partition (if that is what is set in the panel)
-        if self.partitionsEnabled:
-            return self.PartitionsInUse
-        return None
-        
     def _dumpSensorsToLogFile(self, incX10 = False):
         log.debug(" ================================================================================ Display Status ================================================================================")
         for key, sensor in self.SensorList.items():
@@ -1219,16 +1275,16 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
     def isSirenActive(self, partition = INVALID_PARTITION) -> (bool, AlSensorDevice | None):
         if not self.suspendAllOperations:
-            if partition is not None and (p := self.getPartitionsInUse()) is not None:
+            if partition is not None and (piu := self.getPartitionsInUse()) is not None:
                 if 1 <= partition <= 3:
                     # if siren active for partition
                     if self.PartitionState[partition-1].SirenActive:
                         return (True, self.PartitionState[partition-1].SirenActiveDeviceTrigger)
                 else:
                     # Asking for a summary of all partitions, if any have triggered the siren
-                    for piu in p:
-                        if self.PartitionState[piu-1].SirenActive:
-                            return (True, self.PartitionState[piu-1].SirenActiveDeviceTrigger)
+                    for p in piu:
+                        if self.PartitionState[p-1].SirenActive:
+                            return (True, self.PartitionState[p-1].SirenActiveDeviceTrigger)
             else:
                 # Single partition
                 return (self.PartitionState[0].SirenActive, self.PartitionState[0].SirenActiveDeviceTrigger)
@@ -1236,14 +1292,14 @@ class AlPanelInterfaceHelper(AlPanelInterface):
 
     def getPanelStatus(self, partition = INVALID_PARTITION) -> AlPanelStatus:
         if not self.suspendAllOperations:
-            if partition is not None:
+            if partition is not None and (piu := self.getPartitionsInUse()) is not None:
                 if 1 <= partition <= 3:
                     return self.PartitionState[partition-1].PanelState
                 elif partition == 0:
                     #log.debug(f"Partition is zero {self.getPartitionsInUse()}")
                     # Start retval at the lowest ranked setting
                     retval = AlPanelStatus.UNKNOWN
-                    for p in self.getPartitionsInUse():
+                    for p in piu:
                         if self.PartitionState[p-1].PanelState > retval:
                             retval = self.PartitionState[p-1].PanelState
                     #log.debug(f"Partition is zero {self.getPartitionsInUse()}   returning {retval}")
@@ -1324,7 +1380,7 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         for ped in self.panelEventData:
             retval = True
             a = ped.asDict()
-            log.debug(f"[PanelUpdate] ped = {ped}  event data = {a}")
+            #log.debug(f"[PanelUpdate] ped = {ped}  event data = {a}")
             self.sendPanelUpdate(AlCondition.PANEL_UPDATE, a)
         self.panelEventData = [ ] # empty the list
         return retval
