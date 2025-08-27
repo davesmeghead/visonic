@@ -1,6 +1,7 @@
 """Config flow for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
 
 from typing import Any
+from copy import deepcopy
 import logging
 
 from .const import (
@@ -41,7 +42,7 @@ _LOGGER = logging.getLogger(__name__)
 class MyHandlers(data_entry_flow.FlowHandler):
     """My generic handler for config flow ConfigFlow and OptionsFlow."""
 
-    def __init__(self, config_entry = None):
+    def __init__(self):
         """Initialize the config flow."""
         # Do not call the parents init function
         self.PowerlinkRequested = False
@@ -49,6 +50,8 @@ class MyHandlers(data_entry_flow.FlowHandler):
         self.config = {}
         self.step_sequence = []
         self.current_pos = -1
+
+    def setConfigEntry(self, config_entry):
         if config_entry is not None:
             # convert python map to dictionary and set defaults for the options flow handler
             c = self.combineSettings(config_entry)
@@ -56,7 +59,6 @@ class MyHandlers(data_entry_flow.FlowHandler):
             if CONF_EMULATION_MODE in c:
                 s = c[CONF_EMULATION_MODE]
                 self.PowerlinkRequested = s == available_emulation_modes[0]
-
 
     def create_parameters_sequence(self, s : str) -> list:
         step_sequence = []
@@ -228,7 +230,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
     def async_get_options_flow(config_entry : ConfigEntry): #-> OptionsFlowHandler
         """Get the options flow for this handler."""
         #_LOGGER.debug("Visonic async_get_options_flow")
-        return VisonicOptionsFlowHandler(config_entry)
+        return VisonicOptionsFlowHandler()
 
     # ask the user, ethernet or usb
     async def async_step_device(self, user_input=None):
@@ -352,19 +354,19 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
     VERSION = 4
     CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
-    def __init__(self, config_entry: ConfigEntry):
+    def __init__(self) -> None:
         """Initialize options flow."""
-        MyHandlers.__init__(self, config_entry)
-        #OptionsFlow.__init__(self)
-        self.config = dict(config_entry.options)
-        self.entry_id = config_entry.entry_id
-        #_LOGGER.debug(f"init {self.entry_id} {self.config}")
+        MyHandlers.__init__(self)
+        OptionsFlow.__init__(self)
 
     # when editing an existing config, start from parameters10 as the previous settings are not editable after the connection has been made
     async def async_step_init(self, user_input=None):
         """Manage the options."""
         
-        #_LOGGER.debug(f"Edit config option settings, data = {user_input}")
+        #_LOGGER.debug(f"Edit config option settings, user input data = {user_input}")
+        self.setConfigEntry(self.config_entry)
+        self.config = deepcopy(dict(self.config_entry.options))
+        #self.entry_id = self.config_entry.entry_id
 
         if self.config is not None and CONF_DEVICE_TYPE in self.config:
             t = self.config[CONF_DEVICE_TYPE].lower()
