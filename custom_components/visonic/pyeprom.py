@@ -297,6 +297,7 @@ class EPROMManager:
     def reset(self):  
         self.pmRawSettings = {}
         self.pmDownloadComplete = False
+        self.lastSavedPages = set();
 
     def findLength(self, page, index) -> int | None:
         for b in pmBlockDownload[PanelTypeEnum.POWER_MAX]:
@@ -339,19 +340,19 @@ class EPROMManager:
                 if not self._validatEPROMSettingsBlock(convertByteArray(mystr)):
                     myDownloadList.append(convertByteArray(mystr))
         else:
-            lenMax = len(pmBlockDownload[PanelTypeEnum.POWER_MAX])
-            lenMaster = len(pmBlockDownload[PanelTypeEnum.POWER_MASTER])
-
+            # lenMax = len(pmBlockDownload[PanelTypeEnum.POWER_MAX])
+            # lenMaster = len(pmBlockDownload[PanelTypeEnum.POWER_MASTER])
             # log.debug(f"lenMax = {lenMax}   lenMaster = {lenMaster}")
-
-            for block in pmBlockDownload[PanelTypeEnum.POWER_MAX]:
-                if not self._validatEPROMSettingsBlock(block):
-                    myDownloadList.append(block)
 
             if isPowerMaster:
                 for block in pmBlockDownload[PanelTypeEnum.POWER_MASTER]:
                     if not self._validatEPROMSettingsBlock(block):
                         myDownloadList.append(block)
+            else:
+                for block in pmBlockDownload[PanelTypeEnum.POWER_MAX]:
+                    if not self._validatEPROMSettingsBlock(block):
+                        myDownloadList.append(block)
+
         self.pmDownloadComplete = len(myDownloadList) == 0
         return myDownloadList
 
@@ -362,6 +363,7 @@ class EPROMManager:
         settings_len = len(setting)
         wrappoint = index + settings_len - 0x100
         sett = [bytearray(b""), bytearray(b"")]
+        saved = set()  # empty set
 
         #log.debug(f"[Write Settings]   Entering Function  page {page}   index {index}    length {settings_len}")
         if settings_len > 0xB1:
@@ -393,10 +395,22 @@ class EPROMManager:
                 index = 0
             #log.debug(f"[Write Settings]         Writing settings page {page+i}  index {index}    length {settings_len}")
             self.pmRawSettings[page + i] = self.pmRawSettings[page + i][0:index] + sett[i] + self.pmRawSettings[page + i][index + settings_len :]
+            saved.add(page + i)
             #if len(self.pmRawSettings[page + i]) != 256:
             #    log.debug(f"[Write Settings] OOOOOOOOOOOOOOOOOOOO len = {len(self.pmRawSettings[page + i])}")
             # else:
             #    log.debug(f"[Write Settings] Page {page+i} is now {toString(self.pmRawSettings[page + i])}")
+
+        self.lastSavedPages = saved   # The last set of saved pages
+        #log.debug(f"[Write Settings]    The last set of saved pages {self.lastSavedPages}")
+
+    def removeLastSaved(self):
+        if len(self.lastSavedPages) > 0:
+            self.pmDownloadComplete = False
+            for s in self.lastSavedPages:
+                if s in self.pmRawSettings:   # just to make sure
+                    del self.pmRawSettings[s]
+            self.lastSavedPages = set()       # just in case this function is called again
 
     # _readEPROMSettingsPageIndex
     # This function retrieves the downloaded status and EPROM data

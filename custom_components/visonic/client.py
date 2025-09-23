@@ -118,7 +118,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.3.1"
+CLIENT_VERSION = "0.12.3.2"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 

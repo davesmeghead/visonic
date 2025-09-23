@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.5.0"
+PLUGIN_VERSION = "1.9.5.1"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -2278,6 +2278,29 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     elif _sequencerState == SequencerType.EPROMInitialiseDownload:   ################################################################ EPROMInitialiseDownload  ###################################################
 
                         self.EnableB0ReceiveProcessing = False
+                        # Clear all downloaded EPROM and empty all saved data
+                        self.epromManager.reset()
+                        # Populate the full list of EPROM blocks
+                        self.myDownloadList = self.epromManager.populatEPROMDownload(self.isPowerMaster())
+                        if self.PowerLinkBridgeConnected:
+                            if self.PowerLinkBridgeStealth:
+                                _sequencerState = SequencerType.EPROMTriggerDownload
+                                log.debug("[_sequencer] Bridge already in Stealth, continuing to EPROMTriggerDownload")
+                            else:
+                                log.debug("[_sequencer] Sending command to Bridge - Please Turn Stealth ON")
+                                command = 2   # Stealth command
+                                param = 1     # Enter it
+                                self._addMessageToSendList(Send.PL_BRIDGE, priority = MessagePriority.IMMEDIATE, options=[ [1, command], [2, param] ])  # Tell the Bridge to go in to exclusive mode
+                                command = 1   # Get Status command
+                                param = 0     # Irrelevant
+                                self._addMessageToSendList(Send.PL_BRIDGE, priority = MessagePriority.IMMEDIATE, options=[ [1, command], [2, param] ])  # Tell the Bridge to send me the status
+                                # Continue in this SequencerType until the bridge is in stealth
+                        else:
+                            _sequencerState = SequencerType.EPROMTriggerDownload
+
+                        continue   # just do the while loop
+
+                    elif _sequencerState == SequencerType.EPROMTriggerDownload:     ################################################################ EPROMTriggerDownload    ###################################################
 
                         interval = self._getUTCTimeFunction() - self.firstSendOfDownloadEprom
 
@@ -2298,58 +2321,25 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 log.debug("[Controller] ************************************* Going to standard mode ***************************************")
                                 _sequencerState = SequencerType.AimingForStandard
                         else:
-                            self.epromManager.reset()
-                            # Populate the full list of EPROM blocks
-                            self.myDownloadList = self.epromManager.populatEPROMDownload(self.isPowerMaster())
-                            # Send the first EPROM block to the panel to retrieve
-                            if len(self.myDownloadList) == 0:
-                                # This is the message to tell us that the panel has finished download mode, so we too should stop download mode
-                                log.debug("[_readPanelSettings] Download Complete")
-                                self.triggeredDownload = False
-                                self.pmDownloadInProgress = False
-                                self.pmDownloadMode = False
-                                self.pmDownloadComplete = True
-                                _sequencerState = SequencerType.EPROMDownloadComplete
-                            else:
-                                if self.PowerLinkBridgeConnected:
-                                    if self.PowerLinkBridgeStealth:
-                                        _sequencerState = SequencerType.EPROMTriggerDownload
-                                        log.debug("[_sequencer] Bridge already in Stealth, continuing to EPROMTriggerDownload")
-                                    else:
-                                        log.debug("[_sequencer] Sending command to Bridge - Please Turn Stealth ON")
-                                        command = 2   # Stealth command
-                                        param = 1     # Enter it
-                                        self._addMessageToSendList(Send.PL_BRIDGE, priority = MessagePriority.IMMEDIATE, options=[ [1, command], [2, param] ])  # Tell the Bridge to go in to exclusive mode
-                                        command = 1   # Get Status command
-                                        param = 0     # Irrelevant
-                                        self._addMessageToSendList(Send.PL_BRIDGE, priority = MessagePriority.IMMEDIATE, options=[ [1, command], [2, param] ])  # Tell the Bridge to send me the status
-                                        # Continue in this SequencerType until the bridge is in stealth
-                                else:
-                                    _sequencerState = SequencerType.EPROMTriggerDownload
+                            self._clearReceiveResponseList()
+                            self._emptySendQueue(pri_level = 1)
+                            self.DownloadCounter = self.DownloadCounter + 1
+                            log.debug("[_sequencer] Asking for panel EPROM")
 
-                        continue   # just do the while loop
-
-                    elif _sequencerState == SequencerType.EPROMTriggerDownload:     ################################################################ EPROMTriggerDownload    ###################################################
-
-                        self._clearReceiveResponseList()
-                        self._emptySendQueue(pri_level = 1)
-                        self.DownloadCounter = self.DownloadCounter + 1
-                        log.debug("[_sequencer] Asking for panel EPROM")
-
-                        self._addMessageToSendList(Send.DOWNLOAD_DL, options=[ [3, convertByteArray(self.DownloadCode)] ])  #
-                        # We got a first response, now we can Download the panel EPROM settings
-                        self.lastSendOfDownloadEprom = self._getUTCTimeFunction()
-                        # Kick off the download sequence and set associated variables
-                        self.pmExpectedResponse = set()
-                        self.PanelMode = AlPanelMode.DOWNLOAD
-                        self.PartitionState[0].PanelState = AlPanelStatus.DOWNLOADING  # Downloading
-                        self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
-                        log.debug("[_readPanelSettings] Download Ongoing")
-                        self.triggeredDownload = True
-                        self.pmDownloadInProgress = True
-                        self._addMessageToSendList(Send.DL, options=[ [1, self.myDownloadList.pop(0)] ])  # Read the next block of EPROM data
-                        lastrecv = self.lastRecvTimeOfPanelData
-                        _sequencerState = SequencerType.EPROMStartedDownload
+                            self._addMessageToSendList(Send.DOWNLOAD_DL, options=[ [3, convertByteArray(self.DownloadCode)] ])  #
+                            # We got a first response, now we can Download the panel EPROM settings
+                            self.lastSendOfDownloadEprom = self._getUTCTimeFunction()
+                            # Kick off the download sequence and set associated variables
+                            self.pmExpectedResponse = set()
+                            self.PanelMode = AlPanelMode.DOWNLOAD
+                            self.PartitionState[0].PanelState = AlPanelStatus.DOWNLOADING  # Downloading
+                            self.sendPanelUpdate(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
+                            log.debug("[_readPanelSettings] Download Ongoing")
+                            self.triggeredDownload = True
+                            self.pmDownloadInProgress = True
+                            self._addMessageToSendList(Send.DL, options=[ [1, self.myDownloadList.pop(0)] ])  # Read the next block of EPROM data
+                            lastrecv = self.lastRecvTimeOfPanelData
+                            _sequencerState = SequencerType.EPROMStartedDownload
 
                         continue   # just do the while loop
 
@@ -2379,6 +2369,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     elif _sequencerState == SequencerType.EPROMDoingDownload:       ################################################################ EPROMDoingDownload      ###################################################
 
                         if (s := processPanelErrorMessages()) != PanelErrorStates.AllGood:
+                            # Handle error messages from the panel
                             if s in [PanelErrorStates.AccessDeniedDownload, PanelErrorStates.DownloadRetryReceived, PanelErrorStates.TimeoutReceived]:
                                 self.pmExpectedResponse = set()
                                 _sequencerState = SequencerType.EPROMInitialiseDownload
@@ -2388,16 +2379,31 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             else:
                                 _sequencerState = SequencerType.InitialisePanel
                         elif self.pmDownloadComplete:
+                            # Download Complete
                             _sequencerState = SequencerType.EPROMDownloadComplete
                         else:
-                            intervalStart = self._getUTCTimeFunction() - self.lastSendOfDownloadEprom
-                            intervalLastReceive = self._getUTCTimeFunction() - self.lastRecvTimeOfPanelData
+                            # Handle timeouts
+                            timenow = self._getUTCTimeFunction()
+                            intervalStart = timenow - self.lastSendOfDownloadEprom
+                            intervalLastReceive = timenow - self.lastRecvTimeOfPanelData
                             #log.debug(f"[_sequencer] timenow={self._getUTCTimeFunction()}   intervalStart={intervalStart}  self.lastSendOfDownloadEprom={self.lastSendOfDownloadEprom}")
                             #log.debug(f"[_sequencer]                                        intervalLastReceive={intervalLastReceive}  self.lastRecvTimeOfPanelData={self.lastRecvTimeOfPanelData}")
-                            if intervalStart > timedelta(seconds=60):                         # Download hasn't finished in this timeout
+                            if intervalStart > timedelta(seconds=DOWNLOAD_TIMEOUT):                         
+                                # The whole Download sequence hasn't finished in this timeout
                                 _sequencerState = SequencerType.InitialisePanel
-                            elif intervalLastReceive > timedelta(seconds=3):                  # 3 seconds since we last received a byte of data from the panel
+                            elif intervalLastReceive >= timedelta(seconds=8):
+                                # 8 seconds since we last received a byte of data from the panel
+                                log.debug(f"[_sequencer] ****************************** Assume Download Failed, go back to initialise panel and start again ********************************")
                                 _sequencerState = SequencerType.InitialisePanel
+                            elif intervalLastReceive >= timedelta(seconds=3):
+                                # 3 seconds since we last received a byte of data from the panel and the last command to the panel was a download EPROM command
+                                log.debug(f"[_sequencer] ****************************** Recreating Download list and triggering Download ********************************")
+                                # Make sure that the last saved block is removed in case it has been corrupted
+                                self.epromManager.removeLastSaved()
+                                # Recreate the list of blocks to download
+                                self.myDownloadList = self.epromManager.populatEPROMDownload(self.isPowerMaster())
+                                # Resent the Download command to the panel and try to get the blocks
+                                _sequencerState = SequencerType.EPROMTriggerDownload
 
                         continue   # just do the while loop
 
@@ -2414,15 +2420,15 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         else:
                             # Process the EPROM data
                             try:
-                                log.debug("[Process Settings] Process Settings from EPROM")
+                                log.debug("[_sequencer] Process Settings from EPROM")
                                 self._processEPROMSettings()
                                 self.PanelStatus[PANEL_STATUS.DEVICES] = self._processKeypadsAndSirensFromEPROM()
                                 self._updateAllSirens()
                                 self._processX10Settings()
-                                log.debug("[Process Settings] EPROM Processing Complete")
+                                log.debug("[_sequencer] EPROM Processing Complete")
                             except Exception as ex:
-                                log.warning("[Process Settings] EPROM Processing failed by exception:")
-                                log.warning(f"[Process Settings]             {ex}")
+                                log.warning("[_sequencer] EPROM Processing failed by exception:")
+                                log.warning(f"[_sequencer]             {ex}")
                                 _sequencerState = SequencerType.Reset
                             else:
                                 if self.isPowerMaster(): # PowerMaster so get any remaining B0 data
