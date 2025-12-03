@@ -27,7 +27,8 @@
 				"title": "Ethernetconfiguratie",
 				"data": {
 					"host": "Hostadres",
-					"port": "Poort"
+					"port": "Poort",
+					"esphome_entity_select": "ESPHome Baud Entity (PowerMaster only)"
 				}
 			},
 			"myusb": {
@@ -38,6 +39,14 @@
 					"baud": "Baudsnelheid"
 				}
 			},
+            "myzigbee": {
+                "description": "Enter your Zigbee Settings",
+                "title": "Zigbee Configuration",
+                "data": {
+                    "path": "USB Local Path",
+                    "baud": "Baud Rate"
+                }
+            },
 			"parameters1": {
 				"description": "",
 				"title": "Instellingen voor alarmpaneel",

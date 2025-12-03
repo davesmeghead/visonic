@@ -5,6 +5,7 @@ from typing import Callable, Any
 import re
 import socket
 import datetime
+import json
 from datetime import datetime, timedelta, timezone
 from jinja2 import Environment, FileSystemLoader
 from functools import partial
@@ -19,10 +20,14 @@ from requests import ConnectTimeout, HTTPError
 from homeassistant.core import HomeAssistant, valid_entity_id
 from homeassistant.util import slugify
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+from homeassistant.components import mqtt
+from homeassistant.components.mqtt.models import ReceiveMessage
 from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUser
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 #from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.components.alarm_control_panel import AlarmControlPanelState
 from homeassistant.const import (
     Platform,
     ATTR_CODE,
@@ -57,6 +62,7 @@ from .pyvisonic import VisonicProtocol
 
 from .const import (
     available_emulation_modes,
+    map_panel_status_to_ha_status,
     ALARM_PANEL_CHANGE_EVENT,
     ALARM_SENSOR_CHANGE_EVENT,
     ALARM_COMMAND_EVENT,
@@ -95,6 +101,7 @@ from .const import (
     CONF_RETRY_CONNECTION_DELAY,
     CONF_COMMAND,
     CONF_X10_COMMAND,
+    CONF_ESPHOME_ENTITY_SELECT,
     TEXT_DISCONNECTION_COUNT,
     TEXT_CLIENT_VERSION,
     TEXT_LAST_EVENT_NAME,
@@ -109,6 +116,7 @@ from .const import (
     PANEL_ATTRIBUTE_NAME,
     DEVICE_ATTRIBUTE_NAME,
     DEFAULT_DEVICE_BAUD,
+    DEVICE_TYPE_ZIGBEE,
     DEVICE_TYPE_ETHERNET,
     DEVICE_TYPE_USB,
     AvailableNotifications,
@@ -118,9 +126,18 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.3.2"
+CLIENT_VERSION = "0.12.4.0"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
+
+MQTT_FlagReset         = 0x80
+MQTT_FlagConfig        = 0x40
+MQTT_FlagTimeBackwards = 0x10
+#MQTT_FlagOutOfSeq      = 0x08
+#MQTT_FlagCRCMatch      = 0x04
+#MQTT_FlagValidFrame    = 0x02
+#MQTT_FlagVersionMatch  = 0x01
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -164,6 +181,14 @@ AlarmPanelEventActionList = {
     PanelCondition.CHECK_EVENT_LOG_COMMAND  : HA_Event_Type(ALARM_COMMAND_EVENT,           "eventlog"), 
     PanelCondition.CHECK_X10_COMMAND        : HA_Event_Type(ALARM_COMMAND_EVENT,           "x10")
 }
+
+# Convert byte array to a string of hex values
+def toString(array_alpha: bytearray, gap = " "):
+    return ("".join(("%02x"+gap) % b for b in array_alpha))[:-len(gap)] if len(gap) > 0 else ("".join("%02x" % b for b in array_alpha))
+
+def convertByteArray(s) -> bytearray:
+    return bytearray.fromhex(s)
+
 
 ##############################################################################################################################################################################################################################################
 ##########################  Panel Event coordinator to manage A5, B0.24 and A7 panel state and event data ####################################################################################################################################
@@ -300,10 +325,13 @@ class MyTransport(AlTransport):
     
     def write(self, b : bytearray):
         #_LOGGER.debug(f"Data Sent {b}")
-        self._transport.write(b)
+        if self._transport is not None:
+            self._transport.write(b)
 
     def close(self):
-        self._transport.close()
+        if self._transport is not None:
+            self._transport.close()
+        self._transport = None
 
 # This class joins the Protocol data stream to the visonic protocol handler.
 #    transport needs to have 2 functions:   write(bytearray)  and  close()
@@ -311,7 +339,7 @@ class ClientVisonicProtocol(asyncio.Protocol):
 
     def __init__(self, vp : VisonicProtocol, client):
         #super().__init__(*args, **kwargs)
-        #_LOGGER.debug(f"CVP Init")
+        #_LOGGER.debug(f"[ClientVisonicProtocol] Init")
         self._transport = None
         self.vp = vp
         self.client = client
@@ -320,42 +348,199 @@ class ClientVisonicProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         #_LOGGER.debug(f"Received Data {data}")
-        self.vp.data_received(data)
+        if self._transport is not None:
+            self.vp.data_received(data)
 
     def connection_made(self, transport):
-        _LOGGER.debug(f"connection_made Whooooo")
+        _LOGGER.debug(f"[ClientVisonicProtocol] connection_made Whooooo")
         self._transport = MyTransport(transport)
         self.vp.setTransportConnection(self._transport)
 
-    def _stop(self):
-        _LOGGER.debug("stop called")
-        self.client = None
-        self.vp = None
-        if self._transport is not None:
-            _LOGGER.debug("stop called on protocol => closed")
-            self._transport.close()
-        self._transport = None
-        _LOGGER.debug("stop finished")
-
     def connection_lost(self, exc):
-        _LOGGER.debug(f"connection_lost Booooo")
+        _LOGGER.debug(f"[ClientVisonicProtocol] connection_lost Booooo")
         if self.client is not None:
             _LOGGER.debug(f"connection_lost    setup to reconnect, if allowed by the user config")
             self.client.hass.loop.create_task(self.client.async_reconnect_and_restart(force_reconnect = False, allow_restart = True)) # Try a simple reconnect but only if user config allows
-        if self._transport is not None:
-            self._stop()
-        _LOGGER.debug("connection_lost finished")
+        self.close()
+        #_LOGGER.debug("[ClientVisonicProtocol] connection_lost finished")
 
     def close(self):
-        #_LOGGER.debug(f"Connection Closed")
-        _LOGGER.debug("close called on protocol")
+        _LOGGER.debug("[ClientVisonicProtocol] close called")
         if self._transport is not None:
-            self._stop()
-        _LOGGER.debug("close finished")
+            _LOGGER.debug("[ClientVisonicProtocol] close called on protocol => closed")
+            self._transport.close()
+        self._transport = None
+        _LOGGER.debug("[ClientVisonicProtocol] close finished")
 
     # This is needed so we can create the class instance before giving it to the protocol handlers
     def __call__(self):
         return self
+
+class MqttProtocol:
+    """Asyncio Protocol that sends/receives data via MQTT."""
+    def __init__(self, hass, topic_in: str, topic_out: str, vp, client):
+        #super().__init__(vp, client)
+        #_LOGGER.debug(f"[MqttProtocol] Init")
+        self.vp = vp
+        self.client = client
+        self.expectedSeq = 0
+        self.hass = hass
+        self.last_payload = None        
+        self.mqtt_unsub = None
+        self.topic_in = topic_in
+        self.topic_out = topic_out
+        self._connected = asyncio.Event()
+        self._queue = asyncio.Queue()
+        self.commsTask = self.hass.loop.create_task(self._worker())
+
+    def close(self):
+        #_LOGGER.debug("[MqttProtocol] close called on protocol")
+        if self.mqtt_unsub is not None:
+            self.mqtt_unsub()             # unsubscribe mqtt message receive handler
+            self.mqtt_unsub = None
+        # Stop the receiver comms task
+        if self.commsTask is not None:
+            _LOGGER.debug("[MqttProtocol] Stopping the MQTT Comms Receive Task")
+            try:
+                self.commsTask.cancel()
+            except Exception as ex:
+                # Do not cause a full Home Assistant Exception, keep it local here
+                _LOGGER.debug("[MqttProtocol] ...........      Caused an exception")
+                _LOGGER.debug(f"[MqttProtocol]                     {ex}")   
+        self.commsTask = None
+        #_LOGGER.debug("[MqttProtocol] close finished")
+        
+    async def setup_message_handler(self):
+        """Subscribe to MQTT topic and simulate connection_made with a dummy transport."""
+
+        def myround(val) -> int:
+            while val < 0:
+                val = val + 65536
+            while val > 65535:
+                val = val - 65536
+            return val
+
+        def find_first_difference(str1, str2):
+            # Iterate through the characters of both strings
+            for i in range(min(len(str1), len(str2))):
+                if str1[i] != str2[i]:
+                    return i  # Return the index of the first difference
+            # If no difference is found in the common length, check for length mismatch
+            if len(str1) != len(str2):
+                return min(len(str1), len(str2))  # Return the index where one string ends
+            return -1  # Return -1 if the strings are identical
+
+        #@callback
+        async def _on_message(msg : ReceiveMessage):
+            _LOGGER.debug(f"Received mqtt data {msg.payload}")            
+            #_LOGGER.debug(f"         last time {self.last_payload}")            
+            
+            #billy = find_first_difference(msg.payload, self.last_payload) if self.last_payload else -1
+            #if billy >= 0:
+            #    _LOGGER.debug(f"  {billy}      {len(msg.payload)} {msg.payload[billy:]}")
+
+            #    _LOGGER.debug(f"  {billy}      {len(self.last_payload)} {self.last_payload[billy:]}")
+            
+            if isinstance(msg.payload, str) and len(msg.payload) > 0:
+
+                if msg.payload == self.last_payload:
+                    return  # duplicate; ignore
+                
+                self.last_payload = msg.payload
+
+                payload_dict = json.loads(msg.payload)    # create a dict from the string
+                if "visonic_receive" in payload_dict:
+                    vr = payload_dict["visonic_receive"]
+                    if "flags" in vr and "data" in vr and "data_len" in vr and "received_valid_frame" in vr and "crc_match" in vr:
+                        #_LOGGER.debug(f"MQTT received {vr}")
+                        flags = vr.get("flags")
+                        data  = vr.get("data")                      # This is a string of hex
+                        size  = vr.get("data_len")
+                        valid = bool(vr.get("received_valid_frame"))
+                        crc   = bool(vr.get("crc_match"))
+                        if valid and crc and size > 0:
+                            b_data = convertByteArray(data)
+                            #_LOGGER.debug(f"data {type(data)} is {data}")
+                            if flags & MQTT_FlagReset:
+                                self.expectedSeq = 0
+                            if "sequence" in vr:
+                                if self.expectedSeq == vr.get("sequence"):
+                                    #_LOGGER.debug(f"    MQTT received data with same sequence as last time {self.expectedSeq}")
+                                    #await asyncio.sleep(0.0)
+                                    return
+                                elif myround(self.expectedSeq + 1) == vr.get("sequence"):
+                                    self.expectedSeq = self.expectedSeq + 1
+                                else:
+                                    self.expectedSeq = vr.get("sequence")
+                                    _LOGGER.debug(f"    MQTT received data out of sequence {self.expectedSeq}  {vr.get("sequence")}")
+                                if flags & MQTT_FlagConfig:
+                                    if size == 9:
+                                        if b_data[8] == 0x01:
+                                            # The ESP32 device is not configured
+                                            _LOGGER.debug(f"    MQTT received data indicating uart is not configured, so sending config")
+                                            self.writeConfig("00 00 12 13 80 25 08 20");   # status 0, tx 18, rx 19, baud 9600, led pin 8, brightness 32
+                                        elif b_data[8] == 0x02:
+                                            _LOGGER.debug(f"    MQTT received data indicating uart is already configured, so no action  0x" + toString(b_data))
+                                            pass
+                                        else:
+                                            _LOGGER.debug(f"    MQTT received invalid config data")
+                                elif size >= 3 and data[0:2] == "0x":
+                                    # Normal data, strip off "0x" if present
+                                    _LOGGER.debug(f"MQTT received 0x data {data[2:]}")
+                                    self.hass.loop.call_soon_threadsafe(self.data_received, b_data[2:])
+                                elif size > 0:
+                                    # Normal data
+                                    _LOGGER.debug(f"MQTT received data {data}")
+                                    self.hass.loop.call_soon_threadsafe(self.data_received, b_data)
+                            else:
+                                _LOGGER.debug(f"    MQTT received data without a sequence")
+                        else:
+                            _LOGGER.debug(f"MQTT received invalid data {vr}")
+                    else:
+                        _LOGGER.debug(f"MQTT received invalid data, all data not present {vr}")
+                else:
+                    _LOGGER.debug(f"MQTT received invalid data, visonic_receive not in payload {payload_dict}")
+            else:
+                _LOGGER.debug(f"MQTT received invalid data")
+                _LOGGER.debug(f"payload {type(msg.payload)} is {msg.payload}")
+        
+        #_LOGGER.debug(f"[setup_message_handler] Starting - topic is {self.topic_in}")
+        if getattr(self, "_subscribed", False):
+            _LOGGER.debug(f"[setup_message_handler] Already subscribed to {self.topic_in}, skipping.")
+            return
+        self._subscribed = True
+        self.last_payload = None        
+        _LOGGER.debug(f"[setup_message_handler] MQTT subscribing to {self.topic_in}")
+        self.mqtt_unsub = await mqtt.async_subscribe(self.hass, self.topic_in, _on_message, qos=1)
+        #_LOGGER.debug(f"[setup_message_handler] subscribed")
+        self.vp.setTransportConnection(self)
+        self._connected.set()
+        #_LOGGER.debug(f"[setup_message_handler] exit")
+
+    async def _worker(self):
+        """Worker loop to send queued data via MQTT."""
+        await self._connected.wait()
+        while True:
+            js = await self._queue.get()
+            try:
+                while not mqtt.is_connected(self.hass):
+                    await asyncio.sleep(0.5)
+                _LOGGER.debug(f"MQTT Publish {json.dumps(js)}")
+                #js = { "transmit_custom_payload": "0x" + toString(data, "") }
+                await mqtt.async_publish( self.hass, self.topic_out, json.dumps(js), qos=1, retain=False )
+            except Exception as e:
+                _LOGGER.error("MQTT publish failed: %s", e)
+            self._queue.task_done()
+
+    def write(self, data: bytearray):
+        """Queue outgoing data to preserve order."""
+        js = { "transmit_custom_payload": "0x" + toString(data, "") }
+        self._queue.put_nowait(js)
+
+    def writeConfig(self, data: str):
+        """Queue outgoing data to preserve order."""
+        js = { "transmit_custom_config": "0x" + data }
+        self._queue.put_nowait(js)
 
 class VisonicClient:
     """Set up for Visonic devices."""
@@ -409,6 +594,7 @@ class VisonicClient:
         self.rationalised_ha_devices = False
         
         #self.loaded_platforms = set()
+        self.connection_baud_list = [ 9600, 38400, 9600, 38400 ]   # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
         
         self.onChangeHandler = set()
         
@@ -452,6 +638,13 @@ class VisonicClient:
             self.exclude_x10_list = [
                 int(e) if e.isdigit() else e for e in self.exclude_x10_list.split(",")
             ]
+        
+        self.select_entity_id = self.config.get(CONF_ESPHOME_ENTITY_SELECT, "")
+        if self.select_entity_id is None:
+            self.select_entity_id = ""
+            
+        self.logstate_debug(f"ESPHome Select Entity set to: {self.select_entity_id}")
+
         self.updateConfig()       # Set variables from the config
 
 
@@ -583,7 +776,7 @@ class VisonicClient:
 
     def isArmHome(self):
         return self.toBool(self.config.get(CONF_ARM_HOME_ENABLED, True))
-
+        
     def isArmNight(self):
         return self.toBool(self.config.get(CONF_ARM_NIGHT_ENABLED, True))
 
@@ -979,6 +1172,11 @@ class VisonicClient:
             #    partition = 1
             self.panel_entity_name[partition] = panel_entity_name
 
+    def _fire_on_change_handlers(self):
+        # Call all the registered client change handlers
+        for cb in self.onChangeHandler:
+            cb()
+
     def _fireHAEvent(self, event_id: AlCondition | PanelCondition, datadictionary: dict):
         # Check to ensure variables are set correctly
         if self.hass is None:
@@ -992,10 +1190,8 @@ class VisonicClient:
             self.logstate_warning("Attempt to generate HA event when Event Type is undefined")
             return
 
-        # Call all the registered client change handlers
-        for cb in self.onChangeHandler:
-            cb()
-
+        self._fire_on_change_handlers()
+        
         if event_id in AlarmPanelEventActionList: # Event must be in the list to send out
             name = AlarmPanelEventActionList[event_id].name
             a = {}
@@ -1136,6 +1332,61 @@ class VisonicClient:
         #platforms = ep.async_get_platforms(self.hass, DOMAIN)
         #self.logstate_debug(f"         platforms {platforms}")
 
+    def setSelectEntity(self, option : str):
+        """
+        Safely set a select entity to the given option.
+        :param option: The option value to select
+        """
+
+        # Get current entity
+        state_obj = self.hass.states.get(self.select_entity_id)
+        if state_obj is None:
+            raise ValueError(f"Entity {self.select_entity_id} not found")
+
+        # Get available options
+        options = state_obj.attributes.get("options", [])
+        if not options:
+            raise ValueError(f"No options found for {self.select_entity_id}")
+
+        # Check if the requested option is valid
+        if option not in options:
+            raise ValueError(f"Invalid option '{option}' for {self.select_entity_id}. Valid options: {options}")
+
+        self.logstate_debug(f"Setting select value {option}")
+        # Call the service to select the option
+        self.hass.loop.call_soon_threadsafe(
+            self.hass.async_create_task,
+            self.hass.services.async_call(
+                "select",
+                "select_option",
+                {
+                    "entity_id": self.select_entity_id,
+                    "option": option
+                }
+            )
+        )
+        self.logstate_debug(f"     Done")
+
+    def changeBaud(self, baud : int):
+
+        async def set_panel_baud_and_select_entity(baud: int):
+            self.logstate_debug(f"Setting Baud {baud}")
+            retval = await self.visonicProtocol.setPanelBaud(baud) # It will only do this for powermaster panels and when in powerlink mode
+            if retval == AlCommandStatus.SUCCESS:
+                self.logstate_debug(f"    Baud set, send queue empty")
+                self.setSelectEntity(str(baud))
+                self.logstate_debug(f"Select updated successfully!")
+            else:
+                self.logstate_debug(f"Panel baud not changed {retval}")
+
+        if self.select_entity_id and valid_entity_id(self.select_entity_id) and self.visonicProtocol is not None:
+            try:
+                self.hass.loop.create_task(set_panel_baud_and_select_entity(baud))
+            except ValueError as e:
+                self.logstate_debug(f"Failed to update select: {e}")
+        else:
+            self.logstate_debug(f"       ESPHome Select Entity not set or invalid: {self.select_entity_id}")
+        
     def sendEvent(self, event_id: AlCondition | PanelCondition, data : dict):
 
         if event_id == AlCondition.PANEL_UPDATE and data is not None and len(data) == 3:
@@ -1164,6 +1415,8 @@ class VisonicClient:
                 self.logstate_debug(f"   Startup Complete, no partitions in panel")
             if not self._createdAlarmPanel:
                 self._setupAlarmPanel()
+            
+            self.changeBaud(38400)        # This will only succeed if in powerlink mode and the panel is a powermaster
             
         #if event_id == AlCondition.PANEL_UPDATE and self.getPanelMode() == AlPanelMode.POWERLINK:
         #    # Powerlink Mode
@@ -1302,8 +1555,8 @@ class VisonicClient:
         self._setupSensorDelays()
         self.delayBetweenAttempts = float(self.config.get(CONF_RETRY_CONNECTION_DELAY, 1.0))   # seconds
         self.totalAttempts = int(self.config.get(CONF_RETRY_CONNECTION_COUNT, 1))
-        forcekeypad = self.toBool(self.config.get(CONF_FORCE_KEYPAD, False))
-        self.logstate_debug(f"[updateConfig] {forcekeypad=}  {self.totalAttempts=}   {self.delayBetweenAttempts=}")
+        self.logstate_debug(f"[updateConfig] forceKeypad={self.isForceKeypad()}  {self.totalAttempts=}   {self.delayBetweenAttempts=}")
+        self._fire_on_change_handlers()
 
     def onProblem(self, termination : AlTerminationType):
         """Problem Callback for connection disruption to the panel."""
@@ -1348,51 +1601,62 @@ class VisonicClient:
             self.logstate_debug(f"Visonic has responded to a disconnection, action={action}, state={state}")
             self._fireHAEvent(event_id = action, datadictionary = {"state": state})
 
-        self.onPanelChangeHandler(event_id = AlCondition.PUSH_CHANGE, data = {} )  # push through a panel update to the HA Frontend of any changes
+        # Visonic has responded to a disconnection, action=NO_DATA_FROM_PANEL, state=neverconnected
         
-        if self.totalAttempts == 0:                                                                   # If the user says 0 restart attempts then do not restart at all
+        self.onPanelChangeHandler(event_id = AlCondition.PUSH_CHANGE, data = {} )  # push through a panel update to the HA Frontend of any changes
+
+        if ( self.select_entity_id and valid_entity_id(self.select_entity_id) and 
+             self.visonicProtocol is not None and 
+             len(self.connection_baud_list) > 0 and 
+             termination == AlTerminationType.NO_DATA_FROM_PANEL_NEVER_CONNECTED
+           ):
+               
+            # Try the sequence of baud value
+            baud = self.connection_baud_list.pop(0)
+            self.logstate_debug(f"No data from panel (never connected) so try a different baud rate {baud}")
+            self.setSelectEntity(str(baud))
+        elif self.totalAttempts == 0:                                                                   # If the user says 0 restart attempts then do not restart at all
             self.logstate_debug(f"    User config explicitly prevents any reconnection attempts, stopping the connection")
             self.hass.loop.create_task(self.async_panel_stop())                                       # stop, do not restart
         else:                                                               # Are we already in the middle of a restart or reconnection
+            self.connection_baud_list = [ 9600, 38400, 9600, 38400 ]        # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
             self.panel_disconnection_counter = self.panel_disconnection_counter + 1
             self.hass.loop.create_task(self.async_reconnect_and_restart(force_reconnect = False, allow_restart = True))    # Try a reconnect first and if it fails then do the restart sequence (X attempts every Y seconds)
 
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
-    def pmGetPin(self, code: str, forcedKeypad: bool, partition : int):
+    def pmGetPin(self, code: str, partition : int):
         """Get code code."""
         #self.logstate_debug("Getting Pin Start")
-        if code is None or code == "" or len(code) != 4:
-            psc = self.getPanelStatus(partition)
-            panelmode = self.getPanelMode()
-            #self.logstate_debug("Getting Pin")
-            
-            # Avoid the panel codes that we're not interested in, if these are set then we have no business doing any of the functions
-            #    After this we can simply use DISARMED and not DISARMED for all the armed states
-            if psc == AlPanelStatus.UNKNOWN or psc == AlPanelStatus.USER_TEST or psc == AlPanelStatus.DOWNLOADING:
-                return False, None   # Return invalid as panel not in correct state to do anything
-            
-            if panelmode == AlPanelMode.STANDARD:
-                if psc == AlPanelStatus.DISARMED:
-                    if self.isArmWithoutCode():  # 
-                        #self.logstate_debug("Here B")
-                        return True, "0000"        # If the panel can arm without a usercode then we can use 0000 as the usercode
-                    return False, None             # use keypad so invalidate the return, there should be a valid 4 code code
-                else:
-                    return False, None             # use keypad so invalidate the return, there should be a valid 4 code code
-            elif panelmode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:  # 
-                if psc == AlPanelStatus.DISARMED and self.isArmWithoutCode() and forcedKeypad:
-                    return True, None    
-                if forcedKeypad:
-                    return False, None   # use keypad so invalidate the return, there should be a valid 4 code code
-                return True, None    # Usercode
-            elif panelmode == AlPanelMode.DOWNLOAD or panelmode == AlPanelMode.STOPPED or panelmode == AlPanelMode.STARTING:  # No need to output to log file when starting or downloading EPROM as this is normal operation
-                return False, None # Return invalid as panel downloading EPROM, stopped or starting
-            else:
-                # If the panel mode is UNKNOWN, PROBLEM.
-                self.logstate_warning(f"Warning: Valid 4 digit PIN not found, panelmode is {panelmode}")
-                return False, None # Return invalid as panel not in correct state to do anything
-        return True, code
+        psc = self.getPanelStatus(partition)
+        alarm_state = map_panel_status_to_ha_status[psc] if psc is not None and psc in map_panel_status_to_ha_status else AlarmControlPanelState.DISARMED
+        panelmode = self.getPanelMode()
+        forcedKeypad = self.isForceKeypad()
+        mycode = None if code is None or code == "" or len(code) != 4 else code
+        
+        # IsCodeValid, code, showKeypad, code_arm_required
+        if psc in [AlPanelStatus.UNKNOWN, AlPanelStatus.USER_TEST, AlPanelStatus.DOWNLOADING]:     
+            return False, None, False, True                                                                        # Return invalid as panel not in correct state to do anything
+        elif panelmode in [AlPanelMode.UNKNOWN, AlPanelMode.DOWNLOAD, AlPanelMode.STOPPED, AlPanelMode.STARTING, AlPanelMode.MINIMAL_ONLY]:  # 
+            return False, None, False, True                                                                        # Return invalid as panel downloading EPROM, stopped or starting
+        elif panelmode in [AlPanelMode.STANDARD]:                                                        
+            if alarm_state == AlarmControlPanelState.DISARMED:                                          
+                if self.isArmWithoutCode():                                                                        #                                                          
+                    return True, "0000", False, False                                                              # If the panel can arm without a usercode then we can use 0000 as the usercode --> top row in standard Table
+            elif mycode is not None and forcedKeypad:                                                              # Armed and force keypad --> bottom row in Standard Table
+                return True, mycode, True, True                                                                    # use keypad so invalidate the return, there should be a valid 4 code code
 
+            if mycode is None:                                            
+                return False, None, True, True                                                                     # use keypad to get code
+
+            return True, mycode, False, True                                                                       # code is valid so no keypad needed
+
+        # Here when panelmode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]
+        if forcedKeypad:
+            keypad = not self.isArmWithoutCode() if alarm_state == AlarmControlPanelState.DISARMED else True       # Disarmed: depends on if panel can arm without a code.  Armed: Show keypad
+            return True, mycode, keypad, not self.isArmWithoutCode()                                               # Bottom 4 rows of Powerlink Table
+                                                                                                             
+        return True, mycode, False, False                                                                          # Top 2 rows of Powerlink Table. No need for a keypad when in powerlink.
+        
     # pmGetPinSimple: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
     #   This is used from the bypass command and the get event log command
     def pmGetPinSimple(self, code: str):
@@ -1475,7 +1739,7 @@ class VisonicClient:
 
     def isCodeRequired(self) -> bool:
         """Determine if a user code is required given the panel mode and user settings."""
-        isValidPL, code = self.pmGetPin(code = None, forcedKeypad = self.isForceKeypad(), partition = 1)
+        isValidPL, _, _, _ = self.pmGetPin(code = None, partition = 1)
         return not isValidPL;
 
 
@@ -1709,7 +1973,7 @@ class VisonicClient:
             if (codeRequired and code is not None) or not codeRequired:
                 pcode = self.decode_code_from_dict_or_str(code) if codeRequired or (code is not None and len(code) > 0) else ""
                 if self.visonicProtocol is not None:
-                    isValidPL, code = self.pmGetPin(code = pcode, forcedKeypad = self.isForceKeypad(), partition = 1)
+                    isValidPL, code, _, _ = self.pmGetPin(code = pcode, partition = 1)
 
                     if command in [AlPanelCommand.DISARM, AlPanelCommand.ARM_HOME, AlPanelCommand.ARM_AWAY, AlPanelCommand.ARM_HOME_INSTANT, \
                                    AlPanelCommand.ARM_AWAY_INSTANT, AlPanelCommand.ARM_HOME_BYPASS, AlPanelCommand.ARM_AWAY_BYPASS]:
@@ -1901,6 +2165,26 @@ class VisonicClient:
             
         return None, None
 
+    # Create a connection using asyncio using an ip and port
+    async def async_create_mqtt_visonic_connection(self, vp : VisonicProtocol):
+        """Create Visonic manager class, returns tcp transport coroutine."""
+        # Make sure MQTT integration is enabled and the client is available
+        while not mqtt.is_connected(self.hass):
+            await asyncio.sleep(0.5)
+        
+        topic = "zigbee2mqtt/Visonic Alarm ESP"
+        
+        #zigbee2mqtt/Visonic Alarm ESP/transmit_custom_payload/set
+
+        cvp = MqttProtocol(hass=self.hass, topic_in=topic , topic_out=topic + "/set", vp=vp, client=self)   # hass, topic_in: str, topic_out: str, vp : VisonicProtocol, client
+        vtask = self.hass.loop.create_task(cvp.setup_message_handler())
+
+        cvp.writeConfig("00 00 12 13 80 25 08 20");   # status 0, tx 18, rx 19, baud 9600, led pin 8, brightness 32
+        
+        self.logstate_info(f"MQTT Connection made")
+            
+        return vtask, cvp
+
     def tellemaboutme(self, thisisme):
         """This function is here so that the coroutine can tell us the protocol handler"""
         self.tell_em = thisisme
@@ -1956,7 +2240,10 @@ class VisonicClient:
             self.logstate_debug("Comms Device Type is %s", device_type)
             self.cvp = None
             self.visonicCommsTask = None
-            if device_type == DEVICE_TYPE_ETHERNET:
+            if device_type == DEVICE_TYPE_ZIGBEE:
+                
+                (self.visonicCommsTask, self.cvp) = await self.async_create_mqtt_visonic_connection(vp=self.visonicProtocol)
+            elif device_type == DEVICE_TYPE_ETHERNET:
                 host = self.config.get(CONF_HOST, "127.0.0.1")
                 port = self.config.get(CONF_PORT, 0)
                 (self.visonicCommsTask, self.cvp) = await self.async_create_tcp_visonic_connection(vp=self.visonicProtocol, address=host, port=port)
@@ -2133,6 +2420,36 @@ class VisonicClient:
         entry.runtime_data.alarm_entity = None
         entry.runtime_data.sensors = list()
 
+
+    async def wait_for_entry_loaded(self, entry_id, timeout=30):
+        """
+        Wait until a config entry is loaded or timeout is reached.
+        :param entry_id: The entry_id of the config entry
+        :param timeout: Maximum time to wait in seconds
+        :return: True if loaded, False if timeout or entry not found
+        """
+        config_entry = self.hass.config_entries.async_get_entry(entry_id)
+        if config_entry is None:
+            self.logstate_debug(f"Config entry {entry_id} not found")
+            return False
+
+        total_wait = 0
+        poll_interval = 0.5  # seconds
+
+        while config_entry.state != ConfigEntryState.LOADED:
+            await asyncio.sleep(poll_interval)
+            total_wait += poll_interval
+
+            # Refresh entry in case state changed
+            config_entry = self.hass.config_entries.async_get_entry(entry_id)
+
+            if total_wait >= timeout:
+                self.logstate_debug(f"Timeout waiting for config entry {entry_id} to load")
+                return False
+
+        self.logstate_debug(f"Config entry {entry_id} is loaded ✅")
+        return True
+
     async def async_connect(self, force=True) -> bool:
         """Connect to the alarm panel using the pyvisonic library."""
 
@@ -2202,9 +2519,16 @@ class VisonicClient:
                 self.logstate_debug(f"[async_connect] Client connecting.....      async_forward_entry_setups")
                 try:
                     with contextlib.suppress(ValueError):
-                        await self.hass.config_entries.async_forward_entry_setups(self.entry, PLATFORMS )
+                        loaded = await self.wait_for_entry_loaded(self.getEntryID(), 10)
+                        if loaded:
+                            await self.hass.config_entries.async_forward_entry_setups(self.entry, PLATFORMS)
+                        else:
+                            self.logstate_debug(f"[async_connect] Client connecting.....      Entry not loaded")  # do nothing!
+                            return False
                 except ValueError:
                     self.logstate_debug(f"[async_connect] Client connecting.....      Trapped ValueError Setups")  # do nothing!
+                    return False
+                
                 self.logstate_debug(f"[async_connect] Client connecting.....      async_forward_entry_setups done")
 
                 self.visonicProtocol = VisonicProtocol(panelConfig=self.getConfigData(), panel_id=self.panelident, loop=self.hass.loop)

@@ -39,6 +39,7 @@ from .const import (
     CONF_RETRY_CONNECTION_COUNT,
     CONF_MOTION_OFF_DELAY,
     CONF_MAGNET_CLOSED_DELAY,
+    CONF_ESPHOME_ENTITY_SELECT,
     CONF_EMER_OFF_DELAY,
     PANEL_ATTRIBUTE_NAME,
     NOTIFICATION_ID,
@@ -626,6 +627,16 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEn
             update_version_panel_number = update_version_panel_number + 1
         else:
             _LOGGER.debug(f"   Panel Number already set to {new[CONF_PANEL_NUMBER]} so updating config version number only")
+            
+        hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
+
+    if version == 4:
+        version = 5
+        new = config_entry.data.copy()
+        
+        if CONF_ESPHOME_ENTITY_SELECT not in new:
+            _LOGGER.debug(f"Setting ESPHOME Baud Select Entity to empty string")
+            new[CONF_ESPHOME_ENTITY_SELECT] = ""
             
         hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
 

@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.5.1"
+PLUGIN_VERSION = "1.9.6.0"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -386,7 +386,7 @@ pmSendMsg = {  #                        data                                    
    Send.PM_SIREN     : VisonicCommand(convertByteArray('B0 00 3E 0A 99 99 05 FF 08 02 03 00 00 01 43'), None                        ,  True, False,      SendDebugM, 1.0, "Powermaster Trigger Siren" ),        # Trigger Siren, the 99 99 needs to be the usercode
    Send.PL_BRIDGE    : VisonicCommand(convertByteArray('E1 99 99 43')                                 , None                        , False, False,      SendDebugM, 0.0, "Powerlink Bridge" ),                 # Command to the Bridge
 
-#   Send.PM_SETBAUD   : VisonicCommand(convertByteArray('B0 00 41 0D AA AA 01 FF 28 0C 05 01 00 BB BB 00 05 43'), None   ,  True, False,   CMD, 2.5, "Powermaster Set Serial Baud Rate" ),
+   Send.PM_SETBAUD   : VisonicCommand(convertByteArray('B0 00 41 0D AA AA 01 FF 28 0C 05 01 00 BB BB 00 05 43'), None               ,  True, False,      SendDebugC, 2.5, "Powermaster Set Serial Baud Rate" ),
 
 # Not sure what these do to the panel. Panel replies with powerlink ack Packet.POWERLINK_TERMINAL 0x43               
 #   Send.MSG4             : VisonicCommand(convertByteArray('04 43')                                       , None   , False, False,      SendDebugM, 0.0, "Message 04 43. Not sure what this does to the panel. Panel replies with powerlink ack 0x43." ),
@@ -1256,11 +1256,11 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     def setTransportConnection(self, transport : AlTransport):
         """Set the transport connection to the Panel."""
         self.transport = transport
-        if transport is not None:
+        if self.transport is not None:
             log.debug("[Connection] Connected to local Protocol handler and Transport Layer")
-        if self.transport is not None and self.sequencerTask is None:
-            # Start sequencer the first time the transport is set, after that don't
-            self.sequencerTask = self.loop.create_task(self._sequencer())
+            if self.sequencerTask is None:
+                # Start sequencer the first time the transport is set, after that don't
+                self.sequencerTask = self.loop.create_task(self._sequencer())
 
     def stopSequencer(self):
         if self.sequencerTask is not None:
@@ -1314,8 +1314,12 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             log.debug("[_reportProblem]                         No Exception handler to call......")
         #self.shutdownOperation()
 
-    def isSendQueueEmpty(self) -> bool:
-        return self.SendQueue.empty()
+    def isSendQueueEmpty(self, priority : MessagePriority = None) -> bool:
+        if priority is None or self.SendQueue.empty():
+            return self.SendQueue.empty()
+        # Here when the queue is not empty and priority is set to something
+        item_priority, _ = self.SendQueue.peek_nowait()
+        return item_priority > priority
 
     # Clear the send queue and reset the associated parameters
     def _emptySendQueue(self, pri_level : int = 1):
@@ -5698,7 +5702,7 @@ class PacketHandling(ProtocolBase):
             totalimages = data[14]
 
             if zone in self.image_ignore:
-                log.debug(f"[handle_msgtypeF4]        Ignoring Image Header, so not processing F4 data {lastimage=}")
+                log.debug(f"[handle_msgtypeF4]        Ignoring Image Header, so not processing F4 data.      zone = {zone}    size = {size}    unique_id = {hex(unique_id)}    image_id = {image_id}     lastimage = {lastimage}    totalimages = {totalimages}")
                 if lastimage:
                     self.image_ignore.remove(zone)
             elif self.ImageManager.isImageDataInProgress():
@@ -5735,8 +5739,25 @@ class PacketHandling(ProtocolBase):
                     #self._addMessageToSendList(convertByteArray('0d ab 0e 00 17 1e 00 00 03 01 05 00 43 c5 0a')) # 43 should be bytearray([Packet.POWERLINK_TERMINAL])
 
                     # 0d f4 10 00 01 04 00 55 1e 01 f7 fc 0a
-                    fnoseA = 0xF7
-                    fnoseB = 0xFC
+                    fnoseA = 0x6C
+                    fnoseB = 0x9C
+
+                    # I currently assume that f4 07 messages need to be sent to the panel to inform it that we have received the image OK.  
+                    #      I'm not sure how to tell the panel that we have not received it OK
+                    # I also assume that f4 10 messages tell the panel what to do next, send the next image or stop sending image data
+                    #0:07:40.988370  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 01 00 82 02 0a 
+                    #0:07:49.337453  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 02 00 d1 57 0a 
+                    #0:07:57.429574  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 03 00 e0 64 0a 
+                    #0:08:05.520413  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 04 00 77 fd 0a 
+                    #0:08:13.298995  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 05 00 46 ce 0a 
+                    #0:08:19.445386  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 00 00 b3 31 0a 
+
+                    #0:07:42.090978  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 01 4d 8c 0a 
+                    #0:07:49.644125  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 02 2e bc 0a 
+                    #0:07:57.599319  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 03 0f ac 0a 
+                    #0:08:05.621363  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 04 e8 dc 0a 
+                    #0:08:13.484331  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 05 c9 cc 0a 
+                    #0:08:19.499364  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 00 6c 9c 0a  ## This seems to stop the panel sending F4 data
 
                     # Tell the panel we received that one OK, we're ready for the next 
                     #     --> *************************** THIS DOES NOT WORK ***************************
@@ -5744,7 +5765,7 @@ class PacketHandling(ProtocolBase):
                     if image_id == 0:   #   
                         id = data[14] - 1
                         self._addMessageToSendList(convertByteArray(f'0d f4 10 00 01 04 00 {zone:>02} {hexify(unique_id):>02} {hexify(id):>02} {hexify(fnoseA):>02} {hexify(fnoseB):>02} 0a'))
-                    elif image_id >= 2:   #   image_id of 2 is the recorded sequence, I need to try this at 1
+                    elif image_id >= 1:   #   image_id of 2 is the recorded sequence, I need to try this at 1
                         self._addMessageToSendList(convertByteArray(f'0d f4 10 00 01 04 00 {zone:>02} {hexify(unique_id):>02} {hexify(image_id - 1):>02} {hexify(fnoseA):>02} {hexify(fnoseB):>02} 0a'))
 
             else:
@@ -6015,6 +6036,25 @@ class VisonicProtocol(PacketHandling):
                             return AlCommandStatus.SUCCESS
                     return AlCommandStatus.FAIL_INVALID_STATE
                 return AlCommandStatus.FAIL_ENTITY_INCORRECT
+            return AlCommandStatus.FAIL_INVALID_STATE
+        return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
+
+    async def setPanelBaud(self, baud : int) -> AlCommandStatus:
+        if not self.pmDownloadMode:
+            if self.isPowerMaster() and self.PanelMode in [AlPanelMode.POWERLINK]:                  # Only do this for powermaster panels and in powerlink mode
+
+                bpin = self._createPin(None)                       # bytearray pin
+
+                y1, y2 = (baud & 0xFFFF).to_bytes(2, "little")
+                baud_data = bytearray([y2, y1])
+
+                self._addMessageToSendList(Send.PM_SETBAUD, priority = MessagePriority.IMMEDIATE, options=[ [4, bpin], [13, baud_data] ])  #  
+
+                while not self.isSendQueueEmpty(priority = MessagePriority.IMMEDIATE):
+                    log.debug(f"    Waiting for baud to be sent")
+                    await asyncio.sleep(0.1)
+
+                return AlCommandStatus.SUCCESS
             return AlCommandStatus.FAIL_INVALID_STATE
         return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
 
