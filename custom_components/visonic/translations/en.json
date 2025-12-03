@@ -27,12 +27,21 @@
                 "title": "Ethernet Configuration",
                 "data": {
                     "host": "Host Address",
-                    "port": "Port"
+                    "port": "Port",
+					"esphome_entity_select": "ESPHome Baud Entity (PowerMaster only)"
                 }
             },
             "myusb": {
                 "description": "Enter your USB Settings",
                 "title": "USB Configuration",
+                "data": {
+                    "path": "USB Local Path",
+                    "baud": "Baud Rate"
+                }
+            },
+            "myzigbee": {
+                "description": "Enter your Zigbee Settings",
+                "title": "Zigbee Configuration",
                 "data": {
                     "path": "USB Local Path",
                     "baud": "Baud Rate"
