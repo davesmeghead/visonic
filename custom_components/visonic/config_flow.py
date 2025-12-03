@@ -3,7 +3,6 @@
 from typing import Any
 from copy import deepcopy
 import logging
-import voluptuous as vol
 
 from .const import (
     CONF_DEVICE_BAUD,
@@ -18,13 +17,10 @@ from .const import (
     VISONIC_UNIQUE_NAME,
     CONF_ALARM_NOTIFICATIONS,
     DEFAULT_DEVICE_BAUD,
-    DEVICE_TYPE_ZIGBEE,
     DEVICE_TYPE_ETHERNET,
-    DEVICE_TYPE_USB,
-    CONF_ESPHOME_ENTITY_SELECT,
+    DEVICE_TYPE_USB
 )
 
-from homeassistant.helpers import config_validation as cv
 from homeassistant import data_entry_flow
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.config_entries import (
@@ -107,8 +103,6 @@ class MyHandlers(data_entry_flow.FlowHandler):
             ds = self.myschema.create_schema_ethernet()
         elif step == "myusb":
             ds = self.myschema.create_schema_usb()
-        elif step == "myzigbee":
-            ds = self.myschema.create_schema_zigbee()
         elif step == "parameters1":
             ds = self.myschema.create_schema_parameters1()
         elif step == "parameters10":
@@ -207,7 +201,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
 class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
     """Handle a Visonic flow."""
 
-    VERSION = 5
+    VERSION = 4
     CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     def __init__(self):
@@ -238,10 +232,10 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         #_LOGGER.debug("Visonic async_get_options_flow")
         return VisonicOptionsFlowHandler()
 
-    # ask the user: zigbee, ethernet or usb
+    # ask the user, ethernet or usb
     async def async_step_device(self, user_input=None):
         """Handle the input processing of the config flow."""
-        _LOGGER.debug("async_step_device %s", user_input)
+        #_LOGGER.debug("async_step_device %s", user_input)
         #self.dumpMyState()
         if user_input is not None and CONF_DEVICE_TYPE in user_input and CONF_PANEL_NUMBER in user_input:
             panel_num = max(0, int(user_input[CONF_PANEL_NUMBER]))
@@ -253,77 +247,24 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
                 return await self._show_form(step="myethernet")
             elif self.config[CONF_DEVICE_TYPE] == DEVICE_TYPE_USB:
                 return await self._show_form(step="myusb")
-            elif self.config[CONF_DEVICE_TYPE] == DEVICE_TYPE_ZIGBEE:
-                return await self._show_form(step="myzigbee")
         errors = {}
         errors["base"] = "eth_or_usb"
         return await self._show_form(step="device", errors=errors)
 
-    def select_entity_or_empty(self, value):
-        """Return a validator that checks entity is empty or a valid select entity."""
-        if not value or value == "":
-            return ""  # allow empty
-        entity = cv.entity_id(value)
-        if not entity.startswith("select."):
-            raise vol.Invalid("Entity must be from the select domain")
-
-        # Get current entity
-        state_obj = self.hass.states.get(entity)
-        if state_obj is None:
-            raise vol.Invalid(f"Entity {entity} not found")
-
-        # Get available options
-        options = state_obj.attributes.get("options", [])
-        if not options:
-            raise vol.Invalid(f"No options found for selected entity")
-
-        # Check if the available options are valid
-        if "9600" not in options or "38400" not in options:
-            raise vol.Invalid(f"Invalid options for {entity}, options: {options}")
-
-        return entity
-
-
     # ask for the ethernet settings
     async def async_step_myethernet(self, user_input=None):
-        """Handle the input processing of the Ethernet config flow."""
-        errors = {}
-
-        if user_input:
-            try:
-                select_entity = user_input.get(CONF_ESPHOME_ENTITY_SELECT, "")
-                # Use your validator
-                self.select_entity_or_empty(select_entity)
-            except vol.Invalid as e:
-                errors[CONF_ESPHOME_ENTITY_SELECT] = str(e)
-
-            if not errors:
-                self.config.update(user_input)
-                self.config[CONF_PATH] = ""
-                self.config[CONF_DEVICE_BAUD] = DEFAULT_DEVICE_BAUD
-
-                return await self._show_form(step="parameters1")
-
-        _LOGGER.debug(f"async_step_myethernet, select entity validation errors {errors}")
-        
-        return await self._show_form(step="myethernet", errors=errors)
-
-    # ask for the usb settings
-    async def async_step_myusb(self, user_input=None):
-        """Handle the input processing of the USB config flow."""
+        """Handle the input processing of the config flow."""
         self.config.update(user_input)
-        self.config[CONF_HOST] = ""
-        self.config[CONF_PORT] = ""
-        self.config[CONF_ESPHOME_ENTITY_SELECT] = ""
+        self.config[CONF_PATH] = ""
+        self.config[CONF_DEVICE_BAUD] = DEFAULT_DEVICE_BAUD
         return await self._show_form(step="parameters1")
 
     # ask for the usb settings
-    async def async_step_myzigbee(self, user_input=None):
-        """Handle the input processing of the Zigbee config flow."""
+    async def async_step_myusb(self, user_input=None):
+        """Handle the input processing of the config flow."""
         self.config.update(user_input)
         self.config[CONF_HOST] = ""
         self.config[CONF_PORT] = ""
-        self.config[CONF_ESPHOME_ENTITY_SELECT] = ""
         return await self._show_form(step="parameters1")
 
     async def async_step_parameters1(self, user_input=None):
@@ -383,7 +324,6 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
                         data[CONF_DEVICE_TYPE] = DEVICE_TYPE_ETHERNET
                         data[CONF_HOST] = device_type[CONF_HOST]
                         data[CONF_PORT] = device_type[CONF_PORT]
-                        data[CONF_ESPHOME_ENTITY_SELECT] = device_type[CONF_ESPHOME_ENTITY_SELECT]
                         data[CONF_PATH] = ""
                         data[CONF_DEVICE_BAUD] = DEFAULT_DEVICE_BAUD
                     elif device_type[CONF_DEVICE_TYPE] == DEVICE_TYPE_USB:
@@ -395,7 +335,6 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
                             data[CONF_DEVICE_BAUD] = DEFAULT_DEVICE_BAUD
                         data[CONF_HOST] = ""
                         data[CONF_PORT] = ""
-                        data[CONF_ESPHOME_ENTITY_SELECT] = ""
                 else:
                     data[k] = import_config.get(k)
         except Exception as er:
@@ -412,7 +351,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
 class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
     """Handle options."""
 
-    VERSION = 5
+    VERSION = 4
     CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     def __init__(self) -> None:
@@ -432,7 +371,7 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
         if self.config is not None and CONF_DEVICE_TYPE in self.config:
             t = self.config[CONF_DEVICE_TYPE].lower()
             #_LOGGER.debug(f"type = {type(t)}   t = {t}")
-            if t == DEVICE_TYPE_ETHERNET or t == DEVICE_TYPE_ZIGBEE or t == DEVICE_TYPE_USB:
+            if t == DEVICE_TYPE_ETHERNET or t == DEVICE_TYPE_USB:
 
                 self.current_pos = -1
 

@@ -19,8 +19,6 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
     validate_selector,
-    EntitySelector, 
-    EntitySelectorConfig,
 )
 
 from .const import (
@@ -38,7 +36,6 @@ from .const import (
     CONF_EPROM_ATTRIBUTES,
     CONF_DEVICE_BAUD,
     CONF_PANEL_NUMBER,
-    CONF_ESPHOME_ENTITY_SELECT,
     CONF_DEVICE_TYPE,
     CONF_DOWNLOAD_CODE,
     CONF_EMULATION_MODE,
@@ -61,7 +58,6 @@ from .const import (
     DEFAULT_DEVICE_PORT,
     DEFAULT_DEVICE_TOPIC,
     DEFAULT_DEVICE_USB,
-    DEVICE_TYPE_ZIGBEE,
     DEVICE_TYPE_ETHERNET,
     DEVICE_TYPE_USB,
     AvailableNotifications,
@@ -90,33 +86,18 @@ def capitalize(s):
 def titlecase(s):
     return re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda word: capitalize(word.group(0)), s)
 
-# to put zigbee back in, uncomment 142 and switch 107 and 108
 class VisonicSchema:
 
     def __init__(self):
         self.CONFIG_SCHEMA_DEVICE = {
             vol.Required(CONF_DEVICE_TYPE, default=titlecase(DEVICE_TYPE_ETHERNET)): vol.In([titlecase(DEVICE_TYPE_ETHERNET), DEVICE_TYPE_USB.upper()]),
-            #vol.Required(CONF_DEVICE_TYPE, default=titlecase(DEVICE_TYPE_ETHERNET)): vol.In([titlecase(DEVICE_TYPE_ETHERNET), DEVICE_TYPE_USB.upper(), titlecase(DEVICE_TYPE_ZIGBEE)]),
             vol.Optional(CONF_PANEL_NUMBER, default=0): cv.positive_int,
         }
         self.CONFIG_SCHEMA_ETHERNET = {
             vol.Required(CONF_HOST, default=DEFAULT_DEVICE_HOST): str,
             vol.Required(CONF_PORT, default=str(DEFAULT_DEVICE_PORT)): str,
-            #vol.Optional(CONF_ESPHOME_ENTITY_SELECT, default=""): select_entity_or_empty,
-            vol.Optional(
-                CONF_ESPHOME_ENTITY_SELECT,
-            ): EntitySelector(
-                EntitySelectorConfig(
-                    domain=["select"],
-                    multiple=False,
-                )
-            ),
         }
         self.CONFIG_SCHEMA_USB = {
-            vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB): str,
-            vol.Optional(CONF_DEVICE_BAUD, default=str(DEFAULT_DEVICE_BAUD)): str,
-        }
-        self.CONFIG_SCHEMA_ZIGBEE = {
             vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB): str,
             vol.Optional(CONF_DEVICE_BAUD, default=str(DEFAULT_DEVICE_BAUD)): str,
         }
@@ -129,18 +110,14 @@ class VisonicSchema:
             **self.CONFIG_SCHEMA_DEVICE,
             **self.CONFIG_SCHEMA_ETHERNET,
             **self.CONFIG_SCHEMA_USB,
-            #**self.CONFIG_SCHEMA_ZIGBEE,
             **self.create_parameters1(self.options),
             **self.create_parameters10(self.options),
             **self.create_parameters11(self.options),
             **self.create_parameters12(self.options),
         }
         for key in initialise:
-            try:
-                d = key.default()
-                self.options[key] = d
-            except Exception as er:
-                self.options[key] = None
+            d = key.default()
+            self.options[key] = d
 
     def create_default(self, options: dict, key: str, default: Any):
         """Create a default value for the parameter using the previous value that the user entered."""
@@ -329,10 +306,6 @@ class VisonicSchema:
     def create_schema_usb(self):
         """Create schema usb."""
         return vol.Schema(self.CONFIG_SCHEMA_USB)
-
-    def create_schema_zigbee(self):
-        """Create schema ethernet."""
-        return vol.Schema(self.CONFIG_SCHEMA_ZIGBEE)
 
     def create_schema_parameters1(self):
         """Create schema parameters 1."""

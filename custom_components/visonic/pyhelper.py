@@ -796,7 +796,7 @@ class AlImageManager:
         self.ImageZone[zone].images[image_id] = record
         self.ImageZone[zone].current_image = record
 
-        log.debug(f'[AlImageManager]  setCurrent zone = {self.current_zone}    unique_id = {hex(unique_id)}    image_id = {image_id}')
+        log.debug(f'[AlImageManager]  setCurrent zone = {self.current_zone}  unique_id = {hex(unique_id)}    image_id = {image_id}')
         log.debug(f"[AlImageManager]             total filesize {record.size}    next sequence = {hex(record.next_sequence)}     lastimage = {record.lastimage}    totalimages = {totalimages}")
         self.last_image = None
         return True

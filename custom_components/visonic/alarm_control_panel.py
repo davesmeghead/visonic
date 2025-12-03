@@ -2,8 +2,7 @@
 
 import logging
 from enum import IntEnum
-#from propcache.api import cached_property
-from copy import deepcopy
+from propcache.api import cached_property
 
 #import homeassistant.components.alarm_control_panel as alarm
 from homeassistant.util import slugify
@@ -118,8 +117,6 @@ class VisonicAlarm(AlarmControlPanelEntity):
             self._myname = self._client.getAlarmPanelUniqueIdent() + " Partition " + str(partition)
             _LOGGER.debug(f"[VisonicAlarm] Setting alarm control panel {self._myname}    panel {self._client.getPanelID()}  Partition {self._partition}")
         self._client.setPartitionNaming(partition = partition, panel_entity_name = self._myname)
-        self._attr_unique_id = slugify(self._myname)
-        self._attr_name = self._myname
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
@@ -142,16 +139,48 @@ class VisonicAlarm(AlarmControlPanelEntity):
         if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state(True)
 
-    def update(self) -> None:
-        """Get the state of the device."""
-        #_LOGGER.debug(f"[update]")
-        self._mystate = AlarmControlPanelState.DISARMED
-        dsa = {}
-        av = False
-        car = False
-        cf = None
-        sf = AlarmControlPanelEntityFeature(0)
-        di = {
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        #_LOGGER.debug(f"alarm control panel available {self.entity_id=}")
+        if self._client is None:
+            return False
+        return self._client.isPanelConnected()
+
+    @cached_property
+    def unique_id(self) -> str:
+        """Return a unique ID."""
+        #_LOGGER.debug(f"alarm control panel unique_id {self.entity_id=}")
+        return slugify(self._myname)
+
+    @cached_property
+    def name(self):
+        """Return the name of the alarm."""
+        #_LOGGER.debug(f"alarm control panel name {self.entity_id=}")
+        return self._myname
+
+    @property
+    def changed_by(self):
+        """Last change triggered by."""
+        #_LOGGER.debug(f"alarm control panel changed_by {self.entity_id=}")
+        return self._last_triggered
+
+    @property
+    def device_info(self):
+        """Return information about the device."""
+        #_LOGGER.debug(f"alarm control panel device_info {self.entity_id=}")
+        if self._client is not None:
+            pm = self._client.getPanelModel()
+            if pm is not None:
+                if pm.lower() != "unknown":
+                    return {
+                        "manufacturer": MANUFACTURER,
+                        "identifiers": {(DOMAIN, self._myname)},
+                        "name": f"{self._myname}",
+                        "model": pm,
+                        # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
+                    }
+        return {
             "manufacturer": "Visonic",
             "identifiers": {(DOMAIN, self._myname)},
             "name": f"{self._myname}",
@@ -159,10 +188,26 @@ class VisonicAlarm(AlarmControlPanelEntity):
             # "model": "Alarm Panel",
             # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
         }
-        
+
+    @property
+    def code_arm_required(self):
+        """Whether the code is required for arm actions."""
+        #_LOGGER.debug(f"alarm control panel code_arm_required {self.entity_id=}")
+        if self._client is not None:
+            code_required = self._client.getPanelMode() not in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]
+            #_LOGGER.debug(f"[code_arm_required] returning {code_required=} and {not self._client.isArmWithoutCode()}")
+            return code_required and not self._client.isArmWithoutCode()
+        return super().code_arm_required()
+
+    def update(self) -> None:
+        """Get the state of the device."""
+        #_LOGGER.debug(f"[update] {self.entity_id=}")
+        self._mystate = AlarmControlPanelState.DISARMED
+        self._device_state_attributes = {}
+
         if self._client is not None and self.isPanelConnected():
             isa, dev = self._client.isSirenActive(self._partition)
-            #_LOGGER.debug(f"[update] {self._partition=}  {isa=}   {dev=}")
+            #_LOGGER.debug(f"[update] {self.entity_id=}  {self._partition=}  {isa=}   {dev=}")
             if isa:
                 self._mystate = AlarmControlPanelState.TRIGGERED
             else:
@@ -183,82 +228,68 @@ class VisonicAlarm(AlarmControlPanelEntity):
             #_LOGGER.debug(f"[update] {self._mystate=}")
                 
             if data is not None and stat is not None:
-                dsa = {**stat, **data}
+                self._device_state_attributes = {**stat, **data}
             elif stat is not None:
-                dsa = {**stat}
+                self._device_state_attributes = {**stat}
             elif data is not None:
-                dsa = {**data}
+                self._device_state_attributes = {**data}
 
-            dsa[PANEL_ATTRIBUTE_NAME] = self._client.getPanelID() if self.isPanelConnected() else "Unknown"
+#    @property
+#    def state(self):
+#        """Return the state of the device."""
+#        #_LOGGER.debug(f"alarm control panel state {self.entity_id=}")
+#        return self._mystate
 
-            av = self._client.isPanelConnected()
+    @property
+    def alarm_state(self) -> AlarmControlPanelState | None:
+        """Return the state of the alarm."""
+        #_LOGGER.debug(f"alarm control panel state {self._mystate}   {self.entity_id=}")
+        return self._mystate
 
-            pm = self._client.getPanelModel()
-            if pm is not None:
-                if pm.lower() != "unknown":
-                    di = {
-                        "manufacturer": MANUFACTURER,
-                        "identifiers": {(DOMAIN, self._myname)},
-                        "name": f"{self._myname}",
-                        "model": pm,
-                        # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
-                    }
+    @property
+    def extra_state_attributes(self):  #
+        """Return the state attributes of the device."""
+        #_LOGGER.debug(f"alarm control panel extra_state_attributes {self.entity_id=}")
+        attr = self._device_state_attributes
+        attr[PANEL_ATTRIBUTE_NAME] = self._client.getPanelID() if self._client is not None and self.isPanelConnected() else "Unknown"
+        return attr
 
-            car = False
-            cf = None
-            
-            if not self._client.isDisableAllCommands():
+    @property
+    def supported_features(self) -> int:
+        """Return the list of supported features."""
+        #_LOGGER.debug(f"alarm control panel supported_features {self.entity_id=}")
+        if self._client is None:
+            return AlarmControlPanelEntityFeature(0)
+        if self._client.isDisableAllCommands():
+            return AlarmControlPanelEntityFeature(0)
+        #_LOGGER.debug(f"[AlarmcontrolPanel] Getting Supported Features {self._client.isArmHome()} {self._client.isArmNight()}")
+        retval = AlarmControlPanelEntityFeature.ARM_AWAY
+        if self._client.isArmNight():
+            #_LOGGER.debug("[AlarmcontrolPanel] Adding Night")
+            retval = retval | AlarmControlPanelEntityFeature.ARM_NIGHT
+        if self._client.isArmHome():
+            #_LOGGER.debug("[AlarmcontrolPanel] Adding Home")
+            retval = retval | AlarmControlPanelEntityFeature.ARM_HOME
+        if self._client.isPowerMaster():
+            #_LOGGER.debug("[AlarmcontrolPanel] Adding Trigger")
+            retval = retval | AlarmControlPanelEntityFeature.TRIGGER
+        return retval
 
-                isValidPL, code, showKeypad, car = self._client.pmGetPin(code = self._alarm_control_panel_option_default_code, partition = self._partition)
-                #_LOGGER.debug(f"[update] getpin {self._alarm_control_panel_option_default_code=} {isValidPL=} {code=} {showKeypad=} {car=}")
-
-                cf = CodeFormat.NUMBER if showKeypad else None
-                sf = AlarmControlPanelEntityFeature.ARM_AWAY
-                if self._client.isArmNight():
-                    #_LOGGER.debug("[update]  Adding Night")
-                    sf = sf | AlarmControlPanelEntityFeature.ARM_NIGHT
-                if self._client.isArmHome():
-                    #_LOGGER.debug("[update]  Adding Home")
-                    sf = sf | AlarmControlPanelEntityFeature.ARM_HOME
-                if self._client.isPowerMaster():
-                    #_LOGGER.debug("[update]  Adding Trigger")
-                    sf = sf | AlarmControlPanelEntityFeature.TRIGGER
-                #_LOGGER.debug(f"[update] alarm control panel supported_features {sf=}")
-            
-        if not hasattr(self, "_attr_extra_state_attributes"):
-            self._attr_extra_state_attributes = deepcopy(dsa)
-        elif self._attr_extra_state_attributes != dsa:
-            _LOGGER.debug(f"[update] changing extra state attributes to {dsa}")
-            self._attr_extra_state_attributes = deepcopy(dsa)
-        
-        if self._attr_available != av:
-            _LOGGER.debug(f"[update] changing available to {av}")
-            self._attr_available = av                        # writing to this calls the "setter" to refresh the cached property
-
-        if self._attr_supported_features != sf:
-            _LOGGER.debug(f"[update] changing supported features to {sf}")
-            self._attr_supported_features = sf
-        
-        if self._attr_device_info != di:
-            _LOGGER.debug(f"[update] changing device info to {di}")
-            self._attr_device_info = di                     # writing to this calls the "setter" to refresh the cached property
-            
-        if self._attr_code_format != cf:
-            _LOGGER.debug(f"[update] changing code format to {cf}")
-            self._attr_code_format = cf                     # writing to this calls the "setter" to refresh the cached property
-            
-        if self._attr_code_arm_required != car:
-            _LOGGER.debug(f"[update] changing code arm required to {car}")
-            self._attr_code_arm_required = car               # writing to this calls the "setter" to refresh the cached property
-            
-        if self._last_triggered is not None and self._attr_changed_by != self._last_triggered:
-            _LOGGER.debug(f"[update] changing last triggered to {self._last_triggered}")
-            self._attr_changed_by = self._last_triggered     # writing to this calls the "setter" to refresh the cached property
-
-        if self._attr_alarm_state != self._mystate:
-            _LOGGER.debug(f"[update] changing alarm state to {self._mystate}")
-            self._attr_alarm_state = self._mystate           # writing to this calls the "setter" to refresh the cached property
-
+    # DO NOT OVERRIDE state_attributes AS IT IS USED IN THE LOVELACE FRONTEND TO DETERMINE code_format
+    
+    @property
+    def code_format(self):
+        """Regex for code format or None if no code is required."""
+        #_LOGGER.debug(f"alarm control panel code_format {self.entity_id=}")
+        # Do not show the code panel if the integration is just starting up and 
+        #    connecting to the panel
+        if self._client is None:
+            return None
+        if self._client.isDisableAllCommands():
+            return None
+        if self.isPanelConnected():
+            return CodeFormat.NUMBER if self._client.isCodeRequired() else None
+        return None    
 
     def alarm_disarm(self, code=None):
         """Send disarm command."""

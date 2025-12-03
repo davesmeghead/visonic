@@ -48,7 +48,6 @@ DEFAULT_DEVICE_PORT = 30000
 DEFAULT_DEVICE_TOPIC = "visonic/panel"
 DEFAULT_DEVICE_USB = "/dev/ttyUSB1"
 DEFAULT_DEVICE_BAUD = 9600
-DEVICE_TYPE_ZIGBEE = "zigbee"
 DEVICE_TYPE_ETHERNET = "ethernet"
 DEVICE_TYPE_USB = "usb"
 
@@ -81,7 +80,6 @@ CONF_ALARM_NOTIFICATIONS = "panel_state_notifications"
 CONF_PANEL_NUMBER = "panel_number"
 CONF_DEVICE_TYPE = "type"
 CONF_DEVICE_BAUD = "baud"
-CONF_ESPHOME_ENTITY_SELECT = "esphome_entity_select"
 CONF_EXCLUDE_SENSOR = "exclude_sensor"
 CONF_EXCLUDE_X10 = "exclude_x10"
 CONF_DOWNLOAD_CODE = "download_code"
