@@ -94,9 +94,9 @@ class VisonicSiren(SirenEntity):
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
-        await super().async_will_remove_from_hass()
         _LOGGER.debug(f"[async_will_remove_from_hass] {self._myname} panel {self._panel}")
         self._client = None
+        await super().async_will_remove_from_hass()
 
     # The callback handler from the client. All we need to do is schedule an update.
     def onClientChange(self):

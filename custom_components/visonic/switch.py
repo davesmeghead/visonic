@@ -65,11 +65,11 @@ class VisonicSwitch(SwitchEntity):
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
-        await super().async_will_remove_from_hass()
+        _LOGGER.debug(f"[async_will_remove_from_hass] id = {self.unique_id}")
         self._visonic_device = None
         self._is_available = False
         self._client = None
-        _LOGGER.debug(f"[async_will_remove_from_hass] id = {self.unique_id}")
+        await super().async_will_remove_from_hass()
 
     def onChange(self, switch : AlSwitchDevice):
         """Switch state has changed."""

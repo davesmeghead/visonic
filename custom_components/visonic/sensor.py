@@ -106,9 +106,9 @@ class VisonicSensor(Entity):
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
-        await super().async_will_remove_from_hass()
         _LOGGER.debug(f"[async_will_remove_from_hass] Removing alarm panel sensor {self._myname} panel {self._client.getPanelID()}")
         self._client = None
+        await super().async_will_remove_from_hass()
 
     def isPanelConnected(self) -> bool:
         """Are we connected to the Alarm Panel."""

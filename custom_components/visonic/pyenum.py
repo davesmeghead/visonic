@@ -335,6 +335,7 @@ class Receive(IntEnum):
     POWERMASTER       = 0xB0     
     REDIRECT          = 0xC0 
     PROXY             = 0xE0  
+    PROXY_COMMAND     = 0xE1      # This is sent to the panel so if we get this back then it's a ringback of some kind
     UNKNOWN_F1        = 0xF1
     IMAGE_DATA        = 0xF4
 

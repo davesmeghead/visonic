@@ -123,9 +123,9 @@ class VisonicAlarm(AlarmControlPanelEntity):
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
-        await super().async_will_remove_from_hass()
         _LOGGER.debug(f"[async_will_remove_from_hass] panel {self._client.getPanelID()}, name {self._myname}")
         self._client = None
+        await super().async_will_remove_from_hass()
 
     def isPanelConnected(self) -> bool:
         """Are we connected to the Alarm Panel."""

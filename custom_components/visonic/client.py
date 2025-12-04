@@ -126,7 +126,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.4.1"
+CLIENT_VERSION = "0.12.4.2"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -356,21 +356,24 @@ class ClientVisonicProtocol(asyncio.Protocol):
         self._transport = MyTransport(transport)
         self.vp.setTransportConnection(self._transport)
 
-    def connection_lost(self, exc):
-        _LOGGER.debug(f"[ClientVisonicProtocol] connection_lost Booooo")
-        if self.client is not None:
-            _LOGGER.debug(f"connection_lost    setup to reconnect, if allowed by the user config")
-            self.client.hass.loop.create_task(self.client.async_reconnect_and_restart(force_reconnect = False, allow_restart = True)) # Try a simple reconnect but only if user config allows
-        self.close()
-        #_LOGGER.debug("[ClientVisonicProtocol] connection_lost finished")
-
-    def close(self):
-        _LOGGER.debug("[ClientVisonicProtocol] close called")
+    def _stop_transport(self):
         if self._transport is not None:
             _LOGGER.debug("[ClientVisonicProtocol] close called on protocol => closed")
             self._transport.close()
         self._transport = None
-        _LOGGER.debug("[ClientVisonicProtocol] close finished")
+
+    def connection_lost(self, exc):
+        if self.client is not None:
+            _LOGGER.debug(f"[ClientVisonicProtocol] connection_lost Booooo,     setting to reconnect if allowed by the user config")
+            self._stop_transport()
+            self.client.hass.loop.create_task(self.client.async_reconnect_and_restart(force_reconnect = False, allow_restart = True)) # Try a simple reconnect but only if user config allows
+
+    def close(self):
+        if self.client is not None:
+            _LOGGER.debug("[ClientVisonicProtocol] close called")
+            self._stop_transport()
+            _LOGGER.debug("[ClientVisonicProtocol] close finished")
+        self.client = None
 
     # This is needed so we can create the class instance before giving it to the protocol handlers
     def __call__(self):
@@ -2255,24 +2258,50 @@ class VisonicClient:
         return retval
 
     async def _stopCommsTask(self):
+
+        # helper function to force a task to cancel
+        async def force_cancel(task, max_tries=4):
+            # keep track of the number of times tried
+            tries = 0
+            # keep trying to cancel the task
+            while not task.done():
+                # check if we tried too many times
+                if tries >= max_tries:
+                    self.logstate_debug("...........      Exceeded retries to stop the comms task")
+                    return
+                # request the task cancel
+                try:
+                    task.cancel()
+                except Exception as ex:
+                    # Do not cause a full Home Assistant Exception, keep it local here
+                    self.logstate_debug("...........      Caused an exception")
+                    self.logstate_debug(f"                    {ex}")   
+                # update attempt count
+                tries += 1
+                # give the task time to cancel
+                await asyncio.sleep(0.5)
+
         if self.visonicCommsTask is not None:
             self.logstate_debug("........... Closing down Current Comms Task (to close the rs232/socket connection)")
             # Close the protocol handler 
             if self.cvp is not None:
                 self.cvp.close()
+                self.cvp = None
             # Stop the comms task
-            try:
-                self.visonicCommsTask.cancel()
-            except Exception as ex:
-                # Do not cause a full Home Assistant Exception, keep it local here
-                self.logstate_debug("...........      Caused an exception")
-                self.logstate_debug(f"                    {ex}")   
-            # Make sure its all stopped
-            await asyncio.sleep(0.5)
-            if self.visonicCommsTask is not None and self.visonicCommsTask.done():
-                self.logstate_debug("........... Current Comms Task Done")
-            else:
-                self.logstate_debug("........... Current Comms Task Not Done")
+            await force_cancel(self.visonicCommsTask)
+#            try:
+#                self.visonicCommsTask.cancel()
+#            except Exception as ex:
+#                # Do not cause a full Home Assistant Exception, keep it local here
+#                self.logstate_debug("...........      Caused an exception")
+#                self.logstate_debug(f"                    {ex}")   
+#            # Make sure its all stopped
+#            await asyncio.sleep(0.5)
+            if self.visonicCommsTask is not None:  # just to make sure it hasn't been changed during sleep
+                if self.visonicCommsTask.done():
+                    self.logstate_debug("........... Current Comms Task Done")
+                else:
+                    self.logstate_debug("........... Current Comms Task Not Done")
         # Indicate that both have been stopped
         self.visonicCommsTask = None
         self.cvp = None
@@ -2395,11 +2424,14 @@ class VisonicClient:
 
                 # Shutdown the protocol handler and any tasks it uses
                 if self.visonicProtocol is not None:
+                    self.logstate_debug(f"........... Shutting down Visonic Protocol Handler")
                     self.visonicProtocol.shutdownOperation()
-                    
+                
+                self.logstate_debug(f"........... Killing Dispatchers")
                 self.killMyDispatchers(self.entry)
             
             # Reset all variables, include setting self.SystemStarted to False and self.visonicProtocol to None
+            self.logstate_debug(f"........... Initialising Client Variables to default to prevent any further interaction")
             self._initialise()
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
@@ -2494,8 +2526,6 @@ class VisonicClient:
                         return False
 
                 await self.async_panel_stop()
-                # Set all variables to their defaults, this means that no connection has been made
-                self._initialise()
 
                 self.createNotification(
                     AvailableNotifications.CONNECTION_PROBLEM,

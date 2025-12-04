@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.6.1"
+PLUGIN_VERSION = "1.9.6.2"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -541,6 +541,7 @@ pmReceiveMsg = {
    Receive.POWERMASTER        : PanelCallBack(  8,  True,  True,  4, 2, False, DebugLevel.CMD  if OBFUS else RecvDebugM, "PowerMaster (B0)" ),    # The B0 message comes in varying lengths, sometimes it is shorter than what it states and the CRC is sometimes wrong
    Receive.REDIRECT           : PanelCallBack(  5, False,  True,  2, 0, False, DebugLevel.FULL,                          "Redirect" ),            # TESTING: These are redirected Powerlink messages. 0D C0 len <data> cs 0A   so 5 plus the original data length
    Receive.PROXY              : PanelCallBack( 11,  True, False,  0, 0, False, DebugLevel.FULL,                          "Proxy" ),               # VISPROX : Interaction with Visonic Proxy
+   Receive.PROXY_COMMAND      : PanelCallBack(  7, False, False,  0, 0, False, DebugLevel.FULL,                          "Proxy Cmd Ringback"),   # VISPROX : Interaction with Visonic Proxy, this is a command that has ringback so something is wrong
    # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it. Assume a minimum length of 9, a variable length and ignore the checksum calculation.
    Receive.UNKNOWN_F1         : PanelCallBack(  9,  True,  True,  0, 0,  True,      RecvDebugC,                          "Unknown F1" ),          # Ignore checksum on all F1 messages
    # The F4 message comes in varying lengths. It is the image data from a PIR camera. Ignore checksum on all F4 messages
@@ -1193,9 +1194,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             self.PartitionState[2].Reset()
             self.PanelStatus = {}
             log.debug("[Controller] ********************************************************************************")
-            log.debug("[Controller] ********************************************************************************")
             log.debug("[Controller] ****************************** Operations Suspended ****************************")
-            log.debug("[Controller] ********************************************************************************")
             log.debug("[Controller] ********************************************************************************")
 
     def getPartitionsInUse(self) -> set | None:
@@ -4018,6 +4017,7 @@ class PacketHandling(ProtocolBase):
             Receive.POWERMASTER       : DecodeMessage(           processB0 , self.handle_msgtypeB0,  True, None ),  # 
             Receive.IMAGE_DATA        : DecodeMessage(   processNormalData , self.handle_msgtypeF4,  None, None ),  # F4 Message from a Powermaster, can't decode it yet but this will accept it and ignore it
             Receive.REDIRECT          : DecodeMessage(                True , self.handle_msgtypeC0, False, None ),
+            Receive.PROXY_COMMAND     : DecodeMessage(                True , self.handle_msgtypeE1, False, None ),
             Receive.PROXY             : DecodeMessage(                True , self.handle_msgtypeE0, False, None )
         }
 
@@ -5674,6 +5674,10 @@ class PacketHandling(ProtocolBase):
             self.PowerLinkBridgeAlarm = data[0] != 0
             self.PowerLinkBridgeProxy = data[3] != 0
             self.PowerLinkBridgeStealth = data[4] != 0
+
+    def handle_msgtypeE1(self, data):  # Visonic Proxy Command Ringback
+        """ MsgType=E1 - Visonic Proxy Command Ringback """
+        log.info(f"Integration has received a proxy command ringback, this indicates that Rx and Tx are incorrectly connected. Are you testing Ringback?")
 
     def handle_msgtypeF4(self, data) -> bool:  # Static JPG Image
         """ MsgType=F4 - Static JPG Image """

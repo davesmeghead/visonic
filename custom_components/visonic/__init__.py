@@ -294,9 +294,9 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
         persistent_notification.create(hass, message, title=NOTIFICATION_TITLE, notification_id=NOTIFICATION_ID)
 
     def getClient(call):
-        #_LOGGER.debug(f"getClient called")        
+        #_LOGGER.debug(f"Client Not Found called")        
         if isinstance(call.data, dict):
-            #_LOGGER.debug(f"getClient called {call}")
+            #_LOGGER.debug(f"Client Not Found called {call}")
             if ATTR_ENTITY_ID in call.data:
                 eid = str(call.data[ATTR_ENTITY_ID])
                 if valid_entity_id(eid):
@@ -309,9 +309,15 @@ async def async_setup(hass: HomeAssistant, base_config: dict):
                                 #_LOGGER.debug(f"getClient success for panel {panel}")
                                 return client, panel
                             else:
-                                _LOGGER.warning(f"getClient - Panel found {panel} but Client Not Found")
+                                #_LOGGER.warning(f"Client Not Found - Panel found {panel} but Client Not Found")
+                                raise ServiceValidationError(f"Client Not Found - Panel found {panel} but Client Not Found")
                                 return None, panel
-        _LOGGER.warning(f"getClient - Client Not Found")
+                    else:
+                        raise ServiceValidationError(f"Client Not Found - Entity does not have correct attributes")
+                else:
+                    raise ServiceValidationError(f"Client Not Found - Invalid Entity")
+        #_LOGGER.warning(f"Client Not Found")
+        raise ServiceValidationError(f"Client Not Found")
         return None, None
 
     async def async_service_panel_eventlog(call):
