@@ -309,7 +309,7 @@ class VisonicClient:
                 ctr = 0
                 while self.tell_em is None and ctr < 40:     # 40 with a sleep of 0.05 is approx 2 seconds. Wait up to 2 seconds for this to start.
                     await asyncio.sleep(0.05)                # This should only happen once while the Protocol Handler starts up and calls tellemaboutme to set self.tell_em
-                    ctr = ctr + 1
+                    ctr += 1
                 if self.tell_em is not None:
                     # Return the task and protocol
                     return vTask, self.tell_em

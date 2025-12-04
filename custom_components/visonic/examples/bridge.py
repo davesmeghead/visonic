@@ -80,9 +80,9 @@ class ProtocolBase(asyncio.Protocol):
             
             if iIndex == 255:
                 iIndex = 0
-                iPage = iPage + 1
+                iPage += 1
             else:
-                iIndex = iIndex + 1
+                iIndex += 1
             
 
     async def transportwriter(self):

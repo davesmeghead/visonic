@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.6.2"
+PLUGIN_VERSION = "1.9.6.3"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -1390,7 +1390,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             #else:
             #    log.debug("[setTimeInPanel]      Correcting Time in Panel.")
         if settime:
-            self.Panel_Integration_Time_Counter = self.Panel_Integration_Time_Counter + 1
+            self.Panel_Integration_Time_Counter += 1
             if self.Panel_Integration_Time_Counter > 2:  # The time difference has to exceed the TIME_INTERVAL_ERROR for 3 times in a row.
                 self.Panel_Integration_Time_Counter = 0
                 log.debug(f"[setTimeInPanel]      Setting time in panel to {t}     paneltime is currently {paneltime}")
@@ -2053,7 +2053,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     #######       These 3 tests take drastic action, they stop the integration    ###############################################################################
                     #############################################################################################################################################################
                     if self.lastRecvTimeOfPanelData is None:  # has any data been received from the panel yet, even just a single byte?
-                        no_data_received_counter = no_data_received_counter + 1
+                        no_data_received_counter += 1
                         # log.debug(f"[_sequencer] no_data_received_counter {no_data_received_counter}")
                         if no_data_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
                             log.error("[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no data has been received from the panel)" )
@@ -2061,7 +2061,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             no_data_received_counter = 0
                             continue   # just do the while loop, which will exit as self.suspendAllOperations will be True
                     elif self.lastPacket is None: # have we been able to construct at least one full and crc checked message 
-                        no_packet_received_counter = no_packet_received_counter + 1
+                        no_packet_received_counter += 1
                         #log.debug(f"[_sequencer] no_packet_received_counter {no_packet_received_counter}")
                         if no_packet_received_counter >= NO_RECEIVE_DATA_TIMEOUT:  ## lets assume approx 30 seconds
                             log.error("[_sequencer] Visonic Plugin has suspended all operations, there is a problem with the communication with the panel (i.e. no valid packet has been received from the panel)" )
@@ -2326,7 +2326,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         else:
                             self._clearReceiveResponseList()
                             self._emptySendQueue(pri_level = 1)
-                            self.DownloadCounter = self.DownloadCounter + 1
+                            self.DownloadCounter += 1
                             log.debug("[_sequencer] Asking for panel EPROM")
 
                             self._addMessageToSendList(Send.DOWNLOAD_DL, options=[ [3, convertByteArray(self.DownloadCode)] ])  #
@@ -2507,7 +2507,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                     elif _sequencerState == SequencerType.WaitingForEnrolSuccess:   ################################################################ WaitingForEnrolSuccess  ###################################################
 
-                        self.keep_alive_counter = self.keep_alive_counter + 1
+                        self.keep_alive_counter += 1
                         log.debug(f"[_sequencer]     WaitingForEnrolSuccess {self.isSendQueueEmpty()=} {self.pmDownloadMode=} {self.keep_alive_counter=}  threshold is 15")
                         
                         if self.PanelType is not None and not self.AutoEnrol:
@@ -2564,7 +2564,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     elif _sequencerState == SequencerType.DoingStandard:            ################################################################ DoingStandard           ###################################################
                         # Put all the special standard mode things here
                         # Keep alive functionality
-                        self.keep_alive_counter = self.keep_alive_counter + 1
+                        self.keep_alive_counter += 1
                         if self.isSendQueueEmpty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
                             self._reset_keep_alive_messages()
                             self._addMessageToSendList (Send.STATUS_SEN)
@@ -2590,7 +2590,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                         # Put all the special standard plus mode things here
                         # Keep alive functionality
-                        self.keep_alive_counter = self.keep_alive_counter + 1
+                        self.keep_alive_counter += 1
                         if self.isSendQueueEmpty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
                             self._reset_keep_alive_messages()
                             self._addMessageToSendList(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE) # and not self.PowerLinkBridgeConnected 
@@ -2621,8 +2621,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                             _requestMissingPanelConfig(missing)
 
                         # Keep alive functionality
-                        self.keep_alive_counter = self.keep_alive_counter + 1    # This is for me sending to the panel
-                        self.powerlink_counter = self.powerlink_counter + 1      # This gets reset to 0 when I receive I'm Alive from the panel
+                        self.keep_alive_counter += 1    # This is for me sending to the panel
+                        self.powerlink_counter += 1     # This gets reset to 0 when I receive I'm Alive from the panel
 
                         if self.powerlink_counter > POWERLINK_IMALIVE_RETRY_DELAY:
                             # Go back to Std+ and re-enrol
@@ -2644,7 +2644,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
                         if self.PowerLinkBridgeConnected:
                             # Keep alive functionality
-                            self.keep_alive_counter = self.keep_alive_counter + 1    # This is for me sending to the panel
+                            self.keep_alive_counter += 1    # This is for me sending to the panel
                             if self.isSendQueueEmpty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:  #
                                 # Every self.KeepAlivePeriod seconds, unless watchdog has been reset
                                 self._reset_keep_alive_messages()
@@ -2843,7 +2843,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                                 dotrigger = True
 
                     # Do the Watchdog functionality
-                    self.watchdog_counter = self.watchdog_counter + 1
+                    self.watchdog_counter += 1
                     # every iteration, decrement all WATCHDOG_MAXIMUM_EVENTS watchdog counters (loop time is 1 second approx, doesn't have to be accurate)
                     watchdog_list = [x - 1 if x > 0 else 0 for x in watchdog_list]
 
@@ -2855,7 +2855,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         self._reset_keep_alive_messages()
 
                         # Total Watchdog timeouts
-                        self.WatchdogTimeoutCounter = self.WatchdogTimeoutCounter + 1
+                        self.WatchdogTimeoutCounter += 1
                         # Total Watchdog timeouts in last 24 hours. Total up the entries > 0
                         self.WatchdogTimeoutPastDay = 1 + sum(1 if x > 0 else 0 for x in watchdog_list)    # in range 1 to 11
 
@@ -2972,7 +2972,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         def processCRCFailure():
             msgType = self.ReceiveData[1]
             if msgType != Receive.UNKNOWN_F1:  # ignore CRC errors on F1 message
-                self.pmCrcErrorCount = self.pmCrcErrorCount + 1
+                self.pmCrcErrorCount += 1
                 if self.pmCrcErrorCount >= MAX_CRC_ERROR:
                     self.pmCrcErrorCount = 0
                     interval = self._getUTCTimeFunction() - self.pmFirstCRCErrorTime
@@ -3939,7 +3939,7 @@ class PacketHandling(ProtocolBase):
         # Check the current packet against the last packet to determine if they are the same
         if self.lastPacket is not None:
             if self.lastPacket == packet and packet[1] == Receive.STATUS_UPDATE:  # only consider A5 Receive.STATUS_UPDATE packets for consecutive error
-                self.lastPacketCounter = self.lastPacketCounter + 1
+                self.lastPacketCounter += 1
             else:
                 self.lastPacketCounter = 0
         self.lastPacket = packet
@@ -4078,7 +4078,7 @@ class PacketHandling(ProtocolBase):
         """ Handle LOOPBACK """
         #log.debug(f"[handle_msgtype0B] Loopback test assumed {toString(data)}")
         self.loopbackTest = True
-        self.loopbackCounter = self.loopbackCounter + 1
+        self.loopbackCounter += 1
         log.warning(f"[handle_msgtype0B] LOOPBACK TEST SUCCESS, Counter is {self.loopbackCounter}")
 
     def handle_msgtype0F(self, data):  # EXIT
@@ -4177,7 +4177,7 @@ class PacketHandling(ProtocolBase):
             # Add it back on to the end to re-download it
             self.myDownloadList.append(bytearray([iIndex, iPage, blocklen, 0]))
             # Increment counter
-            self.pmDownloadRetryCount = self.pmDownloadRetryCount + 1
+            self.pmDownloadRetryCount += 1
         else:
             log.warning(f"[handle_msgtype3F] Invalid EPROM data block length (received: {len(data)-3}, Expected: {iLength},  blocklen: {blocklen}). Giving up on page {iPage} Index {iIndex}")
             self.myDownloadList = []
@@ -4566,7 +4566,7 @@ class PacketHandling(ProtocolBase):
             if action == 1:
                 log.debug("[handle_msgtypeAB] PowerLink Phone: Calling User")
                 # pmMessage("Calling user " + pmUserCalling + " (" + pmPhoneNr_t[pmUserCalling] +  ").", 2)
-                # pmUserCalling = pmUserCalling + 1
+                # pmUserCalling += 1
                 # if (pmUserCalling > pmPhoneNr_t) then
                 #    pmUserCalling = 1
             elif action == 2:

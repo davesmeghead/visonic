@@ -630,7 +630,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEn
             # We have to assume that multiple panels will be updated at the same time, otherwise it gets complicated
             _LOGGER.debug(f"   Migrating Panel Number, using {update_version_panel_number}")
             new[CONF_PANEL_NUMBER] = update_version_panel_number
-            update_version_panel_number = update_version_panel_number + 1
+            update_version_panel_number += 1
         else:
             _LOGGER.debug(f"   Panel Number already set to {new[CONF_PANEL_NUMBER]} so updating config version number only")
             

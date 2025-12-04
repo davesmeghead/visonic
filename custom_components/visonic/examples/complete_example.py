@@ -381,7 +381,7 @@ class VisonicClient:
         #    0 is a disconnect and (hopefully) reconnect from an exception (probably comms related)
         sleep(5.0)
         print(" ........... setting up reconnection")
-        self.panel_exception_counter = self.panel_exception_counter + 1
+        self.panel_exception_counter += 1
         asyncio.create_task(self.disconnect_callback_async(excep))
 
     def getPanel(self):
@@ -473,7 +473,7 @@ class VisonicClient:
                 ctr = 0
                 while self.tell_em is None and ctr < 40:     # 40 with a sleep of 0.05 is approx 2 seconds. Wait up to 2 seconds for this to start.
                     await asyncio.sleep(0.05)                # This should only happen once while the Protocol Handler starts up and calls tellemaboutme to set self.tell_em
-                    ctr = ctr + 1
+                    ctr += 1
                 if self.tell_em is not None:
                     # Return the task and protocol
                     return vTask, self.tell_em
@@ -589,7 +589,7 @@ class VisonicClient:
                     return True
                 # Failed so set up for next loop around
                 print("........... connection not made")
-                attemptCounter = attemptCounter + 1
+                attemptCounter += 1
                 force = False
                 if attemptCounter < self.totalAttempts:
                     print(f"........... connection attempt delay {self.delayBetweenAttempts} seconds")
@@ -892,7 +892,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         console.print("ERROR: Sorry but you must have the wrong type for that setting")
                 except:
                     console.print("ERROR: Sorry but you must have the wrong type for that setting")
-            c = c + 1
+            c += 1
 
     def getCode(ar, p):
         code = None
@@ -1043,7 +1043,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):
                         for key, value in myconfig.items():
                             s = str(key)
                             console.print(f"{c} :  {s} = {value}")
-                            c = c + 1
+                            c += 1
                         console.print("")
                     elif command.isnumeric() == True:
                         x = result.split('=')

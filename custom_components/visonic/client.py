@@ -126,7 +126,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.4.2"
+CLIENT_VERSION = "0.12.4.3"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -381,6 +381,9 @@ class ClientVisonicProtocol(asyncio.Protocol):
 
 class MqttProtocol:
     """Asyncio Protocol that sends/receives data via MQTT."""
+    
+    _qos = 1
+    
     def __init__(self, hass, topic_in: str, topic_out: str, vp, client):
         #super().__init__(vp, client)
         #_LOGGER.debug(f"[MqttProtocol] Init")
@@ -472,7 +475,7 @@ class MqttProtocol:
                                     #await asyncio.sleep(0.0)
                                     return
                                 elif myround(self.expectedSeq + 1) == vr.get("sequence"):
-                                    self.expectedSeq = self.expectedSeq + 1
+                                    self.expectedSeq += 1
                                 else:
                                     self.expectedSeq = vr.get("sequence")
                                     _LOGGER.debug(f"    MQTT received data out of sequence {self.expectedSeq}  {vr.get("sequence")}")
@@ -514,7 +517,7 @@ class MqttProtocol:
         self._subscribed = True
         self.last_payload = None        
         _LOGGER.debug(f"[setup_message_handler] MQTT subscribing to {self.topic_in}")
-        self.mqtt_unsub = await mqtt.async_subscribe(self.hass, self.topic_in, _on_message, qos=1)
+        self.mqtt_unsub = await mqtt.async_subscribe(self.hass, self.topic_in, _on_message, qos=self._qos)
         #_LOGGER.debug(f"[setup_message_handler] subscribed")
         self.vp.setTransportConnection(self)
         self._connected.set()
@@ -530,7 +533,7 @@ class MqttProtocol:
                     await asyncio.sleep(0.5)
                 _LOGGER.debug(f"MQTT Publish {json.dumps(js)}")
                 #js = { "transmit_custom_payload": "0x" + toString(data, "") }
-                await mqtt.async_publish( self.hass, self.topic_out, json.dumps(js), qos=1, retain=False )
+                await mqtt.async_publish( self.hass, self.topic_out, json.dumps(js), qos=self._qos, retain=False )
             except Exception as e:
                 _LOGGER.error("MQTT publish failed: %s", e)
             self._queue.task_done()
@@ -1623,7 +1626,7 @@ class VisonicClient:
             self.hass.loop.create_task(self.async_panel_stop())                                       # stop, do not restart
         else:                                                               # Are we already in the middle of a restart or reconnection
             self.connection_baud_list = [ 9600, 38400, 9600, 38400 ]        # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
-            self.panel_disconnection_counter = self.panel_disconnection_counter + 1
+            self.panel_disconnection_counter += 1
             self.hass.loop.create_task(self.async_reconnect_and_restart(force_reconnect = False, allow_restart = True))    # Try a reconnect first and if it fails then do the restart sequence (X attempts every Y seconds)
 
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
@@ -2218,7 +2221,7 @@ class VisonicClient:
                 ctr = 0
                 while self.tell_em is None and ctr < 40:     # 40 with a sleep of 0.05 is approx 2 seconds. Wait up to 2 seconds for this to start.
                     await asyncio.sleep(0.05)                # This should only happen once while the Protocol Handler starts up and calls tellemaboutme to set self.tell_em
-                    ctr = ctr + 1
+                    ctr += 1
                 if self.tell_em is not None:
                     # Return the task and protocol
                     self.logstate_debug(f"Creating USB Connection success, returning Task and Protocol")
@@ -2244,7 +2247,6 @@ class VisonicClient:
             self.cvp = None
             self.visonicCommsTask = None
             if device_type == DEVICE_TYPE_ZIGBEE:
-                
                 (self.visonicCommsTask, self.cvp) = await self.async_create_mqtt_visonic_connection(vp=self.visonicProtocol)
             elif device_type == DEVICE_TYPE_ETHERNET:
                 host = self.config.get(CONF_HOST, "127.0.0.1")
@@ -2509,7 +2511,7 @@ class VisonicClient:
                         return True
                     # Failed so set up for next loop around
                     self._fireHAEvent(event_id = PanelCondition.CONNECTION, datadictionary = {"state": "failedattempt", "attempt": attemptCounter + 1})
-                    attemptCounter = attemptCounter + 1
+                    attemptCounter += 1
                     force = False
                     if attemptCounter < self.totalAttempts:
                         self.logstate_debug(f"........... connection attempt delay {self.delayBetweenAttempts} seconds")

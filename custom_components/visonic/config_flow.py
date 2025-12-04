@@ -138,7 +138,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
     async def gotonext(self, user_input=None):
         if user_input is not None:
             self.config.update(user_input)
-        self.current_pos = self.current_pos + 1
+        self.current_pos += 1
         if self.current_pos == len(self.step_sequence):
             return await self.processcomplete()
         return await self._show_form(step="parameters"+str(self.step_sequence[self.current_pos]))

@@ -318,7 +318,7 @@ class EPROMManager:
         while page in self.pmRawSettings and retlen > 0:
             rawset = self.pmRawSettings[page][index : index + retlen]
             retval = retval + rawset
-            page = page + 1
+            page += 1
             retlen = retlen - len(rawset)
             index = 0
         log.debug(f"[_validatEPROMSettingsBlock]    page {block[1]:>3}   index {block[0]:>3}   length {block[2]:>3}     {'Already Got It' if settings_len == len(retval) else 'Not Got It'}")
@@ -418,7 +418,7 @@ class EPROMManager:
         retlen = settings_len
         retval = bytearray()
         while index > 255:
-            page = page + 1
+            page += 1
             index = index - 256
 
         if self.pmDownloadComplete:
@@ -426,7 +426,7 @@ class EPROMManager:
             while page in self.pmRawSettings and retlen > 0:
                 rawset = self.pmRawSettings[page][index : index + retlen]
                 retval = retval + rawset
-                page = page + 1
+                page += 1
                 retlen = retlen - len(rawset)
                 index = 0
             if settings_len == len(retval):
