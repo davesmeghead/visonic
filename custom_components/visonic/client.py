@@ -126,7 +126,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.4.3"
+CLIENT_VERSION = "0.12.4.4"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -398,6 +398,23 @@ class MqttProtocol:
         self._connected = asyncio.Event()
         self._queue = asyncio.Queue()
         self.commsTask = self.hass.loop.create_task(self._worker())
+
+    async def async_setup_subscribe() -> None:
+        """Setup integration MQTT subscription monitoring."""
+        # https://developers.home-assistant.io/blog/#add-a-status-callback-for-mqtt-subscriptions
+
+        def _on_subscribe_status() -> None:
+            """Handle subscription ready signal."""
+            # Do stuff
+            pass
+
+        # Handle subscription ready status update
+        await mqtt.async_on_subscribe_done(
+            self.hass,
+            "myintegration/status",
+            qos=self._qos,
+            on_subscribe_status=_on_subscribe_status,
+        )
 
     def close(self):
         #_LOGGER.debug("[MqttProtocol] close called on protocol")

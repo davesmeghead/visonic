@@ -114,10 +114,12 @@ class PanelSetting(IntEnum):
 
 @unique
 class MessagePriority(IntEnum):
-    IMMEDIATE = 0
-    ACK       = 1
-    URGENT    = 2
-    NORMAL    = 3
+    DELETE_ALL = -1
+    NOW        = 0    
+    IMMEDIATE  = 1
+    ACK        = 2
+    URGENT     = 3
+    NORMAL     = 4
 
 # The text strings for the getEventData dictionary
 @unique
