@@ -115,7 +115,7 @@ class PanelSetting(IntEnum):
 @unique
 class MessagePriority(IntEnum):
     DELETE_ALL = -1
-    NOW        = 0    
+    VITAL      = 0    
     IMMEDIATE  = 1
     ACK        = 2
     URGENT     = 3
