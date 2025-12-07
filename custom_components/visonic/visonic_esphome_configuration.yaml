@@ -1,0 +1,311 @@
+##########################################################################################################################################################################
+##### These need to be in your secrets file, they should be self explanatory.  Feel free to not use the secrets file and put them directly in to the configuration
+##### They should be obvious what they represent
+#####     Note that visonic_network_ip and visonic_network_port are what you use to set up the Integration in Home Assistant
+
+#wifi_ssid: "YourWifiSSID"
+#wifi_password: "YourWifiPassword"
+#visonic_network_ip: 192.168.0.200
+#visonic_network_port: 12345
+#network_mask: 255.255.255.0
+#network_gateway: 192.168.0.1
+#device_password: "123456789"
+# go here to create a random key https://esphome.io/components/api.html
+#visonic_esphome_ip_encrypt: 12345678901234567890123456789012345678901234567890
+
+##### This file includes a "select" that creates a select entity in Home Assistant to change the baud.  Only use this if you have a PowerMaster Panel.
+
+##########################################################################################################################################################################
+
+# This is the main configuration file, please check and update the substitutions for your specific ESP board and your requirements
+# By default it creates a web server
+# If you do not have relay(s) in your panel to trigger an alarm, then set SHOW_RELAY to false
+# If your ESP board has an LED on it then set HIDE_LED to false, and be sure to set LED_BUILTIN to the pin it's connected to
+# For the MY_BOARD setting:
+#     The list of board types can be found here: https://registry.platformio.org/platforms/platformio/espressif32/boards
+#     You need the proper string e.g. "AZ-Delivery ESP-32 Dev Kit C V4" is "az-delivery-devkit-v4" so click on your board type and find the string
+
+substitutions:
+  MY_BOARD: "az-delivery-devkit-v4"   # This is your ESP board type
+  PLUGIN_NAME: "visonicip"            # This string is used for the names created in Home Assistant for the entities created by this ESP device
+  MYIP: !secret visonic_network_ip
+  KEY: !secret visonic_esphome_ip_encrypt
+  FRIENDLY_NAME: Visonic IP
+  RX_FROM_PANEL_TX: GPIO16            # This is Rx on your ESP, connect this pin to the Tx on the Panel
+  TX_TO_PANEL_RX: GPIO17              # This is Tx on your ESP, connect this pin to the Rx on the Panel
+  HIDE_LED: true
+  LED_BUILTIN: GPIO2
+  SHOW_RELAY: true
+
+globals:
+  - id: relay_enabled
+    type: bool
+    initial_value: 'false'
+
+esphome:
+  name: ${PLUGIN_NAME}
+  name_add_mac_suffix: false
+  friendly_name: ${FRIENDLY_NAME}
+  project:
+    name: esphome.web
+    version: '1.0'
+  on_boot:
+    priority: 600
+    then:
+      # Enable or disable relay actions
+      - lambda: |-
+          {
+            #include <string.h>
+            id(relay_enabled) = (strcasecmp("${SHOW_RELAY}", "true") == 0);
+          }
+      # Change UART baud rate
+      - script.execute:
+          id: change_baud_rate
+          baud: !lambda 'return atoi(id(baud_rate).current_option());'
+      # Log new UART baud rate after change
+      - lambda: |-
+          std::string boot_msg;
+          if (esp_reset_reason() == ESP_RST_POWERON)
+              boot_msg = "Cold Boot.";
+          else
+              boot_msg = "Software Restart.";
+          std::string uart_msg2 = boot_msg + " UART baud: " + std::to_string(id(uart_bus_panel).get_baud_rate());
+          id(log_message).execute({uart_msg2});
+
+esp32:
+  board: ${MY_BOARD}
+  framework:
+    type: esp-idf
+
+external_components:
+  - source: github://oxan/esphome-stream-server
+    refresh: 0s
+
+web_server:
+  port: 80
+  version: 3
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 1800s
+  power_save_mode: none
+  ap:
+    ssid: "Hotspot"
+    password: !secret wifi_password
+    ap_timeout: 600s
+    manual_ip:
+      static_ip: ${MYIP}
+      gateway: !secret network_gateway
+      subnet: !secret network_mask
+  manual_ip:
+    static_ip: ${MYIP}
+    gateway: !secret network_gateway
+    subnet: !secret network_mask
+
+captive_portal:
+
+logger:
+  level: DEBUG
+
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: ${KEY}
+  actions:
+    - action: trigger_relay1
+      then:
+        - lambda: |-
+            if (id(relay_enabled)) {
+              id(relay1).turn_on();
+              id(relay3).turn_on();
+              delay(2);
+              id(relay1).turn_off();
+              id(relay3).turn_off();
+            } else {
+              id(log_message).execute({"Relay action disabled: trigger_relay1"});
+            }
+    - action: trigger_relay2
+      then:
+        - lambda: |-
+            if (id(relay_enabled)) {
+              id(relay2).turn_on();
+              id(relay4).turn_on();
+              delay(2);
+              id(relay2).turn_off();
+              id(relay4).turn_off();
+            } else {
+              id(log_message).execute({"Relay action disabled: trigger_relay2"});
+            }
+
+ota:
+  - platform: esphome
+    password: !secret device_password
+
+text_sensor:
+  - platform: version
+    name: "Version"
+  - platform: wifi_info
+    ip_address:
+      name: "IP"
+    ssid:
+      name: "SSID"
+    bssid:
+      name: "BSSID"
+  - platform: template
+    name: "Log"
+    id: run_log
+    update_interval: never
+    entity_category: diagnostic
+
+button:
+  - platform: restart
+    name: "Restart"
+    id: visonic_restart
+    entity_category: config
+    icon: "mdi:mdi-power-cycle"
+
+#time:
+#  - platform: sntp
+#    timezone: Europe/London
+#    on_time:
+#      - seconds: 0
+#        minutes: 0
+#        hours: 16
+#        days_of_week: SUN-SAT
+#        then:
+#          - lambda: |-
+#              std::string msg_text;
+#              if (id(uart_bus_panel).available() == 0) {
+#                msg_text = "UART buffer empty, restarting device";
+#                id(visonic_restart).press();
+#              } else {
+#                msg_text = "UART buffer has data, no action today";
+#              }
+#              id(log_message).execute({msg_text});
+
+binary_sensor:
+  - platform: stream_server
+    connected:
+      name: TCP Stream Client Connected
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+  - platform: stream_server
+    connection_count:
+      name: Number of stream connections
+
+switch:
+  - platform: template
+    name: "Enable Relay Actions"
+    lambda: |-
+      return id(relay_enabled);
+    turn_on_action:
+      - lambda: |-
+          id(relay_enabled) = true;
+    turn_off_action:
+      - lambda: |-
+          id(relay_enabled) = false;
+  - platform: gpio
+    name: "on_board_led"
+    internal: ${HIDE_LED}
+    pin:
+       number: ${LED_BUILTIN}
+       inverted: False
+       mode: OUTPUT
+    id: blinky
+
+output:
+  - platform: gpio
+    pin:
+       number: 12
+       inverted: True
+       mode: OUTPUT_OPEN_DRAIN
+    id: relay1
+  - platform: gpio
+    pin:
+       number: 13
+       inverted: True
+       mode: OUTPUT_OPEN_DRAIN
+    id: relay2
+  - platform: gpio
+    pin:
+       number: 4
+       mode: OUTPUT_OPEN_DRAIN
+    id: relay3
+  - platform: gpio
+    pin:
+       number: 14
+       mode: OUTPUT_OPEN_DRAIN
+    id: relay4
+
+uart:
+  - id: uart_bus_panel
+    baud_rate: 9600
+    tx_pin: ${TX_TO_PANEL_RX}
+    rx_pin: ${RX_FROM_PANEL_TX}
+    stop_bits: 1
+    data_bits: 8
+    parity: NONE
+
+stream_server:
+  - uart_id: uart_bus_panel
+    buffer_size: 512
+    id: my_stream_a
+    port: !secret visonic_network_port
+
+script:
+  - id: log_message
+    parameters:
+      msg: string
+    then:
+      - lambda: |-
+          ESP_LOGI("web_log", "%s", msg.c_str());
+          id(run_log).publish_state(msg);
+
+  - id: change_baud_rate
+    parameters:
+      baud: int
+    then:
+      - lambda: |-
+          id(uart_bus_panel).flush();
+          if (baud == 0) {
+            std::string uart_msg2 = "Not setting baud to 0, currently " + std::to_string(id(uart_bus_panel).get_baud_rate());
+            id(log_message).execute({uart_msg2});
+            ESP_LOGD("change_baud_rate", uart_msg2.c_str());
+          }
+          else if (id(uart_bus_panel).get_baud_rate() != baud) {
+            std::string uart_msg2 = "Change baud from " + std::to_string(id(uart_bus_panel).get_baud_rate());
+            id(uart_bus_panel).set_baud_rate(baud);
+            id(uart_bus_panel).load_settings();
+            uart_msg2 = uart_msg2 + " to " + std::to_string(id(uart_bus_panel).get_baud_rate()) + " (" + std::to_string(baud) + ")";
+
+            id(log_message).execute({uart_msg2});
+            ESP_LOGD("change_baud_rate", uart_msg2.c_str());
+          }
+          else {
+            std::string uart_msg2 = "Baud already set to " + std::to_string(id(uart_bus_panel).get_baud_rate());
+            id(log_message).execute({uart_msg2});
+            ESP_LOGD("change_baud_rate", uart_msg2.c_str());
+          }
+
+select:
+  - platform: template
+    id: baud_rate
+    name: Baud rate
+    options:
+      - "9600"
+      - "38400"
+    optimistic: true
+    initial_option: "9600"
+    restore_value: true
+    internal: false
+    entity_category: config
+    icon: mdi:swap-horizontal
+    set_action:
+      - lambda: |-
+          id(change_baud_rate).execute({atoi(x.c_str())});
+          std::string msg_text = "Selected baud: " + x + " (" + std::to_string(id(uart_bus_panel).get_baud_rate()) + ")";
+          id(log_message).execute({msg_text});

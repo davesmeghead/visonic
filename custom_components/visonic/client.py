@@ -126,7 +126,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.4.4"
+CLIENT_VERSION = "0.12.4.5"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -366,7 +366,7 @@ class ClientVisonicProtocol(asyncio.Protocol):
         if self.client is not None:
             _LOGGER.debug(f"[ClientVisonicProtocol] connection_lost Booooo,     setting to reconnect if allowed by the user config")
             self._stop_transport()
-            self.client.hass.loop.create_task(self.client.async_reconnect_and_restart(force_reconnect = False, allow_restart = True)) # Try a simple reconnect but only if user config allows
+            self.client.hass.loop.create_task(self.client.async_reconnect_and_restart(allow_comms = True, force_reconnect = False, allow_restart = True)) # Try a simple reconnect but only if user config allows
 
     def close(self):
         if self.client is not None:
@@ -1427,6 +1427,9 @@ class VisonicClient:
             self.hass.config_entries.async_update_entry(self.entry, title=s)
 
         if event_id == AlCondition.STARTUP_SUCCESS:        # Startup Success
+            # set baud list back to default ready if there's a disconection
+            self.connection_baud_list = [ 9600, 38400, 9600, 38400 ]        # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
+
             if not self.rationalised_ha_devices:
                 if self.getPanelMode() in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
                     self.rationalised_ha_devices = True
@@ -1620,6 +1623,7 @@ class VisonicClient:
         if reason is not None:
             self.logstate_debug(f"Visonic has responded to a disconnection, action={action}, state={state} reason={reason}")
             self._fireHAEvent(event_id = action, datadictionary = {"state": state, "reason": reason})
+
         else:
             self.logstate_debug(f"Visonic has responded to a disconnection, action={action}, state={state}")
             self._fireHAEvent(event_id = action, datadictionary = {"state": state})
@@ -1631,20 +1635,32 @@ class VisonicClient:
         if ( self.select_entity_id and valid_entity_id(self.select_entity_id) and 
              self.visonicProtocol is not None and 
              len(self.connection_baud_list) > 0 and 
-             termination == AlTerminationType.NO_DATA_FROM_PANEL_NEVER_CONNECTED
+             termination in [AlTerminationType.NO_DATA_FROM_PANEL_NEVER_CONNECTED, AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED]
            ):
-               
             # Try the sequence of baud value
             baud = self.connection_baud_list.pop(0)
-            self.logstate_debug(f"No data from panel (never connected) so try a different baud rate {baud}")
+
+            #if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED:
+                # If it's a disconnection (we did have a connection and data) and we can change baud then make sure it's not a discconnect because of a baud change
+            s = 'disconnected' if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED else 'never connected'
+            self.logstate_debug(f"No data from panel ({s}) so try a different baud rate {baud}")
+            #else:
+            #    self.logstate_debug(f"No data from panel (never connected) so try a different baud rate {baud}")
+
             self.setSelectEntity(str(baud))
+            if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED:
+                # If it's a disconnection (we did have a connection and data) and we can change baud then make sure it's not a discconnect because of a baud change
+                self.panel_disconnection_counter += 1
+                self.hass.loop.create_task(self.async_reconnect_and_restart(allow_comms = False, force_reconnect = False, allow_restart = True))    # Do a full restart sequence (do not allow a simple comms reconnect)
+
         elif self.totalAttempts == 0:                                                                   # If the user says 0 restart attempts then do not restart at all
             self.logstate_debug(f"    User config explicitly prevents any reconnection attempts, stopping the connection")
             self.hass.loop.create_task(self.async_panel_stop())                                       # stop, do not restart
+
         else:                                                               # Are we already in the middle of a restart or reconnection
             self.connection_baud_list = [ 9600, 38400, 9600, 38400 ]        # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
             self.panel_disconnection_counter += 1
-            self.hass.loop.create_task(self.async_reconnect_and_restart(force_reconnect = False, allow_restart = True))    # Try a reconnect first and if it fails then do the restart sequence (X attempts every Y seconds)
+            self.hass.loop.create_task(self.async_reconnect_and_restart(allow_comms = True, force_reconnect = False, allow_restart = True))    # Try a reconnect first and if it fails then do the restart sequence (X attempts every Y seconds)
 
     # pmGetPin: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
     def pmGetPin(self, code: str, partition : int):
@@ -2325,7 +2341,7 @@ class VisonicClient:
         self.visonicCommsTask = None
         self.cvp = None
 
-    async def async_reconnect_and_restart(self, force_reconnect : bool, allow_restart : bool) -> bool:
+    async def async_reconnect_and_restart(self, force_reconnect : bool, allow_comms : bool, allow_restart : bool) -> bool:
 
         async def _async_panel_restart(): 
             try:
@@ -2354,12 +2370,12 @@ class VisonicClient:
                 if self.totalAttempts > 0 or force_reconnect:                  # If the user says 0 restart attempts then do not restart at all
                     if self.doingRestart is None:
                         self.logstate_debug(f"Setting up panel reconnection to Visonic Panel {self.getPanelID()}")
-                        if await self._async_connect_comms():                  # Try a simple comms reconnect first
+                        if allow_comms and await self._async_connect_comms():                  # Try a simple comms reconnect first, evaluated left to right
                             self.logstate_debug(f"Setting up panel reconnection success to Visonic Panel {self.getPanelID()}")
                             self._fireHAEvent(event_id = PanelCondition.CONNECTION, datadictionary = {"state": "connected", "attempt": 1})
                         elif self.doingRestart is None:                        # Check doingRestart again as it could have changed
                             if allow_restart:                                      # if the simple reconnect fails then optionally do a restart, 
-                                self.logstate_debug(f"Setting up panel reconnection failed so doing a Restart to Visonic Panel {self.getPanelID()}")
+                                self.logstate_debug(f"Doing a Full Restart to Visonic Panel {self.getPanelID()}")
                                 self.doingRestart = self.hass.loop.create_task(_async_panel_restart())    # do restart 
                             else:
                                 self.logstate_debug(f"Setting up panel reconnection failed to Visonic Panel {self.getPanelID()}. Restart not allowed in this context.")
@@ -2392,7 +2408,7 @@ class VisonicClient:
                     #self.logstate_debug(f"Checking user information for permissions: {call.context.user_id}")
                     # Check security permissions (that this user has access to the alarm panel entity)
                     await self._checkUserPermission(call, POLICY_CONTROL, Platform.ALARM_CONTROL_PANEL + "." + slugify(self.getAlarmPanelUniqueIdent()))
-            await self.async_reconnect_and_restart(force_reconnect = True, allow_restart = False)
+            await self.async_reconnect_and_restart(allow_comms = True, force_reconnect = True, allow_restart = False)
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
             self.logstate_warning(f"........... async_service_panel_reconnect, caused exception {ex}")
