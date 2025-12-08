@@ -555,6 +555,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
             entry.async_on_unload(entry.add_update_listener(update_listener))
             # if total attempts is greater than 1 then connect as a separate task, and return success (i.e. True)
             tmp = hass.loop.create_task(client.async_connect(force=False))
+            _LOGGER.debug(f"[Visonic Setup] Returning Success for entry id {entry.entry_id}")
             return True
 
     except requests.exceptions.ConnectionError as error:

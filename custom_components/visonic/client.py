@@ -126,7 +126,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.4.5"
+CLIENT_VERSION = "0.12.4.6"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -1637,15 +1637,13 @@ class VisonicClient:
              len(self.connection_baud_list) > 0 and 
              termination in [AlTerminationType.NO_DATA_FROM_PANEL_NEVER_CONNECTED, AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED]
            ):
+            # If it's a disconnection (we did have a connection and data) and we can change baud then make sure it's not a discconnect because of a baud change
+
             # Try the sequence of baud value
             baud = self.connection_baud_list.pop(0)
 
-            #if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED:
-                # If it's a disconnection (we did have a connection and data) and we can change baud then make sure it's not a discconnect because of a baud change
             s = 'disconnected' if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED else 'never connected'
             self.logstate_debug(f"No data from panel ({s}) so try a different baud rate {baud}")
-            #else:
-            #    self.logstate_debug(f"No data from panel (never connected) so try a different baud rate {baud}")
 
             self.setSelectEntity(str(baud))
             if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED:
@@ -2488,34 +2486,34 @@ class VisonicClient:
         entry.runtime_data.sensors = list()
 
 
-    async def wait_for_entry_loaded(self, entry_id, timeout=30):
-        """
-        Wait until a config entry is loaded or timeout is reached.
-        :param entry_id: The entry_id of the config entry
-        :param timeout: Maximum time to wait in seconds
-        :return: True if loaded, False if timeout or entry not found
-        """
-        config_entry = self.hass.config_entries.async_get_entry(entry_id)
-        if config_entry is None:
-            self.logstate_debug(f"Config entry {entry_id} not found")
-            return False
-
-        total_wait = 0
-        poll_interval = 0.5  # seconds
-
-        while config_entry.state != ConfigEntryState.LOADED:
-            await asyncio.sleep(poll_interval)
-            total_wait += poll_interval
-
-            # Refresh entry in case state changed
-            config_entry = self.hass.config_entries.async_get_entry(entry_id)
-
-            if total_wait >= timeout:
-                self.logstate_debug(f"Timeout waiting for config entry {entry_id} to load")
-                return False
-
-        self.logstate_debug(f"Config entry {entry_id} is loaded ✅")
-        return True
+#    async def wait_for_entry_loaded(self, entry_id, timeout=30):
+#        """
+#        Wait until a config entry is loaded or timeout is reached.
+#        :param entry_id: The entry_id of the config entry
+#        :param timeout: Maximum time to wait in seconds
+#        :return: True if loaded, False if timeout or entry not found
+#        """
+#        config_entry = self.hass.config_entries.async_get_entry(entry_id)
+#        if config_entry is None:
+#            self.logstate_debug(f"Config entry {entry_id} not found")
+#            return False
+#
+#        total_wait = 0
+#        poll_interval = 0.5  # seconds
+#
+#        while config_entry.state != ConfigEntryState.LOADED:
+#            await asyncio.sleep(poll_interval)
+#            total_wait += poll_interval
+#
+#            # Refresh entry in case state changed
+#            config_entry = self.hass.config_entries.async_get_entry(entry_id)
+#
+#            if total_wait >= timeout:
+#                self.logstate_debug(f"Timeout waiting for config entry {entry_id} to load")
+#                return False
+#
+#        self.logstate_debug(f"Config entry {entry_id} is loaded ✅")
+#        return True
 
     async def async_connect(self, force=True) -> bool:
         """Connect to the alarm panel using the pyvisonic library."""
@@ -2581,23 +2579,26 @@ class VisonicClient:
                 #self.logstate_debug(f"[async_connect]       async_forward_entry_setups")
                 # Call this before connecting to the panel to set up the platforms
                 
+                #try:
+                #    with contextlib.suppress(ValueError):
+                #        self.logstate_debug(f"[async_connect] Client connecting.....      async_forward_entry_setups")
+                #        loaded = await self.wait_for_entry_loaded(self.getEntryID(), 10)
+                #        if loaded:
+                #            await self.hass.config_entries.async_forward_entry_setups(self.entry, PLATFORMS)
+                #            self.logstate_debug(f"[async_connect] Client connecting.....      async_forward_entry_setups done")
+                #        else:
+                #            self.logstate_debug(f"[async_connect] Client connecting.....      Entry not loaded")  # do nothing!
+                #            return False
+                #except ValueError:
+                #    self.logstate_debug(f"[async_connect] Client connecting.....      Trapped ValueError Setups")  # do nothing!
+                #    return False
+
                 self.logstate_debug(f"[async_connect] Client connecting.....      async_forward_entry_setups")
-                try:
-                    with contextlib.suppress(ValueError):
-                        loaded = await self.wait_for_entry_loaded(self.getEntryID(), 10)
-                        if loaded:
-                            await self.hass.config_entries.async_forward_entry_setups(self.entry, PLATFORMS)
-                        else:
-                            self.logstate_debug(f"[async_connect] Client connecting.....      Entry not loaded")  # do nothing!
-                            return False
-                except ValueError:
-                    self.logstate_debug(f"[async_connect] Client connecting.....      Trapped ValueError Setups")  # do nothing!
-                    return False
-                
+                await self.hass.config_entries.async_forward_entry_setups(self.entry, PLATFORMS)
                 self.logstate_debug(f"[async_connect] Client connecting.....      async_forward_entry_setups done")
 
                 self.visonicProtocol = VisonicProtocol(panelConfig=self.getConfigData(), panel_id=self.panelident, loop=self.hass.loop)
-                
+
                 self.logstate_debug("Client connecting.....")
                 if await _async_panel_start(force=force):
                     self.visonicProtocol.onPanelChange(self.onPanelChangeHandler)
