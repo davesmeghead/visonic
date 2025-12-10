@@ -55,15 +55,6 @@ class MyHandlers(data_entry_flow.FlowHandler):
         self.step_sequence = []
         self.current_pos = -1
 
-    def setConfigEntry(self, config_entry):
-        if config_entry is not None:
-            # convert python map to dictionary and set defaults for the options flow handler
-            c = self.combineSettings(config_entry)
-            self.myschema.set_default_options(options = c)
-            if CONF_EMULATION_MODE in c:
-                s = c[CONF_EMULATION_MODE]
-                self.PowerlinkRequested = s == available_emulation_modes[0]
-
     def create_parameters_sequence(self, s : str) -> list:
         step_sequence = []
         if s == available_emulation_modes[0]:
@@ -74,18 +65,6 @@ class MyHandlers(data_entry_flow.FlowHandler):
             step_sequence = [10,11] 
         return step_sequence
 
-    def combineSettings(self, entry):
-        """Combine the old settings from data and the new from options."""
-        conf = {}
-        # the entry.data dictionary contains all the old data used on creation and is a complete set
-        for k in entry.data:
-            conf[k] = entry.data[k]
-        # the entry.config dictionary contains the latest/updated values but may not be a complete set
-        #     overwrite data with options i.e. overwrite the original settings on creation with the edited settings to get the latest
-        for k in entry.options:
-            conf[k] = entry.options[k]
-        return conf
-        
     def toList(self, lst, cfg):
         """Convert to a list."""
         if cfg in lst:
@@ -145,22 +124,22 @@ class MyHandlers(data_entry_flow.FlowHandler):
 
     async def async_step_parameters10(self, user_input=None):
         """Config flow step 10."""
-        #_LOGGER.debug(f"show_form step is 10 - {self.current_pos}")
+        #_LOGGER.debug(f"show_form step is 10 - {self.current_pos} {user_input=}")
         return await self.gotonext(user_input)
 
     async def async_step_parameters11(self, user_input=None):
         """Config flow step 11."""
-        #_LOGGER.debug(f"show_form step is 11 - {self.current_pos}")
+        #_LOGGER.debug(f"show_form step is 11 - {self.current_pos} {user_input=}")
         return await self.gotonext(user_input)
 
     async def async_step_parameters12(self, user_input=None):
         """Config flow step 12."""
-        #_LOGGER.debug(f"show_form step is 12 - {self.current_pos}")
+        #_LOGGER.debug(f"show_form step is 12 - {self.current_pos} {user_input=}")
         return await self.gotonext(user_input)
 
     async def async_step_parameters13(self, user_input=None):
         """Config flow step 13."""
-        #_LOGGER.debug(f"show_form step is 13 - {self.current_pos}")
+        #_LOGGER.debug(f"show_form step is 13 - {self.current_pos} {user_input=}")
         return await self.gotonext(user_input)
 
     async def validate_input(self, data: dict):
@@ -195,7 +174,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
                     self.config[CONF_EXCLUDE_X10] = [
                         int(i) for i in self.config[CONF_EXCLUDE_X10]
                     ]
-
+                #_LOGGER.debug(f"[processcomplete] in flow  {self.config}")
                 return self.async_create_entry(title=info["title"], data=self.config)
         except Exception as er:  # pylint: disable=broad-except
             _LOGGER.debug("Unexpected exception in config flow  %s", str(er))
@@ -420,14 +399,37 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
         MyHandlers.__init__(self)
         OptionsFlow.__init__(self)
 
+    def combineSettings(self, entry):
+        """Combine the old settings from data and the new from options."""
+        conf = {}
+        # the entry.data dictionary contains all the old data used on creation and is a complete set
+        for k in entry.data:
+            conf[k] = entry.data[k]
+        # the entry.config dictionary contains the latest/updated values but may not be a complete set
+        #     overwrite data with options i.e. overwrite the original settings on creation with the edited settings to get the latest
+        for k in entry.options:
+            conf[k] = entry.options[k]
+        return conf
+        
+    def setConfigEntry(self, config_entry):
+        if config_entry is not None:
+            # convert python map to dictionary and set defaults for the options flow handler
+            c = self.combineSettings(config_entry)
+            self.myschema.set_default_options(options = c)
+            if CONF_EMULATION_MODE in c:
+                s = c[CONF_EMULATION_MODE]
+                self.PowerlinkRequested = s == available_emulation_modes[0]
+
     # when editing an existing config, start from parameters10 as the previous settings are not editable after the connection has been made
     async def async_step_init(self, user_input=None):
         """Manage the options."""
-        
-        #_LOGGER.debug(f"Edit config option settings, user input data = {user_input}")
+
+        #_LOGGER.debug(f"Edit config option settings, user input = {user_input}")
+        #_LOGGER.debug(f"Edit config option settings, data = {self.config_entry.data}")
+        #_LOGGER.debug(f"Edit config option settings, options = {self.config_entry.options}")
+
         self.setConfigEntry(self.config_entry)
         self.config = deepcopy(dict(self.config_entry.options))
-        #self.entry_id = self.config_entry.entry_id
 
         if self.config is not None and CONF_DEVICE_TYPE in self.config:
             t = self.config[CONF_DEVICE_TYPE].lower()
@@ -446,11 +448,11 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
                 else:
                     _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE not in self.config **********************************")
                     return await self.async_abort(reason="emulation_mode_error")
-                return await self.gotonext(user_input)
+                return await self.gotonext()
 
                 #self.current_pos = -1
                 #self.step_sequence = [2,3,4]
-                #return await self.gotonext(user_input)
+                #return await self.gotonext()
             else:
                 _LOGGER.debug(f"Edit config option settings type = {t}, aborting")
         

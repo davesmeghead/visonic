@@ -126,7 +126,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.4.6"
+CLIENT_VERSION = "0.12.4.7"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -1430,10 +1430,9 @@ class VisonicClient:
             # set baud list back to default ready if there's a disconection
             self.connection_baud_list = [ 9600, 38400, 9600, 38400 ]        # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
 
-            if not self.rationalised_ha_devices:
-                if self.getPanelMode() in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
-                    self.rationalised_ha_devices = True
-                    self.rationalise_ha_devices()
+            if not self.rationalised_ha_devices and self.getPanelMode() in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
+                self.rationalised_ha_devices = True
+                self.rationalise_ha_devices()
             
             if (p := self.getPartitionsInUse()) is not None:
                 self.logstate_debug(f"   Startup Complete, number of partitions in panel = {len(p)}   they are {p}")

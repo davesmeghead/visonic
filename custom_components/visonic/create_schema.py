@@ -134,6 +134,7 @@ class VisonicSchema:
             **self.create_parameters10(self.options),
             **self.create_parameters11(self.options),
             **self.create_parameters12(self.options),
+            **self.create_parameters13(self.options),
         }
         for key in initialise:
             try:

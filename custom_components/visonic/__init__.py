@@ -575,77 +575,72 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEn
     # This function is called when I change VERSION in the ConfigFlow
     # If the config schema ever changes then use this function to convert from old to new config parameters
     version = config_entry.version
+    changed = False
 
     _LOGGER.info(f"Migrating from version {version}")
+    conf = await combineSettings(config_entry)
 
     if version == 1:
         # Leave CONF_FORCE_STANDARD in place but use it to add CONF_EMULATION_MODE
         version = 2
-        new = config_entry.data.copy()
         CONF_FORCE_STANDARD = "force_standard"
         
-        _LOGGER.debug(f"   Migrating CONF_FORCE_STANDARD from {config_entry.data[CONF_FORCE_STANDARD]}")
-        if isinstance(config_entry.data[CONF_FORCE_STANDARD], bool):
-            _LOGGER.debug(f"   Migrating CONF_FORCE_STANDARD from {config_entry.data[CONF_FORCE_STANDARD]} and its boolean")
-            if config_entry.data[CONF_FORCE_STANDARD]:
+        _LOGGER.debug(f"   Migrating CONF_FORCE_STANDARD from {conf[CONF_FORCE_STANDARD]}")
+        if CONF_FORCE_STANDARD in conf and isinstance(conf[CONF_FORCE_STANDARD], bool):
+            _LOGGER.debug(f"   Migrating CONF_FORCE_STANDARD from {conf[CONF_FORCE_STANDARD]} and its boolean")
+            if conf[CONF_FORCE_STANDARD]:
                 _LOGGER.info(f"   Migration: Force standard set so using {available_emulation_modes[1]}")
-                new[CONF_EMULATION_MODE] = available_emulation_modes[1]
+                conf[CONF_EMULATION_MODE] = available_emulation_modes[1]
             else:
                 _LOGGER.info(f"   Migration: Force standard not set so using {available_emulation_modes[0]}")
-                new[CONF_EMULATION_MODE] = available_emulation_modes[0]
-        
-        #del new[CONF_FORCE_STANDARD]  # decided to keep it
-        hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
-        _LOGGER.info(f"   Emulation mode set to {config_entry.data[CONF_EMULATION_MODE]}")
+                conf[CONF_EMULATION_MODE] = available_emulation_modes[0]
+            _LOGGER.info(f"   Emulation mode set to {config_entry.options[CONF_EMULATION_MODE]}")
+        changed = True
 
     if version == 2:
         version = 3
-        new = config_entry.data.copy()
-        
+
         CONF_FORCE_STANDARD = "force_standard"
         CONF_FORCE_AUTOENROLL = "force_autoenroll"
         CONF_AUTO_SYNC_TIME = "sync_time"
-        if CONF_FORCE_STANDARD in new:
-            del new[CONF_FORCE_STANDARD]       # decided to remove it
-        if CONF_FORCE_AUTOENROLL in new:
-            del new[CONF_FORCE_AUTOENROLL]
-        if CONF_AUTO_SYNC_TIME in new:
-            del new[CONF_AUTO_SYNC_TIME]
+        if CONF_FORCE_STANDARD in conf:
+            del conf[CONF_FORCE_STANDARD]       # decided to remove it
+        if CONF_FORCE_AUTOENROLL in conf:
+            del conf[CONF_FORCE_AUTOENROLL]
+        if CONF_AUTO_SYNC_TIME in conf:
+            del conf[CONF_AUTO_SYNC_TIME]
         _LOGGER.debug("   Updated config settings to remove unused data")
         
-        if CONF_MOTION_OFF_DELAY in new:
+        if CONF_MOTION_OFF_DELAY in conf:
             # Add the 2 new timeouts with the same values as the old setting
-            new[CONF_MAGNET_CLOSED_DELAY] = new[CONF_MOTION_OFF_DELAY]
-            new[CONF_EMER_OFF_DELAY] = new[CONF_MOTION_OFF_DELAY]
+            conf[CONF_MAGNET_CLOSED_DELAY] = conf[CONF_MOTION_OFF_DELAY]
+            conf[CONF_EMER_OFF_DELAY] = conf[CONF_MOTION_OFF_DELAY]
             _LOGGER.debug("   Added additional trigger delay settings")
 
-        new[CONF_ALARM_NOTIFICATIONS] = [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]
-        hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
+        conf[CONF_ALARM_NOTIFICATIONS] = [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]
         _LOGGER.debug("   Alarm Notification list set to default")
+        changed = True
 
     if version == 3:
         version = 4
-        new = config_entry.data.copy()
-        
-        if CONF_PANEL_NUMBER not in new:
+        if CONF_PANEL_NUMBER not in conf:
             # We have to assume that multiple panels will be updated at the same time, otherwise it gets complicated
             _LOGGER.debug(f"   Migrating Panel Number, using {update_version_panel_number}")
-            new[CONF_PANEL_NUMBER] = update_version_panel_number
+            conf[CONF_PANEL_NUMBER] = update_version_panel_number
             update_version_panel_number += 1
         else:
-            _LOGGER.debug(f"   Panel Number already set to {new[CONF_PANEL_NUMBER]} so updating config version number only")
-            
-        hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
+            _LOGGER.debug(f"   Panel Number already set to {conf[CONF_PANEL_NUMBER]} so updating config version number only")
+        changed = True
 
     if version == 4:
         version = 5
-        new = config_entry.data.copy()
-        
-        if CONF_ESPHOME_ENTITY_SELECT not in new:
-            _LOGGER.debug(f"Setting ESPHOME Baud Select Entity to empty string")
-            new[CONF_ESPHOME_ENTITY_SELECT] = ""
-            
-        hass.config_entries.async_update_entry(config_entry, data=new, options=new, version=version)
+        if CONF_ESPHOME_ENTITY_SELECT not in conf:
+            _LOGGER.debug(f"   Setting ESPHOME Baud Select Entity to empty string")
+            conf[CONF_ESPHOME_ENTITY_SELECT] = ""
+        changed = True
+
+    if changed:    
+        hass.config_entries.async_update_entry(config_entry, options=conf, version=version)
 
     _LOGGER.info("Migration to version %s successful", config_entry.version)
     return True
