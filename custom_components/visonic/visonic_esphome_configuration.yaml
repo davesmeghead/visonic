@@ -61,7 +61,8 @@ esphome:
       # Change UART baud rate
       - script.execute:
           id: change_baud_rate
-          baud: !lambda 'return atoi(id(baud_rate).current_option());'
+          baud: !lambda 'return atoi(id(baud_rate).current_option().c_str());'
+          # baud: !lambda 'return atoi(id(baud_rate).current_option());'
       # Log new UART baud rate after change
       - lambda: |-
           std::string boot_msg;
