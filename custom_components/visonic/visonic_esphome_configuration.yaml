@@ -71,7 +71,7 @@ esphome:
           else
               boot_msg = "Software Restart.";
           std::string uart_msg2 = boot_msg + " UART baud: " + std::to_string(id(uart_bus_panel).get_baud_rate());
-          id(log_message).execute({uart_msg2});
+          id(log_message).execute(uart_msg2);
 
 esp32:
   board: ${MY_BOARD}
@@ -110,34 +110,79 @@ logger:
   level: DEBUG
 
 api:
-  reboot_timeout: 0s
+#  reboot_timeout: 0s
+  batch_delay: 50ms   # Assume ESP32 device, reduce latency for real-time applications
+  listen_backlog: 6   # Assume ESP32 device, allow 6 pending connections in queue
+  max_connections: 10 # Assume ESP32 device, allow up to 10 simultaneous connections
+  max_send_queue: 16  # Assume ESP32 device, maximum queued messages per connection before disconnect
   encryption:
     key: ${KEY}
   actions:
+    - action: is_relay_enabled
+      then:
+        - if:
+            condition:
+              lambda: 'return id(relay_enabled);'
+            then:
+              - api.respond:
+                  success: true
+            else:
+              - api.respond:
+                  success: false
     - action: trigger_relay1
       then:
-        - lambda: |-
-            if (id(relay_enabled)) {
-              id(relay1).turn_on();
-              id(relay3).turn_on();
-              delay(2);
-              id(relay1).turn_off();
-              id(relay3).turn_off();
-            } else {
-              id(log_message).execute({"Relay action disabled: trigger_relay1"});
-            }
+        - if:
+            condition:
+              lambda: 'return id(relay_enabled);'
+            then:
+              # 1. Execute turn on logic
+              - lambda: |-
+                  id(relay1).turn_on();
+                  id(relay3).turn_on();
+              # 2. Respond with success
+              - api.respond:
+                  success: true
+              # 3. delay
+              - delay: 2s
+              # 4. Execute turn off logic
+              - lambda: |-
+                  id(relay1).turn_off();
+                  id(relay3).turn_off();
+            else:
+              # 1. Log the failure as before
+              - lambda: |-
+                  id(log_message).execute("Relay action disabled: trigger_relay1");
+              # 2. Respond with an error back to the caller
+              - api.respond:
+                  success: false
+                  error_message: "Relay action is currently disabled."
     - action: trigger_relay2
       then:
-        - lambda: |-
-            if (id(relay_enabled)) {
-              id(relay2).turn_on();
-              id(relay4).turn_on();
-              delay(2);
-              id(relay2).turn_off();
-              id(relay4).turn_off();
-            } else {
-              id(log_message).execute({"Relay action disabled: trigger_relay2"});
-            }
+        - if:
+            condition:
+              lambda: 'return id(relay_enabled);'
+            then:
+              # 1. Execute turn on logic
+              - lambda: |-
+                  id(relay2).turn_on();
+                  id(relay4).turn_on();
+              # 2. Respond with success
+              - api.respond:
+                  success: true
+              # 3. delay
+              - delay: 2s
+              # 4. Execute turn off logic
+              - lambda: |-
+                  id(relay2).turn_off();
+                  id(relay4).turn_off();
+            else:
+              # 1. Log the failure as before
+              - lambda: |-
+                  id(log_message).execute("Relay action disabled: trigger_relay2");
+              # 2. Respond with an error back to the caller
+              - api.respond:
+                  success: false
+                  error_message: "Relay action is currently disabled."
 
 ota:
   - platform: esphome
@@ -183,7 +228,7 @@ button:
 #              } else {
 #                msg_text = "UART buffer has data, no action today";
 #              }
-#              id(log_message).execute({msg_text});
+#              id(log_message).execute(msg_text);
 
 binary_sensor:
   - platform: stream_server
@@ -217,6 +262,7 @@ switch:
        inverted: False
        mode: OUTPUT
     id: blinky
+    restore_mode: ALWAYS_OFF
 
 output:
   - platform: gpio
@@ -274,7 +320,7 @@ script:
           id(uart_bus_panel).flush();
           if (baud == 0) {
             std::string uart_msg2 = "Not setting baud to 0, currently " + std::to_string(id(uart_bus_panel).get_baud_rate());
-            id(log_message).execute({uart_msg2});
+            id(log_message).execute(uart_msg2);
             ESP_LOGD("change_baud_rate", uart_msg2.c_str());
           }
           else if (id(uart_bus_panel).get_baud_rate() != baud) {
@@ -283,12 +329,12 @@ script:
             id(uart_bus_panel).load_settings();
             uart_msg2 = uart_msg2 + " to " + std::to_string(id(uart_bus_panel).get_baud_rate()) + " (" + std::to_string(baud) + ")";
 
-            id(log_message).execute({uart_msg2});
+            id(log_message).execute(uart_msg2);
             ESP_LOGD("change_baud_rate", uart_msg2.c_str());
           }
           else {
             std::string uart_msg2 = "Baud already set to " + std::to_string(id(uart_bus_panel).get_baud_rate());
-            id(log_message).execute({uart_msg2});
+            id(log_message).execute(uart_msg2);
             ESP_LOGD("change_baud_rate", uart_msg2.c_str());
           }
 
@@ -307,6 +353,7 @@ select:
     icon: mdi:swap-horizontal
     set_action:
       - lambda: |-
-          id(change_baud_rate).execute({atoi(x.c_str())});
+          //id(change_baud_rate).execute({atoi(x.c_str())});
+          id(change_baud_rate).execute(atoi(x.c_str()));
           std::string msg_text = "Selected baud: " + x + " (" + std::to_string(id(uart_bus_panel).get_baud_rate()) + ")";
-          id(log_message).execute({msg_text});
+          id(log_message).execute(msg_text);
