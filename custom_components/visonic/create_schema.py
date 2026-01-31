@@ -61,7 +61,6 @@ from .const import (
     DEFAULT_DEVICE_PORT,
     DEFAULT_DEVICE_TOPIC,
     DEFAULT_DEVICE_USB,
-    DEVICE_TYPE_ZIGBEE,
     DEVICE_TYPE_ETHERNET,
     DEVICE_TYPE_USB,
     AvailableNotifications,
@@ -90,13 +89,11 @@ def capitalize(s):
 def titlecase(s):
     return re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda word: capitalize(word.group(0)), s)
 
-# to put zigbee back in, uncomment 142 and switch 107 and 108
 class VisonicSchema:
 
     def __init__(self):
         self.CONFIG_SCHEMA_DEVICE = {
             vol.Required(CONF_DEVICE_TYPE, default=titlecase(DEVICE_TYPE_ETHERNET)): vol.In([titlecase(DEVICE_TYPE_ETHERNET), DEVICE_TYPE_USB.upper()]),
-            #vol.Required(CONF_DEVICE_TYPE, default=titlecase(DEVICE_TYPE_ETHERNET)): vol.In([titlecase(DEVICE_TYPE_ETHERNET), DEVICE_TYPE_USB.upper(), titlecase(DEVICE_TYPE_ZIGBEE)]),
             vol.Optional(CONF_PANEL_NUMBER, default=0): cv.positive_int,
         }
         self.CONFIG_SCHEMA_ETHERNET = {
@@ -116,10 +113,6 @@ class VisonicSchema:
             vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB): str,
             vol.Optional(CONF_DEVICE_BAUD, default=str(DEFAULT_DEVICE_BAUD)): str,
         }
-        self.CONFIG_SCHEMA_ZIGBEE = {
-            vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB): str,
-            vol.Optional(CONF_DEVICE_BAUD, default=str(DEFAULT_DEVICE_BAUD)): str,
-        }
         
         # These are the options that the user entered
         self.options = {}
@@ -129,7 +122,6 @@ class VisonicSchema:
             **self.CONFIG_SCHEMA_DEVICE,
             **self.CONFIG_SCHEMA_ETHERNET,
             **self.CONFIG_SCHEMA_USB,
-            #**self.CONFIG_SCHEMA_ZIGBEE,
             **self.create_parameters1(self.options),
             **self.create_parameters10(self.options),
             **self.create_parameters11(self.options),
@@ -331,11 +323,7 @@ class VisonicSchema:
         """Create schema usb."""
         return vol.Schema(self.CONFIG_SCHEMA_USB)
 
-    def create_schema_zigbee(self):
-        """Create schema ethernet."""
-        return vol.Schema(self.CONFIG_SCHEMA_ZIGBEE)
-
-    def create_schema_parameters1(self):
+    def create_schema_parameters1(self, defaults=None):
         """Create schema parameters 1."""
         return vol.Schema(self.create_parameters1(self.options))
 

@@ -18,7 +18,6 @@ from .const import (
     VISONIC_UNIQUE_NAME,
     CONF_ALARM_NOTIFICATIONS,
     DEFAULT_DEVICE_BAUD,
-    DEVICE_TYPE_ZIGBEE,
     DEVICE_TYPE_ETHERNET,
     DEVICE_TYPE_USB,
     CONF_ESPHOME_ENTITY_SELECT,
@@ -217,7 +216,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         #_LOGGER.debug("Visonic async_get_options_flow")
         return VisonicOptionsFlowHandler()
 
-    # ask the user: zigbee, ethernet or usb
+    # ask the user: ethernet or usb
     async def async_step_device(self, user_input=None):
         """Handle the input processing of the config flow."""
         _LOGGER.debug("async_step_device %s", user_input)
@@ -232,8 +231,6 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
                 return await self._show_form(step="myethernet")
             elif self.config[CONF_DEVICE_TYPE] == DEVICE_TYPE_USB:
                 return await self._show_form(step="myusb")
-            elif self.config[CONF_DEVICE_TYPE] == DEVICE_TYPE_ZIGBEE:
-                return await self._show_form(step="myzigbee")
         errors = {}
         errors["base"] = "eth_or_usb"
         return await self._show_form(step="device", errors=errors)
@@ -261,7 +258,6 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
             raise vol.Invalid(f"Invalid options for {entity}, options: {options}")
 
         return entity
-
 
     # ask for the ethernet settings
     async def async_step_myethernet(self, user_input=None):
@@ -434,7 +430,7 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
         if self.config is not None and CONF_DEVICE_TYPE in self.config:
             t = self.config[CONF_DEVICE_TYPE].lower()
             #_LOGGER.debug(f"type = {type(t)}   t = {t}")
-            if t == DEVICE_TYPE_ETHERNET or t == DEVICE_TYPE_ZIGBEE or t == DEVICE_TYPE_USB:
+            if t == DEVICE_TYPE_ETHERNET or t == DEVICE_TYPE_USB:
 
                 self.current_pos = -1
 

@@ -20,8 +20,6 @@ from requests import ConnectTimeout, HTTPError
 from homeassistant.core import HomeAssistant, valid_entity_id
 from homeassistant.util import slugify
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
-from homeassistant.components import mqtt
-from homeassistant.components.mqtt.models import ReceiveMessage
 from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUser
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
@@ -129,15 +127,6 @@ from .const import (
 CLIENT_VERSION = "0.12.4.7"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
-
-MQTT_FlagReset         = 0x80
-MQTT_FlagConfig        = 0x40
-MQTT_FlagTimeBackwards = 0x10
-#MQTT_FlagOutOfSeq      = 0x08
-#MQTT_FlagCRCMatch      = 0x04
-#MQTT_FlagValidFrame    = 0x02
-#MQTT_FlagVersionMatch  = 0x01
-
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -378,192 +367,6 @@ class ClientVisonicProtocol(asyncio.Protocol):
     # This is needed so we can create the class instance before giving it to the protocol handlers
     def __call__(self):
         return self
-
-class MqttProtocol:
-    """Asyncio Protocol that sends/receives data via MQTT."""
-    
-    _qos = 1
-    
-    def __init__(self, hass, topic_in: str, topic_out: str, vp, client):
-        #super().__init__(vp, client)
-        #_LOGGER.debug(f"[MqttProtocol] Init")
-        self.vp = vp
-        self.client = client
-        self.expectedSeq = 0
-        self.hass = hass
-        self.last_payload = None        
-        self.mqtt_unsub = None
-        self.topic_in = topic_in
-        self.topic_out = topic_out
-        self._connected = asyncio.Event()
-        self._queue = asyncio.Queue()
-        self.commsTask = self.hass.loop.create_task(self._worker())
-
-    async def async_setup_subscribe() -> None:
-        """Setup integration MQTT subscription monitoring."""
-        # https://developers.home-assistant.io/blog/#add-a-status-callback-for-mqtt-subscriptions
-
-        def _on_subscribe_status() -> None:
-            """Handle subscription ready signal."""
-            # Do stuff
-            pass
-
-        # Handle subscription ready status update
-        await mqtt.async_on_subscribe_done(
-            self.hass,
-            "myintegration/status",
-            qos=self._qos,
-            on_subscribe_status=_on_subscribe_status,
-        )
-
-    def close(self):
-        #_LOGGER.debug("[MqttProtocol] close called on protocol")
-        if self.mqtt_unsub is not None:
-            self.mqtt_unsub()             # unsubscribe mqtt message receive handler
-            self.mqtt_unsub = None
-        # Stop the receiver comms task
-        if self.commsTask is not None:
-            _LOGGER.debug("[MqttProtocol] Stopping the MQTT Comms Receive Task")
-            try:
-                self.commsTask.cancel()
-            except Exception as ex:
-                # Do not cause a full Home Assistant Exception, keep it local here
-                _LOGGER.debug("[MqttProtocol] ...........      Caused an exception")
-                _LOGGER.debug(f"[MqttProtocol]                     {ex}")   
-        self.commsTask = None
-        #_LOGGER.debug("[MqttProtocol] close finished")
-        
-    async def setup_message_handler(self):
-        """Subscribe to MQTT topic and simulate connection_made with a dummy transport."""
-
-        def myround(val) -> int:
-            while val < 0:
-                val = val + 65536
-            while val > 65535:
-                val = val - 65536
-            return val
-
-        def find_first_difference(str1, str2):
-            # Iterate through the characters of both strings
-            for i in range(min(len(str1), len(str2))):
-                if str1[i] != str2[i]:
-                    return i  # Return the index of the first difference
-            # If no difference is found in the common length, check for length mismatch
-            if len(str1) != len(str2):
-                return min(len(str1), len(str2))  # Return the index where one string ends
-            return -1  # Return -1 if the strings are identical
-
-        #@callback
-        async def _on_message(msg : ReceiveMessage):
-            _LOGGER.debug(f"Received mqtt data {msg.payload}")            
-            #_LOGGER.debug(f"         last time {self.last_payload}")            
-            
-            #billy = find_first_difference(msg.payload, self.last_payload) if self.last_payload else -1
-            #if billy >= 0:
-            #    _LOGGER.debug(f"  {billy}      {len(msg.payload)} {msg.payload[billy:]}")
-
-            #    _LOGGER.debug(f"  {billy}      {len(self.last_payload)} {self.last_payload[billy:]}")
-            
-            if isinstance(msg.payload, str) and len(msg.payload) > 0:
-
-                if msg.payload == self.last_payload:
-                    return  # duplicate; ignore
-                
-                self.last_payload = msg.payload
-
-                payload_dict = json.loads(msg.payload)    # create a dict from the string
-                if "visonic_receive" in payload_dict:
-                    vr = payload_dict["visonic_receive"]
-                    if "flags" in vr and "data" in vr and "data_len" in vr and "received_valid_frame" in vr and "crc_match" in vr:
-                        #_LOGGER.debug(f"MQTT received {vr}")
-                        flags = vr.get("flags")
-                        data  = vr.get("data")                      # This is a string of hex
-                        size  = vr.get("data_len")
-                        valid = bool(vr.get("received_valid_frame"))
-                        crc   = bool(vr.get("crc_match"))
-                        if valid and crc and size > 0:
-                            b_data = convertByteArray(data)
-                            #_LOGGER.debug(f"data {type(data)} is {data}")
-                            if flags & MQTT_FlagReset:
-                                self.expectedSeq = 0
-                            if "sequence" in vr:
-                                if self.expectedSeq == vr.get("sequence"):
-                                    #_LOGGER.debug(f"    MQTT received data with same sequence as last time {self.expectedSeq}")
-                                    #await asyncio.sleep(0.0)
-                                    return
-                                elif myround(self.expectedSeq + 1) == vr.get("sequence"):
-                                    self.expectedSeq += 1
-                                else:
-                                    self.expectedSeq = vr.get("sequence")
-                                    _LOGGER.debug(f"    MQTT received data out of sequence {self.expectedSeq}  {vr.get("sequence")}")
-                                if flags & MQTT_FlagConfig:
-                                    if size == 9:
-                                        if b_data[8] == 0x01:
-                                            # The ESP32 device is not configured
-                                            _LOGGER.debug(f"    MQTT received data indicating uart is not configured, so sending config")
-                                            self.writeConfig("00 00 12 13 80 25 08 20");   # status 0, tx 18, rx 19, baud 9600, led pin 8, brightness 32
-                                        elif b_data[8] == 0x02:
-                                            _LOGGER.debug(f"    MQTT received data indicating uart is already configured, so no action  0x" + toString(b_data))
-                                            pass
-                                        else:
-                                            _LOGGER.debug(f"    MQTT received invalid config data")
-                                elif size >= 3 and data[0:2] == "0x":
-                                    # Normal data, strip off "0x" if present
-                                    _LOGGER.debug(f"MQTT received 0x data {data[2:]}")
-                                    self.hass.loop.call_soon_threadsafe(self.data_received, b_data[2:])
-                                elif size > 0:
-                                    # Normal data
-                                    _LOGGER.debug(f"MQTT received data {data}")
-                                    self.hass.loop.call_soon_threadsafe(self.data_received, b_data)
-                            else:
-                                _LOGGER.debug(f"    MQTT received data without a sequence")
-                        else:
-                            _LOGGER.debug(f"MQTT received invalid data {vr}")
-                    else:
-                        _LOGGER.debug(f"MQTT received invalid data, all data not present {vr}")
-                else:
-                    _LOGGER.debug(f"MQTT received invalid data, visonic_receive not in payload {payload_dict}")
-            else:
-                _LOGGER.debug(f"MQTT received invalid data")
-                _LOGGER.debug(f"payload {type(msg.payload)} is {msg.payload}")
-        
-        #_LOGGER.debug(f"[setup_message_handler] Starting - topic is {self.topic_in}")
-        if getattr(self, "_subscribed", False):
-            _LOGGER.debug(f"[setup_message_handler] Already subscribed to {self.topic_in}, skipping.")
-            return
-        self._subscribed = True
-        self.last_payload = None        
-        _LOGGER.debug(f"[setup_message_handler] MQTT subscribing to {self.topic_in}")
-        self.mqtt_unsub = await mqtt.async_subscribe(self.hass, self.topic_in, _on_message, qos=self._qos)
-        #_LOGGER.debug(f"[setup_message_handler] subscribed")
-        self.vp.setTransportConnection(self)
-        self._connected.set()
-        #_LOGGER.debug(f"[setup_message_handler] exit")
-
-    async def _worker(self):
-        """Worker loop to send queued data via MQTT."""
-        await self._connected.wait()
-        while True:
-            js = await self._queue.get()
-            try:
-                while not mqtt.is_connected(self.hass):
-                    await asyncio.sleep(0.5)
-                _LOGGER.debug(f"MQTT Publish {json.dumps(js)}")
-                #js = { "transmit_custom_payload": "0x" + toString(data, "") }
-                await mqtt.async_publish( self.hass, self.topic_out, json.dumps(js), qos=self._qos, retain=False )
-            except Exception as e:
-                _LOGGER.error("MQTT publish failed: %s", e)
-            self._queue.task_done()
-
-    def write(self, data: bytearray):
-        """Queue outgoing data to preserve order."""
-        js = { "transmit_custom_payload": "0x" + toString(data, "") }
-        self._queue.put_nowait(js)
-
-    def writeConfig(self, data: str):
-        """Queue outgoing data to preserve order."""
-        js = { "transmit_custom_config": "0x" + data }
-        self._queue.put_nowait(js)
 
 class VisonicClient:
     """Set up for Visonic devices."""
@@ -2201,26 +2004,6 @@ class VisonicClient:
             
         return None, None
 
-    # Create a connection using asyncio using an ip and port
-    async def async_create_mqtt_visonic_connection(self, vp : VisonicProtocol):
-        """Create Visonic manager class, returns tcp transport coroutine."""
-        # Make sure MQTT integration is enabled and the client is available
-        while not mqtt.is_connected(self.hass):
-            await asyncio.sleep(0.5)
-        
-        topic = "zigbee2mqtt/Visonic Alarm ESP"
-        
-        #zigbee2mqtt/Visonic Alarm ESP/transmit_custom_payload/set
-
-        cvp = MqttProtocol(hass=self.hass, topic_in=topic , topic_out=topic + "/set", vp=vp, client=self)   # hass, topic_in: str, topic_out: str, vp : VisonicProtocol, client
-        vtask = self.hass.loop.create_task(cvp.setup_message_handler())
-
-        cvp.writeConfig("00 00 12 13 80 25 08 20");   # status 0, tx 18, rx 19, baud 9600, led pin 8, brightness 32
-        
-        self.logstate_info(f"MQTT Connection made")
-            
-        return vtask, cvp
-
     def tellemaboutme(self, thisisme):
         """This function is here so that the coroutine can tell us the protocol handler"""
         self.tell_em = thisisme
@@ -2276,9 +2059,7 @@ class VisonicClient:
             self.logstate_debug("Comms Device Type is %s", device_type)
             self.cvp = None
             self.visonicCommsTask = None
-            if device_type == DEVICE_TYPE_ZIGBEE:
-                (self.visonicCommsTask, self.cvp) = await self.async_create_mqtt_visonic_connection(vp=self.visonicProtocol)
-            elif device_type == DEVICE_TYPE_ETHERNET:
+            if device_type == DEVICE_TYPE_ETHERNET:
                 host = self.config.get(CONF_HOST, "127.0.0.1")
                 port = self.config.get(CONF_PORT, 0)
                 (self.visonicCommsTask, self.cvp) = await self.async_create_tcp_visonic_connection(vp=self.visonicProtocol, address=host, port=port)
