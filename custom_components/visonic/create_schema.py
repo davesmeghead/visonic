@@ -96,19 +96,6 @@ class VisonicSchema:
             vol.Required(CONF_DEVICE_TYPE, default=titlecase(DEVICE_TYPE_ETHERNET)): vol.In([titlecase(DEVICE_TYPE_ETHERNET), DEVICE_TYPE_USB.upper()]),
             vol.Optional(CONF_PANEL_NUMBER, default=0): cv.positive_int,
         }
-        self.CONFIG_SCHEMA_ETHERNET = {
-            vol.Required(CONF_HOST, default=DEFAULT_DEVICE_HOST): str,
-            vol.Required(CONF_PORT, default=str(DEFAULT_DEVICE_PORT)): str,
-            #vol.Optional(CONF_ESPHOME_ENTITY_SELECT, default=""): select_entity_or_empty,
-            vol.Optional(
-                CONF_ESPHOME_ENTITY_SELECT,
-            ): EntitySelector(
-                EntitySelectorConfig(
-                    domain=["select"],
-                    multiple=False,
-                )
-            ),
-        }
         self.CONFIG_SCHEMA_USB = {
             vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB): str,
             vol.Optional(CONF_DEVICE_BAUD, default=str(DEFAULT_DEVICE_BAUD)): str,
@@ -120,7 +107,7 @@ class VisonicSchema:
         # initially populate the options data with the default values from all possible settings
         initialise = {
             **self.CONFIG_SCHEMA_DEVICE,
-            **self.CONFIG_SCHEMA_ETHERNET,
+            **self.create_parameters_ethernet(self.options),
             **self.CONFIG_SCHEMA_USB,
             **self.create_parameters1(self.options),
             **self.create_parameters10(self.options),
@@ -156,6 +143,22 @@ class VisonicSchema:
         #_LOGGER.debug(f"    returning {default=}")
         return default
 
+    # These are only used on creation of the component
+    def create_parameters_ethernet(self, options: dict):
+        """Create parameter set 1."""
+        # Panel settings - can only be set on creation
+        return {
+            vol.Required(CONF_HOST, default=self.create_default(options, CONF_HOST, DEFAULT_DEVICE_HOST)): str,
+            vol.Required(CONF_PORT, default=self.create_default(options, CONF_PORT, str(DEFAULT_DEVICE_PORT))): str,
+            vol.Optional(
+                CONF_ESPHOME_ENTITY_SELECT,
+            ): EntitySelector(
+                EntitySelectorConfig(
+                    domain=["select"],
+                    multiple=False,
+                )
+            ),
+        }
 
     # These are only used on creation of the component
     def create_parameters1(self, options: dict):
@@ -311,39 +314,49 @@ class VisonicSchema:
             ): int,
         }
 
-    def create_schema_device(self):
+    def create_schema_device(self, defaults=None):
         """Create schema device."""
+        self.set_default_options(defaults)
         return vol.Schema(self.CONFIG_SCHEMA_DEVICE)
 
-    def create_schema_ethernet(self):
+    def create_schema_ethernet(self, defaults=None):
         """Create schema ethernet."""
-        return vol.Schema(self.CONFIG_SCHEMA_ETHERNET)
+        self.set_default_options(defaults)
+        return vol.Schema(self.create_parameters_ethernet(self.options))
+        #return vol.Schema(self.CONFIG_SCHEMA_ETHERNET)
 
-    def create_schema_usb(self):
+    def create_schema_usb(self, defaults=None):
         """Create schema usb."""
+        self.set_default_options(defaults)
         return vol.Schema(self.CONFIG_SCHEMA_USB)
 
     def create_schema_parameters1(self, defaults=None):
         """Create schema parameters 1."""
+        self.set_default_options(defaults)
         return vol.Schema(self.create_parameters1(self.options))
 
-    def create_schema_parameters10(self):
+    def create_schema_parameters10(self, defaults=None):
         """Create schema parameters 10."""
+        self.set_default_options(defaults)
         return vol.Schema(self.create_parameters10(self.options))
 
-    def create_schema_parameters11(self, isPowerlinkEmulation : bool = False):
+    def create_schema_parameters11(self, defaults=None, isPowerlinkEmulation : bool = False):
         """Create schema parameters 11."""
+        self.set_default_options(defaults)
         return vol.Schema(self.create_parameters11(self.options, isPowerlinkEmulation))
 
-    def create_schema_parameters12(self):
+    def create_schema_parameters12(self, defaults=None):
         """Create schema parameters 12."""
+        self.set_default_options(defaults)
         return vol.Schema(self.create_parameters12(self.options))
 
-    def create_schema_parameters13(self):
+    def create_schema_parameters13(self, defaults=None):
         """Create schema parameters 13."""
+        self.set_default_options(defaults)
         return vol.Schema(self.create_parameters13(self.options))
 
     def set_default_options(self, options: dict):
         """Set schema defaults."""
-        for key in options:
-            self.options[key] = options[key]
+        if options:
+            for key in options:
+                self.options[key] = options[key]

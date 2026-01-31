@@ -84,30 +84,28 @@ class MyHandlers(data_entry_flow.FlowHandler):
             else:
                 self.config[cfg] = lst[cfg]
 
-    async def _show_form(self, step: str = "device", placeholders=None, errors=None):
+    async def _show_form(self, step: str = "device", placeholders=None, errors=None, defaults=None):
         """Show the form to the user."""
-        #_LOGGER.debug(f"show_form start {step} {placeholders} {errors}")
+        _LOGGER.debug(f"show_form start {step=} {placeholders=} {errors=} {defaults=}")
 
         ds = None
 
         if step == "device":
-            ds = self.myschema.create_schema_device()
+            ds = self.myschema.create_schema_device(defaults)
         elif step == "myethernet":
-            ds = self.myschema.create_schema_ethernet()
+            ds = self.myschema.create_schema_ethernet(defaults)
         elif step == "myusb":
-            ds = self.myschema.create_schema_usb()
-        elif step == "myzigbee":
-            ds = self.myschema.create_schema_zigbee()
+            ds = self.myschema.create_schema_usb(defaults)
         elif step == "parameters1":
-            ds = self.myschema.create_schema_parameters1()
+            ds = self.myschema.create_schema_parameters1(defaults)
         elif step == "parameters10":
-            ds = self.myschema.create_schema_parameters10()
+            ds = self.myschema.create_schema_parameters10(defaults)
         elif step == "parameters11":
-            ds = self.myschema.create_schema_parameters11(self.PowerlinkRequested)
+            ds = self.myschema.create_schema_parameters11(defaults, self.PowerlinkRequested)
         elif step == "parameters12":
-            ds = self.myschema.create_schema_parameters12()
+            ds = self.myschema.create_schema_parameters12(defaults)
         elif step == "parameters13":
-            ds = self.myschema.create_schema_parameters13()
+            ds = self.myschema.create_schema_parameters13(defaults)
         else:
             return self.async_abort(reason=TRANSLATE_ERROR_DEVICE)
 
@@ -334,14 +332,60 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         self.config[CONF_ESPHOME_ENTITY_SELECT] = ""
         return await self._show_form(step="parameters1")
 
-    # ask for the usb settings
-    async def async_step_myzigbee(self, user_input=None):
-        """Handle the input processing of the Zigbee config flow."""
-        self.config.update(user_input)
-        self.config[CONF_HOST] = ""
-        self.config[CONF_PORT] = ""
-        self.config[CONF_ESPHOME_ENTITY_SELECT] = ""
-        return await self._show_form(step="parameters1")
+    async def async_step_zeroconf(self, discovery_info):
+        """Handle discovery from Zeroconf."""
+        # Home Assistant has already resolved the IP
+        _LOGGER.debug(f"[async_step_zeroconf] discovery_info {discovery_info}")
+
+        # Decode the panel number, if not present then assume 0
+        panel_num = 0
+        baud_entity = ""
+        
+        if "properties" in discovery_info:
+            # Decode the panel identifier, if present
+            if "panel" in discovery_info.properties:
+                panel_num_str = discovery_info.properties.get("panel")
+                if isinstance(panel_num_str, bytes):
+                    panel_num_str = panel_num_str.decode("utf-8")
+
+                # Convert to integer with a fallback/default of 0
+                try:
+                    panel_num = max(0, int(panel_num_str))
+                except (ValueError, TypeError):
+                    panel_num = 0
+            
+            # Decode the select baud rate entity, if present
+            if "baud_entity" in discovery_info.properties:
+                # If the baud select entity has been set in the esphome yaml then check to make sure it exists
+                #    This assumes that the ESPHome integration has added it to create the entities
+                baud_entity = discovery_info.properties.get("baud_entity")
+                if isinstance(baud_entity, bytes):
+                    baud_entity = baud_entity.decode("utf-8")
+                _LOGGER.debug(f"[async_step_zeroconf] baud select entity set to {baud_entity}")
+
+        _LOGGER.debug(f"[async_step_zeroconf] resolved down to {panel_num=}   ...   checking for unique panel identifier")
+        
+        # Set the unique id for this hub
+        await self.async_set_unique_id(VISONIC_UNIQUE_NAME + " Panel " + str(panel_num))
+        # Abort if it's already been configured (for this panel number)
+        self._abort_if_unique_id_configured()
+
+        host = discovery_info.host
+        port = discovery_info.port
+        hostname = discovery_info.hostname
+
+        self.config[CONF_DEVICE_TYPE] = DEVICE_TYPE_ETHERNET
+        self.config[CONF_HOST] = host
+        self.config[CONF_PORT] = str(port)
+        self.config[CONF_ESPHOME_ENTITY_SELECT] = baud_entity
+        self.config[CONF_PANEL_NUMBER] = panel_num
+
+        # You can now pre-fill the configuration form
+        self.context["title_placeholders"] = {"name": "Visonic Device Detected"}
+
+        _LOGGER.debug(f"[async_step_zeroconf] {host=}    {port=}    {hostname=}    {panel_num=}    {baud_entity=}")
+
+        return await self._show_form(step="myethernet", defaults = self.config)
 
     async def async_step_parameters1(self, user_input=None):
         """Config flow step 1."""
