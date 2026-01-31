@@ -4,6 +4,7 @@ from typing import Any
 from copy import deepcopy
 import logging
 import voluptuous as vol
+import socket
 
 from .const import (
     CONF_DEVICE_BAUD,
@@ -41,6 +42,16 @@ from homeassistant.core import callback
 from .create_schema import VisonicSchema
 
 _LOGGER = logging.getLogger(__name__)
+
+# These are the translation strings for the various abort and error indications to the user
+TRANSLATE_ERROR_ALREADY_CONFIGURED = "already_configured"
+TRANSLATE_ERROR_DEVICE = "device_error"
+TRANSLATE_ERROR_SETTINGS_MISSING = "settings_missing"
+TRANSLATE_ERROR_ETHERNET_OR_USB = "eth_or_usb"
+TRANSLATE_ERROR_EMULATION_MODE = "emulation_mode_error"
+TRANSLATE_ERROR_UNKNOWN = "unknown"
+TRANSLATE_ERROR_CONNECTION_TIMEOUT = "cannot_connect_timeout"
+TRANSLATE_ERROR_CONNECTION_REFUSED = "cannot_connect_refused"
 
 class MyHandlers(data_entry_flow.FlowHandler):
     """My generic handler for config flow ConfigFlow and OptionsFlow."""
@@ -98,14 +109,14 @@ class MyHandlers(data_entry_flow.FlowHandler):
         elif step == "parameters13":
             ds = self.myschema.create_schema_parameters13()
         else:
-            return self.async_abort(reason="device_error")
+            return self.async_abort(reason=TRANSLATE_ERROR_DEVICE)
 
         if ds is None:
             # The only way this could happen is one of the create functions have returned None
-            _LOGGER.debug("show_form ds is None, step is %s", step)
-            return self.async_abort(reason="device_error")
+            _LOGGER.debug(f"show_form ds is None, {step=}")
+            return self.async_abort(reason=TRANSLATE_ERROR_DEVICE)
 
-        #_LOGGER.debug(f"doing show_form step = {step}   ds = {ds}")
+        _LOGGER.debug(f"doing show_form  {step=}   {ds=}")
         return self.async_show_form(
             step_id=step,
             data_schema=ds,
@@ -177,9 +188,8 @@ class MyHandlers(data_entry_flow.FlowHandler):
                 return self.async_create_entry(title=info["title"], data=self.config)
         except Exception as er:  # pylint: disable=broad-except
             _LOGGER.debug("Unexpected exception in config flow  %s", str(er))
-            # errors["base"] = "unknown"
-        return self.async_abort(reason="device_error")
-
+            # errors["base"] = TRANSLATE_ERROR_UNKNOWN
+        return self.async_abort(reason=TRANSLATE_ERROR_DEVICE)
 
 @HANDLERS.register(DOMAIN)
 class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
@@ -193,6 +203,29 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         MyHandlers.__init__(self)
         ConfigFlow.__init__(self)
         _LOGGER.debug("Visonic ConfigFlow init")
+
+    async def validate_visonic_connection(self, host: str, port: int) -> str:
+        """Attempt to open a socket to the ethernet/thread device. Returns error key or None."""
+        try:
+            # Detect family
+            family = socket.AF_INET6 if ":" in host else socket.AF_INET
+
+            _LOGGER.debug(f"validate_visonic_connection, family {family}   host {host}   port {port}")
+            
+            # We use a short 3s timeout for the UI check to keep it snappy
+            sock = socket.socket(family, socket.SOCK_STREAM)
+            sock.settimeout(3.0)
+            
+            # Attempt the connection
+            sock.connect((host, port))
+            sock.close()
+            return None  # Success!
+            
+        except socket.timeout:
+            return TRANSLATE_ERROR_CONNECTION_TIMEOUT
+        except socket.error:
+            return TRANSLATE_ERROR_CONNECTION_REFUSED
+        return TRANSLATE_ERROR_UNKNOWN
 
     def dumpMyState(self):
         """Output state to the log file."""
@@ -232,7 +265,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
             elif self.config[CONF_DEVICE_TYPE] == DEVICE_TYPE_USB:
                 return await self._show_form(step="myusb")
         errors = {}
-        errors["base"] = "eth_or_usb"
+        errors["base"] = TRANSLATE_ERROR_ETHERNET_OR_USB
         return await self._show_form(step="device", errors=errors)
 
     def select_entity_or_empty(self, value):
@@ -273,11 +306,20 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
                 errors[CONF_ESPHOME_ENTITY_SELECT] = str(e)
 
             if not errors:
-                self.config.update(user_input)
-                self.config[CONF_PATH] = ""
-                self.config[CONF_DEVICE_BAUD] = DEFAULT_DEVICE_BAUD
+                host = user_input.get(CONF_HOST, "")
+                port = user_input.get(CONF_PORT, "0")
+                error_key = await self.validate_visonic_connection(host, int(port))
+                
+                if error_key is None:
+                    self.config.update(user_input)
+                    self.config[CONF_PATH] = ""
+                    self.config[CONF_DEVICE_BAUD] = DEFAULT_DEVICE_BAUD
 
-                return await self._show_form(step="parameters1")
+                    return await self._show_form(step="parameters1")
+                
+                errors = {}
+                errors["base"] = error_key
+                return await self._show_form(step="myethernet", errors=errors, defaults=user_input) # keep the old user settings in the interface
 
         _LOGGER.debug(f"async_step_myethernet, select entity validation errors {errors}")
         
@@ -304,30 +346,25 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
     async def async_step_parameters1(self, user_input=None):
         """Config flow step 1."""
         #_LOGGER.debug(f"async_step_parameters1,  step is 1 - {self.current_pos}")
-        self.config.update(user_input)
+        if user_input:
+            self.config.update(user_input)
         
         self.current_pos = -1
 
-        if CONF_EMULATION_MODE in user_input:
+        if user_input and CONF_EMULATION_MODE in user_input:
             self.step_sequence = self.create_parameters_sequence(user_input[CONF_EMULATION_MODE])
             if len(self.step_sequence) == 0:
                 _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE set to {user_input[CONF_EMULATION_MODE]} **********************************")
-                return self.async_abort(reason="emulation_mode_error")
+                return self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
         else:
             _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE not in user_input **********************************")
-            return self.async_abort(reason="emulation_mode_error")
+            return self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
         #_LOGGER.debug(f"async_step_parameters1 {user_input}")
         return await self.gotonext(user_input)
 
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle a user config flow."""
-        # determine if a panel connection has already been made and stop a second connection
-        # _LOGGER.debug("Visonic async_step_user")
-        #if self._async_current_entries():
-            #return self.async_abort(reason="already_configured")
-        #self.dumpMyState()
-
         # is this a raw configuration (not called from importing yaml)
         if not user_input:
             #_LOGGER.debug("Visonic in async_step_user - trigger user input")
@@ -339,7 +376,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         info = await self.validate_input(user_input)
         if info is not None:
             return self.async_create_entry(title=info["title"], data=user_input)
-        return self.async_abort(reason="device_error")
+        return self.async_abort(reason=TRANSLATE_ERROR_DEVICE)
 
     # this is run to import the configuration.yaml parameters
     async def async_step_import(self, import_config):
@@ -379,7 +416,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
                 str(er),
             )
             # _LOGGER.debug("     The current data is %s", import_config)
-            return self.async_abort(reason="settings_missing")
+            return self.async_abort(reason=TRANSLATE_ERROR_SETTINGS_MISSING)
 
         return await self.async_step_user(data)
 
@@ -440,10 +477,10 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
                         self.step_sequence.remove(2) # remove the init parameters and only include modifyable
                     if len(self.step_sequence) == 0:
                         _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE set to {self.config[CONF_EMULATION_MODE]} **********************************")
-                        return await self.async_abort(reason="emulation_mode_error")
+                        return await self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
                 else:
                     _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE not in self.config **********************************")
-                    return await self.async_abort(reason="emulation_mode_error")
+                    return await self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
                 return await self.gotonext()
 
                 #self.current_pos = -1
@@ -452,7 +489,7 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
             else:
                 _LOGGER.debug(f"Edit config option settings type = {t}, aborting")
         
-        return self.async_abort(reason="device_error")
+        return self.async_abort(reason=TRANSLATE_ERROR_DEVICE)
 
         
 

@@ -11,7 +11,9 @@
 		"error": {
 			"eth_or_usb": "Moet Ethernet of USB zijn",
 			"emulation_mode_error": "Onjuiste instelling voor emulatiemodus",
-			"unknown": "Onverwachte fout"
+			"unknown": "Onverwachte fout",
+  		    "cannot_connect_timeout": "Connection timed out. Ensure the device is online.",
+			"cannot_connect_refused": "Connection refused. Is the ESPHome Stream Server active?"
 		},
 		"step": {
 			"device": {

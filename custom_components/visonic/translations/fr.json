@@ -11,7 +11,9 @@
         "error": {
             "eth_or_usb": "Doit \u00eatre Ethernet ou USB",
             "emulation_mode_error": "Param\u00e8tre de mode d'\u00e9mulation incorrect",
-            "unknown": "Erreur inattendue"
+            "unknown": "Erreur inattendue",
+  		    "cannot_connect_timeout": "Connection timed out. Ensure the device is online.",
+			"cannot_connect_refused": "Connection refused. Is the ESPHome Stream Server active?"
         },
         "step": {
             "device": {
