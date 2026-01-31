@@ -360,7 +360,7 @@ pmSendMsg = {  #                        data                                    
    Send.RESTORE      : VisonicCommand(convertByteArray('AB 06 00 00 00 00 00 00 00 00 00 43')         , None                        ,  True, False,      SendDebugM, 0.0, "Restore Connection" ),             # It can take multiple of these to put the panel back in to powerlink
    Send.ENROL        : VisonicCommand(convertByteArray('AB 0A 00 00 99 99 00 00 00 00 00 43')         , None                        ,  True, False,      SendDebugM, 2.5, "Auto-Enrol PowerMax/Master" ),     # should get a reply of [0xAB] but its not guaranteed
    Send.INIT         : VisonicCommand(convertByteArray('AB 0A 00 01 00 00 00 00 00 00 00 43')         , None                        ,  True, False,      SendDebugM, 3.0, "Init PowerLink Connection" ),
-   Send.IMAGE_FB     : VisonicCommand(convertByteArray('AB 0E 00 17 1E 00 00 03 01 05 00 43')         , None                        ,  True, False,      SendDebugM, 0.0, "PowerMaster after jpg feedback" ), # 
+   # Send.IMAGE_FB     : VisonicCommand(convertByteArray('AB 0E 00 17 1E 00 00 03 01 05 00 43')         , None                        ,  True, False,      SendDebugM, 0.0, "PowerMaster after jpg feedback" ), # 
 
    Send.X10NAMES     : VisonicCommand(convertByteArray('AC 00 00 00 00 00 00 00 00 00 00 43')         , [Receive.X10_NAMES]         , False, False,      SendDebugM, 0.0, "Requesting X10 Names" ),
    Send.GET_IMAGE    : VisonicCommand(convertByteArray('AD 99 99 0A FF FF 00 00 00 00 00 43')         , [Receive.IMAGE_MGMT]        ,  True, False,      SendDebugI, 0.0, "Requesting JPG Image" ),           # The first 99 might be the number of images. Request a jpg image, second 99 is the zone.  
@@ -4644,10 +4644,10 @@ class PacketHandling(ProtocolBase):
     def _handle_msgtypeAD(self, data):  # PowerLink Message
         """ MsgType=AD - Panel Powerlink Messages """
         log.debug(f"[handle_msgtypeAD]  data {toString(data)}")
-        if data[2] == 0x00: # the request was accepted by the panel
-            if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
-                log.debug(f"[handle_msgtypeAD]      adding Image FB to send list")
-                self._add_message_to_send_queue(Send.IMAGE_FB)
+        #if data[2] == 0x00: # the request was accepted by the panel
+        #    if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
+        #        log.debug(f"[handle_msgtypeAD]      adding Image FB to send list")
+        #        self._add_message_to_send_queue(Send.IMAGE_FB)
 
     def _checkallsame(self, val, b : bytearray) -> []:
         retval = []
@@ -5783,7 +5783,7 @@ class PacketHandling(ProtocolBase):
                     # Assume that we are managing the interaction/protocol with the panel
                     self.ignoreF4DataMessages = False
 
-                    self._add_message_to_send_queue(Send.IMAGE_FB)
+                    #self._add_message_to_send_queue(Send.IMAGE_FB)
                     #self._add_message_to_send_queue(convertByteArray('0d ab 0e 00 17 1e 00 00 03 01 05 00 43 c5 0a')) # 43 should be bytearray([Packet.POWERLINK_TERMINAL])
 
                     # 0d f4 10 00 01 04 00 55 1e 01 f7 fc 0a
@@ -5873,14 +5873,13 @@ class PacketHandling(ProtocolBase):
 
                         if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD]:
                             # Assume that we are managing the interaction/protocol with the panel
-                            if total_images != 0xFF:
-                                fnoseA = 0xF7
-                                fnoseB = 0xFC
-                                # Tell the panel we received that one OK, we're ready for the next
-                                #                                         0d f4 07 00 01 04 55 1e 01 00 15 21 0a  
-                                self._add_message_to_send_queue(convertByteArray(f'0d f4 07 00 01 04 {zone:>02} {hexify(unique_id):>02} {hexify(image_id):>02} 00 {hexify(fnoseA):>02} {hexify(fnoseB):>02} 0a'))
+                            fnoseA = 0x15
+                            fnoseB = 0x21
+                            # Tell the panel we received that one OK, we're ready for the next
+                            #                                         0d f4 07 00 01 04 55 1e 01 00 15 21 0a  
+                            self._add_message_to_send_queue(convertByteArray(f'0d f4 07 00 01 04 {zone:>02} {hexify(unique_id):>02} {hexify(image_id):>02} 00 {hexify(fnoseA):>02} {hexify(fnoseB):>02} 0a'))
 
-                            if lastimage:
+                            if not lastimage:
                                 fnoseA = 0xF7
                                 fnoseB = 0xFC
                                 # Tell the panel we received that one OK, we're ready for the next

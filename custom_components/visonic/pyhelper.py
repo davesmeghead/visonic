@@ -708,6 +708,9 @@ class ImageRecord:
             self.buffer[self.current : self.current+datalen] = databuffer
             self.current = self.current + datalen
             if self.current == self.size:
+                # Could check the data for a jpg Start of Image "FF D8", Quantization Table "FF DB" and Start of Frame "FF C0", and maybe end of image "FF D9"
+                #   So "ff d8 ff db" at the start and "ff d9" at the end
+                #      "ff c0" is in the middle for the start of the image data itself
                 self.ongoing = False
             log.debug(f"[handle_msgtypeF4]         current position {self.current}    next sequence = {self.next_sequence}       ongoing = {self.ongoing}")
             return True
