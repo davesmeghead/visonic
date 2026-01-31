@@ -1998,13 +1998,38 @@ class VisonicClient:
             try:
                 #self.logstate_debug(f"Setting TCP socket Options {address} {port}")
                 self.logstate_debug("Creating TCP Connection, Creating socket and setting socket options")
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+
+                # Detect if the address is IPv6 (contains a colon)
+                if ":" in address:
+                    family = socket.AF_INET6
+                    timeout = 5.0         # timout longer as may take longer over v6 or thread networks
+                else:
+                    family = socket.AF_INET
+                    timeout = 1.0
+
+                # Create the socket using the detected family
+                sock = socket.socket(family, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-                sock.setblocking(1)  # Set blocking to on, this is the default but just make sure
-                sock.settimeout(1.0)  # set timeout to 1 second to flush the receive buffer
-                self.logstate_debug("Creating TCP Connection, Making Connection")
+                sock.setblocking(1)   # Set blocking to on, this is the default but just make sure
+
+                # Connection Logic
+                sock.settimeout(timeout) 
+
+                # sock.connect works for both v4 and v6 tuples
+                self.logstate_debug(f"Creating TCP {family.name} Connection to {address}")
                 sock.connect((address, port))
+
+                sock.settimeout(1.0) # Reset to original 1s timeout for flushing
+
+                #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+                #sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                #sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                #sock.setblocking(1)  # Set blocking to on, this is the default but just make sure
+                #sock.settimeout(1.0)  # set timeout to 1 second to flush the receive buffer
+                #self.logstate_debug("Creating TCP Connection, Making Connection")
+                #sock.connect((address, port))
 
                 # Flush the buffer, receive any data and dump it
                 try:
