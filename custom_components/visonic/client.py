@@ -80,7 +80,7 @@ from .const import (
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
     CONF_EPROM_ATTRIBUTES,
-    CONF_DEVICE_BAUD,
+#    CONF_DEVICE_BAUD,
     CONF_DEVICE_TYPE,
     CONF_DOWNLOAD_CODE,
     CONF_EMULATION_MODE,
@@ -114,7 +114,6 @@ from .const import (
     PANEL_ATTRIBUTE_NAME,
     DEVICE_ATTRIBUTE_NAME,
     DEFAULT_DEVICE_BAUD,
-    DEVICE_TYPE_ZIGBEE,
     DEVICE_TYPE_ETHERNET,
     DEVICE_TYPE_USB,
     AvailableNotifications,
@@ -347,15 +346,16 @@ class ClientVisonicProtocol(asyncio.Protocol):
 
     def _stop_transport(self):
         if self._transport is not None:
-            _LOGGER.debug("[ClientVisonicProtocol] close called on protocol => closed")
+            _LOGGER.debug("[ClientVisonicProtocol] protocol closing down => closing transport")
             self._transport.close()
         self._transport = None
 
     def connection_lost(self, exc):
         if self.client is not None:
-            _LOGGER.debug(f"[ClientVisonicProtocol] connection_lost Booooo,     setting to reconnect if allowed by the user config")
+            _LOGGER.debug(f"[ClientVisonicProtocol] connection_lost Booooo, stopping transport and calling client handler")
             self._stop_transport()
-            self.client.hass.loop.create_task(self.client.async_reconnect_and_restart(allow_comms = True, force_reconnect = False, allow_restart = True)) # Try a simple reconnect but only if user config allows
+            self.client.connection_lost(exc)
+        self.client = None
 
     def close(self):
         if self.client is not None:
@@ -403,10 +403,12 @@ class VisonicClient:
         self.alreadyDoingThisFunction = False
         
         self.cvp = None
+        self._doing_serial_baud_change = False
         self.visonicCommsTask = None
         self.visonicProtocol : AlPanelInterface = None
         self.SystemStarted = False
         self._createdAlarmPanel = False
+        self._serial_baud_rate = 9600
 
         # variables for creating the event log for csv and xml
         self.csvdata = None
@@ -1195,23 +1197,53 @@ class VisonicClient:
 
     def changeBaud(self, baud : int):
 
-        async def set_panel_baud_and_select_entity(baud: int):
+        async def set_panel_baud_and_change_serial_connection(path, baud: int):
             self.logstate_debug(f"Setting Baud {baud}")
             retval = await self.visonicProtocol.setPanelBaud(baud) # It will only do this for powermaster panels and when in powerlink mode
             if retval == AlCommandStatus.SUCCESS:
-                self.logstate_debug(f"    Baud set, send queue empty")
-                self.setSelectEntity(str(baud))
-                self.logstate_debug(f"Select updated successfully!")
+                self.logstate_debug(f"    Baud set in panel, send queue is empty")
+                # close existing connection
+                if self.cvp is not None:
+                    self._doing_serial_baud_change = True
+                    await self._stopCommsTask()
+                    # wait for it to close
+                    while self._doing_serial_baud_change:
+                        self.logstate_debug(f"Waiting for protocol handler to close")
+                        await asyncio.sleep(0.2)
+                # change serial connection
+                (self.visonicCommsTask, self.cvp) = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud=baud)
+                self._serial_baud_rate = baud
+                self.logstate_debug(f"Baud rate updated successfully!")
             else:
                 self.logstate_debug(f"Panel baud not changed {retval}")
 
-        if self.select_entity_id and valid_entity_id(self.select_entity_id) and self.visonicProtocol is not None:
+        async def set_panel_baud_and_select_entity(baud: int):
+            if self.select_entity_id and valid_entity_id(self.select_entity_id):
+                self.logstate_debug(f"Setting Baud {baud}")
+                retval = await self.visonicProtocol.setPanelBaud(baud) # It will only do this for powermaster panels and when in powerlink mode
+                if retval == AlCommandStatus.SUCCESS:
+                    self.logstate_debug(f"    Baud set in panel, send queue is empty")
+                    self.setSelectEntity(str(baud))
+                    self.logstate_debug(f"Select updated successfully!")
+                else:
+                    self.logstate_debug(f"Panel baud not changed {retval}")
+            else:
+                self.logstate_debug(f"NOT attempting to change Baud {baud}, entity id invalid")
+
+        if self.SystemStarted and self.visonicProtocol is not None:
             try:
-                self.hass.loop.create_task(set_panel_baud_and_select_entity(baud))
+                device_type = self.config.get(CONF_DEVICE_TYPE, "")     # This must be set so default is an invalid setting
+                self.logstate_debug("[change baud] Comms Device Type is %s", device_type)
+                if device_type == DEVICE_TYPE_ETHERNET:
+                    self.hass.loop.create_task(set_panel_baud_and_select_entity(baud))
+                elif device_type == DEVICE_TYPE_USB:
+                    path = self.config.get(CONF_PATH, "COM0")
+                    self.hass.loop.create_task(set_panel_baud_and_change_serial_connection(path, baud))
+
             except ValueError as e:
                 self.logstate_debug(f"Failed to update select: {e}")
         else:
-            self.logstate_debug(f"       ESPHome Select Entity not set or invalid: {self.select_entity_id}")
+            self.logstate_debug(f"       System not started or ESPHome Select Entity not set or invalid: {self.select_entity_id}")
         
     def sendEvent(self, event_id: AlCondition | PanelCondition, data : dict):
 
@@ -1434,20 +1466,25 @@ class VisonicClient:
         
         self.onPanelChangeHandler(event_id = AlCondition.PUSH_CHANGE, data = {} )  # push through a panel update to the HA Frontend of any changes
 
-        if ( self.select_entity_id and valid_entity_id(self.select_entity_id) and 
+        device_type = self.config.get(CONF_DEVICE_TYPE, "")     # This must be set so default is an invalid setting
+
+        if ( (device_type == DEVICE_TYPE_USB or (device_type == DEVICE_TYPE_ETHERNET and self.select_entity_id and valid_entity_id(self.select_entity_id))) and 
              self.visonicProtocol is not None and 
              len(self.connection_baud_list) > 0 and 
              termination in [AlTerminationType.NO_DATA_FROM_PANEL_NEVER_CONNECTED, AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED]
            ):
-            # If it's a disconnection (we did have a connection and data) and we can change baud then make sure it's not a discconnect because of a baud change
-
             # Try the sequence of baud value
             baud = self.connection_baud_list.pop(0)
 
             s = 'disconnected' if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED else 'never connected'
             self.logstate_debug(f"No data from panel ({s}) so try a different baud rate {baud}")
 
-            self.setSelectEntity(str(baud))
+            # for the next reconnection.....
+            if device_type == DEVICE_TYPE_USB:
+                self._serial_baud_rate = baud
+            else:
+                self.setSelectEntity(str(baud))
+            
             if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED:
                 # If it's a disconnection (we did have a connection and data) and we can change baud then make sure it's not a discconnect because of a baud change
                 self.panel_disconnection_counter += 1
@@ -1945,6 +1982,13 @@ class VisonicClient:
     # =======================================================================================================
     # =======================================================================================================
 
+    # When the connection is closed the connection protocol handler calls this after closing the transport
+    def connection_lost(self, exc):
+        _LOGGER.debug(f"[Client connection_lost] will reconnect if allowed by the user config")
+        if not self._doing_serial_baud_change:
+            self.hass.loop.create_task(self.async_reconnect_and_restart(allow_comms = True, force_reconnect = False, allow_restart = True)) # Try a simple reconnect but only if user config allows
+        self._doing_serial_baud_change = False
+
     # Create a connection using asyncio using an ip and port
     async def async_create_tcp_visonic_connection(self, vp : VisonicProtocol, address, port):
         """Create Visonic manager class, returns tcp transport coroutine."""
@@ -2009,12 +2053,11 @@ class VisonicClient:
         self.tell_em = thisisme
 
     # Create a connection using asyncio through a linux port (usb or rs232)
-    async def async_create_usb_visonic_connection(self, vp : VisonicProtocol, path, baud_s=str(DEFAULT_DEVICE_BAUD)):
+    async def async_create_usb_visonic_connection(self, vp : VisonicProtocol, path, baud=DEFAULT_DEVICE_BAUD):
         """Create Visonic manager class, returns rs232 transport coroutine."""
         from serial_asyncio_fast import create_serial_connection
 
         # setup serial connection
-        baud = int(baud_s)
         self.logstate_debug(f"Creating USB Connection {path=} {baud=}")
 
         # use default protocol if not specified
@@ -2065,8 +2108,8 @@ class VisonicClient:
                 (self.visonicCommsTask, self.cvp) = await self.async_create_tcp_visonic_connection(vp=self.visonicProtocol, address=host, port=port)
             elif device_type == DEVICE_TYPE_USB:
                 path = self.config.get(CONF_PATH, "COM0")
-                baud_rate = self.config.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD)
-                (self.visonicCommsTask, self.cvp) = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud_s=baud_rate)
+                #baud_rate = self.config.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD)
+                (self.visonicCommsTask, self.cvp) = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud=self._serial_baud_rate)
             retval = self.cvp is not None and self.visonicCommsTask is not None
         return retval
 

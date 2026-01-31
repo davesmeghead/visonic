@@ -641,8 +641,9 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEn
 
     if changed:    
         hass.config_entries.async_update_entry(config_entry, options=conf, version=version)
-
-    _LOGGER.info("Migration to version %s successful", config_entry.version)
+        _LOGGER.info("Migration to version %s successful", config_entry.version)
+    else:
+        _LOGGER.info("Migration. Nothing changed, version is currently %s", config_entry.version)
     return True
 
 
