@@ -285,7 +285,7 @@ class VisonicClient:
     # Create a connection using asyncio through a linux port (usb or rs232)
     async def async_create_usb_visonic_connection(self, vp : VisonicProtocol, path, baud="9600"):
         """Create Visonic manager class, returns rs232 transport coroutine."""
-        from serial_asyncio import create_serial_connection
+        from serial_asyncio_fast import create_serial_connection
 
         print("Setting USB Options")
 

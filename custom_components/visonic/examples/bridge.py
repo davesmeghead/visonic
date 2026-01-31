@@ -17,7 +17,7 @@ import time
 import copy
 import math
 import argparse
-import serial_asyncio
+#import serial_asyncio_fast
 import datetime
 
 from collections import defaultdict
@@ -210,7 +210,7 @@ def create_usb_visonic_connection(
     port, baud=9600, protocol=ProtocolBase, loop=None, receiver=None, sender=None, name="", debs=False,
 ):
     """Create Visonic manager class, returns rs232 transport coroutine."""
-    from serial_asyncio import create_serial_connection
+    from serial_asyncio_fast import create_serial_connection
 
     # use default protocol if not specified
     protocol = partial(protocol, receiver=receiver, sender=sender, name=name, deb=debs, loop=loop if loop else asyncio.get_event_loop(),)
