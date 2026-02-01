@@ -184,6 +184,27 @@ api:
                   success: false
                   error_message: "Relay action is currently disabled."
 
+# Add this to broadcast your specific service
+mdns:
+  services:
+    - service: "_visonic"        # Do not change
+      protocol: "_tcp"           # Do not change
+      port: !secret network_port # Do not change
+      txt:
+        # All settings must be a string, set the panel number in a string, if you want panel 0 then you can delete the following line
+        panel: ${PANEL_NUMBER}
+        # Only include this if you have a PowerMaster panel, if PowerMax then delete the following lines
+        baud_entity: !lambda |-
+            std::string be = "select.${FRIENDLY_NAME}_baud_rate";
+            for (auto &c : be) {
+                if (isalnum(c) || c == '.') {
+                    c = std::tolower(c);   // Keep letters/digits, lowercase letters, and full stops
+                } else {
+                    c = '_';               // Replace all other characters with underscore (including underscores)
+                }
+            }
+            return be;
+
 ota:
   - platform: esphome
     password: !secret device_password
@@ -328,7 +349,6 @@ script:
             id(uart_bus_panel).set_baud_rate(baud);
             id(uart_bus_panel).load_settings();
             uart_msg2 = uart_msg2 + " to " + std::to_string(id(uart_bus_panel).get_baud_rate()) + " (" + std::to_string(baud) + ")";
-
             id(log_message).execute(uart_msg2);
             ESP_LOGD("change_baud_rate", uart_msg2.c_str());
           }
