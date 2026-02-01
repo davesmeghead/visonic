@@ -2,6 +2,7 @@
 
 import logging
 import re
+from copy import deepcopy
 
 import voluptuous as vol
 from typing import Any
@@ -115,6 +116,7 @@ class VisonicSchema:
             **self.create_parameters12(self.options),
             **self.create_parameters13(self.options),
         }
+        # The key in initialise is not a text string, it is a vol.Required / vol.Optional structure
         for key in initialise:
             try:
                 d = key.default()
@@ -152,6 +154,7 @@ class VisonicSchema:
             vol.Required(CONF_PORT, default=self.create_default(options, CONF_PORT, str(DEFAULT_DEVICE_PORT))): str,
             vol.Optional(
                 CONF_ESPHOME_ENTITY_SELECT,
+                default=self.create_default(options, CONF_ESPHOME_ENTITY_SELECT, "")
             ): EntitySelector(
                 EntitySelectorConfig(
                     domain=["select"],
@@ -316,47 +319,53 @@ class VisonicSchema:
 
     def create_schema_device(self, defaults=None):
         """Create schema device."""
-        self.set_default_options(defaults)
+        self.update_options(defaults)
         return vol.Schema(self.CONFIG_SCHEMA_DEVICE)
 
     def create_schema_ethernet(self, defaults=None):
         """Create schema ethernet."""
-        self.set_default_options(defaults)
+        self.update_options(defaults)
         return vol.Schema(self.create_parameters_ethernet(self.options))
         #return vol.Schema(self.CONFIG_SCHEMA_ETHERNET)
 
     def create_schema_usb(self, defaults=None):
         """Create schema usb."""
-        self.set_default_options(defaults)
+        self.update_options(defaults)
         return vol.Schema(self.CONFIG_SCHEMA_USB)
 
     def create_schema_parameters1(self, defaults=None):
         """Create schema parameters 1."""
-        self.set_default_options(defaults)
+        self.update_options(defaults)
         return vol.Schema(self.create_parameters1(self.options))
 
     def create_schema_parameters10(self, defaults=None):
         """Create schema parameters 10."""
-        self.set_default_options(defaults)
+        self.update_options(defaults)
         return vol.Schema(self.create_parameters10(self.options))
 
     def create_schema_parameters11(self, defaults=None, isPowerlinkEmulation : bool = False):
         """Create schema parameters 11."""
-        self.set_default_options(defaults)
+        self.update_options(defaults)
         return vol.Schema(self.create_parameters11(self.options, isPowerlinkEmulation))
 
     def create_schema_parameters12(self, defaults=None):
         """Create schema parameters 12."""
-        self.set_default_options(defaults)
+        self.update_options(defaults)
         return vol.Schema(self.create_parameters12(self.options))
 
     def create_schema_parameters13(self, defaults=None):
         """Create schema parameters 13."""
-        self.set_default_options(defaults)
+        self.update_options(defaults)
         return vol.Schema(self.create_parameters13(self.options))
 
-    def set_default_options(self, options: dict):
+    def update_options(self, options: dict):
         """Set schema defaults."""
         if options:
             for key in options:
                 self.options[key] = options[key]
+
+    def getConfig(self) -> dict:
+        dc = deepcopy(self.options)
+        # The key in dc is not a text string, it is a vol.Required / vol.Optional structure
+        return {str(k): v for k, v in dc.items()}
+

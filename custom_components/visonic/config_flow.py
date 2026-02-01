@@ -14,19 +14,25 @@ from .const import (
     CONF_SIREN_SOUNDING,
     CONF_PANEL_NUMBER,
     CONF_EMULATION_MODE,
+    CONF_ESPHOME_ENTITY_SELECT,
+    CONF_ALARM_NOTIFICATIONS,
+    CONF_NAME,
+    CONF_ENABLE_REMOTE_ARM,
+    CONF_ENABLE_REMOTE_DISARM,
+    CONF_ENABLE_SENSOR_BYPASS,
+    CONF_ARM_HOME_ENABLED,
     available_emulation_modes,
     DOMAIN, 
     VISONIC_UNIQUE_NAME,
-    CONF_ALARM_NOTIFICATIONS,
     DEFAULT_DEVICE_BAUD,
     DEVICE_TYPE_ETHERNET,
     DEVICE_TYPE_USB,
-    CONF_ESPHOME_ENTITY_SELECT,
 )
 
 from homeassistant.helpers import config_validation as cv
 from homeassistant import data_entry_flow
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -34,7 +40,6 @@ from homeassistant.config_entries import (
     OptionsFlow,
     CONN_CLASS_LOCAL_POLL,
     HANDLERS,
-#    ENTRY_STATE_LOADED,
 )
 from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT
 from homeassistant.core import callback
@@ -84,7 +89,7 @@ class MyHandlers(data_entry_flow.FlowHandler):
             else:
                 self.config[cfg] = lst[cfg]
 
-    async def _show_form(self, step: str = "device", placeholders=None, errors=None, defaults=None):
+    def _show_form(self, step: str = "device", placeholders=None, errors=None, defaults=None):
         """Show the form to the user."""
         _LOGGER.debug(f"show_form start {step=} {placeholders=} {errors=} {defaults=}")
 
@@ -121,46 +126,46 @@ class MyHandlers(data_entry_flow.FlowHandler):
             errors=errors if errors else {},
             #description_placeholders=placeholders if placeholders else {},
         )
-
-    async def gotonext(self, user_input=None):
+        
+    def gotonext(self, user_input=None):
         if user_input is not None:
             self.config.update(user_input)
         self.current_pos += 1
         if self.current_pos == len(self.step_sequence):
-            return await self.processcomplete()
-        return await self._show_form(step="parameters"+str(self.step_sequence[self.current_pos]))
+            return self.processcomplete()
+        return self._show_form(step="parameters"+str(self.step_sequence[self.current_pos]))
 
     async def async_step_parameters10(self, user_input=None):
         """Config flow step 10."""
         #_LOGGER.debug(f"show_form step is 10 - {self.current_pos} {user_input=}")
-        return await self.gotonext(user_input)
+        return self.gotonext(user_input)
 
     async def async_step_parameters11(self, user_input=None):
         """Config flow step 11."""
         #_LOGGER.debug(f"show_form step is 11 - {self.current_pos} {user_input=}")
-        return await self.gotonext(user_input)
+        return self.gotonext(user_input)
 
     async def async_step_parameters12(self, user_input=None):
         """Config flow step 12."""
         #_LOGGER.debug(f"show_form step is 12 - {self.current_pos} {user_input=}")
-        return await self.gotonext(user_input)
+        return self.gotonext(user_input)
 
     async def async_step_parameters13(self, user_input=None):
         """Config flow step 13."""
         #_LOGGER.debug(f"show_form step is 13 - {self.current_pos} {user_input=}")
-        return await self.gotonext(user_input)
+        return self.gotonext(user_input)
 
-    async def validate_input(self, data: dict):
+    def validate_input(self, data: dict):
         """Validate the input."""
         # Validation to be implemented
         # return a temporary title to use
         return {"title": "Alarm Panel"}
 
-    async def processcomplete(self):
+    def processcomplete(self):
         """Config flow process complete."""
         try:
             #_LOGGER.debug('processcomplete')
-            info = await self.validate_input(self.config)
+            info = self.validate_input(self.config)
             if info is not None:
                 # convert comma separated string to a list
                 if CONF_SIREN_SOUNDING in self.config:
@@ -202,13 +207,13 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         ConfigFlow.__init__(self)
         _LOGGER.debug("Visonic ConfigFlow init")
 
-    async def validate_visonic_connection(self, host: str, port: int) -> str:
+    def validate_visonic_connection(self, host: str, port: int) -> str:
         """Attempt to open a socket to the ethernet/thread device. Returns error key or None."""
         try:
             # Detect family
             family = socket.AF_INET6 if ":" in host else socket.AF_INET
 
-            _LOGGER.debug(f"validate_visonic_connection, family {family}   host {host}   port {port}")
+            _LOGGER.debug(f"validate_visonic_connection, family {family.name}   host {host}   port {port}")
             
             # We use a short 3s timeout for the UI check to keep it snappy
             sock = socket.socket(family, socket.SOCK_STREAM)
@@ -254,17 +259,18 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         #self.dumpMyState()
         if user_input is not None and CONF_DEVICE_TYPE in user_input and CONF_PANEL_NUMBER in user_input:
             panel_num = max(0, int(user_input[CONF_PANEL_NUMBER]))
-            await self.async_set_unique_id(VISONIC_UNIQUE_NAME + " Panel " + str(panel_num))
+            await self.async_set_unique_id(f"{VISONIC_UNIQUE_NAME}_panel_{panel_num}".lower())
+            #await self.async_set_unique_id(VISONIC_UNIQUE_NAME + " Panel " + str(panel_num))
             self._abort_if_unique_id_configured()
             self.config[CONF_PANEL_NUMBER] = panel_num
             self.config[CONF_DEVICE_TYPE] = user_input[CONF_DEVICE_TYPE].lower()
             if self.config[CONF_DEVICE_TYPE] == DEVICE_TYPE_ETHERNET:
-                return await self._show_form(step="myethernet")
+                return self._show_form(step="myethernet")
             elif self.config[CONF_DEVICE_TYPE] == DEVICE_TYPE_USB:
-                return await self._show_form(step="myusb")
+                return self._show_form(step="myusb")
         errors = {}
         errors["base"] = TRANSLATE_ERROR_ETHERNET_OR_USB
-        return await self._show_form(step="device", errors=errors)
+        return self._show_form(step="device", errors=errors)
 
     def select_entity_or_empty(self, value):
         """Return a validator that checks entity is empty or a valid select entity."""
@@ -306,22 +312,20 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
             if not errors:
                 host = user_input.get(CONF_HOST, "")
                 port = user_input.get(CONF_PORT, "0")
-                error_key = await self.validate_visonic_connection(host, int(port))
+                error_key = self.validate_visonic_connection(host, int(port))
                 
                 if error_key is None:
                     self.config.update(user_input)
                     self.config[CONF_PATH] = ""
                     self.config[CONF_DEVICE_BAUD] = DEFAULT_DEVICE_BAUD
 
-                    return await self._show_form(step="parameters1")
+                    return self._show_form(step="parameters1")
                 
-                errors = {}
-                errors["base"] = error_key
-                return await self._show_form(step="myethernet", errors=errors, defaults=user_input) # keep the old user settings in the interface
+                return self._show_form(step="myethernet", errors={"base": error_key}) # keep the old user settings in the interface
 
         _LOGGER.debug(f"async_step_myethernet, select entity validation errors {errors}")
         
-        return await self._show_form(step="myethernet", errors=errors)
+        return self._show_form(step="myethernet", errors=errors)
 
     # ask for the usb settings
     async def async_step_myusb(self, user_input=None):
@@ -330,81 +334,140 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         self.config[CONF_HOST] = ""
         self.config[CONF_PORT] = ""
         self.config[CONF_ESPHOME_ENTITY_SELECT] = ""
-        return await self._show_form(step="parameters1")
+        return self._show_form(step="parameters1")
 
-    async def async_step_zeroconf(self, discovery_info):
+    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo):
         """Handle discovery from Zeroconf."""
-        # Home Assistant has already resolved the IP
-        _LOGGER.debug(f"[async_step_zeroconf] discovery_info {discovery_info}")
 
-        # Decode the panel number, if not present then assume 0
-        panel_num = 0
-        baud_entity = ""
+        def _get(properties, prop, default=None):
+            value = properties.get(prop, default)
+            if isinstance(value, bytes):
+                return value.decode("utf-8")
+            return default if value is None else str(value)
+
+        _LOGGER.debug("[async_step_zeroconf] Visonic Alarm device found via zeroconf: %s", discovery_info)
+        properties = discovery_info.properties or {}
+
+        # Convert to integer with a fallback/default of 0
+        try:
+            panel_num = max(0, int(_get(properties, "panel", "0")))
+        except (ValueError, TypeError):
+            panel_num = 0
         
-        if "properties" in discovery_info:
-            # Decode the panel identifier, if present
-            if "panel" in discovery_info.properties:
-                panel_num_str = discovery_info.properties.get("panel")
-                if isinstance(panel_num_str, bytes):
-                    panel_num_str = panel_num_str.decode("utf-8")
-
-                # Convert to integer with a fallback/default of 0
-                try:
-                    panel_num = max(0, int(panel_num_str))
-                except (ValueError, TypeError):
-                    panel_num = 0
-            
-            # Decode the select baud rate entity, if present
-            if "baud_entity" in discovery_info.properties:
-                # If the baud select entity has been set in the esphome yaml then check to make sure it exists
-                #    This assumes that the ESPHome integration has added it to create the entities
-                baud_entity = discovery_info.properties.get("baud_entity")
-                if isinstance(baud_entity, bytes):
-                    baud_entity = baud_entity.decode("utf-8")
-                _LOGGER.debug(f"[async_step_zeroconf] baud select entity set to {baud_entity}")
-
-        _LOGGER.debug(f"[async_step_zeroconf] resolved down to {panel_num=}   ...   checking for unique panel identifier")
+        #_LOGGER.debug(f"[async_step_zeroconf] resolved down to {panel_num=}   ...   checking for unique panel identifier")
         
-        # Set the unique id for this hub
-        await self.async_set_unique_id(VISONIC_UNIQUE_NAME + " Panel " + str(panel_num))
-        # Abort if it's already been configured (for this panel number)
-        self._abort_if_unique_id_configured()
-
+        # If here then the panel number is unique
         host = discovery_info.host
         port = discovery_info.port
         hostname = discovery_info.hostname
+        self.name = discovery_info.name.removesuffix("._visonic._tcp.local.")
+        index = hostname.find(".")
+        baud_entity = _get(properties, "baud_entity", "").lower().strip()
 
-        self.config[CONF_DEVICE_TYPE] = DEVICE_TYPE_ETHERNET
-        self.config[CONF_HOST] = host
-        self.config[CONF_PORT] = str(port)
-        self.config[CONF_ESPHOME_ENTITY_SELECT] = baud_entity
-        self.config[CONF_PANEL_NUMBER] = panel_num
+        # Set the unique id for this hub
+        existing_config_entry = await self.async_set_unique_id(f"{VISONIC_UNIQUE_NAME}_panel_{panel_num}".lower()) # VISONIC_UNIQUE_NAME + " Panel " + str(panel_num)
+
+        # Sometimes, devices send an invalid zeroconf message with multiple addresses
+        # and one of them, which could end up being in discovery_info.host, is from a
+        # different device. If any of the discovery_info.ip_addresses matches the
+        # existing host, don't update the host.
+        if (
+            existing_config_entry
+            # Ignored entries don't have host
+            and CONF_HOST in existing_config_entry.data
+            and len(discovery_info.ip_addresses) > 1
+        ):
+            existing_host = existing_config_entry.data[CONF_HOST]
+            if existing_host != self.host:
+                if existing_host in [str(ip_address) for ip_address in discovery_info.ip_addresses]:
+                    host = existing_host
+                    _LOGGER.debug(f"[async_step_zeroconf] Resolved new host from an existing configuration for panel {panel_num}  host is {host}")
+
+        # Abort if it's already been configured (for this panel number)
+        #self._abort_if_unique_id_configured()
+        self._abort_if_unique_id_configured(
+            updates={CONF_HOST: host, CONF_PORT: str(port)}
+        )
+
+        # Need to set all the parameters that the first few GUIs would have completed
+        self.config.update({
+            CONF_DEVICE_TYPE: DEVICE_TYPE_ETHERNET,
+            CONF_HOST: host,
+            CONF_PORT: str(port),
+            CONF_ESPHOME_ENTITY_SELECT: baud_entity,
+            CONF_PANEL_NUMBER: panel_num,
+            CONF_PATH: "",
+            CONF_DEVICE_BAUD: DEFAULT_DEVICE_BAUD,
+        })
 
         # You can now pre-fill the configuration form
-        self.context["title_placeholders"] = {"name": "Visonic Device Detected"}
+        self.context["title_placeholders"] = {"name": f"Visonic Security - Panel {panel_num} ({self.name}) Device Detected"}
 
-        _LOGGER.debug(f"[async_step_zeroconf] {host=}    {port=}    {hostname=}    {panel_num=}    {baud_entity=}")
+        _LOGGER.debug(f"[async_step_zeroconf] {self.name=}    {host=}    {port=}    {hostname=}    {panel_num=}    {baud_entity=}")
 
-        return await self._show_form(step="myethernet", defaults = self.config)
+        return await self.async_step_zeroconf_confirm()
+        #return self._show_form(step="parameters1", defaults=self.config)
+
+    async def async_step_zeroconf_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle a flow initiated by zeroconf."""
+        if user_input is not None:
+            _LOGGER.debug(f"[async_step_zeroconf_confirm] Start")
+            # This check should always pass because the device has sent us its IP address
+            if self.validate_visonic_connection(self.config[CONF_HOST], int(self.config[CONF_PORT])) is not None:
+                _LOGGER.debug(f"[async_step_zeroconf_confirm] Aborting - TRANSLATE_ERROR_CONNECTION_REFUSED")
+                return self.async_abort(reason=TRANSLATE_ERROR_CONNECTION_REFUSED)
+
+            # As the schema has not been used this will return a deepcopy of default values
+            c = self.myschema.getConfig()
+
+            # Override some defaults to make the config 'full use' as it says in the string message to the user
+            c[CONF_ENABLE_REMOTE_ARM] = True
+            c[CONF_ENABLE_REMOTE_DISARM] = True
+            c[CONF_ENABLE_SENSOR_BYPASS] = True
+            c[CONF_ARM_HOME_ENABLED] = True
+
+            # Merge in user_input and the config values from the zeroconf function
+            c.update(user_input)
+            c.update(self.config)
+
+            # Check that all keys are strings
+            for k,v in c.items():
+                if not isinstance(k, str):
+                    _LOGGER.debug(f"[async_step_zeroconf_confirm] Not a string  {type(k)}   {k}")
+            
+            info = self.validate_input(c)
+            if info is not None:
+                _LOGGER.debug(f"[async_step_zeroconf_confirm] Creating Hub Entry")
+                return self.async_create_entry(title=info["title"], data=c)
+            _LOGGER.debug(f"[async_step_zeroconf_confirm] Aborting - TRANSLATE_ERROR_DEVICE")
+            return self.async_abort(reason=TRANSLATE_ERROR_DEVICE)
+        # Show a simple form to the user asking for confirmation
+        return self.async_show_form(
+            step_id="zeroconf_confirm",
+            description_placeholders={CONF_NAME: self.name},
+        )
 
     async def async_step_parameters1(self, user_input=None):
-        """Config flow step 1."""
-        #_LOGGER.debug(f"async_step_parameters1,  step is 1 - {self.current_pos}")
-        if user_input:
-            self.config.update(user_input)
-        
-        self.current_pos = -1
+        errors = {}
 
-        if user_input and CONF_EMULATION_MODE in user_input:
-            self.step_sequence = self.create_parameters_sequence(user_input[CONF_EMULATION_MODE])
-            if len(self.step_sequence) == 0:
-                _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE set to {user_input[CONF_EMULATION_MODE]} **********************************")
+        if user_input:
+            """Config flow step 1."""
+            _LOGGER.debug(f"async_step_parameters1,  step is 1 - {self.current_pos}    {user_input=}")
+            self.config.update(user_input)
+
+            self.current_pos = -1
+
+            if CONF_EMULATION_MODE in user_input:
+                self.step_sequence = self.create_parameters_sequence(user_input[CONF_EMULATION_MODE])
+                if len(self.step_sequence) == 0:
+                    _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE set to {user_input[CONF_EMULATION_MODE]} **********************************")
+                    return self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
+            else:
+                _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE not in user_input **********************************")
                 return self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
-        else:
-            _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE not in user_input **********************************")
-            return self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
-        #_LOGGER.debug(f"async_step_parameters1 {user_input}")
-        return await self.gotonext(user_input)
+            #_LOGGER.debug(f"async_step_parameters1 {user_input}")
+            return self.gotonext(user_input)
+        return self._show_form(step="parameters1", errors=errors)
 
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -412,12 +475,12 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         # is this a raw configuration (not called from importing yaml)
         if not user_input:
             #_LOGGER.debug("Visonic in async_step_user - trigger user input")
-            return await self._show_form(step="device")
+            return self._show_form(step="device")
 
         #_LOGGER.debug("Visonic async_step_user - importing a yaml config setup")
 
         # importing a yaml config setup
-        info = await self.validate_input(user_input)
+        info = self.validate_input(user_input)
         if info is not None:
             return self.async_create_entry(title=info["title"], data=user_input)
         return self.async_abort(reason=TRANSLATE_ERROR_DEVICE)
@@ -492,7 +555,7 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
         if config_entry is not None:
             # convert python map to dictionary and set defaults for the options flow handler
             c = self.combineSettings(config_entry)
-            self.myschema.set_default_options(options = c)
+            self.myschema.update_options(options = c)
             if CONF_EMULATION_MODE in c:
                 s = c[CONF_EMULATION_MODE]
                 self.PowerlinkRequested = s == available_emulation_modes[0]
@@ -517,19 +580,15 @@ class VisonicOptionsFlowHandler(OptionsFlow, MyHandlers):
 
                 if CONF_EMULATION_MODE in self.config:
                     self.step_sequence = self.create_parameters_sequence(self.config[CONF_EMULATION_MODE])
-                    if 2 in self.step_sequence:
-                        self.step_sequence.remove(2) # remove the init parameters and only include modifyable
                     if len(self.step_sequence) == 0:
                         _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE set to {self.config[CONF_EMULATION_MODE]} **********************************")
-                        return await self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
+                        return self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
                 else:
                     _LOGGER.debug(f"********************* ERROR : CONF_EMULATION_MODE not in self.config **********************************")
-                    return await self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
-                return await self.gotonext()
+                    return self.async_abort(reason=TRANSLATE_ERROR_EMULATION_MODE)
 
-                #self.current_pos = -1
-                #self.step_sequence = [2,3,4]
-                #return await self.gotonext()
+                return self.gotonext()
+
             else:
                 _LOGGER.debug(f"Edit config option settings type = {t}, aborting")
         

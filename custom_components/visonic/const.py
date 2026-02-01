@@ -73,6 +73,9 @@ TEXT_XML_LOG_FILE_TEMPLATE = "visonic_template.xml"
 # Supplement the HA attributes with a bypass, this is for individual sensors in the service call. It is used as a boolean.
 ATTR_BYPASS = "bypass"
 
+# used in the string translation for autoconf
+CONF_NAME = "name"
+
 # What notifications to send to the HA Frontend
 CONF_ALARM_NOTIFICATIONS = "panel_state_notifications"
 

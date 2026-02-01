@@ -1,0 +1,417 @@
+#################################################################################################################
+#################################################################################################################
+#
+# I am providing this with all keys and secrets shown as I do not use this in my production environment
+#     You may want to put some values in to your secrets
+#
+# I bought two ESP32-C6 from Amazon in the UK   
+#          https://www.amazon.co.uk/Microcontroller-Bluetooth-Development-ESP32-C6-WROOM-1-Interface/dp/B0DBVM51MP
+#
+#     One is connected to Home Assistant via an Open Threads Border Router docker container (the "leader")
+#     The other has this esphome yaml programmed to it, it promotes itself to a "router"
+#          python -m esphome run this_yaml_file.yaml --device COM5
+#
+#     The IPv6 address is a pain to get so I've added mdns capability to the integration
+#          Apart from that, it's the same as using an Ethernet connection.
+#          You must be using integration release 0.12.5.1 or later
+# 
+#################################################################################################################
+#################################################################################################################
+
+substitutions:
+  MY_BOARD: esp32-c6-devkitm-1
+  PLUGIN_NAME: visonic-thread-12
+  FRIENDLY_NAME: Visonic Thread 1012
+
+  # Do not use this key, get a unique key from here https://esphome.io/components/api/
+  #             Scroll down the page until you see it :)
+  KEY: "pJxuGcl9y5zqMC1P+NwnsJKQ717WBlAMg50zD7IP3ts="
+
+  # General settings
+  PORT: 10666
+  PANEL_NUMBER: 5
+  SHOW_RELAY: true
+  # I have a multicolor led on my board
+  HIDE_LED: false
+  LED_BUILTIN: GPIO8
+
+  # Pins for ESP32-C6 (Adjust if your wiring differs)
+  RX_FROM_PANEL_TX: GPIO4            
+  TX_TO_PANEL_RX: GPIO5             
+
+  # Thread Dataset - MATCH THESE TO YOUR 'ot-ctl dataset active' OUTPUT
+  THR_CHAN: "23"                                        # Channel
+  THR_NET_NAME: "MyHomeAssistant"                       # Network Name
+  THR_NET_KEY: "0x9837e24d1e794471650cda0d053dae53"     # Network Key.    This is the trickiest to get. Note that it needs the "0x"
+  THR_PAN: "0x1234"                                     # PAN ID.    Note that it needs the "0x"
+  THR_MESH: fd7c:cdf1:5480:a365::/64                    # Mesh Local Prefix.    This is the trickiest to get
+
+# The only way that I know of to get the 'network key' and 'mesh local prefix' is to use "ot-ctl dataset active" on the threads 'leader'
+# 
+# root@mysystem:~# docker exec -it otbr ot-ctl dataset active
+# Active Timestamp: 1
+# Channel: 23
+# Wake-up Channel: 23
+# Channel Mask: 0x07fff800
+# Ext PAN ID: 0ea12e8bca99374c
+# Mesh Local Prefix: fd7c:cdf1:5480:a365::/64
+# Network Key: 9837e24d1e794471650cda0d053dae53
+# Network Name: MyHomeAssistant
+# PAN ID: 0x1234
+# PSKc: 1e16f2b4592a6353257b8b8b7de89260
+# Security Policy: 672 onrc 0
+
+
+globals:
+  - id: relay_enabled
+    type: bool
+    initial_value: 'false'
+
+esphome:
+  name: ${PLUGIN_NAME}
+  friendly_name: ${FRIENDLY_NAME}
+  min_version: 2025.11.0
+  on_boot:
+    priority: 600
+    then:
+      # Enable or disable relay actions
+      - lambda: |-
+          {
+            #include <string.h>
+            id(relay_enabled) = (strcasecmp("${SHOW_RELAY}", "true") == 0);
+          }
+      # Change UART baud rate
+      - script.execute:
+          id: change_baud_rate
+          baud: !lambda 'return atoi(id(baud_rate).current_option().c_str());'
+      # Log new UART baud rate after change
+      - lambda: |-
+          std::string boot_msg;
+          if (esp_reset_reason() == ESP_RST_POWERON)
+              boot_msg = "Cold Boot.";
+          else
+              boot_msg = "Software Restart.";
+          std::string uart_msg2 = boot_msg + " UART baud: " + std::to_string(id(uart_bus_panel).get_baud_rate());
+          id(log_message).execute(uart_msg2);
+      - light.turn_on:
+          id: status_led
+          brightness: 50%
+          red: 0%
+          green: 0%
+          blue: 100%
+
+esp32:
+  board: ${MY_BOARD}
+#  flash_size: 8MB
+  variant: esp32c6
+  framework:
+    type: esp-idf
+    version: recommended # Forces the most stable IDF for C6
+#    sdkconfig_options:
+#      CONFIG_ESPTOOLPY_FLASHSIZE_8MB: y
+
+external_components:
+  - source: github://esphome/esphome@dev
+    components: [ openthread ]
+  - source: github://oxan/esphome-stream-server
+
+# Enable IPv6 Thread Networking
+network:
+  enable_ipv6: true
+
+# We use a dummy dataset to pass validation; Matter will overwrite it 
+openthread:
+  device_type: FTD
+  channel: ${THR_CHAN}
+  network_name: ${THR_NET_NAME}
+  network_key: ${THR_NET_KEY}
+  pan_id: ${THR_PAN}
+#  mesh_local_prefix: ${THR_MESH}
+  force_dataset: true
+
+# Enable the native API for Home Assistant discovery
+api:
+  encryption:
+    key: ${KEY} # Generate a new one if needed
+  actions:
+    - action: is_relay_enabled
+      then:
+        - if:
+            condition:
+              lambda: 'return id(relay_enabled);'
+            then:
+              - api.respond:
+                  success: true
+            else:
+              - api.respond:
+                  success: false
+    - action: trigger_relay1
+      then:
+        - if:
+            condition:
+              lambda: 'return id(relay_enabled);'
+            then:
+              # 1. Execute turn on logic
+              - lambda: |-
+                  id(relay1).turn_on();
+                  id(relay3).turn_on();
+              # 2. Respond with success
+              - api.respond:
+                  success: true
+              # 3. delay
+              - delay: 2s
+              # 4. Execute turn off logic
+              - lambda: |-
+                  id(relay1).turn_off();
+                  id(relay3).turn_off();
+            else:
+              # 1. Log the failure as before
+              - lambda: |-
+                  id(log_message).execute("Relay action disabled: trigger_relay1");
+              # 2. Respond with an error back to the caller
+              - api.respond:
+                  success: false
+                  error_message: "Relay action is currently disabled."
+    - action: trigger_relay2
+      then:
+        - if:
+            condition:
+              lambda: 'return id(relay_enabled);'
+            then:
+              # 1. Execute turn on logic
+              - lambda: |-
+                  id(relay2).turn_on();
+                  id(relay4).turn_on();
+              # 2. Respond with success
+              - api.respond:
+                  success: true
+              # 3. delay
+              - delay: 2s
+              # 4. Execute turn off logic
+              - lambda: |-
+                  id(relay2).turn_off();
+                  id(relay4).turn_off();
+            else:
+              # 1. Log the failure as before
+              - lambda: |-
+                  id(log_message).execute("Relay action disabled: trigger_relay2");
+              # 2. Respond with an error back to the caller
+              - api.respond:
+                  success: false
+                  error_message: "Relay action is currently disabled."
+
+# Add this to broadcast your specific service
+mdns:
+  services:
+    - service: "_visonic"    # Do not change
+      protocol: "_tcp"       # Do not change
+      port: ${PORT}          # Do not change
+      txt:
+        # All settings must be a string, set the panel number in a string, if you want panel 0 then you can delete the following line as 0 is the default
+        panel: ${PANEL_NUMBER}
+        # Only include this if you have a PowerMaster panel and want baud rate auto-managed, if PowerMax then delete the following lines
+        baud_entity: !lambda |-
+            std::string be = "select.${FRIENDLY_NAME}_baud_rate";
+            for (auto &c : be) {
+                if (isalnum(c) || c == '.') {
+                    c = std::tolower(c);   // Keep letters/digits, lowercase letters
+                } else {
+                    c = '_';               // Replace all other characters with underscore (including underscores)
+                }
+            }
+            return be;
+            
+
+# Standard Components
+logger:
+  level: DEBUG # This will show the internal OpenThread state changes
+  hardware_uart: USB_SERIAL_JTAG
+
+switch:
+  - platform: template
+    name: "Enable Relay Actions"
+    lambda: |-
+      return id(relay_enabled);
+    turn_on_action:
+      - lambda: |-
+          id(relay_enabled) = true;
+    turn_off_action:
+      - lambda: |-
+          id(relay_enabled) = false;
+
+light:
+  - platform: esp32_rmt_led_strip
+    internal: ${HIDE_LED}
+    rgb_order: GRB
+    pin: ${LED_BUILTIN}
+    num_leds: 1
+    chipset: WS2812
+    id: status_led
+    name: "LED Light"
+    icon: "mdi:led-outline"
+    default_transition_length: 0.25s
+    effects:
+      - random:
+      - flicker:
+      - addressable_rainbow:
+    
+# UI and Diagnostic Sensors
+binary_sensor:
+  - platform: stream_server
+    connected:
+      name: "TCP Stream State"
+  - platform: status
+    name: "Thread Node Status"
+    on_press:
+      # Triggered when CONNECTED
+      then:
+        - light.turn_on:
+            id: status_led
+            red: 0%
+            green: 100%
+            blue: 0%
+            brightness: 50%
+    on_release:
+      # Triggered when DISCONNECTED
+      then:
+        - light.turn_on:
+            id: status_led
+            red: 100%
+            green: 0%
+            blue: 0%
+            brightness: 50%
+
+text_sensor:
+#  - platform: version
+#    name: "Version"
+  - platform: openthread_info
+    role:
+      name: "Thread Role"
+    ip_address:
+      name: "IP"
+      # This lambda filter splits the string on the 4th colon to display it on 2 lines in home assistant
+ #     filters:
+ #       - lambda: |-
+ #             std::string str = x;
+ #             size_t pos = 0;
+ #             for (int i = 0; i < 4; i++) {
+ #               pos = str.find(':', pos);
+ #               if (pos == std::string::npos) return x; // Return original if 4 colons aren't found
+ #               pos++; // Move past the current colon
+ #             }
+ #             // Replace the 4th colon (which is at pos-1) with a newline
+ #             str.replace(pos - 1, 1, "\n:");
+ #             return str;
+  - platform: template
+    name: "Log"
+    id: run_log
+    update_interval: never
+    entity_category: diagnostic
+
+sensor:
+  - platform: internal_temperature
+    name: "Internal Temperature"
+  - platform: stream_server
+    connection_count:
+      name: "Number of stream connections"
+
+button:
+  - platform: restart
+    name: "Restart"
+    id: visonic_restart
+    entity_category: config
+    icon: "mdi:mdi-power-cycle"
+
+output:
+  - platform: gpio
+    pin:
+       number: 18
+       inverted: True
+       mode: OUTPUT_OPEN_DRAIN
+    id: relay1
+  - platform: gpio
+    pin:
+       number: 19
+       inverted: True
+       mode: OUTPUT_OPEN_DRAIN
+    id: relay2
+  - platform: gpio
+    pin:
+       number: 20
+       mode: OUTPUT_OPEN_DRAIN
+    id: relay3
+  - platform: gpio
+    pin:
+       number: 21
+       mode: OUTPUT_OPEN_DRAIN
+    id: relay4
+
+uart:
+  - id: uart_bus_panel
+    baud_rate: 9600
+    tx_pin: ${TX_TO_PANEL_RX}
+    rx_pin: ${RX_FROM_PANEL_TX}
+    stop_bits: 1
+    data_bits: 8
+    parity: NONE
+    rx_buffer_size: 512
+
+stream_server:
+  - uart_id: uart_bus_panel
+    buffer_size: 512
+    id: my_stream_a
+    port: ${PORT}
+
+script:
+  - id: log_message
+    parameters:
+      msg: string
+    then:
+      - lambda: |-
+          ESP_LOGI("web_log", "%s", msg.c_str());
+          id(run_log).publish_state(msg);
+
+  - id: change_baud_rate
+    parameters:
+      baud: int
+    then:
+      - lambda: |-
+          id(uart_bus_panel).flush();
+          if (baud == 0) {
+            std::string uart_msg2 = "Not setting baud to 0, currently " + std::to_string(id(uart_bus_panel).get_baud_rate());
+            id(log_message).execute(uart_msg2);
+            ESP_LOGD("change_baud_rate", uart_msg2.c_str());
+          }
+          else if (id(uart_bus_panel).get_baud_rate() != baud) {
+            std::string uart_msg2 = "Change baud from " + std::to_string(id(uart_bus_panel).get_baud_rate());
+            id(uart_bus_panel).set_baud_rate(baud);
+            id(uart_bus_panel).load_settings();
+            uart_msg2 = uart_msg2 + " to " + std::to_string(id(uart_bus_panel).get_baud_rate()) + " (" + std::to_string(baud) + ")";
+            id(log_message).execute(uart_msg2);
+            ESP_LOGD("change_baud_rate", uart_msg2.c_str());
+          }
+          else {
+            std::string uart_msg2 = "Baud already set to " + std::to_string(id(uart_bus_panel).get_baud_rate());
+            id(log_message).execute(uart_msg2);
+            ESP_LOGD("change_baud_rate", uart_msg2.c_str());
+          }
+
+select:
+  - platform: template
+    id: baud_rate
+    name: Baud rate
+    options:
+      - "9600"
+      - "38400"
+    optimistic: true
+    initial_option: "9600"
+    restore_value: true
+    internal: false
+    entity_category: config
+    icon: mdi:swap-horizontal
+    set_action:
+      - lambda: |-
+          //id(change_baud_rate).execute({atoi(x.c_str())});
+          id(change_baud_rate).execute(atoi(x.c_str()));
+          std::string msg_text = "Selected baud: " + x + " (" + std::to_string(id(uart_bus_panel).get_baud_rate()) + ")";
+          id(log_message).execute(msg_text);

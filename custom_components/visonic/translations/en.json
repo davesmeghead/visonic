@@ -41,14 +41,10 @@
                     "baud": "Baud Rate"
                 }
             },
-            "myzigbee": {
-                "description": "Enter your Zigbee Settings",
-                "title": "Zigbee Configuration",
-                "data": {
-                    "path": "USB Local Path",
-                    "baud": "Baud Rate"
-                }
-            },
+  		    "zeroconf_confirm": {
+				"description": "Do you want to add the Visonic Panel ({name}) to Home Assistant? It will be added with 'full use' values in Powerlink Emulation Mode.",
+				"title": "Discovered Visonic Panel"
+			},
             "parameters1": {
                 "description": "",
                 "title": "Alarm Panel Settings",
