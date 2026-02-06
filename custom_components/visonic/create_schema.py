@@ -154,7 +154,6 @@ class VisonicSchema:
             vol.Required(CONF_PORT, default=self.create_default(options, CONF_PORT, str(DEFAULT_DEVICE_PORT))): str,
             vol.Optional(
                 CONF_ESPHOME_ENTITY_SELECT,
-                default=self.create_default(options, CONF_ESPHOME_ENTITY_SELECT, "")
             ): EntitySelector(
                 EntitySelectorConfig(
                     domain=["select"],
