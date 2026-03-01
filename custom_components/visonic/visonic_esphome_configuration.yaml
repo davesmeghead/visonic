@@ -22,7 +22,9 @@
 # If you do not have relay(s) in your panel to trigger an alarm, then set SHOW_RELAY to false
 # If your ESP board has an LED on it then set HIDE_LED to false, and be sure to set LED_BUILTIN to the pin it's connected to
 # For the MY_BOARD setting:
-#     The list of board types can be found here: https://registry.platformio.org/platforms/platformio/espressif32/boards
+#     The list of board types can be found here:
+#          ESP32:  https://registry.platformio.org/platforms/platformio/espressif32/boards
+#          ESP8266:  https://registry.platformio.org/platforms/platformio/espressif8266/boards
 #     You need the proper string e.g. "AZ-Delivery ESP-32 Dev Kit C V4" is "az-delivery-devkit-v4" so click on your board type and find the string
 
 substitutions:

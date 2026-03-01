@@ -3214,14 +3214,14 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             else:
                 log.error(f"[_add_message_to_send_queue] Message not added as not a string and not a bytearray, it is of type {type(message)}")
                 return
-            
+
             if (f := self.SendQueue.find(e)) is not None:
                 if f[0] != MessagePriority.ACK:     # Multiple acknowledge messages are allowed
                     if priority == f[0]:
                         log.info(f"[_add_message_to_send_queue] Adding panel message at priority {priority} that is already in the queue {str(f[1])}")
                     else:
                         log.info(f"[_add_message_to_send_queue] Adding panel message at priority {priority} that is already in the queue {f[0]} {str(f[1])}   (the priority is different)")
-            
+
             # The SendQueue is set up as a PriorityQueue and needs a < function implementing in VisonicListEntry based on time, oldest < newest
             # By doing this it's like having three queues in one, an immediate queue, a high priority queue, and a low priority queue, each one date ordered oldest first
             # 0 < 1 so 0 is the high priority queue
@@ -4377,7 +4377,6 @@ class PacketHandling(ProtocolBase):
                 val = self._makeInt(data[2:6])
                 if val != self.enrolled_old:
                     log.debug(f"[handle_msgtypeA5]      Enrolled Zones 32-01: {val:032b}")
-                    send_zone_type_request = False
                     self.enrolled_old = val
 
                     self._update_panel_setting(key = PanelSetting.ZoneEnrolled, length = 4, datasize = RAW.BITS.value, data = data[2:6], display = True, msg = f"A5 Zone Enrolled Data")
@@ -5037,7 +5036,7 @@ class PacketHandling(ProtocolBase):
 
             # I believe that bit 0 of sysStatus2 represents the "Instant" indication for armed home and armed away (and maybe disarm etc) i.e. all the PanelState values above 0x0F
             sysStatus = (sysStatus & 0x0F) | (( sysStatus2 << 4 ) & 0x10 )
-            
+
             oldPS = self.PartitionState[partition].PanelState
             # Mask off the top bit as seems to be used to indicate overall validity
             s = self.PartitionState[partition].UpdatePartition(sysStatus=sysStatus, sysFlags=sysFlags & 0x7F, PanelMode=self.PanelMode)  # does not set partition in return value

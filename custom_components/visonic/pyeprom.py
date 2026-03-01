@@ -252,7 +252,7 @@ pmDecodePanelSettings = {                   #  show count  type     poff psize p
 #    We have to do it like this as the max message size is 176 (0xB0) bytes.
 
 pmBlockDownload_Short = {
-    PanelTypeEnum.POWER_MAX : ( 
+    PanelTypeEnum.POWER_MAX : (
               ( 0x0100, 0x0500 ),
               ( 0x0900, 0x0C00 ),
               ( 0x1900, 0x1B00 ),      # ZoneStringNames 0x1900 = 6400 Decimal

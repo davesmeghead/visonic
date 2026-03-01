@@ -123,7 +123,7 @@ from .const import (
     VisonicConfigData,
 )
 
-CLIENT_VERSION = "0.12.5.1"
+CLIENT_VERSION = "0.12.5.2"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -580,11 +580,11 @@ class VisonicClient:
             return self.visonicProtocol.getPartitionsInUse()
         return None
 
-    def isPanelTrouble(self, partition : int ) -> bool:
-        """Is panel trouble"""
-        if self.visonicProtocol is not None:
-            return self.visonicProtocol.isPanelTrouble(partition)
-        return False
+#    def isPanelTrouble(self, partition : int ) -> bool:
+#        """Is panel trouble"""
+#        if self.visonicProtocol is not None:
+#            return self.visonicProtocol.isPanelTrouble(partition)
+#        return False
 
     def isForceKeypad(self) -> bool:
         """Force Keypad"""
