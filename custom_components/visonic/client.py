@@ -1,93 +1,88 @@
 """Create a Client connection to a Visonic PowerMax or PowerMaster Alarm System."""
 import asyncio
-import logging
-from typing import Callable, Any
-import re
-import socket
-import datetime
-import json
-from datetime import datetime, timedelta, timezone
-from jinja2 import Environment, FileSystemLoader
-from functools import partial
-import threading
 import collections
 from collections import namedtuple
 import contextlib
-
+import datetime
+from datetime import datetime, timedelta, timezone
 from enum import IntEnum
+from functools import partial
+import json
+import logging
+import re
+import socket
+import threading
+from typing import Any, Callable
+
+from jinja2 import Environment, FileSystemLoader
 from requests import ConnectTimeout, HTTPError
 
-from homeassistant.core import HomeAssistant, valid_entity_id
-from homeassistant.util import slugify
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass
-from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUser
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
+from homeassistant.components import persistent_notification
+from homeassistant.components.alarm_control_panel import (
+    DOMAIN as ALARM_PANEL_DOMAIN,
+    AlarmControlPanelState,
+)
+from homeassistant.components.binary_sensor import (
+    DOMAIN as BINARY_SENSOR_DOMAIN,
+    BinarySensorDeviceClass,
+)
+from homeassistant.components.image import DOMAIN as IMAGE_DOMAIN
+from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.components.siren import DOMAIN as SIREN_DOMAIN
+from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
+
 #from homeassistant.config_entries import ConfigEntry
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.components.alarm_control_panel import AlarmControlPanelState
 from homeassistant.const import (
-    Platform,
     ATTR_CODE,
     ATTR_ENTITY_ID,
     CONF_HOST,
     CONF_PATH,
     CONF_PORT,
-    CONF_LANGUAGE,
-    CONF_USERNAME, 
-    CONF_PASSWORD,
+    CONF_USERNAME,
     EVENT_HOMEASSISTANT_STOP,
+    Platform,
 )
-
-from homeassistant.helpers import entity_platform as ep
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
-
-from homeassistant.components import persistent_notification
-from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
-from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.components.image import DOMAIN as IMAGE_DOMAIN
-from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
-from homeassistant.components.siren import DOMAIN as SIREN_DOMAIN
-from homeassistant.components.alarm_control_panel import DOMAIN as ALARM_PANEL_DOMAIN
+from homeassistant.core import HomeAssistant, valid_entity_id
+from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUser
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_platform as ep,
+    entity_registry as er,
+)
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.util import slugify
 from homeassistant.util.thread import ThreadWithException
 
-from .pyconst import (AlEnum, AlTransport, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlPanelStatus, AlTroubleType, AlSensorType,  
-                      AlAlarmType, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlSensorDevice, AlLogPanelEvent, AlSwitchDevice, AlTerminationType,
-                      PE_PARTITION, PE_EVENT, PE_NAME, PE_TIME)
-from .pyvisonic import VisonicProtocol
-
 from .const import (
-    available_emulation_modes,
-    map_panel_status_to_ha_status,
-    ALARM_PANEL_CHANGE_EVENT,
-    ALARM_SENSOR_CHANGE_EVENT,
     ALARM_COMMAND_EVENT,
+    ALARM_PANEL_CHANGE_EVENT,
     ALARM_PANEL_LOG_FILE_COMPLETE,
     ALARM_PANEL_LOG_FILE_ENTRY,
+    ALARM_SENSOR_CHANGE_EVENT,
     ATTR_BYPASS,
-    VISONIC_UNIQUE_NAME,
-    CONF_EXCLUDE_SENSOR,
-    CONF_EXCLUDE_X10,
+    CONF_ALARM_NOTIFICATIONS,
+    CONF_ARM_CODE_AUTO,
+    CONF_ARM_HOME_ENABLED,
+    CONF_ARM_NIGHT_ENABLED,
+    CONF_COMMAND,
+    #    CONF_DEVICE_BAUD,
+    CONF_DEVICE_TYPE,
+    CONF_DOWNLOAD_CODE,
+    CONF_EMER_OFF_DELAY,
+    CONF_EMULATION_MODE,
     CONF_ENABLE_REMOTE_ARM,
     CONF_ENABLE_REMOTE_DISARM,
     CONF_ENABLE_SENSOR_BYPASS,
-    CONF_ARM_CODE_AUTO,
+    CONF_EPROM_ATTRIBUTES,
+    CONF_ESPHOME_ENTITY_SELECT,
+    CONF_EXCLUDE_SENSOR,
+    CONF_EXCLUDE_X10,
     CONF_FORCE_KEYPAD,
-    CONF_ARM_HOME_ENABLED,
-    CONF_ARM_NIGHT_ENABLED,
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
-    CONF_EPROM_ATTRIBUTES,
-#    CONF_DEVICE_BAUD,
-    CONF_DEVICE_TYPE,
-    CONF_DOWNLOAD_CODE,
-    CONF_EMULATION_MODE,
-    CONF_MOTION_OFF_DELAY,
-    CONF_MAGNET_CLOSED_DELAY,
-    CONF_EMER_OFF_DELAY,
-    CONF_SIREN_SOUNDING,
     CONF_LOG_CSV_FN,
     CONF_LOG_CSV_TITLE,
     CONF_LOG_DONE,
@@ -95,35 +90,63 @@ from .const import (
     CONF_LOG_MAX_ENTRIES,
     CONF_LOG_REVERSE,
     CONF_LOG_XML_FN,
+    CONF_MAGNET_CLOSED_DELAY,
+    CONF_MOTION_OFF_DELAY,
     CONF_RETRY_CONNECTION_COUNT,
     CONF_RETRY_CONNECTION_DELAY,
-    CONF_COMMAND,
+    CONF_SIREN_SOUNDING,
     CONF_X10_COMMAND,
-    CONF_ESPHOME_ENTITY_SELECT,
-    TEXT_DISCONNECTION_COUNT,
-    TEXT_CLIENT_VERSION,
-    TEXT_LAST_EVENT_NAME,
-    TEXT_LAST_EVENT_TIME,
-    TEXT_LAST_EVENT_ACTION,
-    TEXT_XML_LOG_FILE_TEMPLATE,
-    DOMAIN,
-    PLATFORMS,
-    NOTIFICATION_ID,
-    NOTIFICATION_TITLE,
-    CONF_ALARM_NOTIFICATIONS,
-    PANEL_ATTRIBUTE_NAME,
-    DEVICE_ATTRIBUTE_NAME,
     DEFAULT_DEVICE_BAUD,
+    DEVICE_ATTRIBUTE_NAME,
     DEVICE_TYPE_ETHERNET,
     DEVICE_TYPE_USB,
-    AvailableNotifications,
+    DOMAIN,
+    NOTIFICATION_ID,
+    NOTIFICATION_TITLE,
+    PANEL_ATTRIBUTE_NAME,
     PIN_REGEX,
+    PLATFORMS,
+    TEXT_CLIENT_VERSION,
+    TEXT_DISCONNECTION_COUNT,
+    TEXT_LAST_EVENT_ACTION,
+    TEXT_LAST_EVENT_NAME,
+    TEXT_LAST_EVENT_TIME,
+    TEXT_XML_LOG_FILE_TEMPLATE,
+    VISONIC_UNIQUE_NAME,
+    AvailableNotifications,
+    VisonicConfigData,
     VisonicConfigEntry,
     VisonicConfigKey,
-    VisonicConfigData,
+    available_emulation_modes,
+    map_panel_status_to_ha_status,
 )
+from .pyconst import (
+    PE_EVENT,
+    PE_NAME,
+    PE_PARTITION,
+    PE_TIME,
+    AlAlarmType,
+    AlCommandStatus,
+    AlCondition,
+    AlConfiguration,
+    AlEnum,
+    AlLogPanelEvent,
+    AlPanelCommand,
+    AlPanelMode,
+    AlPanelStatus,
+    AlSensorCondition,
+    AlSensorDevice,
+    AlSensorType,
+    AlSwitchDevice,
+    AlTerminationType,
+    AlTransport,
+    AlTroubleType,
+    AlX10Command,
+    PanelConfig,
+)
+from .pyvisonic import VisonicProtocol
 
-CLIENT_VERSION = "0.12.5.2"
+CLIENT_VERSION = "0.12.5.3"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -408,7 +431,9 @@ class VisonicClient:
         self.visonicProtocol : AlPanelInterface = None
         self.SystemStarted = False
         self._createdAlarmPanel = False
-        self._serial_baud_rate = 9600
+        self._serial_baud_rate = 9600       # Start with 9600 to cater for PowerMax panels
+        self.connection_baud_list_reset = [ 38400, 9600, 38400, 9600 ]   # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
+        self.connection_baud_list = self.connection_baud_list_reset.copy()
 
         # variables for creating the event log for csv and xml
         self.csvdata = None
@@ -420,9 +445,6 @@ class VisonicClient:
         self.image_task = None
         
         self.rationalised_ha_devices = False
-        
-        #self.loaded_platforms = set()
-        self.connection_baud_list = [ 9600, 38400, 9600, 38400 ]   # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
         
         self.onChangeHandler = set()
         
@@ -1207,12 +1229,16 @@ class VisonicClient:
                     self._doing_serial_baud_change = True
                     await self._stopCommsTask()
                     # wait for it to close
-                    while self._doing_serial_baud_change:
+                    for _ in range(20):     # 4 seconds
+                        if not self._doing_serial_baud_change:
+                            break
                         self.logstate_debug(f"Waiting for protocol handler to close")
                         await asyncio.sleep(0.2)
+                    else:
+                        self.logstate_debug(f"Protocol terminated abnormally")
                 # change serial connection
-                (self.visonicCommsTask, self.cvp) = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud=baud)
                 self._serial_baud_rate = baud
+                (self.visonicCommsTask, self.cvp) = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud=baud)
                 self.logstate_debug(f"Baud rate updated successfully!")
             else:
                 self.logstate_debug(f"Panel baud not changed {retval}")
@@ -1263,7 +1289,7 @@ class VisonicClient:
 
         if event_id == AlCondition.STARTUP_SUCCESS:        # Startup Success
             # set baud list back to default ready if there's a disconection
-            self.connection_baud_list = [ 9600, 38400, 9600, 38400 ]        # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
+            self.connection_baud_list = self.connection_baud_list_reset.copy()
 
             if not self.rationalised_ha_devices and self.getPanelMode() in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
                 self.rationalised_ha_devices = True
@@ -1276,8 +1302,9 @@ class VisonicClient:
             if not self._createdAlarmPanel:
                 self._setupAlarmPanel()
             
-            self.changeBaud(38400)        # This will only succeed if in powerlink mode and the panel is a powermaster
-            
+            if self._serial_baud_rate == 9600 and self.isPowerMaster():
+                self.changeBaud(38400)        # This will only succeed if in powerlink mode and the panel is a powermaster
+
         #if event_id == AlCondition.PANEL_UPDATE and self.getPanelMode() == AlPanelMode.POWERLINK:
         #    # Powerlink Mode
         #    self.printAllEntities()
@@ -1495,7 +1522,7 @@ class VisonicClient:
             self.hass.loop.create_task(self.async_panel_stop())                                       # stop, do not restart
 
         else:                                                               # Are we already in the middle of a restart or reconnection
-            self.connection_baud_list = [ 9600, 38400, 9600, 38400 ]        # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
+            self.connection_baud_list = self.connection_baud_list_reset.copy()
             self.panel_disconnection_counter += 1
             self.hass.loop.create_task(self.async_reconnect_and_restart(allow_comms = True, force_reconnect = False, allow_restart = True))    # Try a reconnect first and if it fails then do the restart sequence (X attempts every Y seconds)
 
@@ -2078,7 +2105,7 @@ class VisonicClient:
         self.tell_em = thisisme
 
     # Create a connection using asyncio through a linux port (usb or rs232)
-    async def async_create_usb_visonic_connection(self, vp : VisonicProtocol, path, baud=DEFAULT_DEVICE_BAUD):
+    async def async_create_usb_visonic_connection(self, vp : VisonicProtocol, path, baud):
         """Create Visonic manager class, returns rs232 transport coroutine."""
         from serial_asyncio_fast import create_serial_connection
 
