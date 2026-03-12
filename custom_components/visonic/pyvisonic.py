@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.6.6"
+PLUGIN_VERSION = "1.9.6.7"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -3227,8 +3227,11 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             # 0 < 1 so 0 is the high priority queue
             # So when get is called it looks at the high priority queue first and if nothing then looks at the low priority queue
             # So urgent tagged messages get sent to the panel asap, like arm, disarm etc
-            self.SendQueue.put_nowait(item=(int(priority), e))
-
+            #self.SendQueue.put_nowait(item=(int(priority), e))
+            asyncio.run_coroutine_threadsafe(
+                self.SendQueue.put(item=(int(priority), e)),
+                self.loop
+            )
 
 # This class performs transactions based on messages (ProtocolBase is the raw data)
 class PacketHandling(ProtocolBase):

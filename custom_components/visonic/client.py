@@ -1,18 +1,15 @@
 """Create a Client connection to a Visonic PowerMax or PowerMaster Alarm System."""
 import asyncio
 import collections
-from collections import namedtuple
-import contextlib
-import datetime
-from datetime import datetime, timedelta, timezone
+from collections.abc import Callable
+from datetime import datetime, timezone
 from enum import IntEnum
 from functools import partial
-import json
 import logging
 import re
 import socket
 import threading
-from typing import Any, Callable
+from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 from requests import ConnectTimeout, HTTPError
@@ -34,19 +31,17 @@ from homeassistant.components.siren import DOMAIN as SIREN_DOMAIN
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 
 #from homeassistant.config_entries import ConfigEntry
-from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
     ATTR_CODE,
     ATTR_ENTITY_ID,
     CONF_HOST,
     CONF_PATH,
     CONF_PORT,
-    CONF_USERNAME,
     EVENT_HOMEASSISTANT_STOP,
     Platform,
 )
 from homeassistant.core import HomeAssistant, valid_entity_id
-from homeassistant.exceptions import HomeAssistantError, Unauthorized, UnknownUser
+from homeassistant.exceptions import Unauthorized, UnknownUser
 from homeassistant.helpers import (
     device_registry as dr,
     entity_platform as ep,
@@ -54,7 +49,6 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import slugify
-from homeassistant.util.thread import ThreadWithException
 
 from .const import (
     ALARM_COMMAND_EVENT,
@@ -68,7 +62,7 @@ from .const import (
     CONF_ARM_HOME_ENABLED,
     CONF_ARM_NIGHT_ENABLED,
     CONF_COMMAND,
-    #    CONF_DEVICE_BAUD,
+    CONF_DEVICE_BAUD,
     CONF_DEVICE_TYPE,
     CONF_DOWNLOAD_CODE,
     CONF_EMER_OFF_DELAY,
@@ -114,9 +108,7 @@ from .const import (
     TEXT_XML_LOG_FILE_TEMPLATE,
     VISONIC_UNIQUE_NAME,
     AvailableNotifications,
-    VisonicConfigData,
     VisonicConfigEntry,
-    VisonicConfigKey,
     available_emulation_modes,
     map_panel_status_to_ha_status,
 )
@@ -125,13 +117,12 @@ from .pyconst import (
     PE_NAME,
     PE_PARTITION,
     PE_TIME,
-    AlAlarmType,
     AlCommandStatus,
     AlCondition,
     AlConfiguration,
-    AlEnum,
     AlLogPanelEvent,
     AlPanelCommand,
+    AlPanelInterface,
     AlPanelMode,
     AlPanelStatus,
     AlSensorCondition,
@@ -140,13 +131,12 @@ from .pyconst import (
     AlSwitchDevice,
     AlTerminationType,
     AlTransport,
-    AlTroubleType,
     AlX10Command,
     PanelConfig,
 )
 from .pyvisonic import VisonicProtocol
 
-CLIENT_VERSION = "0.12.5.3"
+CLIENT_VERSION = "0.12.5.4"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -431,8 +421,11 @@ class VisonicClient:
         self.visonicProtocol : AlPanelInterface = None
         self.SystemStarted = False
         self._createdAlarmPanel = False
-        self._serial_baud_rate = 9600       # Start with 9600 to cater for PowerMax panels
-        self.connection_baud_list_reset = [ 38400, 9600, 38400, 9600 ]   # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
+        self._serial_baud_rate = self.entry.options.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD)
+        if self._serial_baud_rate == 9600:
+            self.connection_baud_list_reset = [ 38400, 9600, 38400, 9600 ]   # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
+        else:
+            self.connection_baud_list_reset = [ 9600, 38400, 9600, 38400 ]   # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
         self.connection_baud_list = self.connection_baud_list_reset.copy()
 
         # variables for creating the event log for csv and xml
@@ -1217,6 +1210,14 @@ class VisonicClient:
         )
         self.logstate_debug(f"     Done")
 
+    def save_working_baud(self, baud: int):
+        """Copy existing options and update baud."""
+        options = dict(self.entry.options)
+        if options[CONF_DEVICE_BAUD] != baud:
+            options[CONF_DEVICE_BAUD] = baud
+            # Update the config entry options
+            self.hass.config_entries.async_update_entry(self.entry, options=options)
+
     def changeBaud(self, baud : int):
 
         async def set_panel_baud_and_change_serial_connection(path, baud: int):
@@ -1229,7 +1230,7 @@ class VisonicClient:
                     self._doing_serial_baud_change = True
                     await self._stopCommsTask()
                     # wait for it to close
-                    for _ in range(20):     # 4 seconds
+                    for _ in range(5):     # 1 second
                         if not self._doing_serial_baud_change:
                             break
                         self.logstate_debug(f"Waiting for protocol handler to close")
@@ -1305,6 +1306,7 @@ class VisonicClient:
             if self._serial_baud_rate == 9600 and self.isPowerMaster():
                 self.changeBaud(38400)        # This will only succeed if in powerlink mode and the panel is a powermaster
 
+        self.save_working_baud(self._serial_baud_rate)
         #if event_id == AlCondition.PANEL_UPDATE and self.getPanelMode() == AlPanelMode.POWERLINK:
         #    # Powerlink Mode
         #    self.printAllEntities()
@@ -1509,13 +1511,13 @@ class VisonicClient:
             # for the next reconnection.....
             if device_type == DEVICE_TYPE_USB:
                 self._serial_baud_rate = baud
+                self.hass.loop.create_task(self.async_reconnect_and_restart(allow_comms = True, force_reconnect = False, allow_restart = True))    # Reconnect comms
             else:
                 self.setSelectEntity(str(baud))
-            
-            if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED:
-                # If it's a disconnection (we did have a connection and data) and we can change baud then make sure it's not a discconnect because of a baud change
-                self.panel_disconnection_counter += 1
-                self.hass.loop.create_task(self.async_reconnect_and_restart(allow_comms = False, force_reconnect = False, allow_restart = True))    # Do a full restart sequence (do not allow a simple comms reconnect)
+                if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED:
+                    # If it's a disconnection (we did have a connection and data) and we can change baud then make sure it's not a discconnect because of a baud change
+                    self.panel_disconnection_counter += 1
+                    self.hass.loop.create_task(self.async_reconnect_and_restart(allow_comms = False, force_reconnect = False, allow_restart = True))    # Do a full restart sequence (do not allow a simple comms reconnect)
 
         elif self.totalAttempts == 0:                                                                   # If the user says 0 restart attempts then do not restart at all
             self.logstate_debug(f"    User config explicitly prevents any reconnection attempts, stopping the connection")
@@ -1826,7 +1828,7 @@ class VisonicClient:
                 if isValidPL:
                     devid, eid = await self.decode_entity(call, Platform.BINARY_SENSOR, "bypass a sensor", AvailableNotifications.BYPASS_PROBLEM)
                     if devid is not None and devid >= 1 and devid <= 64:
-                        bypass: boolean = False
+                        bypass: bool = False
                         if ATTR_BYPASS in call.data:
                             bypass = call.data[ATTR_BYPASS]
 
@@ -2160,7 +2162,6 @@ class VisonicClient:
                 (self.visonicCommsTask, self.cvp) = await self.async_create_tcp_visonic_connection(vp=self.visonicProtocol, address=host, port=port)
             elif device_type == DEVICE_TYPE_USB:
                 path = self.config.get(CONF_PATH, "COM0")
-                #baud_rate = self.config.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD)
                 (self.visonicCommsTask, self.cvp) = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud=self._serial_baud_rate)
             retval = self.cvp is not None and self.visonicCommsTask is not None
         return retval
@@ -2512,7 +2513,7 @@ class VisonicClient:
                     self.logstate_debug(f"************* platforms not unloaded ***********")
                     
             except (ConnectTimeout, HTTPError) as ex:
-                createNotification(
+                self.createNotification(
                     AvailableNotifications.CONNECTION_PROBLEM,
                     "Visonic Panel Connection Error: {ex}<br />You will need to restart hass after fixing.")
 
