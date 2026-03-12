@@ -136,7 +136,7 @@ from .pyconst import (
 )
 from .pyvisonic import VisonicProtocol
 
-CLIENT_VERSION = "0.12.5.4"
+CLIENT_VERSION = "0.12.5.5"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -421,7 +421,7 @@ class VisonicClient:
         self.visonicProtocol : AlPanelInterface = None
         self.SystemStarted = False
         self._createdAlarmPanel = False
-        self._serial_baud_rate = self.entry.options.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD)
+        self._serial_baud_rate = int(self.entry.options.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD))
         if self._serial_baud_rate == 9600:
             self.connection_baud_list_reset = [ 38400, 9600, 38400, 9600 ]   # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
         else:

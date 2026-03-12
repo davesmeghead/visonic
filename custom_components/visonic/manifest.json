@@ -11,7 +11,7 @@
   "loggers": ["visonic"],
   "requirements": ["Pillow", "pyserial_asyncio_fast"],
   "single_config_entry": false,
-  "version": "0.12.5.4",
+  "version": "0.12.5.5",
   "zeroconf": [
     {
        "type": "_visonic._tcp.local.",
