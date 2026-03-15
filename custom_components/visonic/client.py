@@ -136,7 +136,7 @@ from .pyconst import (
 )
 from .pyvisonic import VisonicProtocol
 
-CLIENT_VERSION = "0.12.5.5"
+CLIENT_VERSION = "0.12.5.6"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -1213,7 +1213,8 @@ class VisonicClient:
     def save_working_baud(self, baud: int):
         """Copy existing options and update baud."""
         options = dict(self.entry.options)
-        if options[CONF_DEVICE_BAUD] != baud:
+        options_baud = int(options.get(CONF_DEVICE_BAUD, 0))
+        if options_baud != baud and baud in [9600, 38400]:
             options[CONF_DEVICE_BAUD] = baud
             # Update the config entry options
             self.hass.config_entries.async_update_entry(self.entry, options=options)

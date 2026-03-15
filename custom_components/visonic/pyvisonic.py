@@ -112,7 +112,7 @@ except:
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.6.7"
+PLUGIN_VERSION = "1.9.6.8"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -640,6 +640,46 @@ pmZoneName = [
    "master_bathroom", "master_bedroom", "office", "upstairs", "utility_room", "yard", "custom_1", "custom_2", "custom_3",
    "custom_4", "custom_5", "not_installed"
 ]
+
+# The sequencer uses these 2 classes
+class SequencerType(IntEnum):
+    Invalid                 = -1
+    Reset                   = 1
+    LookForPowerlinkBridge  = 2
+    InitialisePanel         = 3
+    WaitingForPanelDetails  = 4
+    AimingForStandard       = 5
+    DoingStandard           = 6
+    #AimingForStandardPlus   = 6
+    EPROMInitialiseDownload = 7
+    EPROMTriggerDownload    = 8
+    EPROMStartedDownload    = 9
+    EPROMDoingDownload      = 10
+    EPROMDownloadComplete   = 11
+    EPROMExitDownload       = 12
+    EnrollingPowerlink      = 13
+    DoingStandardPlus       = 14
+    WaitingForEnrolSuccess  = 15
+    DoingPowerlink          = 16
+    DoingPowerlinkBridge    = 17
+    GettingB0SensorMessages = 18
+    CreateSensors           = 19
+
+    def __str__(self):
+        return str(self.name)
+
+class PanelErrorStates(IntEnum):
+    AllGood               = 0
+    AccessDeniedDownload  = 1
+    AccessDeniedPin       = 2
+    AccessDeniedStop      = 3
+    AccessDeniedCommand   = 4
+    Exit                  = 5
+    TimeoutReceived       = 6
+    DownloadRetryReceived = 7
+    DespatcherException   = 8
+    BeeZeroInvalidCommand = 9
+
 
 # These are conversion to string functions
 def psc_lba(p):   # p = a list of bytearrays
@@ -1517,21 +1557,21 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             self._add_message_to_send_queue(Send.STATUS_SEN, priority = priority)
 
 
+    async def waitForTransport(self, s : int):  # seconds to wait
+        for _ in range(s*10):
+            if self.transport is not None:
+                break
+            await asyncio.sleep(0.1)
+        else:
+            log.debug("[_despatcher] **************************************************************************************")
+            log.info("[_despatcher] ****************************** Transport Mechanism Invalid ***************************")
+            log.debug("[_despatcher] **************************************************************************************")
+
     # There are 2 Tasks that manage the panel (despatcher and sequencer):
     #    This is the despatcher, it manages the sending of messages to the panel from a PriorityQueue
     #        The SendQueue is set up as a PriorityQueue and needs a < function implementing in VisonicListEntry based on time, oldest < newest
     #        By doing this it's like having two queues in one, a high priority queue, date ordered oldest first, and a low priority queue date ordered oldest first
     async def _despatcher(self):
-
-        async def waitForTransport(s : int):
-            s = s * 10
-            while s >= 0 and self.transport is None:
-                await asyncio.sleep(0.1)
-                s = s - 1
-            if self.transport is None:
-                log.debug("[_despatcher] **************************************************************************************")
-                log.debug("[_despatcher] ****************************** Transport Mechanism Invalid ***************************")
-                log.debug("[_despatcher] **************************************************************************************")
 
         def checkQueuePriorityLevel():
             if not self.is_send_queue_empty():
@@ -1621,9 +1661,9 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                 return command.waittime
             return -1.0           
 
-        log.debug(f"[_despatcher]  Starting")
+        log.debug("[_despatcher]  Starting")
         self.despatcherException = False
-        await waitForTransport(20) # Wait up to 20 seconds for the transport to be setup, if it isn't then other functions set self.suspendAllOperations to True
+        await self.waitForTransport(20) # Wait up to 20 seconds for the transport to be setup, if it isn't then other functions set self.suspendAllOperations to True
         while not self.suspendAllOperations:
             try:
                 post_delay = 0.01
@@ -1712,74 +1752,45 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
     # In standard mode, this command asks the panel for a status
     async def _sequencer(self):
 
-        class SequencerType(IntEnum):
-            Invalid                 = -1
-            Reset                   = 1
-            LookForPowerlinkBridge  = 2
-            InitialisePanel         = 3
-            WaitingForPanelDetails  = 4
-            AimingForStandard       = 5
-            DoingStandard           = 6
-            #AimingForStandardPlus   = 6
-            EPROMInitialiseDownload = 7
-            EPROMTriggerDownload    = 8
-            EPROMStartedDownload    = 9
-            EPROMDoingDownload      = 10
-            EPROMDownloadComplete   = 11
-            EPROMExitDownload       = 12
-            EnrollingPowerlink      = 13
-            DoingStandardPlus       = 14
-            WaitingForEnrolSuccess  = 15
-            DoingPowerlink          = 16
-            DoingPowerlinkBridge    = 17
-            GettingB0SensorMessages = 18
-            CreateSensors           = 19
+        try:
+            checkAllPanelData = True
 
-            def __str__(self):
-                return str(self.name)
+            _sequencerState = SequencerType.LookForPowerlinkBridge
+            _sequencerStatePrev = SequencerType.Invalid
 
-        class PanelErrorStates(IntEnum):
-            AllGood               = 0
-            AccessDeniedDownload  = 1
-            AccessDeniedPin       = 2
-            AccessDeniedStop      = 3
-            AccessDeniedCommand   = 4
-            Exit                  = 5
-            TimeoutReceived       = 6
-            DownloadRetryReceived = 7
-            DespatcherException   = 8
-            BeeZeroInvalidCommand = 9
+            self._reset_watchdog_timeout()
+            self._reset_keep_alive_messages()
 
-        checkAllPanelData = True
+	        # declare a list and fill it with zeroes
+            watchdog_list = [0] * WATCHDOG_MAXIMUM_EVENTS
+	        # The starting point doesn't really matter
+            watchdog_pos = WATCHDOG_MAXIMUM_EVENTS - 1
+            self.powerlink_counter = 0
 
-        _sequencerState = SequencerType.LookForPowerlinkBridge
-        _sequencerStatePrev = SequencerType.Invalid
+            counter = 0                     # create a generic counter that gets reset every state change, so it can be used in a single state
+            no_data_received_counter = 0
+            no_packet_received_counter = 0
+            _my_panel_state_trigger_count = 5
+            _sendStartUp = False
+            image_delay_counter = 0
+            log_sensor_state_counter = 0
+            _last_B0_wanted_request_time = self._getTimeFunction()
+            lastrecv = None
+            delay_loops = 0
+            a_day = 24 * 60 * 60  # seconds in a day
 
-        self._reset_watchdog_timeout()
-        self._reset_keep_alive_messages()
+            oldPanelMode = self.PanelMode
+            # Note that PANEL_STATE_1 is in all of them, to get it every time        
+            B0_Regular_Update_Set_List = [ { B0SubType.SENSOR_ENROL, B0SubType.ZONE_NAMES, B0SubType.ZONE_TYPES, B0SubType.DEVICE_TYPES, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_4 }, 
+                                        { B0SubType.TAMPER_ALERT, B0SubType.WIRELESS_DEV_MISSING, B0SubType.WIRELESS_DEV_INACTIVE, B0SubType.WIRELESS_DEV_ONEWAY, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_5 },
+                                        { B0SubType.ZONE_TEMPERATURE, B0SubType.TAMPER_ACTIVITY, B0SubType.ZONE_OPENCLOSE, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_4 },                  # B0SubType.ZONE_LUX,  LUX seems to cause problems with my PM30
+                                        { B0SubType.WIRED_STATUS_1, B0SubType.WIRED_STATUS_2, B0SubType.WIRED_DEVICES, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_5 } ]
 
-        # declare a list and fill it with zeroes
-        watchdog_list = [0] * WATCHDOG_MAXIMUM_EVENTS
-        # The starting point doesn't really matter
-        watchdog_pos = WATCHDOG_MAXIMUM_EVENTS - 1
-        self.powerlink_counter = 0
+            await self.waitForTransport(20)
 
-        counter = 0                     # create a generic counter that gets reset every state change, so it can be used in a single state
-        no_data_received_counter = 0
-        no_packet_received_counter = 0
-        _my_panel_state_trigger_count = 5
-        _sendStartUp = False
-        image_delay_counter = 0
-        log_sensor_state_counter = 0
-        _last_B0_wanted_request_time = self._getTimeFunction()
-        lastrecv = None
-        delay_loops = 0
-        a_day = 24 * 60 * 60  # seconds in a day
-
-        async def waitForTransport(s : int):
-            while s >= 0 and self.transport is None:
-                await asyncio.sleep(0.1)
-                s = s - 1
+        except Exception as ex:
+                tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+                log.error(f"[_sequencer] Visonic seq start has caused an exception \n\n{tb_str}")
 
         def _resetPanelInterface():
             """ This should re-initialise the panel """
@@ -1926,30 +1937,34 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             return {pmSendMsgB0_reverseLookup[i].data if isinstance(i, int) and i in pmSendMsgB0_reverseLookup else i for i in ll}
 
         def reset_vars():
-            self._reset_global_variables()
+            try:
+                self._reset_global_variables()
 
-            checkAllPanelData = True
+                checkAllPanelData = True
 
-            _sequencerState = SequencerType.InitialisePanel
-            _sequencerStatePrev = SequencerType.Invalid
+                _sequencerState = SequencerType.InitialisePanel
+                _sequencerStatePrev = SequencerType.Invalid
 
-            _last_B0_wanted_request_time = self._getTimeFunction()
-            _my_panel_state_trigger_count = 5
-            _sendStartUp = False
-            # declare a list and fill it with zeroes
-            watchdog_list = [0] * WATCHDOG_MAXIMUM_EVENTS
-            # The starting point doesn't really matter
-            watchdog_pos = WATCHDOG_MAXIMUM_EVENTS - 1
+                _last_B0_wanted_request_time = self._getTimeFunction()
+                _my_panel_state_trigger_count = 5
+                _sendStartUp = False
+                # declare a list and fill it with zeroes
+                watchdog_list = [0] * WATCHDOG_MAXIMUM_EVENTS
+                # The starting point doesn't really matter
+                watchdog_pos = WATCHDOG_MAXIMUM_EVENTS - 1
 
-            self._start_despatcher()
+                self._start_despatcher()
 
-            counter = 0                     # create a generic counter that gets reset every state change, so it can be used in a single state
-            no_data_received_counter = 0
-            no_packet_received_counter = 0
-            image_delay_counter = 0
-            log_sensor_state_counter = 0
-            lastrecv = None
-            delay_loops = 0
+                counter = 0                     # create a generic counter that gets reset every state change, so it can be used in a single state
+                no_data_received_counter = 0
+                no_packet_received_counter = 0
+                image_delay_counter = 0
+                log_sensor_state_counter = 0
+                lastrecv = None
+                delay_loops = 0
+            except Exception as ex:
+                    tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+                    log.error(f"[_sequencer] Reset has caused an exception \n\n{tb_str}")
 
         def updateSensorNamesAndTypes(force = False) -> bool:
             """ Retrieve Zone Names and Zone Types if needed """
@@ -2034,16 +2049,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                     return u
             return -1
 
-        myspecialcounter = 0
-
-        await waitForTransport(200)
+        #myspecialcounter = 0
         reset_vars()
-        oldPanelMode = self.PanelMode
-        # Note that PANEL_STATE_1 is in all of them, to get it every time        
-        B0_Regular_Update_Set_List = [ { B0SubType.SENSOR_ENROL, B0SubType.ZONE_NAMES, B0SubType.ZONE_TYPES, B0SubType.DEVICE_TYPES, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_4 }, 
-                                       { B0SubType.TAMPER_ALERT, B0SubType.WIRELESS_DEV_MISSING, B0SubType.WIRELESS_DEV_INACTIVE, B0SubType.WIRELESS_DEV_ONEWAY, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_5 },
-                                       { B0SubType.ZONE_TEMPERATURE, B0SubType.TAMPER_ACTIVITY, B0SubType.ZONE_OPENCLOSE, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_4 },                  # B0SubType.ZONE_LUX,  LUX seems to cause problems with my PM30
-                                       { B0SubType.WIRED_STATUS_1, B0SubType.WIRED_STATUS_2, B0SubType.WIRED_DEVICES, B0SubType.PANEL_STATE_1, B0SubType.PANEL_STATE_5 } ]
         while not self.suspendAllOperations:
             try:
                 changedState = _sequencerState != _sequencerStatePrev
@@ -2970,11 +2977,8 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
                         self._dumpSensorsToLogFile()
 
             except Exception as ex:
-                log.error("[_sequencer] Visonic Executor loop has caused an exception")
-                log.error(f"             {ex}")
-                # we will build a tree hierarchy   
-                #ipt.getclasstree(ipt.getmro(ex))  
-                #tree_class(ex)
+                tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+                log.error(f"[_sequencer] Visonic Executor loop has caused an exception \n\n{tb_str}")
                 reset_vars()
 
     # Process any received bytes (in data as a bytearray)
@@ -3228,10 +3232,12 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
             # So when get is called it looks at the high priority queue first and if nothing then looks at the low priority queue
             # So urgent tagged messages get sent to the panel asap, like arm, disarm etc
             #self.SendQueue.put_nowait(item=(int(priority), e))
-            asyncio.run_coroutine_threadsafe(
-                self.SendQueue.put(item=(int(priority), e)),
-                self.loop
-            )
+            #asyncio.run_coroutine_threadsafe(
+            #    self.SendQueue.put(item=(int(priority), e)),
+            #    self.loop
+            #)
+            #log.info("Putting command on the queue")
+            self.loop.call_soon_threadsafe(self.SendQueue.put_nowait, (int(priority), e) )            
 
 # This class performs transactions based on messages (ProtocolBase is the raw data)
 class PacketHandling(ProtocolBase):

@@ -1182,12 +1182,14 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         """Initialize class."""
         super().__init__()
 
-        if loop:
-            self.loop = loop
-            log.debug("Establishing Protocol - Using Home Assistant Loop")
-        else:
-            self.loop = asyncio.get_event_loop()
-            log.debug("Establishing Protocol - Using Asyncio Event Loop")
+        self.loop = asyncio.get_running_loop()
+
+#        if loop:
+#            self.loop = loop
+#            log.debug("Establishing Protocol - Using Home Assistant Loop")
+#        else:
+#            self.loop = asyncio.get_event_loop()
+#            log.debug("Establishing Protocol - Using Asyncio Event Loop")
 
         #if logger is not None:
         #    log = logger
