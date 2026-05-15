@@ -3,8 +3,10 @@
 import logging
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, cached_property, callback
 from homeassistant.util import slugify
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -55,12 +57,17 @@ class VisonicSwitch(SwitchEntity):
         self._visonic_device = visonic_device
         self._visonic_device.onChange(self.onChange)
         self._x10id = self._visonic_device.getDeviceID()
-        self._dname = self._visonic_device.createFriendlyName()
-        pname = client.getMyString()
-        self._name = pname.lower() + self._dname.lower()
         self._panel = client.getPanelID()
         self._current_value = self._visonic_device.isOn()
+
+        self._dname = self._visonic_device.createFriendlyName()
+        pname = client.getMyString()
+        self._name = str(pname + self._dname).lower()
         self._is_available = True
+        self._attr_unique_id = slugify(self._name + "_switch")
+        self._attr_name = None
+        self._attr_should_poll = False
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, self._name)})
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
@@ -70,6 +77,16 @@ class VisonicSwitch(SwitchEntity):
         self._is_available = False
         self._client = None
         await super().async_will_remove_from_hass()
+
+    @cached_property
+    def name(self) -> str | None:
+        """Name."""
+        return None
+
+    @property
+    def has_entity_name(self) -> bool:
+        """Prevent HA adding the device name to the start of the entity name."""
+        return False
 
     def onChange(self, switch : AlSwitchDevice):
         """Switch state has changed."""
@@ -84,21 +101,6 @@ class VisonicSwitch(SwitchEntity):
         """Return True if entity is available."""
         #_LOGGER.debug(f"   In binary sensor VisonicSensor available self._is_available = {self._is_available}    self._current_value = {self._current_value}")
         return self._is_available
-
-    @property
-    def should_poll(self):
-        """Get polling requirement from visonic device."""
-        return False
-
-    @property
-    def unique_id(self) -> str:
-        """Return a unique ID."""
-        return slugify(self._name)
-
-    @property
-    def name(self):
-        """Return the name of the device."""
-        return self._name
 
     @property
     def assumed_state(self):
@@ -117,22 +119,6 @@ class VisonicSwitch(SwitchEntity):
     def turn_off(self, **kwargs):
         """Turn the device off."""
         self.turnmeonandoff(AlX10Command.OFF)
-
-    @property
-    def device_info(self):
-        """Return information about the device."""
-        if self._visonic_device is not None:
-            n = f"Visonic X10 ({self._dname})" if self._panel == 0 else f"Visonic X10 ({self._panel}/{self._dname})"
-            return {
-                "manufacturer": MANUFACTURER,
-                "identifiers": {(DOMAIN, self._name)},
-                "name": n,
-                "model": self._visonic_device.getType(),
-                # "sw_version": self._api.information.version_string,
-            }
-        return { 
-                 "manufacturer": MANUFACTURER, 
-            }
 
     def isPanelConnected(self) -> bool:
         """Are we connected to the Alarm Panel."""

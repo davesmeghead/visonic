@@ -9,9 +9,9 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/davesmeghead/visonic/issues",
   "loggers": ["visonic"],
-  "requirements": ["Pillow", "pyserial_asyncio_fast"],
+  "requirements": ["Pillow", "serialx"],
   "single_config_entry": false,
-  "version": "0.12.5.6",
+  "version": "0.12.6.0",
   "zeroconf": [
     {
        "type": "_visonic._tcp.local.",

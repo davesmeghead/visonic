@@ -12,6 +12,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.util.yaml.objects import NodeListClass
 from homeassistant.helpers import selector
 from homeassistant.const import CONF_NAME, CONF_SOURCE, UnitOfTime
+from voluptuous.schema_builder import UNDEFINED
 
 from homeassistant.helpers.selector import (
     ObjectSelector,
@@ -20,6 +21,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
     validate_selector,
+    SerialPortSelector,
     EntitySelector, 
     EntitySelectorConfig,
 )
@@ -98,7 +100,10 @@ class VisonicSchema:
             vol.Optional(CONF_PANEL_NUMBER, default=0): cv.positive_int,
         }
         self.CONFIG_SCHEMA_USB = {
-            vol.Required(CONF_PATH, default=DEFAULT_DEVICE_USB): str,
+            vol.Required(
+                CONF_PATH,
+                default=UNDEFINED,
+            ): SerialPortSelector(),
             vol.Optional(CONF_DEVICE_BAUD, default=str(DEFAULT_DEVICE_BAUD)): str,
         }
         

@@ -1236,6 +1236,11 @@ class AlPanelInterfaceHelper(AlPanelInterface):
         for p in range(3):
             self.PartitionState[p].shutdownOperation()
 
+    @property
+    def isrunning(self) -> bool:
+        """Is the sequencer running?"""
+        return not self.suspendAllOperations
+
     def _dumpSensorsToLogFile(self, incX10 = False):
         log.debug(" ================================================================================ Display Status ================================================================================")
         for key, sensor in self.SensorList.items():

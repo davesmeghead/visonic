@@ -7,12 +7,13 @@ from homeassistant.components.image import DOMAIN as IMAGE_DOMAIN
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .pyconst import AlSensorDevice, AlSensorCondition
 from .client import VisonicClient
-from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, VISONIC_TRANSLATION_KEY
+from .const import DOMAIN, MANUFACTURER, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, VISONIC_TRANSLATION_KEY
 from . import VisonicConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,10 +41,6 @@ async def async_setup_entry(
 class VisonicImage(ImageEntity):
     """A class to let you visualize the image from a PIR sensors camera."""
 
-    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
-    #_attr_content_type = "image/jpg"
-    #_attr_has_entity_name = True
-
     def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSensorDevice):
         #super().__init__(self, hass)
         ImageEntity.__init__(self, hass)
@@ -54,12 +51,16 @@ class VisonicImage(ImageEntity):
         self._attr_should_poll = False
         self._visonic_device = visonic_device
         self._visonic_device.onChange(self.onChange)
-        self._dname = visonic_device.createFriendlyName()
+        dname = visonic_device.createFriendlyName()
         pname = client.getMyString()
-        self._name = pname.lower() + self._dname.lower()
+        self._name = str(pname + dname).lower()
         self._panel = client.getPanelID()
+        self._attr_translation_key = VISONIC_TRANSLATION_KEY
         self._sensor_image = None
         #_LOGGER.debug(f"************* image init ************** Sensor ID {self._dname}     Sensor Type {visonic_device.getSensorType()}")
+        self._attr_unique_id = slugify(self._name + "_image")
+        self._attr_name = "Image"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, self._name)})
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
@@ -89,24 +90,6 @@ class VisonicImage(ImageEntity):
         else:
             _LOGGER.debug("changeHandler: image on change called but sensor is not defined")
 
-    # To link this entity to the device, this property must return an identifiers
-    #      value matching that used in the binary sensor, but no other information such as name. 
-    #           If name is returned, this entity will then also become a device in the HA UI.
-    @property
-    def device_info(self):
-        """Return information to link this entity with the correct device."""
-        return {"identifiers": {(DOMAIN, self._name)}}
-
-    @property
-    def unique_id(self) -> str:
-        """Return a unique ID."""
-        return slugify(self._name)
-
-    @property
-    def name(self):
-        """Return the name of the device."""
-        return self._name
-
     @property
     def extra_state_attributes(self):
         """Return the state attributes of the device."""
@@ -115,12 +98,11 @@ class VisonicImage(ImageEntity):
         attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()
         return attr
 
-    @property
-    def should_poll(self):
-        """Get polling requirement from visonic device."""
-        # Polling would be a waste of time so we turn off polling and onChange callback is called when the sensor changes state
-        return False
-
     async def async_image(self) -> bytes | None:
         """Update the image if it is not cached."""
         return self._sensor_image
+
+    @property
+    def has_entity_name(self) -> bool:
+        """Prevent HA adding the device name to the start of the entity name."""
+        return False

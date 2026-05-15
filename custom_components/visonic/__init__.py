@@ -4,17 +4,27 @@ from __future__ import annotations
 
 import logging
 import asyncio
+from urllib.parse import ParseResult, urlparse
 import requests.exceptions
+import serialx
 import voluptuous as vol
 import collections
 from collections import namedtuple
-from homeassistant.core import HomeAssistant, valid_entity_id, ServiceCall, ServiceResponse, SupportsResponse
+from .config_flow import validate_ethernet_connection
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.core import HomeAssistant, ServiceValidationError, valid_entity_id, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.components import persistent_notification
 from homeassistant.helpers.translation import async_translate_state
+from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.helpers import entity_registry as er, device_registry as dr
 
 from homeassistant.const import (
+    CONF_HOST,
+    CONF_PATH,
+    CONF_PORT,
+    CONF_TYPE,
     Platform,
     ATTR_CODE,
     ATTR_ENTITY_ID,
@@ -24,6 +34,9 @@ from homeassistant.const import (
 from .pyconst import AlPanelCommand, AlX10Command
 from .client import VisonicClient
 from .const import (
+    CONF_DEVICE_TYPE,
+    DEVICE_TYPE_ETHERNET,
+    DEVICE_TYPE_USB,
     DOMAIN,
     PLATFORMS,
     ALARM_PANEL_EVENTLOG,
@@ -285,6 +298,43 @@ def translateLanguage(hass):
     _LOGGER.debug(f"[translateLanguage] alarm control panel event_action translated {pmLogEvent_t}")
 
 
+async def cleanup_stale_entities(hass : HomeAssistant, config_entry: ConfigEntry):
+    import re
+    PATTERN = re.compile(r"^[^.]+\.visonic_[zsx]([0-9]{2})$")
+
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
+
+    # Get all devices for this config entry
+    device_entries = dr.async_entries_for_config_entry(
+        device_registry,
+        config_entry.entry_id,
+    )
+
+    for device in device_entries:
+
+        # Get ALL entities for the device
+        entries = er.async_entries_for_device(
+            entity_registry,
+            device.id,
+            include_disabled_entities=True,
+        )
+
+        for entry in entries:
+
+            # Remove entities no longer provided by integration
+            if PATTERN.match(entry.entity_id):
+                _LOGGER.info(f"Removing entity: {entry.unique_id}")  # noqa: G004
+                entity_registry.async_remove(entry.entity_id)
+                continue
+
+            state = hass.states.get(entry.entity_id)
+
+            # Optional: remove permanently unavailable entities
+            if state and state.state == STATE_UNAVAILABLE:
+                entity_registry.async_remove(entry.entity_id)
+
+
 async def async_setup(hass: HomeAssistant, base_config: dict):
     """Set up the visonic component."""
     
@@ -494,6 +544,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> b
     _LOGGER.debug(f"[Visonic Setup] ************************************ create connection ************************************")
     #_LOGGER.debug(f"[Visonic Setup]       Entry data={entry.data}   options={entry.options}")
     _LOGGER.debug(f"[Visonic Setup]       Entry id={entry.entry_id} in a total of {configured_hosts(hass)} previously configured panels")
+
+    await cleanup_stale_entities(hass, entry)
+
+    device_type = entry.data.get(CONF_DEVICE_TYPE, "")     # This must be set so default is an invalid setting
+    if device_type == DEVICE_TYPE_USB:
+        try:
+            asu = None
+            serial_url = entry.data.get(CONF_PATH, "")
+            #parsed: ParseResult = urlparse(serial_url)
+            #if len(parsed.scheme) > 0:
+            asu = serialx.async_serial_for_url(
+                url=serial_url,
+                baudrate=9600,
+            )
+            await asu.open()
+            _ = asu.is_open
+            await asu.close()
+
+        except (OSError, serialx.SerialException) as err:
+            raise ConfigEntryNotReady("ESPHome serial proxy not ready, cannot continue") from err
+        finally:
+            if asu is not None and asu.is_open:
+                await asu.close()
+    elif device_type == DEVICE_TYPE_ETHERNET:
+        host = entry.data.get(CONF_HOST, "")
+        port = entry.data.get(CONF_PORT, "")
+        if validate_ethernet_connection(host, port) is not None: # not None means an error
+            raise ConfigEntryNotReady("Ethernet connection not ready, cannot continue")
 
     if not translatedLanguageAlready:
         translatedLanguageAlready = True

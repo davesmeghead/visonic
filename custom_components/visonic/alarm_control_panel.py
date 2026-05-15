@@ -84,8 +84,6 @@ async def async_setup_entry(
 class VisonicAlarm(AlarmControlPanelEntity):
     """Representation of a Visonic alarm control panel."""
 
-    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
-
     _unrecorded_attributes = frozenset(
         {TEXT_PANEL_MODEL, TEXT_WATCHDOG_TIMEOUT_TOTAL, TEXT_WATCHDOG_TIMEOUT_DAY, TEXT_DOWNLOAD_TIMEOUT, 
           TEXT_DL_MESSAGE_RETRIES, TEXT_DISCONNECTION_COUNT, TEXT_CLIENT_VERSION,
@@ -100,6 +98,7 @@ class VisonicAlarm(AlarmControlPanelEntity):
         self._last_triggered = None
         self.resetPartition(partition)
         self._client.onChange(callback = self.onClientChange)
+        self._attr_translation_key = VISONIC_TRANSLATION_KEY
 
     def resetPartition(self, partition : int | None):
         if partition is None:
@@ -145,6 +144,8 @@ class VisonicAlarm(AlarmControlPanelEntity):
     def update(self) -> None:
         """Get the state of the device."""
         #_LOGGER.debug(f"[update]")
+        if self._client is None:
+            return
         self._mystate = AlarmControlPanelState.DISARMED
         dsa = {}
         av = False
@@ -152,12 +153,8 @@ class VisonicAlarm(AlarmControlPanelEntity):
         cf = None
         sf = AlarmControlPanelEntityFeature(0)
         di = {
-            "manufacturer": "Visonic",
-            "identifiers": {(DOMAIN, self._myname)},
-            "name": f"{self._myname}",
-            "model": None,
-            # "model": "Alarm Panel",
-            # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
+            "identifiers": {(DOMAIN, self._client.getAlarmPanelUniqueIdent())},
+            "name": f"{self._myname}", # Device Name (after unmangling")
         }
         
         if self._client is not None and self.isPanelConnected():
@@ -196,13 +193,7 @@ class VisonicAlarm(AlarmControlPanelEntity):
             pm = self._client.getPanelModel()
             if pm is not None:
                 if pm.lower() != "unknown":
-                    di = {
-                        "manufacturer": MANUFACTURER,
-                        "identifiers": {(DOMAIN, self._myname)},
-                        "name": f"{self._myname}",
-                        "model": pm,
-                        # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
-                    }
+                    di["model"] = pm  # Add the model
 
             car = False
             cf = None

@@ -9,14 +9,15 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
 
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, cached_property, callback
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from . import VisonicConfigEntry
 from .pyconst import AlSensorDevice, AlCommandStatus, AlSensorCondition
-from .const import DOMAIN, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, VISONIC_TRANSLATION_KEY
+from .const import DOMAIN, MANUFACTURER, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, VISONIC_TRANSLATION_KEY
 from .client import VisonicClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,9 +47,6 @@ async def async_setup_entry(
 class VisonicSelect(SelectEntity):
     """Representation of a visonic arm/bypass select entity."""
 
-    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
-    #_attr_has_entity_name = True
-
     def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSensorDevice):
         """Initialize the visonic binary sensor arm/bypass select entity."""
         SelectEntity.__init__(self)
@@ -58,12 +56,16 @@ class VisonicSelect(SelectEntity):
         self._visonic_device.onChange(self.onChange)
         dname = visonic_device.createFriendlyName()
         pname = client.getMyString()
-        self._name = pname.lower() + dname.lower()  # this must match the binary_sensor self._name so that device_info associates them
+        self._name = str(pname + dname).lower()  # this must match the binary_sensor self._name so that device_info associates them
         self._panel = client.getPanelID()
         self._is_available = self._visonic_device.isEnrolled()
         self._is_armed = not self._visonic_device.isBypass()
         self._pending_state_is_armed = None
         self.lastCommandData = None
+        self._attr_should_poll = False
+        self._attr_unique_id = slugify(self._name + "_select")
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, self._name)})
+        self._attr_translation_key = VISONIC_TRANSLATION_KEY
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
@@ -91,14 +93,6 @@ class VisonicSelect(SelectEntity):
         if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state(True)
 
-    # To link this entity to the device, this property must return an identifiers
-    #      value matching that used in the binary sensor, but no other information such as name. 
-    #           If name is returned, this entity will then also become a device in the HA UI.
-    @property
-    def device_info(self):
-        """Return information to link this entity with the correct device."""
-        return {"identifiers": {(DOMAIN, self._name)}}
-
     @property
     def options(self) -> list[str]:
         """Return a set of selectable options."""
@@ -110,24 +104,19 @@ class VisonicSelect(SelectEntity):
         return ARMED if self._is_armed else BYPASS
 
     @property
-    def should_poll(self):
-        """Get polling requirement from visonic device."""
-        return False
-
-    @property
     def available(self) -> bool:
         """Return True if entity is available."""
         return self._is_available
 
-    @property
-    def unique_id(self) -> str:
-        """Return a unique ID."""
-        return slugify(self._name)
+    @cached_property
+    def name(self) -> str | None:
+        """Name."""
+        return "Arm Mode"
 
     @property
-    def name(self):
-        """Return the name of the device."""
-        return self._name
+    def has_entity_name(self) -> bool:
+        """Prevent HA adding the device name to the start of the entity name."""
+        return False
 
     @property
     def icon(self) -> str | None:

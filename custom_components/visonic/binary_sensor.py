@@ -5,8 +5,9 @@ import asyncio
 import re
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, cached_property, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.util import slugify
@@ -75,9 +76,6 @@ async def async_setup_entry(
 class VisonicBinarySensor(BinarySensorEntity):
     """Representation of a Visonic Sensor."""
 
-    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
-    #_attr_has_entity_name = True
-
     def __init__(self, hass, client: VisonicClient, sensor: AlSensorDevice, entry: VisonicConfigEntry):
         """Initialize the sensor."""
         #_LOGGER.debug("[VisonicBinarySensor]   In binary sensor VisonicSensor initialisation")
@@ -90,13 +88,17 @@ class VisonicBinarySensor(BinarySensorEntity):
 
         self._dname = sensor.createFriendlyName()
         pname = client.getMyString()
-        self._name = pname.lower() + self._dname.lower()
-        _LOGGER.debug(f"[VisonicBinarySensor] friendlyname : {str(self._name)}")
+        self._name = str(pname + self._dname).lower()
+        _LOGGER.debug(f"[VisonicBinarySensor] friendlyname : {self._name}")
         self._panel = client.getPanelID()
         # Append device id to prevent name clashes in HA.
         self._current_value = (self._visonic_device.isTriggered() or self._visonic_device.isOpen())
         self._is_available = self._visonic_device.isEnrolled()
         self._visonic_device.onChange(self.onChange)
+        self._attr_unique_id = slugify(f"{self._name}_sensor")
+        self._attr_should_poll = False
+        self._attr_translation_key = VISONIC_TRANSLATION_KEY
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, self._name)})
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
@@ -108,8 +110,8 @@ class VisonicBinarySensor(BinarySensorEntity):
                 self.timerTask.cancel()
             except Exception as ex:
                 # Do not cause a full Home Assistant Exception, keep it local here
-                log.debug("[async_will_remove_from_hass]...........             Caused an exception killing timer task")
-                log.debug(f"[async_will_remove_from_hass]                           {ex}")   
+                _LOGGER.debug("[async_will_remove_from_hass]...........             Caused an exception killing timer task")
+                _LOGGER.debug(f"[async_will_remove_from_hass]                           {ex}")   
         self._visonic_device.onChange(None)
         self._visonic_device = None
         self._is_available = False
@@ -155,47 +157,20 @@ class VisonicBinarySensor(BinarySensorEntity):
             return self._visonic_device.getDeviceID()
         return 0
 
+    @cached_property
+    def name(self) -> str | None:
+        """Name."""
+        return "Zone"
+
     @property
-    def should_poll(self):
-        """Get polling requirement from visonic device."""
-        # Polling would be a waste of time so we turn off polling and onChange callback is called when the sensor changes state
-        # I found that allowing it to poll caused delays in showing the sensor state in the frontend
+    def has_entity_name(self) -> bool:
+        """Prevent HA adding the device name to the start of the entity name."""
         return False
-
-    @property
-    def unique_id(self) -> str:
-        """Return a unique ID."""
-        return slugify(self._name)
-
-    @property
-    def name(self):
-        """Return the name of the device."""
-        return self._name
 
     @property
     def is_on(self):
         """Return true if the binary sensor is on."""
         return self._current_value
-
-    @property
-    def device_info(self):
-        """Return information about the device."""
-        if self._visonic_device is not None:
-            t = self._visonic_device.getSensorType()
-            s = f"{t.name} Sensor"
-            n = f"Visonic Sensor ({self._dname})" if self._panel == 0 else f"Visonic Sensor ({self._panel}/{self._dname})"
-            return {
-                "manufacturer": MANUFACTURER,
-                "identifiers": {(DOMAIN, slugify(self._name))},
-                "name": n,
-                #"model": s.title() + f" ({self._visonic_device.getSensorModel()})",
-                "model": s.title().replace("_"," "),
-                "model_id": self._visonic_device.getSensorModel(),
-                #"battery": 1 if self._visonic_device.isLowBattery else 100
-            }
-        return { 
-                 "manufacturer": MANUFACTURER, 
-            }
 
     @property
     def supported_features(self) -> int:

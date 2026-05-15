@@ -97,7 +97,7 @@ from textwrap import wrap
 
 try:
     from .pyenum import (CFG, RAW, SEQUENCE, PanelSetting, MessagePriority, DataType, IndexName, Packet, B0SubType, EPROM, Send, Receive, PanelTypeEnum, EVENT_TYPE, PANEL_STATUS)
-    from .pyconst import (AlTransport, AlPanelDataStream, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlTroubleType, AlPanelEventData, EPROM_DOWNLOAD_ALL,
+    from .pyconst import (AlPanelDataStream, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlTroubleType, AlPanelEventData, EPROM_DOWNLOAD_ALL,
                           AlAlarmType, AlPanelStatus, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlLogPanelEvent, AlSensorType, AlDeviceType, AlTerminationType, PE_PARTITION, NOBYPASSSTR, DISABLE_TEXT,
                           TEXT_PANEL_MODEL, TEXT_WATCHDOG_TIMEOUT_TOTAL, TEXT_WATCHDOG_TIMEOUT_DAY, TEXT_DOWNLOAD_TIMEOUT, TEXT_DL_MESSAGE_RETRIES, TEXT_PROTOCOL_VERSION, TEXT_POWER_MASTER )
     from .pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
@@ -105,14 +105,14 @@ try:
     from .pyeprom import EPROMManager
 except:
     from pyenum import (CFG, RAW, SEQUENCE, PanelSetting, MessagePriority, DataType, IndexName, Packet, B0SubType, EPROM, Send, Receive, PanelTypeEnum, EVENT_TYPE, PANEL_STATUS)
-    from pyconst import (AlTransport, AlPanelDataStream, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlTroubleType, AlPanelEventData, EPROM_DOWNLOAD_ALL,
+    from pyconst import (AlPanelDataStream, NO_DELAY_SET, PanelConfig, AlConfiguration, AlPanelMode, AlPanelCommand, AlTroubleType, AlPanelEventData, EPROM_DOWNLOAD_ALL,
                           AlAlarmType, AlPanelStatus, AlSensorCondition, AlCommandStatus, AlX10Command, AlCondition, AlLogPanelEvent, AlSensorType, AlDeviceType, AlTerminationType, PE_PARTITION, NOBYPASSSTR, DISABLE_TEXT,
                           TEXT_PANEL_MODEL, TEXT_WATCHDOG_TIMEOUT_TOTAL, TEXT_WATCHDOG_TIMEOUT_DAY, TEXT_DOWNLOAD_TIMEOUT, TEXT_DL_MESSAGE_RETRIES, TEXT_PROTOCOL_VERSION, TEXT_POWER_MASTER )
     from pyhelper import (toString, MyChecksumCalc, AlImageManager, ImageRecord, titlecase, AlPanelInterfaceHelper, 
                           AlSensorDeviceHelper, AlSwitchDeviceHelper)
     from pyeprom import EPROMManager
 
-PLUGIN_VERSION = "1.9.6.8"
+PLUGIN_VERSION = "1.9.6.9"
 
 #############################################################################################################################################################################
 ######################### Global variables used to determine what is included in the log file ###############################################################################
@@ -1313,7 +1313,7 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
 
     # This is called from the loop handler when the connection to the transport is made
     #   This also starts the sequencer
-    def setTransportConnection(self, transport : AlTransport):
+    def setTransportConnection(self, transport : asyncio.Transport):
         """Set the transport connection to the Panel."""
         self.transport = transport
         if self.transport is not None:
@@ -1367,12 +1367,13 @@ class ProtocolBase(AlPanelInterfaceHelper, AlPanelDataStream, MyChecksumCalc):
         log.debug(f"[_report_problem] Problem due to {termination}")
         # Set mode to Stopped just in case the handler uses it, leave all other variables as they are
         self.PanelMode = AlPanelMode.STOPPED
-        if self.onProblemHandler:
+        func = self.onProblemHandler
+        self.shutdownOperation()
+        if func:
             #log.debug("[_report_problem]                         Calling Exception handler.")
-            self.onProblemHandler(termination)
+            func(termination)
         else:
             log.debug("[_report_problem]                         No Exception handler to call......")
-        #self.shutdownOperation()
 
     def is_send_queue_empty(self, priority : MessagePriority = None) -> bool:
         if priority is None or self.SendQueue.empty():

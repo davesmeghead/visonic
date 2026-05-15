@@ -1,4 +1,5 @@
 
+import asyncio
 import os
 import sys
 
@@ -510,24 +511,14 @@ class PanelConfig(TypedDict):
 #    AlConfiguration.PluginLanguage:       str
     AlConfiguration.SirenTriggerList:     list[str]
 
-class AlTransport(ABC):
-
-    @abstractmethod
-    def write(self, b : bytearray):
-        pass
-
-    @abstractmethod
-    def close(self):
-        pass
-
 class AlPanelDataStream(ABC):
 
     @abstractmethod
-    def setTransportConnection(self, transport : AlTransport):
+    def setTransportConnection(self, transport : asyncio.Transport):
         pass
 
     @abstractmethod
-    def data_received(self, data):
+    def data_received(self, data: bytearray | bytes):
         pass
 
 
@@ -536,12 +527,16 @@ class AlPanelInterface(ABC):
 
     @abstractmethod
     def updateSettings(self, newdata: PanelConfig):
-        pass
+        """Update settings."""
 
     @abstractmethod
     def shutdownOperation(self):
-        """ Terminate the connection to the panel. """
-        pass
+        """Terminate the connection to the panel."""
+
+    @property
+    @abstractmethod
+    def isrunning(self) -> bool:
+        """Is the sequencer running?"""
 
     @abstractmethod
     def isSirenActive(self, partition : int | None = None) -> (bool, AlSensorDevice | None):

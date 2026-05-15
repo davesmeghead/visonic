@@ -4,7 +4,7 @@ import logging
 from enum import IntEnum
 from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity import DeviceInfo, Entity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -73,9 +73,6 @@ async def async_setup_entry(
 class VisonicSensor(Entity):
     """Representation of a Visonic alarm control panel as a simple sensor for minimal."""
 
-    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
-    #_attr_has_entity_name = True
-
     def __init__(self, hass: HomeAssistant, client: VisonicClient, partition : int = None):
         """Initialize a Visonic security alarm."""
         self._client = client
@@ -85,6 +82,9 @@ class VisonicSensor(Entity):
         self.resetPartition(partition)
         self._client.onChange(callback = self.onClientChange)
         #_LOGGER.debug(f"[VisonicSensor] Initialising alarm sensor {self._myname}")
+        self._attr_unique_id = slugify(self._myname+"_sensor")
+        self._attr_name = "Alarm Panel" # self._name
+        self._attr_translation_key = VISONIC_TRANSLATION_KEY
 
     def resetPartition(self, partition : int | None):
         if partition is None:
@@ -103,6 +103,11 @@ class VisonicSensor(Entity):
             self._myname = self._client.getAlarmPanelUniqueIdent() + " Partition " + str(partition)
             _LOGGER.debug(f"[VisonicAlarm] Setting alarm sensor {self._myname}      {self.unique_id=}")
         self._client.setPartitionNaming(partition = partition, panel_entity_name = self._myname)
+        pm = self._client.getPanelModel()
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, {(DOMAIN, self._client.getAlarmPanelUniqueIdent())})},
+            model = pm,
+        )
 
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
@@ -124,42 +129,14 @@ class VisonicSensor(Entity):
             self.schedule_update_ha_state(True)
 
     @property
-    def unique_id(self) -> str:
-        """Return a unique ID."""
-        return slugify(self._myname)
-
-    @property
-    def name(self):
-        """Return the name of the alarm."""
-        return self._myname  # partition 1 but eventually differentiate partitions
-
-    @property
     def changed_by(self):
         """Last change triggered by."""
         return self._last_triggered
 
     @property
-    def device_info(self):
-        """Return information about the device."""
-        if self._client is not None:
-            pm = self._client.getPanelModel()
-            if pm is not None:
-                if pm.lower() != "unknown":
-                    return {
-                        "manufacturer": MANUFACTURER,
-                        "identifiers": {(DOMAIN, self._myname)},
-                        "name": f"{self._myname}",
-                        "model": pm,
-                        # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
-                    }
-        return {
-            "manufacturer": MANUFACTURER,
-            "identifiers": {(DOMAIN, self._myname)},
-            "name": f"{self._myname}",
-            "model": None,
-            # "model": "Alarm Panel",
-            # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
-        }
+    def has_entity_name(self) -> bool:
+        """Prevent HA adding the device name to the start of the entity name."""
+        return False
 
     def update(self):
         """Get the state of the device."""

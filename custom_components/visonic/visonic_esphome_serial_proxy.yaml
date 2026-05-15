@@ -1,0 +1,18 @@
+
+# Set panel_baud_rate, TX_TO_PANEL_RX pin and RX_FROM_PANEL_TX pin
+
+uart:
+  - id: uart_bus_panel
+    baud_rate: !secret panel_baud_rate
+    tx_pin: ${TX_TO_PANEL_RX}
+    rx_pin: ${RX_FROM_PANEL_TX}
+    stop_bits: 1
+    data_bits: 8
+    parity: NONE
+    rx_buffer_size: 1024
+
+serial_proxy:
+  - id: device_serial
+    uart_id: uart_bus_panel
+    port_type: TTL
+    name: esp_visonic

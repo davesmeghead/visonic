@@ -11,8 +11,11 @@ import socket
 import threading
 from typing import Any
 
+import aioesphomeapi
 from jinja2 import Environment, FileSystemLoader
 from requests import ConnectTimeout, HTTPError
+import serialx
+from serialx import create_serial_connection
 
 from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 from homeassistant.components import persistent_notification
@@ -43,11 +46,13 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, valid_entity_id
 from homeassistant.exceptions import Unauthorized, UnknownUser
 from homeassistant.helpers import (
+    area_registry as ar,
     device_registry as dr,
     entity_platform as ep,
     entity_registry as er,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.entity import UNDEFINED, UndefinedType
 from homeassistant.util import slugify
 
 from .const import (
@@ -95,6 +100,7 @@ from .const import (
     DEVICE_TYPE_ETHERNET,
     DEVICE_TYPE_USB,
     DOMAIN,
+    MANUFACTURER,
     NOTIFICATION_ID,
     NOTIFICATION_TITLE,
     PANEL_ATTRIBUTE_NAME,
@@ -130,13 +136,12 @@ from .pyconst import (
     AlSensorType,
     AlSwitchDevice,
     AlTerminationType,
-    AlTransport,
     AlX10Command,
     PanelConfig,
 )
 from .pyvisonic import VisonicProtocol
 
-CLIENT_VERSION = "0.12.5.6"
+CLIENT_VERSION = "0.12.6.0"
 
 MAX_CLIENT_LOG_ENTRIES = 1000
 
@@ -319,67 +324,46 @@ class PanelEventCoordinator:
                 return True
         return False
 
-class MyTransport(AlTransport):
-
-    def __init__(self, t):
-        self._transport = t
-    
-    def write(self, b : bytearray):
-        #_LOGGER.debug(f"Data Sent {b}")
-        if self._transport is not None:
-            self._transport.write(b)
-
-    def close(self):
-        if self._transport is not None:
-            self._transport.close()
-        self._transport = None
-
 # This class joins the Protocol data stream to the visonic protocol handler.
-#    transport needs to have 2 functions:   write(bytearray)  and  close()
 class ClientVisonicProtocol(asyncio.Protocol):
 
-    def __init__(self, vp : VisonicProtocol, client):
+    def __init__(self, vp : VisonicProtocol, client: VisonicClient):
         #super().__init__(*args, **kwargs)
         #_LOGGER.debug(f"[ClientVisonicProtocol] Init")
-        self._transport = None
-        self.vp = vp
-        self.client = client
-        if client is not None:
-            client.tellemaboutme(self)
+        self._transport : asyncio.Transport | None = None
+        self.vp: VisonicProtocol = vp
+        self.client: VisonicClient = client
 
     def data_received(self, data):
         #_LOGGER.debug(f"Received Data {data}")
-        if self._transport is not None:
+        if self.vp is not None and self._transport is not None:
             self.vp.data_received(data)
 
-    def connection_made(self, transport):
+    def connection_made(self, transport: asyncio.Transport):
+        p = transport.get_protocol()
+        if self.client is None or self.client.visonicProtocol is not self.vp or p is not self:
+            _LOGGER.debug("[ClientVisonicProtocol] connection_made for an orphaned protocol, closing transport")
+            transport.close()
+            return
         _LOGGER.debug(f"[ClientVisonicProtocol] connection_made Whooooo")
-        self._transport = MyTransport(transport)
+        self._transport = transport
         self.vp.setTransportConnection(self._transport)
 
-    def _stop_transport(self):
+    def connection_lost(self, exc):
+        self.vp.setTransportConnection(None)
+        if self.client is not None:
+            _LOGGER.debug(f"[ClientVisonicProtocol] connection_lost Booooo, stopping transport and calling client handler")
+            self.client.connection_lost(exc)
+        self.client = None
+        self._transport = None
+
+    def close(self):
+        # set it to None here so that the connection_lost does not call the callback
+        self.client = None
         if self._transport is not None:
             _LOGGER.debug("[ClientVisonicProtocol] protocol closing down => closing transport")
             self._transport.close()
         self._transport = None
-
-    def connection_lost(self, exc):
-        if self.client is not None:
-            _LOGGER.debug(f"[ClientVisonicProtocol] connection_lost Booooo, stopping transport and calling client handler")
-            self._stop_transport()
-            self.client.connection_lost(exc)
-        self.client = None
-
-    def close(self):
-        if self.client is not None:
-            _LOGGER.debug("[ClientVisonicProtocol] close called")
-            self._stop_transport()
-            _LOGGER.debug("[ClientVisonicProtocol] close finished")
-        self.client = None
-
-    # This is needed so we can create the class instance before giving it to the protocol handlers
-    def __call__(self):
-        return self
 
 class VisonicClient:
     """Set up for Visonic devices."""
@@ -415,9 +399,7 @@ class VisonicClient:
 
         self.alreadyDoingThisFunction = False
         
-        self.cvp = None
-        self._doing_serial_baud_change = False
-        self.visonicCommsTask = None
+        self.cvp: ClientVisonicProtocol = None
         self.visonicProtocol : AlPanelInterface = None
         self.SystemStarted = False
         self._createdAlarmPanel = False
@@ -910,8 +892,6 @@ class VisonicClient:
         if self.hass is None:
             self.logstate_warning("Attempt to add X10 switch when hass is undefined")
             return
-        #if not self._createdAlarmPanel:
-        #    await self._async_setupAlarmPanel()
         if dev is None:
             self.logstate_warning("Attempt to add X10 switch when sensor is undefined")
             return
@@ -921,7 +901,27 @@ class VisonicClient:
         if dev.isEnabled() and dev.getDeviceID() not in self.exclude_x10_list:
             dev.onChange(self.onSwitchChange)
             async with self.visonic_switch_setup_lock:
+                d = dev.createFriendlyName()
+                name = slugify(self.getDevicePrefix(self.panelident) + d).lower()
+                identifiers = {(DOMAIN, name)}
+                device_registry = dr.async_get(self.hass)
+                stype = dev.getType()
                 if create and dev not in self.x10_list:
+                    n = (
+                        f"Visonic {d}"
+                        if self.panelident == 0
+                        else f"Visonic P{self.panelident} {d}"
+                    )
+                    dreg = device_registry.async_get_or_create(
+                        config_entry_id=self.entry.entry_id,
+                        identifiers=identifiers,
+                        name=n,
+                        manufacturer=MANUFACTURER,
+                        model=(
+                            stype.replace("_", " ").title() if stype is not None else "Unknown"
+                        ),
+                    )
+
                     self.logstate_debug(f"X10 Switch list {dev.getDeviceID()=}")
                     self.x10_list.append(dev)
                     await self._setupVisonicEntity(SWITCH_DOMAIN, dev)
@@ -929,12 +929,21 @@ class VisonicClient:
                     # delete
                     self.x10_list.remove(dev)
                     self.logstate_debug(f"X10 Device {dev.getDeviceID()} to be deleted")
+                    dev = device_registry.async_get_device(identifiers=identifiers)
+                    if dev:
+                        device_registry.async_remove_device(dev.getDeviceID())
                     if self.rationalised_ha_devices and self.getPanelMode() in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
                         # If startup has completed, the devices have already been rationalise once, and we're in an appropriate panel mode
                         #   otherwise wait until all sensors are installed
                         self.rationalise_ha_devices()
                 else:
                     self.logstate_debug(f"X10 Device {dev.getDeviceID()} already in the list")
+
+    def getDevicePrefix(self, panel_ident: int) -> str:
+        """Get my string."""
+        if panel_ident > 0:
+            return f"{DOMAIN}_p{panel_ident}_"
+        return f"{DOMAIN}_"
 
     def _setupAlarmPanel(self):
         self.hass.loop.create_task(self._async_setupAlarmPanel())
@@ -945,6 +954,16 @@ class VisonicClient:
         async with self.visonic_alarm_setup_lock:
             if not self._createdAlarmPanel:
                 self._createdAlarmPanel = True
+                model = self.visonicProtocol.getPanelModel()
+                identifiers={(DOMAIN, self.getAlarmPanelUniqueIdent())}
+                device_registry = dr.async_get(self.hass)
+                device_registry.async_get_or_create(
+                    config_entry_id=self.entry.entry_id,
+                    identifiers=identifiers,
+                    #name=self.getAlarmPanelUniqueIdent(),
+                    manufacturer=MANUFACTURER,
+                    model=model,
+                )
                 if self.DisableAllCommands:
                     self.logstate_debug("Creating Sensor for Alarm indications")
                     await self._setupVisonicEntity(SENSOR_DOMAIN, False)
@@ -962,8 +981,6 @@ class VisonicClient:
         if self.hass is None:
             self.logstate_warning("Visonic attempt to add sensor when hass is undefined")
             return
-        #if not self._createdAlarmPanel:
-        #    await self._async_setupAlarmPanel()
         if sensor is None:
             self.logstate_warning("Visonic attempt to add sensor when sensor is undefined")
             return
@@ -973,7 +990,44 @@ class VisonicClient:
         if sensor.getDeviceID() not in self.exclude_sensor_list:
             async with self.visonic_sensor_setup_lock:
                 sensor.onChange(self.onSensorChange)
+
+                area_reg = ar.async_get(self.hass)
+                area_map = {
+                    area.id: area.name
+                    for area in area_reg.async_list_areas()
+                }
+                suggested_area: str | None | UndefinedType = UNDEFINED
+                loc : tuple[str,str] = sensor.getZoneLocation()
+                for areavalue in area_map.values():
+                    if loc[0].casefold() == areavalue.casefold() or loc[1].casefold() == areavalue.casefold():
+                        suggested_area = areavalue
+                        break
+
+                d = sensor.createFriendlyName()
+                name = slugify(self.getDevicePrefix(self.panelident) + d).lower()
+                identifiers = {(DOMAIN, name)}
+                device_registry = dr.async_get(self.hass)
                 if create and sensor not in self.sensor_list:
+                    st: AlSensorType = sensor.getSensorType()
+                    st: str = str(st).title()
+                    if (sm:=sensor.getSensorModel()).casefold() != "Unknown".casefold() and st.casefold() != sm.casefold():
+                        st = f"{st} ({sm})"
+                    s = f"{st} Sensor"
+                    n = (
+                        f"Visonic {d}"
+                        if self.panelident == 0
+                        else f"Visonic P{self.panelident} {d}"
+                    )
+                    dev = device_registry.async_get_or_create(
+                        config_entry_id=self.entry.entry_id,
+                        identifiers=identifiers,
+                        name=n,
+                        manufacturer=MANUFACTURER,
+                        model=s.replace("_", " "),
+                        suggested_area=suggested_area,
+                        #model_id=model,
+                        #via_device=(DOMAIN, name),
+                    )
                     self.logstate_debug("Adding Sensor %s", sensor)
                     self.sensor_list.append(sensor)
                     await self._setupVisonicEntity(BINARY_SENSOR_DOMAIN, sensor)
@@ -985,6 +1039,9 @@ class VisonicClient:
                     # delete
                     self.sensor_list.remove(sensor)
                     self.logstate_debug(f"Sensor Zone Z{sensor.getDeviceID():0>2} to be deleted, also need to delete the select entity if it was created")
+                    dev = device_registry.async_get_device(identifiers=identifiers)
+                    if dev:
+                        device_registry.async_remove_device(dev.id)
                     if self.rationalised_ha_devices and self.getPanelMode() in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]:
                         # If startup has completed, the devices have already been rationalise once, and we're in an appropriate panel mode
                         #   otherwise wait until all sensors are installed
@@ -996,7 +1053,7 @@ class VisonicClient:
         else:
             self.logstate_debug(f"Sensor {sensor.getDeviceID()} in exclusion list")
 
-    async def create_image_entity(self, sensor):
+    async def create_image_entity(self, sensor: AlSensorDevice):
         # The issue is that PIR Sensors could be detected and created without knowing that it's a Camera PIR Sensor until too late
         # We might not know the sensor type when we first startup, could be standard mode or whatever
         self.logstate_debug("Adding Sensor Image %s", sensor)
@@ -1138,7 +1195,7 @@ class VisonicClient:
         
         # Clear out all devices not created by this panel
         for device in device_entries:
-            self.logstate_debug(f"        HA Device        {device}")
+            #self.logstate_debug(f"        HA Device        {device}")
             # Get the list of Entities associated with this Device
             entity_entries = er.async_entries_for_device(entity_reg, device.id, True)
             #for entity in entity_entries:
@@ -1156,20 +1213,20 @@ class VisonicClient:
                     device_reg.async_remove_device(device.id)
 
         # Get the entities that are associated with this config
-        entity_entries = er.async_entries_for_config_entry(entity_reg, self.getEntryID())
+#        entity_entries = er.async_entries_for_config_entry(entity_reg, self.getEntryID())
 
         #for entity in entity_entries:
         #    self.logstate_debug(f"        HA Entity BEFORE {entity}")
 
         # Filter the entities for this panel ID (so we dont remove entities for other panels that may still be valid)
-        entity_entries = filterEntitybyPanelIdent(entity_entries, self.getPanelID())
+#        entity_entries = filterEntitybyPanelIdent(entity_entries, self.getPanelID())
 
         # Clear out all entities not created by this panel
-        for entity in entity_entries:
-            self.logstate_debug(f"        HA Entity        {entity}")
-            if entity.unique_id not in my_entities:
-                self.logstate_debug(f"               Deleting this entity from HA")
-                entity_reg.async_remove(entity.entity_id)
+#        for entity in entity_entries:
+#            self.logstate_debug(f"        HA Entity        {entity}")
+#            if entity.unique_id not in my_entities:
+#                self.logstate_debug(f"               Deleting this entity from HA")
+#                entity_reg.async_remove(entity.entity_id)
 
         # The platforms do not initially exist, but after a reload they already exist
         #platforms = ep.async_get_platforms(self.hass, DOMAIN)
@@ -1226,21 +1283,12 @@ class VisonicClient:
             retval = await self.visonicProtocol.setPanelBaud(baud) # It will only do this for powermaster panels and when in powerlink mode
             if retval == AlCommandStatus.SUCCESS:
                 self.logstate_debug(f"    Baud set in panel, send queue is empty")
-                # close existing connection
-                if self.cvp is not None:
-                    self._doing_serial_baud_change = True
-                    await self._stopCommsTask()
-                    # wait for it to close
-                    for _ in range(5):     # 1 second
-                        if not self._doing_serial_baud_change:
-                            break
-                        self.logstate_debug(f"Waiting for protocol handler to close")
-                        await asyncio.sleep(0.2)
-                    else:
-                        self.logstate_debug(f"Protocol terminated abnormally")
                 # change serial connection
                 self._serial_baud_rate = baud
-                (self.visonicCommsTask, self.cvp) = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud=baud)
+                # Close existing connection
+                #    Calling close() means that the callback is not called on "connection_lost"
+                await self._stopCommsTask()
+                self.cvp = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud=baud)
                 self.logstate_debug(f"Baud rate updated successfully!")
             else:
                 self.logstate_debug(f"Panel baud not changed {retval}")
@@ -1507,12 +1555,18 @@ class VisonicClient:
             baud = self.connection_baud_list.pop(0)
 
             s = 'disconnected' if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED else 'never connected'
-            self.logstate_debug(f"No data from panel ({s}) so try a different baud rate {baud}")
+            self.logstate_debug(f"No data from panel ({s}) so try a different baud rate {baud},  protocol is {self.visonicProtocol.isrunning}")
 
             # for the next reconnection.....
             if device_type == DEVICE_TYPE_USB:
                 self._serial_baud_rate = baud
-                self.hass.loop.create_task(self.async_reconnect_and_restart(allow_comms = True, force_reconnect = False, allow_restart = True))    # Reconnect comms
+                self.hass.loop.create_task(
+                    self.async_reconnect_and_restart(
+                        allow_comms = self.visonicProtocol.isrunning,
+                        force_reconnect = False,
+                        allow_restart = True
+                    )
+                )    # Reconnect comms
             else:
                 self.setSelectEntity(str(baud))
                 if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED:
@@ -2015,9 +2069,7 @@ class VisonicClient:
     # When the connection is closed the connection protocol handler calls this after closing the transport
     def connection_lost(self, exc):
         _LOGGER.debug(f"[Client connection_lost] will reconnect if allowed by the user config")
-        if not self._doing_serial_baud_change:
-            self.hass.loop.create_task(self.async_reconnect_and_restart(allow_comms = True, force_reconnect = False, allow_restart = True)) # Try a simple reconnect but only if user config allows
-        self._doing_serial_baud_change = False
+        self.hass.loop.create_task(self.async_reconnect_and_restart(allow_comms = True, force_reconnect = False, allow_restart = True)) # Try a simple reconnect but only if user config allows
 
     # Create a connection using asyncio using an ip and port
     async def async_create_tcp_visonic_connection(self, vp : VisonicProtocol, address, port):
@@ -2085,36 +2137,23 @@ class VisonicClient:
         try:
             sock = createSocketConnection(address, int(port))
             if sock is not None:
-                # Create the Protocol Handler for the Panel, also handle Powerlink connection inside this protocol handler
-                cvp = ClientVisonicProtocol(vp=vp, client=self)
-                # create the connection to the panel as an asyncio protocol handler and then set it up in a task
-                conn = self.hass.loop.create_connection(cvp, sock=sock)
-                self.logstate_debug(f"Creating TCP Connection, the coro type is {type(conn)}  with value {conn}")
-                # Wrap the coroutine in a task to add it to the asyncio loop
-                vTask = self.hass.loop.create_task(conn)
-                # Return the task and protocol
-                self.logstate_debug(f"Creating TCP Connection success, returning Task and Protocol")
-                return vTask, cvp
-
+                _, protocol = await self.hass.loop.create_connection(
+                    lambda: ClientVisonicProtocol(vp=vp, client=self),
+                    sock=sock,
+                )
+                return protocol
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
             self.logstate_warning(f"Creating TCP Connection, TCP Connection Exception {ex}")
         self.logstate_info(f"Creating TCP has a Connection problem, returning not-connected condition")
             
-        return None, None
-
-    def tellemaboutme(self, thisisme):
-        """This function is here so that the coroutine can tell us the protocol handler"""
-        self.tell_em = thisisme
+        return None
 
     # Create a connection using asyncio through a linux port (usb or rs232)
     async def async_create_usb_visonic_connection(self, vp : VisonicProtocol, path, baud):
         """Create Visonic manager class, returns rs232 transport coroutine."""
-        from serial_asyncio_fast import create_serial_connection
 
         # setup serial connection
-        self.logstate_debug(f"Creating USB Connection {path=} {baud=}")
-
         # use default protocol if not specified
         protocol = partial(
             ClientVisonicProtocol,
@@ -2123,98 +2162,51 @@ class VisonicClient:
         )
 
         try:
-            self.tell_em = None
             # create the connection to the panel as an asyncio protocol handler and then set it up in a task
-            conn = create_serial_connection(self.hass.loop, protocol, path, baud)
-            self.logstate_debug(f"Creating USB Connection, the coro type is {type(conn)}  with value {conn}")
-            vTask = self.hass.loop.create_task(conn)
-            if vTask is not None:
-                ctr = 0
-                while self.tell_em is None and ctr < 40:     # 40 with a sleep of 0.05 is approx 2 seconds. Wait up to 2 seconds for this to start.
-                    await asyncio.sleep(0.05)                # This should only happen once while the Protocol Handler starts up and calls tellemaboutme to set self.tell_em
-                    ctr += 1
-                if self.tell_em is not None:
-                    # Return the task and protocol
-                    self.logstate_debug(f"Creating USB Connection success, returning Task and Protocol")
-                    return vTask, self.tell_em
-                else:
-                    self.logstate_debug(f"Creating USB Connection failure, returning not-connected condition")
+            #await asyncio.sleep(20.0) 
+            self.logstate_debug(f"Creating USB Connection {path=} {baud=}")
+            _, proto = await create_serial_connection(
+                self.hass.loop,
+                protocol,
+                path,
+                baud,
+            )
+        except (aioesphomeapi.core.APIConnectionError, serialx.common.SerialException) as ex:
+            self.logstate_debug(f"    Failed to create it, connection error {ex}")
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
             self.logstate_warning(f"Creating USB Connection, USB Connection Exception {ex}")
+        else:
+            return proto
+
         self.logstate_info(f"Creating USB Connection problem, returning not-connected condition")
-        return None, None
+        return None
 
     async def _async_connect_comms(self) -> bool:
         """Create the comms connection to the alarm panel."""
         await self._stopCommsTask()
         # Connect in the way defined by the user in the config file, ethernet or usb
-        retval = False
         if self.visonicProtocol is not None:
             self.visonicProtocol.resetVariablesForNewConnection()
             # Get Visonic specific configuration.
             device_type = self.config.get(CONF_DEVICE_TYPE, "")     # This must be set so default is an invalid setting
             self.logstate_debug("Comms Device Type is %s", device_type)
-            self.cvp = None
-            self.visonicCommsTask = None
             if device_type == DEVICE_TYPE_ETHERNET:
                 host = self.config.get(CONF_HOST, "127.0.0.1")
                 port = self.config.get(CONF_PORT, 0)
-                (self.visonicCommsTask, self.cvp) = await self.async_create_tcp_visonic_connection(vp=self.visonicProtocol, address=host, port=port)
+                self.cvp = await self.async_create_tcp_visonic_connection(vp=self.visonicProtocol, address=host, port=port)
             elif device_type == DEVICE_TYPE_USB:
                 path = self.config.get(CONF_PATH, "COM0")
-                (self.visonicCommsTask, self.cvp) = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud=self._serial_baud_rate)
-            retval = self.cvp is not None and self.visonicCommsTask is not None
-        return retval
+                self.cvp = await self.async_create_usb_visonic_connection(vp=self.visonicProtocol, path=path, baud=self._serial_baud_rate)
+            return self.cvp is not None
+        return False
 
     async def _stopCommsTask(self):
-
-        # helper function to force a task to cancel
-        async def force_cancel(task, max_tries=4):
-            # keep track of the number of times tried
-            tries = 0
-            # keep trying to cancel the task
-            while not task.done():
-                # check if we tried too many times
-                if tries >= max_tries:
-                    self.logstate_debug("...........      Exceeded retries to stop the comms task")
-                    return
-                # request the task cancel
-                try:
-                    task.cancel()
-                except Exception as ex:
-                    # Do not cause a full Home Assistant Exception, keep it local here
-                    self.logstate_debug("...........      Caused an exception")
-                    self.logstate_debug(f"                    {ex}")   
-                # update attempt count
-                tries += 1
-                # give the task time to cancel
-                await asyncio.sleep(0.5)
-
-        if self.visonicCommsTask is not None:
-            self.logstate_debug("........... Closing down Current Comms Task (to close the rs232/socket connection)")
-            # Close the protocol handler 
-            if self.cvp is not None:
-                self.cvp.close()
-                self.cvp = None
-            # Stop the comms task
-            await force_cancel(self.visonicCommsTask)
-#            try:
-#                self.visonicCommsTask.cancel()
-#            except Exception as ex:
-#                # Do not cause a full Home Assistant Exception, keep it local here
-#                self.logstate_debug("...........      Caused an exception")
-#                self.logstate_debug(f"                    {ex}")   
-#            # Make sure its all stopped
-#            await asyncio.sleep(0.5)
-            if self.visonicCommsTask is not None:  # just to make sure it hasn't been changed during sleep
-                if self.visonicCommsTask.done():
-                    self.logstate_debug("........... Current Comms Task Done")
-                else:
-                    self.logstate_debug("........... Current Comms Task Not Done")
-        # Indicate that both have been stopped
-        self.visonicCommsTask = None
-        self.cvp = None
+        if self.cvp is not None:
+            self.cvp.close()
+            # Give a delay before connecting again, but also set to None in case anythin else runs in the meantime
+            self.cvp = None
+            await asyncio.sleep(1.0)
 
     async def async_reconnect_and_restart(self, force_reconnect : bool, allow_comms : bool, allow_restart : bool) -> bool:
 
@@ -2478,18 +2470,19 @@ class VisonicClient:
 
                 self.logstate_debug("Client connecting.....")
                 if await _async_panel_start(force=force):
-                    self.visonicProtocol.onPanelChange(self.onPanelChangeHandler)
-                    self.visonicProtocol.onPanelLog(self.process_panel_event_log)
-                    self.visonicProtocol.onProblem(self.onProblem)
-                    self.visonicProtocol.onNewSensor(self.onNewSensor)
-                    self.visonicProtocol.onNewSwitch(self.onNewSwitch)
-                    ## Establish a callback to stop the component when the stop event occurs
-                    self.hass.bus.async_listen_once(
-                        EVENT_HOMEASSISTANT_STOP, self.async_panel_stop
-                    )
-                    # Record that we have started the system
-                    self.SystemStarted = True
-                    return True
+                    if self.visonicProtocol is not None:
+                        self.visonicProtocol.onPanelChange(self.onPanelChangeHandler)
+                        self.visonicProtocol.onPanelLog(self.process_panel_event_log)
+                        self.visonicProtocol.onProblem(self.onProblem)
+                        self.visonicProtocol.onNewSensor(self.onNewSensor)
+                        self.visonicProtocol.onNewSwitch(self.onNewSwitch)
+                        ## Establish a callback to stop the component when the stop event occurs
+                        self.hass.bus.async_listen_once(
+                            EVENT_HOMEASSISTANT_STOP, self.async_panel_stop
+                        )
+                        # Record that we have started the system
+                        self.SystemStarted = True
+                        return True
 
                 #integration = loader.async_get_loaded_integration(self.hass, DOMAIN)
                 #self.logstate_debug(f"Client not connecting.....   platforms_are_loaded = {integration.platforms_are_loaded(PLATFORMS)}")

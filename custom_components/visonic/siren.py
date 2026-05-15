@@ -6,8 +6,8 @@ import logging
 from enum import IntEnum
 from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import Entity
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import DeviceInfo, Entity
+from homeassistant.core import HomeAssistant, cached_property, callback
 from homeassistant.components.siren import DOMAIN as SIREN_DOMAIN
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.siren import SirenEntity, SirenEntityFeature
@@ -52,9 +52,6 @@ async def async_setup_entry(
 class VisonicSiren(SirenEntity):
     """Representation of a visonic siren device."""
 
-    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
-    _attr_should_poll = False
-
     def __init__(self, hass: HomeAssistant, client: VisonicClient):
         """Initialize a Visonic security alarm."""
         self._client = client
@@ -79,6 +76,10 @@ class VisonicSiren(SirenEntity):
 #        if support_duration:
 #            self._attr_supported_features |= SirenEntityFeature.DURATION
         self._attr_available_tones = None # available_tones
+        self._attr_should_poll = False
+        self._attr_translation_key = VISONIC_TRANSLATION_KEY
+        self._attr_unique_id = slugify(self._myname + "_siren")
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, self._client.getAlarmPanelUniqueIdent())})
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the siren on."""
@@ -120,37 +121,11 @@ class VisonicSiren(SirenEntity):
             return False
         return self._client.isPanelConnected()
 
-    @property
-    def unique_id(self) -> str:
-        """Return a unique ID."""
-        #_LOGGER.debug(f"alarm control panel unique_id {self.entity_id=}")
-        return slugify(self._myname)
+    @cached_property
+    def name(self) -> str | None:
+        """Name."""
+        return "Siren"
 
-    @property
-    def name(self):
-        """Return the name of the alarm."""
-        #_LOGGER.debug(f"alarm control panel name {self.entity_id=}")
-        return self._myname
-
-    @property
-    def device_info(self):
-        """Return information about the device."""
-        if self._client is not None:
-            return {
-                "manufacturer": MANUFACTURER,
-                "identifiers": {(DOMAIN, self._myname)},
-                "name": f"{self._myname}",
-#                "model": pm,
-                # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
-            }
-        return {
-            "manufacturer": MANUFACTURER,
-            "identifiers": {(DOMAIN, self._myname)},
-            "name": f"{self._myname}",
-            "model": None,
-            # "model": "Alarm Panel",
-            # "via_device" : (DOMAIN, "Visonic Intruder Alarm"),
-        }
 
     def update(self):
         """Get the state of the device."""

@@ -1,4 +1,6 @@
 
+import asyncio
+
 import os,sys,inspect,traceback
 # set the parent directory on the import path
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -13,6 +15,10 @@ from pyvisonic import VisonicProtocol
 #d = "0d b0 03 24 22 ff 08 ff 1d 0f 00 00 00 00 00 00 00 0a 2d 0c 09 08 19 14 07 03 00 81 00 00 00 81 00 00 00 01 00 00 01 43 fd 0a"
 d = "0d b0 03 38 11 ff 20 ff 0c 01 00 00 00 02 00 03 00 05 00 00 00 2d 43 5b 0a"
 d = "0d a5 00 04 00 61 0c 05 00 04 00 00 43 9c 0a"
+
+
+d = "0d 3f b0 b6 b0 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0d 02 43 ba 0a 0d a5 00 01 00 00 00 00 00 00 00 00 43 16 0a 0d 02 43 ba 0a 0d a5 00 01 00 00 00 00 00 00 00 00 43 16 0a 0d 02 43 ba 0a 0d a5"
+
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)
 
@@ -23,6 +29,11 @@ formatter = logging.Formatter('%(message)s')
 handler.setFormatter(formatter)
 log.addHandler(handler)
 
-visonicProtocol = VisonicProtocol(panelConfig={}, panel_id=0, loop=None)
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+
+visonicProtocol = VisonicProtocol(panelConfig={}, panel_id=0, loop=loop)
 visonicProtocol.setLogger(log)
 visonicProtocol.handle_msgtype_testing(bytearray.fromhex(d))

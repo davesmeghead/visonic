@@ -58,6 +58,30 @@ TRANSLATE_ERROR_UNKNOWN = "unknown"
 TRANSLATE_ERROR_CONNECTION_TIMEOUT = "cannot_connect_timeout"
 TRANSLATE_ERROR_CONNECTION_REFUSED = "cannot_connect_refused"
 
+def validate_ethernet_connection(host: str, port: int) -> str:
+    """Attempt to open a socket to the ethernet/thread device. Returns error key or None."""
+    try:
+        # Detect family
+        family = socket.AF_INET6 if ":" in host else socket.AF_INET
+
+        _LOGGER.debug(f"Validate_ethernet_connection, family {family.name}   host {host}   port {port}")
+        
+        # We use a short 3s timeout for the UI check to keep it snappy
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        sock.settimeout(3.0)
+        
+        # Attempt the connection
+        sock.connect((host, int(port)))
+        sock.close()
+        return None  # Success!
+        
+    except socket.timeout:
+        return TRANSLATE_ERROR_CONNECTION_TIMEOUT
+    except socket.error:
+        return TRANSLATE_ERROR_CONNECTION_REFUSED
+    return TRANSLATE_ERROR_UNKNOWN
+
+
 class MyHandlers(data_entry_flow.FlowHandler):
     """My generic handler for config flow ConfigFlow and OptionsFlow."""
 
@@ -207,29 +231,6 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         ConfigFlow.__init__(self)
         _LOGGER.debug("Visonic ConfigFlow init")
 
-    def validate_visonic_connection(self, host: str, port: int) -> str:
-        """Attempt to open a socket to the ethernet/thread device. Returns error key or None."""
-        try:
-            # Detect family
-            family = socket.AF_INET6 if ":" in host else socket.AF_INET
-
-            _LOGGER.debug(f"validate_visonic_connection, family {family.name}   host {host}   port {port}")
-            
-            # We use a short 3s timeout for the UI check to keep it snappy
-            sock = socket.socket(family, socket.SOCK_STREAM)
-            sock.settimeout(3.0)
-            
-            # Attempt the connection
-            sock.connect((host, port))
-            sock.close()
-            return None  # Success!
-            
-        except socket.timeout:
-            return TRANSLATE_ERROR_CONNECTION_TIMEOUT
-        except socket.error:
-            return TRANSLATE_ERROR_CONNECTION_REFUSED
-        return TRANSLATE_ERROR_UNKNOWN
-
     def dumpMyState(self):
         """Output state to the log file."""
         if self._async_current_entries():
@@ -312,7 +313,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
             if not errors:
                 host = user_input.get(CONF_HOST, "")
                 port = user_input.get(CONF_PORT, "0")
-                error_key = self.validate_visonic_connection(host, int(port))
+                error_key = validate_ethernet_connection(host, int(port))
                 
                 if error_key is None:
                     self.config.update(user_input)
@@ -413,7 +414,7 @@ class VisonicConfigFlow(ConfigFlow, MyHandlers, domain=DOMAIN):
         if user_input is not None:
             _LOGGER.debug(f"[async_step_zeroconf_confirm] Start")
             # This check should always pass because the device has sent us its IP address
-            if self.validate_visonic_connection(self.config[CONF_HOST], int(self.config[CONF_PORT])) is not None:
+            if validate_ethernet_connection(self.config[CONF_HOST], int(self.config[CONF_PORT])) is not None:
                 _LOGGER.debug(f"[async_step_zeroconf_confirm] Aborting - TRANSLATE_ERROR_CONNECTION_REFUSED")
                 return self.async_abort(reason=TRANSLATE_ERROR_CONNECTION_REFUSED)
 
