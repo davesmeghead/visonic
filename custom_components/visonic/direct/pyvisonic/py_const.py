@@ -50,18 +50,6 @@ class DebugLevel(IntEnum):
     CMD  = 1   # 1 = Show only the msg string in the log file, not the message content
     FULL = 2   # 2 = Show the full data in the log file, including the message content
 
-# Debug Settings (what information to put in the log files) - Sending Messages to the Panel
-SendDebugC = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug sending control messages
-SendDebugM = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug sending message data
-SendDebugD = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug sending EPROM message data
-SendDebugI = DebugLevel.NONE if OBFUS else DebugLevel.FULL  # Debug sending image data
-
-# Debug Settings (what information to put in the log files) - Receiving Messages from the Panel
-RecvDebugC = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug incoming control messages
-RecvDebugM = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug incoming message data
-RecvDebugD = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug incoming EPROM message data
-RecvDebugI = DebugLevel.NONE if OBFUS else DebugLevel.FULL  # Debug incoming image data
-
 ###################################################################################
 ### Global variables used to configure specific timeouts and maximum settings. ####
 ### These also help readability of the code.                                   ####

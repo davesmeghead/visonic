@@ -4,7 +4,7 @@
 import asyncio
 from typing import Any, NamedTuple
 
-from .py_const import DebugLevel, SendDebugC, SendDebugD, SendDebugI, SendDebugM
+from .py_const import OBFUS, DebugLevel
 from .py_enum import B0SubType, Receive, Send
 from .py_exception import PyVisonicException
 from .py_utils import convert_bytearray, get_local_time, toString
@@ -30,6 +30,12 @@ class VisonicCommand(NamedTuple):
     debugprint: DebugLevel
     waittime: float
     msg: str
+
+# Debug Settings (what information to put in the log files) - Sending Messages to the Panel
+SendDebugC = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug sending control messages
+SendDebugM = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug sending message data
+SendDebugD = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug sending EPROM message data
+SendDebugI = DebugLevel.NONE if OBFUS else DebugLevel.FULL  # Debug sending image data
 
 #VisonicCommand = collections.namedtuple('VisonicCommand', 'data replytype waitforack download debugprint waittime msg')
 pmSendMsg: dict[Any, VisonicCommand] = {

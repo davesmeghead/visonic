@@ -3,21 +3,17 @@ from dataclasses import dataclass, field
 import logging
 from typing import Final, NamedTuple
 
-from .py_const import (
-    B0_35_PANEL_DATA_LOG,
-    B0_42_PANEL_DATA_LOG,
-    OBFUS,
-    DebugLevel,
-    RecvDebugC,
-    RecvDebugD,
-    RecvDebugI,
-    RecvDebugM,
-)
+from .py_const import B0_35_PANEL_DATA_LOG, B0_42_PANEL_DATA_LOG, OBFUS, DebugLevel
 from .py_enum import DataType, IndexName, Receive
 from .py_utils import b2i, toString
 
 log = logging.getLogger(__name__)
 
+# Debug Settings (what information to put in the log files) - Receiving Messages from the Panel
+RecvDebugC = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug incoming control messages
+RecvDebugM = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug incoming message data
+RecvDebugD = DebugLevel.CMD if OBFUS else DebugLevel.FULL   # Debug incoming EPROM message data
+RecvDebugI = DebugLevel.NONE if OBFUS else DebugLevel.FULL  # Debug incoming image data
 
 ###################################################################################
 ################## Messages that we can receive from the panel  ###################

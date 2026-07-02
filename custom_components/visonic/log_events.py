@@ -41,7 +41,7 @@ class logEvents:
 
     def logstate_debug(self, msg: str, *args: object, **kwargs: object) -> None:
         """Log debug state."""
-        s: str = "P" + str(self.panel_id) + "  " + (msg % args % kwargs)
+        s: str = "P" + str(self.panel_id) + "  " + ((msg % args % kwargs) if (args or kwargs) else msg)
         # s = self.logger.info("P%s  " + msg, self.panel_id, *args)
         self.logger.debug(s)
         self.strlog.append(str(datetime.now(UTC).astimezone()) + "  D " + s)
@@ -50,7 +50,7 @@ class logEvents:
 
     def logstate_info(self, msg: str, *args: object, **kwargs: object) -> None:
         """Log info state."""
-        s: str = "P" + str(self.panel_id) + "  " + (msg % args % kwargs)
+        s: str = "P" + str(self.panel_id) + "  " + ((msg % args % kwargs) if (args or kwargs) else msg)
         self.logger.info(" %s", s)
         self.strlog.append(str(datetime.now(UTC).astimezone()) + "  I " + s)
         while len(self.strlog) > MAX_CLIENT_LOG_ENTRIES:
@@ -58,7 +58,7 @@ class logEvents:
 
     def logstate_warning(self, msg: str, *args: object, **kwargs: object) -> None:
         """Log warning state."""
-        s: str = "P" + str(self.panel_id) + "  " + (msg % args % kwargs)
+        s: str = "P" + str(self.panel_id) + "  " + ((msg % args % kwargs) if (args or kwargs) else msg)
         self.logger.warning(s)
         self.strlog.append(str(datetime.now(UTC).astimezone()) + "  W " + s)
         while len(self.strlog) > MAX_CLIENT_LOG_ENTRIES:
@@ -66,7 +66,7 @@ class logEvents:
 
     def logstate_error(self, msg: str, *args: object, **kwargs: object) -> None:
         """Log error state."""
-        s: str = "P" + str(self.panel_id) + "  " + (msg % args % kwargs)
+        s: str = "P" + str(self.panel_id) + "  " + ((msg % args % kwargs) if (args or kwargs) else msg)
         self.logger.error(s)
         self.strlog.append(str(datetime.now(UTC).astimezone()) + "  E " + s)
         while len(self.strlog) > MAX_CLIENT_LOG_ENTRIES:
