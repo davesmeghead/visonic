@@ -6,7 +6,8 @@ from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo, Entity
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN, SensorEntity, SensorDeviceClass
+from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.alarm_control_panel import AlarmControlPanelState
 
@@ -19,6 +20,8 @@ from homeassistant.const import (
 #    STATE_ALARM_PENDING,
 #    STATE_ALARM_TRIGGERED,
     STATE_UNKNOWN,
+    PERCENTAGE,
+    EntityCategory,
 )
 
 from .client import VisonicClient
@@ -30,9 +33,10 @@ from .const import (
     MANUFACTURER,
     TEXT_LAST_EVENT_NAME,
     PANEL_ATTRIBUTE_NAME,
+    DEVICE_ATTRIBUTE_NAME,
 )
 
-from .pyconst import AlPanelStatus
+from .pyconst import AlPanelStatus, AlSensorType, AlSensorDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,6 +72,18 @@ async def async_setup_entry(
             async_add_entities(entities, True)
 
     entry.runtime_data.dispatchers[SENSOR_DOMAIN] = async_dispatcher_connect(hass, f"{DOMAIN}_{entry.entry_id}_add_{SENSOR_DOMAIN}", async_add_sensor)
+
+    @callback
+    def async_add_battery(device: AlSensorDevice) -> None:
+        """Add a battery sensor for a zone device."""
+        if device is None or device.getSensorType() == AlSensorType.WIRED:   # wired zones have no battery
+            return
+        async_add_entities([VisonicBatterySensor(hass, entry.runtime_data.client, device)])
+
+    # Reuse the per-device binary_sensor dispatch signal to also create a battery sensor per device
+    entry.runtime_data.dispatchers[SENSOR_DOMAIN + "_battery"] = async_dispatcher_connect(
+        hass, f"{DOMAIN}_{entry.entry_id}_add_{BINARY_SENSOR_DOMAIN}", async_add_battery
+    )
     #_LOGGER.debug("[async_setup_entry] exit")
 
 class VisonicSensor(Entity):
@@ -174,3 +190,83 @@ class VisonicSensor(Entity):
             #_LOGGER.debug(f"[update] _attr_extra_state_attributes {self._attr_extra_state_attributes=}")
 
         #_LOGGER.debug(f"[update] after {self._attr_state=}")
+
+
+class VisonicBatterySensor(SensorEntity):
+    """A battery level sensor for a Visonic zone device.
+
+    The panel only reports a low-battery flag (not a true percentage), so this
+    reports 100% normally and 10% when the device signals a low battery, which
+    is enough to drive Home Assistant low-battery alerts.
+    """
+
+    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
+    _attr_device_class = SensorDeviceClass.BATTERY
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, hass: HomeAssistant, client: VisonicClient, sensor: AlSensorDevice):
+        """Initialize the battery sensor."""
+        self.hass = hass
+        self._client = client
+        self._visonic_device = sensor
+        self._dname = sensor.createFriendlyName()
+        pname = client.getMyString()
+        # Match VisonicBinarySensor._name so device_info links to the same HA device
+        self._name = pname.lower() + self._dname.lower()
+        self._panel = client.getPanelID()
+        self._is_available = sensor.isEnrolled()
+        sensor.onChange(self.onChange)
+
+    def onChange(self, sensor: AlSensorDevice = None, s=None):
+        """Call on any change to the sensor."""
+        if self._visonic_device is not None:
+            self._is_available = self._visonic_device.isEnrolled()
+        if self.hass is not None and self.entity_id is not None:
+            self.schedule_update_ha_state()
+
+    async def async_will_remove_from_hass(self):
+        """Remove from hass. Do not clear the shared device callback list here."""
+        self._visonic_device = None
+        self._client = None
+        self._is_available = False
+        await super().async_will_remove_from_hass()
+
+    @property
+    def should_poll(self):
+        return False
+
+    @property
+    def unique_id(self) -> str:
+        return slugify(self._name + "_battery")
+
+    @property
+    def name(self):
+        return self._name + " Battery"
+
+    @property
+    def available(self) -> bool:
+        return self._is_available
+
+    @property
+    def device_info(self):
+        """Link this entity to the same device as the zone binary sensor."""
+        return {"identifiers": {(DOMAIN, slugify(self._name))}}
+
+    @property
+    def native_value(self):
+        """Return 100% normally, 10% when a low battery is signalled."""
+        if self._visonic_device is None:
+            return None
+        return 10 if self._visonic_device.isLowBattery() else 100
+
+    @property
+    def extra_state_attributes(self):
+        d = self._visonic_device
+        if d is None:
+            return {}
+        return {
+            "low_battery": d.isLowBattery(),
+            DEVICE_ATTRIBUTE_NAME: d.getDeviceID(),
+            PANEL_ATTRIBUTE_NAME: self._panel,
+        }

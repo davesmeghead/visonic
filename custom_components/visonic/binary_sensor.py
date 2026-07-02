@@ -16,6 +16,7 @@ from homeassistant.const import (
     ATTR_BATTERY_LEVEL,
     ATTR_LAST_TRIP_TIME,
     ATTR_TRIPPED,
+    EntityCategory,
 )
 
 from . import VisonicConfigEntry
@@ -65,6 +66,16 @@ async def async_setup_entry(
         vbs = VisonicBinarySensor(hass, entry.runtime_data.client, device, entry)
         entities: list[BinarySensorEntity] = []
         entities.append(vbs)
+        # Separate diagnostic 'problem' binary sensors, one per condition
+        client = entry.runtime_data.client
+        for key, label, pm_only in _PROBLEM_CONDITIONS:
+            if pm_only and not client.isPowerMaster():
+                continue
+            entities.append(VisonicConditionBinarySensor(hass, client, device, key, label))
+        # Shock/vibration sensors are also magnetic contacts; expose their open/closed
+        #   state as its own door/window binary sensor on the same device.
+        if device.getSensorType() in _OPENING_TYPES:
+            entities.append(VisonicOpeningBinarySensor(hass, client, device))
         async_add_entities(entities)
         entry.runtime_data.sensors.append(vbs)
 
@@ -92,7 +103,7 @@ class VisonicBinarySensor(BinarySensorEntity):
         _LOGGER.debug(f"[VisonicBinarySensor] friendlyname : {self._name}")
         self._panel = client.getPanelID()
         # Append device id to prevent name clashes in HA.
-        self._current_value = (self._visonic_device.isTriggered() or self._visonic_device.isOpen())
+        self._current_value = self._computeActive()
         self._is_available = self._visonic_device.isEnrolled()
         self._visonic_device.onChange(self.onChange)
         self._attr_unique_id = slugify(f"{self._name}_sensor")
@@ -123,7 +134,7 @@ class VisonicBinarySensor(BinarySensorEntity):
         _LOGGER.debug(f"[_retainStateTimout] in   id = {self.unique_id}   timeout = {timeout}    dc={self.device_class}")
         await asyncio.sleep(timeout) 
         if self._visonic_device is not None:
-            self._current_value = self._visonic_device.isTriggered() or self._visonic_device.isOpen()
+            self._current_value = self._computeActive()
             self._is_available = self._visonic_device.isEnrolled()
         if self.hass is not None and self.entity_id is not None:
             self.schedule_update_ha_state()
@@ -138,7 +149,7 @@ class VisonicBinarySensor(BinarySensorEntity):
         if self.hass is not None and self._visonic_device is not None:
 
             if self.timerTask is None:
-                newval = self._visonic_device.isTriggered() or self._visonic_device.isOpen()
+                newval = self._computeActive()
                 if newval and not self._current_value:
                     # kick off timer
                     self.timerTask = self.hass.loop.create_task(self._retainStateTimout())
@@ -151,6 +162,18 @@ class VisonicBinarySensor(BinarySensorEntity):
                 self.schedule_update_ha_state()
         else:
             _LOGGER.debug("[onChange] called but sensor is not defined")
+
+    def _computeActive(self) -> bool:
+        """Return the on/off value for this entity.
+
+        Shock/vibration zones are also magnetic contacts. Their open/closed state
+        is exposed as a separate opening binary sensor, so this entity reflects
+        only shock/trigger activity and not the contact being open.
+        """
+        d = self._visonic_device
+        if d.getSensorType() in _OPENING_TYPES:
+            return bool(d.isTriggered())
+        return d.isTriggered() or d.isOpen()
 
     def getDeviceID(self) -> int:
         if self._visonic_device is not None:
@@ -170,6 +193,10 @@ class VisonicBinarySensor(BinarySensorEntity):
     @property
     def is_on(self):
         """Return true if the binary sensor is on."""
+        # Shock/vibration zones report their contact state via a separate opening
+        # sensor, so report shock/trigger activity live rather than the retained value.
+        if self._visonic_device is not None and self._visonic_device.getSensorType() in _OPENING_TYPES:
+            return bool(self._visonic_device.isTriggered())
         return self._current_value
 
     @property
@@ -270,5 +297,175 @@ class VisonicBinarySensor(BinarySensorEntity):
 
             attr[PANEL_ATTRIBUTE_NAME] = self._panel
             return attr
-            
+
         return { }
+
+
+# Per-condition diagnostic 'problem' binary sensors created for each zone.
+#   (key, label, powermaster_only)
+_PROBLEM_CONDITIONS = [
+    ("trouble", "Trouble", False),
+    ("missing", "Missing", True),
+    ("inactive", "Inactive", True),
+    ("oneway", "One-Way", True),
+]
+
+# Sensor types that are shock/vibration detectors but also report a magnetic contact
+# open/closed state, for which a separate door/window binary sensor is created.
+_OPENING_TYPES = (AlSensorType.SHOCK, AlSensorType.VIBRATION)
+
+
+class VisonicConditionBinarySensor(BinarySensorEntity):
+    """A diagnostic 'problem' binary sensor for a single Visonic zone condition.
+
+    One instance is created per condition (trouble / missing / inactive / one-way)
+    so each fault surfaces as its own entity.
+    """
+
+    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, hass, client: VisonicClient, sensor: AlSensorDevice, key: str, label: str):
+        """Initialize a per-condition problem binary sensor."""
+        self.hass = hass
+        self._client = client
+        self._visonic_device = sensor
+        self._key = key
+        self._label = label
+        self._dname = sensor.createFriendlyName()
+        pname = client.getMyString()
+        # Match VisonicBinarySensor._name so device_info links to the same HA device
+        self._name = pname.lower() + self._dname.lower()
+        self._panel = client.getPanelID()
+        self._is_available = sensor.isEnrolled()
+        sensor.onChange(self.onChange)
+
+    def onChange(self, sensor: AlSensorDevice = None, s: AlSensorCondition = None):
+        """Call on any change to the sensor."""
+        if self._visonic_device is not None:
+            self._is_available = self._visonic_device.isEnrolled()
+        if self.hass is not None and self.entity_id is not None:
+            self.schedule_update_ha_state()
+
+    async def async_will_remove_from_hass(self):
+        """Remove from hass. Do not clear the shared device callback list here."""
+        self._visonic_device = None
+        self._client = None
+        self._is_available = False
+        await super().async_will_remove_from_hass()
+
+    @property
+    def should_poll(self):
+        return False
+
+    @property
+    def unique_id(self) -> str:
+        return slugify(self._name + "_" + self._key)
+
+    @property
+    def name(self):
+        return self._name + " " + self._label
+
+    @property
+    def available(self) -> bool:
+        return self._is_available
+
+    @property
+    def device_info(self):
+        """Link this entity to the same device as the zone binary sensor."""
+        return {"identifiers": {(DOMAIN, slugify(self._name))}}
+
+    @property
+    def is_on(self):
+        """Return true if this specific condition is present on the device."""
+        d = self._visonic_device
+        if d is None:
+            return None
+        if self._key == "trouble":
+            prob = d.getProblem()
+            return prob is not None and str(prob).lower() not in ("none", "")
+        if self._key == "missing":
+            return bool(d.isMissing())
+        if self._key == "inactive":
+            return bool(d.isInactive())
+        if self._key == "oneway":
+            return bool(d.isOneWay())
+        return None
+
+    @property
+    def extra_state_attributes(self):
+        d = self._visonic_device
+        if d is None:
+            return {}
+        attr = {DEVICE_ATTRIBUTE_NAME: d.getDeviceID(), PANEL_ATTRIBUTE_NAME: self._panel}
+        if self._key == "trouble":
+            attr["zone_trouble"] = d.getProblem()
+        return attr
+
+
+class VisonicOpeningBinarySensor(BinarySensorEntity):
+    """Door/window open-closed binary sensor for a shock/vibration zone.
+
+    Shock and vibration sensors are also magnetic contacts. The main zone entity
+    keeps its vibration device class; this exposes the contact open/closed state
+    separately as an 'opening' binary sensor on the same device.
+    """
+
+    _attr_translation_key: str = VISONIC_TRANSLATION_KEY
+    _attr_device_class = BinarySensorDeviceClass.OPENING
+
+    def __init__(self, hass, client: VisonicClient, sensor: AlSensorDevice):
+        """Initialize the opening binary sensor."""
+        self.hass = hass
+        self._client = client
+        self._visonic_device = sensor
+        self._dname = sensor.createFriendlyName()
+        pname = client.getMyString()
+        # Match VisonicBinarySensor._name so device_info links to the same HA device
+        self._name = pname.lower() + self._dname.lower()
+        self._panel = client.getPanelID()
+        self._is_available = sensor.isEnrolled()
+        sensor.onChange(self.onChange)
+
+    def onChange(self, sensor: AlSensorDevice = None, s: AlSensorCondition = None):
+        """Call on any change to the sensor."""
+        if self._visonic_device is not None:
+            self._is_available = self._visonic_device.isEnrolled()
+        if self.hass is not None and self.entity_id is not None:
+            self.schedule_update_ha_state()
+
+    async def async_will_remove_from_hass(self):
+        """Remove from hass. Do not clear the shared device callback list here."""
+        self._visonic_device = None
+        self._client = None
+        self._is_available = False
+        await super().async_will_remove_from_hass()
+
+    @property
+    def should_poll(self):
+        return False
+
+    @property
+    def unique_id(self) -> str:
+        return slugify(self._name + "_opening")
+
+    @property
+    def name(self):
+        return self._name + " Opening"
+
+    @property
+    def available(self) -> bool:
+        return self._is_available
+
+    @property
+    def device_info(self):
+        """Link this entity to the same device as the zone binary sensor."""
+        return {"identifiers": {(DOMAIN, slugify(self._name))}}
+
+    @property
+    def is_on(self):
+        """Return true if the contact is open."""
+        if self._visonic_device is None:
+            return None
+        return self._visonic_device.isOpen()

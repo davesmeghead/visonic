@@ -498,21 +498,21 @@ class VisonicClient:
         return 120
 
     def logstate_debug(self, msg, *args, **kwargs):
-        s = "P" + str(self.getPanelID()) + "  " + (msg % args % kwargs)
+        s = "P" + str(self.getPanelID()) + "  " + ((msg % args % kwargs) if (args or kwargs) else msg)
         _LOGGER.debug(s)
         self.strlog.append(str(datetime.now(timezone.utc).astimezone()) + "  D " + s)
         while len(self.strlog) > MAX_CLIENT_LOG_ENTRIES:
             self.strlog.pop(0)
             
     def logstate_info(self, msg, *args, **kwargs):
-        s = "P" + str(self.getPanelID()) + "  " + (msg % args % kwargs)
+        s = "P" + str(self.getPanelID()) + "  " + ((msg % args % kwargs) if (args or kwargs) else msg)
         _LOGGER.info(" " + s)
         self.strlog.append(str(datetime.now(timezone.utc).astimezone()) + "  I " + s)
         while len(self.strlog) > MAX_CLIENT_LOG_ENTRIES:
             self.strlog.pop(0)
 
     def logstate_warning(self, msg, *args, **kwargs):
-        s = "P" + str(self.getPanelID()) + "  " + (msg % args % kwargs)
+        s = "P" + str(self.getPanelID()) + "  " + ((msg % args % kwargs) if (args or kwargs) else msg)
         _LOGGER.warning(s)
         self.strlog.append(str(datetime.now(timezone.utc).astimezone()) + "  W " + s)
         while len(self.strlog) > MAX_CLIENT_LOG_ENTRIES:
@@ -1153,6 +1153,11 @@ class VisonicClient:
             for sensor in self.sensor_list:
                 entname = self.getMyString() + sensor.createFriendlyName().lower()
                 retval.add(entname)
+                # Whitelist every per-zone entity by its actual unique_id suffix so they are
+                # not removed as orphans: the base binary sensor, the battery sensor and the
+                # per-condition problem binary sensors.
+                for suffix in ("sensor", "battery", "opening", "trouble", "missing", "inactive", "oneway"):
+                    retval.add(slugify(entname + "_" + suffix))
             for switch in self.x10_list:
                 entname = self.getMyString() + switch.createFriendlyName().lower()
                 retval.add(entname)
