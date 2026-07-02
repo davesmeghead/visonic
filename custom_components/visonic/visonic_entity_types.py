@@ -19,6 +19,7 @@ from homeassistant.const import (
     ATTR_ARMED,
     ATTR_BATTERY_LEVEL,
     LIGHT_LUX,
+    EntityCategory,
     UnitOfTemperature,
 )
 
@@ -61,6 +62,7 @@ class VisonicBinarySensorKey(StrEnum):
     """Keys for the BINARY_SENSOR_DEFINITIONS."""
     # I could have separated them for float and binary but ... I didn't
     ZONE_TRIGGER = "zone_trigger"
+    ZONE_SHOCK = "zone_shock"
     ZONE_STATUS = "zone_status"
     ZONE_CONTACT = "zone_contact"
     ZONE_BATTERY = "zone_battery"
@@ -70,6 +72,9 @@ class VisonicBinarySensorKey(StrEnum):
     PANEL_TAMPER = "panel_tamper"
     ZONE_PROBLEM = "zone_problem"
     PANEL_PROBLEM = "panel_problem"
+    ZONE_MISSING = "zone_missing"
+    ZONE_ONEWAY = "zone_oneway"
+    ZONE_INACTIVE = "zone_inactive"
 
 class VisonicFloatSensorKey(StrEnum):
     """Keys for the FLOAT_SENSOR_DEFINITIONS."""
@@ -259,6 +264,9 @@ class StateField(StrEnum):
     LOW_BATTERY = "low_battery"
     ZONETAMPER = "zonetamper"
     PROBLEM = "problem"
+    ISMISSING = "ismissing"
+    ISONEWAY = "isoneway"
+    ISINACTIVE = "isinactive"
     TEMPERATURE = "temperature"
     LUMINANCE = "luminance"
     # Panel
@@ -483,6 +491,17 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         attributes_fn=sensor_full_attributes,
         friendly_name="Zone"
     ),
+    VisonicBinarySensorKey.ZONE_SHOCK: BinarySensorDefinition(   # As ZONE_TRIGGER but named "Shock" for shock sensors, alongside "Contact"
+        key="zone_shock",
+        device_class=None, # None means it uses STYPE_TO_HA_SENSOR_MAP (VIBRATION for a shock sensor)
+        source=EntityDataType.ZONE,
+        data_key=StateField.TRIGGERED,
+        unique_extension="_shock",
+        translation_key=VISONIC_TRANSLATION_KEY,
+        value_fn=lambda x: x,
+        attributes_fn=sensor_full_attributes,
+        friendly_name="Shock"
+    ),
     VisonicBinarySensorKey.ZONE_STATUS: BinarySensorDefinition(
         key="zone_status",
         device_class=None, # When set to None then the class uses STYPE_TO_HA_SENSOR_MAP and the sensor type from ZoneSensorDetails
@@ -507,6 +526,7 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
     ),
     VisonicBinarySensorKey.ZONE_BATTERY: BinarySensorDefinition(
         key="zone_battery",
+        entity_category=EntityCategory.DIAGNOSTIC,
         device_class=BinarySensorDeviceClass.BATTERY,
         source=EntityDataType.ZONE, # use the "zones"
         data_key=StateField.LOW_BATTERY,
@@ -518,6 +538,7 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
     ),
     VisonicBinarySensorKey.DEVICE_BATTERY: BinarySensorDefinition(
         key="device_battery",
+        entity_category=EntityCategory.DIAGNOSTIC,
         device_class=BinarySensorDeviceClass.BATTERY,
         source=EntityDataType.DEVICE, # use the "device"
         data_key=StateField.LOW_BATTERY,
@@ -529,6 +550,7 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
     ),
     VisonicBinarySensorKey.PANEL_BATTERY: BinarySensorDefinition(
         key="panel_battery",
+        entity_category=EntityCategory.DIAGNOSTIC,
         device_class=BinarySensorDeviceClass.BATTERY,
         source=EntityDataType.PANEL,  # use the panelstate
         data_key=StateField.BATTERY_LEVEL,  # use this key to get the value from the panelstate
@@ -562,6 +584,7 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
     ),
     VisonicBinarySensorKey.ZONE_PROBLEM: BinarySensorDefinition(
         key="zone_problem",
+        entity_category=EntityCategory.DIAGNOSTIC,
         device_class=BinarySensorDeviceClass.PROBLEM,
         source=EntityDataType.ZONE,
         data_key=StateField.PROBLEM,
@@ -571,8 +594,45 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         attributes_fn=partial(sensor_subset_attributes, lst=["zone_trouble"]),
         friendly_name="Trouble",
     ),
+    VisonicBinarySensorKey.ZONE_MISSING: BinarySensorDefinition(
+        key="zone_missing",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        source=EntityDataType.ZONE,
+        data_key=StateField.ISMISSING,
+        unique_extension="_missing",
+        translation_key=VISONIC_TRANSLATION_KEY,
+        value_fn=evaluate_binary_state_normal,
+        attributes_fn=partial(sensor_subset_attributes, lst=["zone_missing"]),
+        friendly_name="Missing",
+    ),
+    VisonicBinarySensorKey.ZONE_ONEWAY: BinarySensorDefinition(
+        key="zone_oneway",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        source=EntityDataType.ZONE,
+        data_key=StateField.ISONEWAY,
+        unique_extension="_oneway",
+        translation_key=VISONIC_TRANSLATION_KEY,
+        value_fn=evaluate_binary_state_normal,
+        attributes_fn=partial(sensor_subset_attributes, lst=["zone_oneway"]),
+        friendly_name="One-Way",
+    ),
+    VisonicBinarySensorKey.ZONE_INACTIVE: BinarySensorDefinition(
+        key="zone_inactive",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        source=EntityDataType.ZONE,
+        data_key=StateField.ISINACTIVE,
+        unique_extension="_inactive",
+        translation_key=VISONIC_TRANSLATION_KEY,
+        value_fn=evaluate_binary_state_normal,
+        attributes_fn=partial(sensor_subset_attributes, lst=["zone_inactive"]),
+        friendly_name="Inactive",
+    ),
     VisonicBinarySensorKey.PANEL_PROBLEM : BinarySensorDefinition(
         key="panel_problem",
+        entity_category=EntityCategory.DIAGNOSTIC,
         device_class=BinarySensorDeviceClass.PROBLEM,
         source=EntityDataType.PANEL,
         data_key=StateField.TROUBLE,
