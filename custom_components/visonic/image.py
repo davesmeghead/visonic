@@ -70,6 +70,7 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         # self._attr_image_url = None
         self._attr_content_type = "image/jpeg"
         self._image_data = None
+        self._image_data_time = None
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, identifier)},
             manufacturer=MANUFACTURER,
@@ -123,11 +124,8 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         image_time = sensor.image_time
 
         async with self._image_lock:
-            if image_time != self._attr_image_last_updated:
-                self._attr_image_last_updated = image_time
-                self._attr_state: StateType = (
-                    STATE_OK  # pyright: ignore[reportIncompatibleVariableOverride]
-                )
+            if image_time != self._image_data_time or self._image_data is None:
+                self._image_data_time = image_time
                 # Fetch from the client; use async if possible
                 self._image_data: bytearray | None = (
                     await self.coordinator.get_cached_image(self._sensor_id)

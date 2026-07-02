@@ -288,7 +288,7 @@ class VisonicProtocol(MessageHandling):
             return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
         if self.PanelMode not in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
             return AlCommandStatus.FAIL_INVALID_STATE
-        if device - 1 in self.SensorList and self.SensorList[device-1].has_jpg:
+        if device - 1 in self.SensorList:
             if device in self.image_ignore:
                 return AlCommandStatus.FAIL_INVALID_STATE
             if self.image_manager.create(device, count):   # This makes sure that there isn't an ongoing image retrieval for this sensor

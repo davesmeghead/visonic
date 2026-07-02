@@ -155,6 +155,8 @@ class PlatformManager:
         self._device_created_set : set[int] = set()
         # A set of sensor IDs that are PIR/Camera and have an image
         self._image_created_set: set[int] = set()
+        # Latest JPEG bytes per camera sensor id
+        self._sensor_jpeg: dict[int, bytearray] = {}
 
         self._createdAlarmPanel = False
 
@@ -431,6 +433,7 @@ class PlatformManager:
         # We might not know the sensor type when we first startup, could be standard mode or whatever
         #self.logger.logstate_debug("Adding Sensor Image %s", zsd.device_id)
         if zsd.device_id not in self._image_created_set:
+            self._image_created_set.add(zsd.device_id)
             # The connection to the panel allows interaction with the sensor, including asking to get the image from a camera
             self.setupVisonicEntity(Platform.IMAGE, zsd)
 
@@ -466,9 +469,9 @@ class PlatformManager:
         if sensor is None or sensor.id is None:
             return False
         if sensor.id not in self.exclude_sensor_list:
+            identifier = create_sensor_unique_id(self.panel_ident, sensor.id)
             if sensor.id not in self._sensor_dict:
                 # Create
-                identifier = create_sensor_unique_id(self.panel_ident, sensor.id)
                 d = create_sensor_label(sensor.id)
                 identifiers = {(DOMAIN, identifier)}
                 device_registry = dr.async_get(self.hass)
@@ -501,7 +504,6 @@ class PlatformManager:
                     and sensor.id not in self._image_created_set
                     and sensor.sensor_type.type == AlarmSensorType.CAMERA
                 ):
-                    self._image_created_set.add(sensor.id)
                     zsd = ZoneSensorData(identifier=identifier, device_id=sensor.id)
                     self.create_image_entity(zsd)
             return True
@@ -667,11 +669,15 @@ class PlatformManager:
             return True
         return False
 
+    def set_sensor_jpeg(self, sensor_id: int, data: bytearray | None) -> None:
+        """Cache the latest JPEG bytes for a camera sensor (or drop it)."""
+        if data:
+            self._sensor_jpeg[sensor_id] = bytearray(data)
+        else:
+            self._sensor_jpeg.pop(sensor_id, None)
+
     def _get_sensor_jpeg(self, sensor_id: int) -> bytearray | None:
-        _sensor: SensorState | None = self._sensor_dict.get(sensor_id)
-        #if sensor and sensor.has_image and sensor.jpg_data:
-        #    return sensor.jpg_data
-        return None
+        return self._sensor_jpeg.get(sensor_id)
 
     def get_jpg_image(self, sensor_id: int) -> bytearray | None:
         """Get the binary image data from a camera sensor."""

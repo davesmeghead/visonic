@@ -1047,7 +1047,7 @@ class MessageHandling(MessageHandlingB0Data):
                 if is_in_sequence:
                     if self.image_manager.isImageComplete():
                         izc, ir = self.image_manager.getLastImageRecord()
-                        log.debug(f"[handle_msgtypeF4]        Image Complete       Current Data     zone={ir.zone}    unique_id={hex(izc.unique_id)}    image_id={ir.image_id}    total_images={izc.total_images}    lastimage={ir.lastimage}")
+                        log.debug(f"[handle_msgtypeF4]        Image Complete       Current Data     zone={ir.zone}    unique_id={hex(izc.unique_id)}    image_id={ir.image_id}    total_images={izc.totalimages}    lastimage={ir.lastimage}")
                         pushchange = True
 
                         #self.add_message_to_send_queue(Send.IMAGE_FB)

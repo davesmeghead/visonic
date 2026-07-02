@@ -128,16 +128,20 @@ class AlImageManager:
         self._current_id: int | None = None
         self._current_image: ImageRecord = None           # The current image being built
 
-    def stop(self):
-        """Terminate the image creation."""
+    def _reset_current(self):
+        """Reset the in-progress image build state."""
         self._current_zone = None             # when not None then building an image for this zone number
         self._current_id = None
         self._current_image = None           # The current image being built
+
+    def stop(self):
+        """Terminate the image creation."""
+        self._reset_current()
         self.last_image = None
 
     def isImageComplete(self) -> bool:
         """Is the image complete."""
-        return False if self.last_image is None else self.last_image.isImageComplete()
+        return self._current_image is None and self.last_image is not None and self.last_image.isImageComplete()
 
     def isImageDataInProgress(self) -> bool:
         """Is the image data ongoing."""
@@ -196,7 +200,7 @@ class AlImageManager:
         if self._current_image.isImageComplete():
             self.last_image = self._current_image
             self.ImageZone[self._current_zone].add_replace(self._current_id, self._current_image)
-            self.stop()
+            self._reset_current()
         return insequence
 
     def getLastImageRecord(self) -> tuple[ImageZoneClass, ImageRecord]:
