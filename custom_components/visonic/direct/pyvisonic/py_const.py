@@ -38,7 +38,7 @@ TEXT_AC_FAIL    = "ac_failure"
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
 #                     It also limits logging of received data
-OBFUS = False
+OBFUS = True
 
 # Whether to include B0 35 and B0 42 panel data decode in the log file.  Note that this is also combined with OBFUS.
 B0_35_PANEL_DATA_LOG = True  # True or False
