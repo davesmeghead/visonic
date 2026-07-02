@@ -1,108 +1,135 @@
 """Support for Visonic PIR Camera image."""
-import logging
-from datetime import timedelta
+
+import asyncio
+from collections.abc import Mapping
+from typing import Any
 
 from homeassistant.components.image import ImageEntity
-from homeassistant.components.image import DOMAIN as IMAGE_DOMAIN
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
-
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_IDLE, STATE_OK, Platform
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import StateType
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import slugify
 
-from .pyconst import AlSensorDevice, AlSensorCondition
-from .client import VisonicClient
-from .const import DOMAIN, MANUFACTURER, PANEL_ATTRIBUTE_NAME, DEVICE_ATTRIBUTE_NAME, VISONIC_TRANSLATION_KEY
-from . import VisonicConfigEntry
+from .const import (
+    DEVICE_ATTRIBUTE_NAME,
+    DOMAIN,
+    MANUFACTURER,
+    PANEL_ATTRIBUTE_NAME,
+    VISONIC_TRANSLATION_KEY,
+)
+from .coordinator_base import VisonicCoordinator
+from .visonic_entity_types import SensorState, ZoneSensorData
+from .visonic_types import VisonicConfigData, VisonicCoordinatorData
 
-_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: VisonicConfigEntry,
+    entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Visonic Image Entity for Camera PIRs"""
-    #_LOGGER.debug(f"image async_setup_entry start")
+    """Set up the Visonic Image Entity for Camera PIRs."""
 
     @callback
-    def async_add_image(device: AlSensorDevice) -> None:
+    def async_add_image(sensor_data: ZoneSensorData) -> None:
         """Add Visonic Image Sensor."""
-        entities: list[ImageEntity] = []
-        entities.append(VisonicImage(hass, entry.runtime_data.client, device))
-        #_LOGGER.debug(f"image adding {device.getDeviceID()}")
-        async_add_entities(entities)
+        async_add_entities(
+            [VisonicImage(hass=hass, entry=entry, sensor_id=sensor_data.device_id, identifier=sensor_data.identifier)]
+        )
 
-    entry.runtime_data.dispatchers[IMAGE_DOMAIN] = async_dispatcher_connect(hass, f"{DOMAIN}_{entry.entry_id}_add_{IMAGE_DOMAIN}", async_add_image)
-    #_LOGGER.debug("image async_setup_entry exit")
+    vce: VisonicConfigData = entry.runtime_data
+    vce.dispatchers[Platform.IMAGE] = async_dispatcher_connect(
+        hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.IMAGE}", async_add_image
+    )
 
 
-class VisonicImage(ImageEntity):
+class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
     """A class to let you visualize the image from a PIR sensors camera."""
 
-    def __init__(self, hass: HomeAssistant, client: VisonicClient, visonic_device: AlSensorDevice):
-        #super().__init__(self, hass)
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, sensor_id: int, identifier: str
+    ) -> None:
+        """Initialize the image entity."""
+        vce: VisonicConfigData = entry.runtime_data
+        CoordinatorEntity.__init__(self, coordinator=vce.coordinator)  # type: ignore[arg-type]
         ImageEntity.__init__(self, hass)
+        self._sensor_id = sensor_id
+        self._panel_id = vce.panel_id
+        self._attr_unique_id = slugify(identifier + "_sensor_image")
+        self._attr_name = "Image"
+        self._attr_should_poll = False
+        self._attr_translation_key = VISONIC_TRANSLATION_KEY
+
+        self._panel = vce.panel_id
         self._attr_image_last_updated = None
         self._cached_image = None
-        self._attr_image_url = None
+        # self._attr_image_url = None
         self._attr_content_type = "image/jpeg"
-        self._attr_should_poll = False
-        self._visonic_device = visonic_device
-        self._visonic_device.onChange(self.onChange)
-        dname = visonic_device.createFriendlyName()
-        pname = client.getMyString()
-        self._name = str(pname + dname).lower()
-        self._panel = client.getPanelID()
-        self._attr_translation_key = VISONIC_TRANSLATION_KEY
-        self._sensor_image = None
-        #_LOGGER.debug(f"************* image init ************** Sensor ID {self._dname}     Sensor Type {visonic_device.getSensorType()}")
-        self._attr_unique_id = slugify(self._name + "_image")
-        self._attr_name = "Image"
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, self._name)})
+        self._image_data = None
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            manufacturer=MANUFACTURER,
+        )
 
-    # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
-    async def async_will_remove_from_hass(self):
-        """Remove from hass."""
-        _LOGGER.debug(f"[async_will_remove_from_hass] id = {self.unique_id}")
-        self._visonic_device = None
-        self._is_available = False
-        await super().async_will_remove_from_hass()
+        self._attr_available = False
+        self._has_image: bool = False
+        self._attr_state = STATE_IDLE  # STATE_IDLE
+        self._image_lock = asyncio.Lock()
 
-    def onChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
-        """Call on any change to the sensor."""
-        # the sensor parameter is the same as self._visonic_device, but it's a generic callback handler that calls this function
+    def _get_sensor(self) -> SensorState | None:
+        """Get the sensor dictionary associated with this entity."""
+        if not self.coordinator or not self.coordinator.data:
+            return None
+        vcd: VisonicCoordinatorData = self.coordinator.data
+        return vcd.zones.get(self._sensor_id)  # Could be None if not present
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
         # Update the current value based on the device state
-        #_LOGGER.debug(f"   In Image VisonicSensor onchange {self._visonic_device}")
-        if self._visonic_device is not None:
-            if s == AlSensorCondition.CAMERA and self._visonic_device.hasJPG:              # Camera update
-                interval = timedelta(seconds=2)
-                if self._attr_image_last_updated is not None:
-                    interval = self._visonic_device.jpg_time - self._attr_image_last_updated
-                if interval > timedelta(seconds=1):
-                    _LOGGER.debug("[onChange] updating image")
-                    self._sensor_image = self._visonic_device.jpg_data
-                    self._attr_image_last_updated = self._visonic_device.jpg_time
-                    # Ask HA to schedule an update
-                    if self.hass is not None and self.entity_id is not None:
-                        self.schedule_update_ha_state()
-        else:
-            _LOGGER.debug("changeHandler: image on change called but sensor is not defined")
+        if (sensor := self._get_sensor()) is None:
+            return
+        self._attr_available = sensor.enrolled
+        self._has_image = sensor.has_image
+
+        if self._has_image:
+            image_time = sensor.image_time
+            if image_time != self._attr_image_last_updated:
+                self._attr_image_last_updated = image_time
+                self._attr_state: StateType = STATE_OK
+                self.async_write_ha_state()
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> Mapping[str, Any] | None:
         """Return the state attributes of the device."""
-        attr = {}
-        attr[PANEL_ATTRIBUTE_NAME] = self._panel
-        attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()
+        if self._get_sensor() is None:
+            return None
+        attr: Mapping[str, Any] = {}
+        attr[PANEL_ATTRIBUTE_NAME] = self._panel_id
+        attr[DEVICE_ATTRIBUTE_NAME] = self._sensor_id
         return attr
 
     async def async_image(self) -> bytes | None:
-        """Update the image if it is not cached."""
-        return self._sensor_image
+        """Return bytes of image on-demand."""
+        if (sensor := self._get_sensor()) is None:
+            return None
+        if not self._has_image:
+            return None
 
-    @property
-    def has_entity_name(self) -> bool:
-        """Prevent HA adding the device name to the start of the entity name."""
-        return False
+        image_time = sensor.image_time
+
+        async with self._image_lock:
+            if image_time != self._attr_image_last_updated:
+                self._attr_image_last_updated = image_time
+                self._attr_state: StateType = (
+                    STATE_OK  # pyright: ignore[reportIncompatibleVariableOverride]
+                )
+                # Fetch from the client; use async if possible
+                self._image_data: bytearray | None = (
+                    await self.coordinator.get_cached_image(self._sensor_id)
+                )
+        return self._image_data

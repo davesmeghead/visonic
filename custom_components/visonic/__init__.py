@@ -1,765 +1,512 @@
-"""Create a connection to a Visonic PowerMax or PowerMaster Alarm System."""
+"""Integration for a Visonic PowerMax or PowerMaster Alarm System."""
 
-from __future__ import annotations
-
-import logging
 import asyncio
-from urllib.parse import ParseResult, urlparse
-import requests.exceptions
-import serialx
-import voluptuous as vol
-import collections
-from collections import namedtuple
-from .config_flow import validate_ethernet_connection
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.core import HomeAssistant, ServiceValidationError, valid_entity_id, ServiceCall, ServiceResponse, SupportsResponse
+from copy import deepcopy
+import logging
+from types import MappingProxyType
+from typing import Any
+
+from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
+from homeassistant.const import CONF_NAME, CONF_SOURCE, CONF_TYPE
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import config_validation as cv
-from homeassistant.components import persistent_notification
-from homeassistant.helpers.translation import async_translate_state
-from homeassistant.const import STATE_UNAVAILABLE
-from homeassistant.helpers import entity_registry as er, device_registry as dr
 
-from homeassistant.const import (
-    CONF_HOST,
-    CONF_PATH,
-    CONF_PORT,
-    CONF_TYPE,
-    Platform,
-    ATTR_CODE,
-    ATTR_ENTITY_ID,
-    EVENT_CORE_CONFIG_UPDATE,
-)
+from .cloud.coordinator_cloud import VisonicCloudCoordinator
+from .connection_test import ConnectionTest
 
-from .pyconst import AlPanelCommand, AlX10Command
-from .client import VisonicClient
+# Most of the CONF_ are only imported because of the migration function from one version to the next
 from .const import (
-    CONF_DEVICE_TYPE,
-    DEVICE_TYPE_ETHERNET,
-    DEVICE_TYPE_USB,
-    DOMAIN,
-    PLATFORMS,
-    ALARM_PANEL_EVENTLOG,
-    ALARM_PANEL_RECONNECT,
-    ALARM_PANEL_ZONEINFO,
-    ALARM_PANEL_COMMAND,
-    ALARM_PANEL_X10,
-    ALARM_SENSOR_BYPASS,
-    ALARM_SENSOR_IMAGE,
-    ATTR_BYPASS,
-    CONF_PANEL_NUMBER,
     CONF_ALARM_NOTIFICATIONS,
-    CONF_RETRY_CONNECTION_COUNT,
-    CONF_MOTION_OFF_DELAY,
-    CONF_MAGNET_CLOSED_DELAY,
-    CONF_ESPHOME_ENTITY_SELECT,
+    CONF_DEVICE_BAUD,
     CONF_EMER_OFF_DELAY,
-    PANEL_ATTRIBUTE_NAME,
-    NOTIFICATION_ID,
-    NOTIFICATION_TITLE,
     CONF_EMULATION_MODE,
-    CONF_COMMAND,
-    CONF_X10_COMMAND,
-    available_emulation_modes,
+    CONF_ESPHOME_ENTITY_SELECT,
+    CONF_EXCLUDE_SWITCH,
+    CONF_MAGNET_CLOSED_DELAY,
+    CONF_MOTION_OFF_DELAY,
+    CONF_PANEL_NUMBER,
+    CONF_SERVER_HOST,
+    CONF_SERVER_PORT,
+    CONF_USAGE,
+    DEFAULT_DEVICE_BAUD,
+    DISCOVERIES,
+    DOMAIN,
+    FORM_CLOUD,
+    FORM_DEVICE,
+    FORM_ETHERNET,
+    FORM_PARAM10,
+    FORM_PARAM11,
+    FORM_PARAM12,
+    FORM_PARAM13,
+    FORM_PARAM14,
+    FORM_POWERLINK,
+    FORM_SERIAL,
+    FORM_TCP_DISCOVERED,
+    FORM_TCP_SERVER,
+    PANELS,
+    PLATFORMS,
+    SERVERS,
+    TEXT_TITLE,
+    TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE,
+)
+from .create_schema import FormItems, build_config_items
+from .direct.coordinator_direct import VisonicDirectCoordinator
+from .exceptions import VisonicException
+from .log_events import logEvents
+from .server import ServerProtocol, TCPServerConnection
+from .services import async_register_services
+from .visonic_types import (
     AvailableNotifications,
-    VisonicConfigEntry,
-    VisonicConfigKey,
+    DeviceType,
+    EmulationMode,
     VisonicConfigData,
+    VisonicDiscoveryData,
+    VisonicDomainData,
+    VisonicEntryKey,
+    VisonicServerData,
+)
+from .visonic_utils import (
+    check_panel_is_unique,
+    check_server_is_unique,
+    create_key,
+    get_next_panel_id,
+    get_panel_by_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-
-# the 6 schemas for the HA service calls
-ALARM_SCHEMA_EVENTLOG = vol.Schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Optional(ATTR_CODE, default=""): cv.string,
-    }
-)
-
-ALARM_SCHEMA_COMMAND = vol.Schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Required(CONF_COMMAND) : vol.In([x.lower() for x in list(AlPanelCommand.get_variables().keys())]),
-        vol.Optional(ATTR_CODE, default=""): cv.string,
-    }
-)
-
-ALARM_SCHEMA_X10 = vol.Schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Required(CONF_X10_COMMAND) : vol.In([x.lower() for x in list(AlX10Command.get_variables().keys())]),
-    }
-)
-
-ALARM_SCHEMA_RECONNECT = vol.Schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-    }
-)
-
-ALARM_SCHEMA_BYPASS = vol.Schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Required(ATTR_BYPASS, default=False): cv.boolean,
-        vol.Optional(ATTR_CODE, default=""): cv.string,
-    }
-)
-
-ALARM_SCHEMA_ZONE_INFO = vol.Schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-    }
-)
-
-ALARM_SCHEMA_IMAGE = vol.Schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-    }
-)
-
-update_version_panel_number = 0
-translatedLanguageAlready = False
-
-##############################################################################################################################################################################################################################################
-##########################  Known Data Strings for EPROM and Message Decode  ################################################################################################################################################################
-##############################################################################################################################################################################################################################################
-
-# Use English as the default values unless updated by the settings from the Integration
-pmLogEvent_t = [
-   "None",
-   # 1
-   "Interior Alarm", "Perimeter Alarm", "Delay Alarm", "24h Silent Alarm", "24h Audible Alarm",
-   "Tamper", "Control Panel Tamper", "Tamper Alarm", "Tamper Alarm", "Communication Loss",
-   # 11
-   "Panic From Keyfob", "Panic From Control Panel", "Duress", "Confirm Alarm", "General Trouble",
-   "General Trouble Restore", "Interior Restore", "Perimeter Restore", "Delay Restore", "24h Silent Restore",
-   # 21
-   "24h Audible Restore", "Tamper Restore", "Control Panel Tamper Restore", "Tamper Restore", "Tamper Restore",
-   "Communication Restore", "General Restore", "Cancel Alarm", "Trouble Restore", "Not used",
-   # 31
-   "Recent Close", "Fire", "Fire Restore", "Not Active", "Emergency",
-   "Remove User", "Disarm Latchkey", "Confirm Alarm Emergency", "Supervision (Inactive)", "Supervision Restore (Active)",
-   # 41
-   "Low Battery", "Low Battery Restore", "AC Fail", "AC Restore", "Control Panel Low Battery",
-   "Control Panel Low Battery Restore", "RF Jamming", "RF Jamming Restore", "Communications Failure", "Communications Restore",
-   # 51
-   "Telephone Line Failure", "Telephone Line Restore", "Auto Test", "Fuse Failure", "Fuse Restore",
-   "Keyfob Low Battery", "Keyfob Low Battery Restore", "Engineer Reset", "Battery Disconnect", "1-Way Keypad Low Battery",
-   # 61
-   "1-Way Keypad Low Battery Restore", "1-Way Keypad Inactive", "1-Way Keypad Restore Active", "Low Battery Ack", "Clean Me",
-   "Fire Trouble", "Low Battery", "Battery Restore", "AC Fail", "AC Restore",
-   # 71
-   "Supervision (Inactive)", "Supervision Restore (Active)", "Gas Alert", "Gas Alert Restore", "Gas Trouble",
-   "Gas Trouble Restore", "Flood Alert", "Flood Alert Restore", "X-10 Trouble", "X-10 Trouble Restore",
-   # 81
-   "Armed Home", "Armed Away", "Quick Armed Home", "Quick Armed Away", "Disarmed",
-   "Fail To Auto-Arm", "Enter To Test Mode", "Exit From Test Mode", "Force Arm", "Auto Arm",
-   # 91
-   "Instant Arm", "Bypass", "Fail To Arm", "Door Open", "Communication Established By Control Panel",
-   "System Reset", "Installer Programming", "Wrong Password", "Not Sys Event", "Not Sys Event",
-   # 101
-   "Extreme Hot Alert", "Extreme Hot Alert Restore", "Freeze Alert", "Freeze Alert Restore", "Human Cold Alert",
-   "Human Cold Alert Restore", "Human Hot Alert", "Human Hot Alert Restore", "Temperature Sensor Trouble", "Temperature Sensor Trouble Restore",
-   # 111
-   # New values for PowerMaster and models with partitions
-   "PIR Mask", "PIR Mask Restore", "Repeater low battery", "Repeater low battery restore", "Repeater inactive",
-   "Repeater inactive restore", "Repeater tamper", "Repeater tamper restore", "Siren test end", "Devices test end",
-   # 121
-   "One way comm. trouble", "One way comm. trouble restore", "Sensor outdoor alarm", "Sensor outdoor restore", "Guard sensor alarmed",
-   "Guard sensor alarmed restore", "Date time change", "System shutdown", "System power up", "Missed Reminder",
-   # 131
-   "Pendant test fail", "Basic KP inactive", "Basic KP inactive restore", "Basic KP tamper", "Basic KP tamper Restore",
-   "Heat", "Heat restore", "LE Heat Trouble", "CO alarm", "CO alarm restore",
-   # 141
-   "CO trouble", "CO trouble restore", "Exit Installer", "Enter Installer", "Self test trouble",
-   "Self test restore", "Confirm panic event", "", "Soak test fail", "Fire Soak test fail",
-   # 151
-   "Gas Soak test fail"  
-]
-
-# Default "Panel" to English
-en_keys = ["system", "zone", "fob", "user", "pad", "siren", "2pad", "x10", "pgm", "gsm", "powerlink", "ptag", "repeater", "undefined"]
-
-# pmax is powermax, pmas is powermaster
-pmLogPowerColl = collections.namedtuple("pmLogPowerColl", 'key name pmax_include pmax_autonumber pmax_start pmax_stop pmas_include pmas_autonumber pmas_start pmas_stop' )
-pmLogPower = [ #                                     PowerMax Settings           PowerMaster Settings     powermax   powermaster  
-   pmLogPowerColl( en_keys[0]  , "System" ,         True, False, 0,  0 ,         True,  False, 0,  0 ), #     0           0  System   
-   pmLogPowerColl( en_keys[1]  , "Zone"   ,         True,  True, 1, 30 ,         True,   True, 1, 64 ), #     1           1  Zone     
-   pmLogPowerColl( en_keys[2]  , "Fob"    ,         True,  True, 1,  8 ,         True,   True, 1, 32 ), #    31          65  Fob      
-   pmLogPowerColl( en_keys[3]  , "User"   ,         True,  True, 1,  8 ,         True,   True, 1, 48 ), #    39          97  User     
-   pmLogPowerColl( en_keys[4]  , "Pad"    ,         True,  True, 1,  8 ,         True,   True, 1, 32 ), #    47         145  Pad      
-   pmLogPowerColl( en_keys[5]  , "Sir"    ,         True,  True, 1,  2 ,         True,   True, 1,  8 ), #    55         177  Sir      
-   pmLogPowerColl( en_keys[6]  , "2Pad"   ,         True,  True, 1,  4 ,         True,   True, 1,  4 ), #    57         185  2PAD     
-   pmLogPowerColl( en_keys[7]  , "X10"    ,         True,  True, 1, 15 ,         True,   True, 1, 15 ), #    61         189  X10      
-   pmLogPowerColl( en_keys[8]  , "PGM"    ,         True, False, 0,  0 ,         True,  False, 0,  0 ), #    76         204  PGM      
-   pmLogPowerColl( en_keys[9]  , "GSM"    ,         True, False, 0,  0 ,        False,  False, 0,  0 ), #    77            - GSM
-   pmLogPowerColl( en_keys[10] , "P-LINK" ,         True, False, 0,  0 ,         True,  False, 0,  0 ), #    78         205  P-LINK   
-   pmLogPowerColl( en_keys[11] , "PTag"   ,         True,  True, 1,  8 ,         True,   True, 1, 32 ), #    79         206  PTag     
-   pmLogPowerColl( en_keys[12] , "Rptr"   ,        False, False, 0,  0 ,         True,   True, 1,  8 ), #     -         238  Rptr     
-   pmLogPowerColl( en_keys[13] , "Unknown",         True, False, 1, 41 ,         True,  False, 1, 10 )  #    87         246  Unknown  
-]
-
-# Create the defaults in English to be updated by settings from the Integration
-pmLogPowerMaxUser_t = []
-pmLogPowerMasterUser_t = []
-for v in pmLogPower:
-    # create list
-    if v.pmax_include:
-        pmLogPowerMaxUser_t.extend([f"{v.name} {i:>02}" if v.pmax_autonumber else v.name for i in range(v.pmax_start, v.pmax_stop+1)])
-    if v.pmas_include:
-        pmLogPowerMasterUser_t.extend([f"{v.name} {i:>02}" if v.pmas_autonumber else v.name for i in range(v.pmas_start, v.pmas_stop+1)])
-
-def findClient(hass, panel : int) -> VisonicClient | None:
-    """Look through all the configuration entries looking for the panel."""
-    data = hass.data[VisonicConfigKey]
-    for entry_id in data:
-        # Cycle through the entry IDs. Get the VisonicConfigData Entry
-        e = hass.data[VisonicConfigKey][entry_id]
-        if e.client is not None:
-            if panel == e.client.getPanelID():
-                #_LOGGER.info(f"findClient success, found client and panel")
-                return e.client
-    return None
-
-def findEntry(hass, panel : int):
-    """Look through all the configuration entries looking for the entry ID."""
-    data = hass.data[VisonicConfigKey]
-    for entry_id in data:
-        # Cycle through the entry IDs. Get the VisonicConfigData Entry
-        e = hass.data[VisonicConfigKey][entry_id]
-        if e.client is not None:
-            if panel == e.client.getPanelID():
-                #_LOGGER.info(f"findClient success, found client and panel")
-                return entry_id
-    return None
-
-async def combineSettings(entry):
-    """Combine the old settings from data and the new from options."""
-    # convert python map to dictionary
-    conf = {}
-    # the entry.data dictionary contains all the old data used on creation and is a complete set
-    for k in entry.data:
-        conf[k] = entry.data[k]
-    # the entry.config dictionary contains the latest/updated values but may not be a complete set
-    for k in entry.options:
-        conf[k] = entry.options[k]
-    return conf
-
-def translateLanguage(hass):
-    ###################################################################################################
-    # Retrieve the names of the things that create the events from the language translations files ####
-    ###################################################################################################
-
-    _LOGGER.debug(f"[translateLanguage] Home Assistant country is {str(hass.config.country)}")
-    _LOGGER.debug(f"[translateLanguage] Home Assistant language is {str(hass.config.language)}")
-
-    en_vals = { key : async_translate_state(hass=hass, 
-                                            domain=DOMAIN,
-                                            device_class="event_name",
-                                            state=key, 
-                                            platform=None,
-                                            translation_key=None)
-                for key in en_keys }
-
-    _LOGGER.debug(f"[translateLanguage] alarm control panel event_names translations {en_vals}")
-
-    if len(en_vals) > 0:
-        pmLogPowerMaxUser_t = []
-        pmLogPowerMasterUser_t = []
-        for v in pmLogPower:
-            # Use the translation if in the list else default back to the English.  
-            #     The translation file does not need to contain all 14 translations
-            w = en_vals[v.key] if v.key in en_vals else v.name     # get the translation
-            # create list
-            if v.pmax_include:
-                pmLogPowerMaxUser_t.extend([f"{w} {i:>02}" if v.pmax_autonumber else w for i in range(v.pmax_start, v.pmax_stop+1)])
-            if v.pmas_include:
-                pmLogPowerMasterUser_t.extend([f"{w} {i:>02}" if v.pmas_autonumber else w for i in range(v.pmas_start, v.pmas_stop+1)])
-                
-        _LOGGER.debug(f"[translateLanguage] Replacing default English names with provided list:")
-        _LOGGER.debug(f"[translateLanguage]       pmLogPowerMaxUser_t    = {pmLogPowerMaxUser_t}")
-        _LOGGER.debug(f"[translateLanguage]       pmLogPowerMasterUser_t = {pmLogPowerMasterUser_t}")
-
-    # Retrieve the actions from the language translations files
-    for key in range(0, len(pmLogEvent_t)+1):
-        state = f"{key:0>3}"
-        tx_s = async_translate_state(hass=hass, 
-                                     domain=DOMAIN,
-                                     device_class="event_action",
-                                     state=state, 
-                                     platform=None,
-                                     translation_key=None)
-        if tx_s != state:     # Check to see if it's just returned the state that I passed in i.e. to make sure the translation exists
-            pmLogEvent_t[key] = tx_s
-    
-    _LOGGER.debug(f"[translateLanguage] alarm control panel event_action translated {pmLogEvent_t}")
-
-
-async def cleanup_stale_entities(hass : HomeAssistant, config_entry: ConfigEntry):
-    import re
-    PATTERN = re.compile(r"^[^.]+\.visonic_[zsx]([0-9]{2})$")
-
-    device_registry = dr.async_get(hass)
-    entity_registry = er.async_get(hass)
-
-    # Get all devices for this config entry
-    device_entries = dr.async_entries_for_config_entry(
-        device_registry,
-        config_entry.entry_id,
-    )
-
-    for device in device_entries:
-
-        # Get ALL entities for the device
-        entries = er.async_entries_for_device(
-            entity_registry,
-            device.id,
-            include_disabled_entities=True,
-        )
-
-        for entry in entries:
-
-            # Remove entities no longer provided by integration
-            if PATTERN.match(entry.entity_id):
-                _LOGGER.info(f"Removing entity: {entry.unique_id}")  # noqa: G004
-                entity_registry.async_remove(entry.entity_id)
-                continue
-
-            state = hass.states.get(entry.entity_id)
-
-            # Optional: remove permanently unavailable entities
-            if state and state.state == STATE_UNAVAILABLE:
-                entity_registry.async_remove(entry.entity_id)
-
-
-async def async_setup(hass: HomeAssistant, base_config: dict):
+async def async_setup(hass: HomeAssistant, _base_config: dict[str, Any]) -> bool:
     """Set up the visonic component."""
-    
-    def sendHANotification(message: str):
-        """Send a HA notification and output message to log file"""
-        _LOGGER.info(message)
-        persistent_notification.create(hass, message, title=NOTIFICATION_TITLE, notification_id=NOTIFICATION_ID)
-
-    def getClient(call):
-        #_LOGGER.debug(f"Client Not Found called")        
-        if isinstance(call.data, dict):
-            #_LOGGER.debug(f"Client Not Found called {call}")
-            if ATTR_ENTITY_ID in call.data:
-                eid = str(call.data[ATTR_ENTITY_ID])
-                if valid_entity_id(eid):
-                    mybpstate = hass.states.get(eid)
-                    if mybpstate is not None:
-                        if PANEL_ATTRIBUTE_NAME in mybpstate.attributes:
-                            panel = mybpstate.attributes[PANEL_ATTRIBUTE_NAME]
-                            client = findClient(hass, panel)
-                            if client is not None:
-                                #_LOGGER.debug(f"getClient success for panel {panel}")
-                                return client, panel
-                            else:
-                                #_LOGGER.warning(f"Client Not Found - Panel found {panel} but Client Not Found")
-                                raise ServiceValidationError(f"Client Not Found - Panel found {panel} but Client Not Found")
-                                return None, panel
-                    else:
-                        raise ServiceValidationError(f"Client Not Found - Entity does not have correct attributes")
-                else:
-                    raise ServiceValidationError(f"Client Not Found - Invalid Entity")
-        #_LOGGER.warning(f"Client Not Found")
-        raise ServiceValidationError(f"Client Not Found")
-        return None, None
-
-    async def async_service_panel_eventlog(call):
-        """Handler for event log service"""
-        _LOGGER.info("Event log called")
-        
-        client, panel = getClient(call)
-        if client is not None:
-            await client.async_service_panel_eventlog(call)
-        elif panel is not None:
-            sendHANotification(f"Event log failed - Panel {panel} not found")
-        else:
-            sendHANotification(f"Event log failed - Panel not found")
-    
-    async def async_service_panel_reconnect(call):
-        """Handler for panel reconnect service"""
-        client, panel = getClient(call)
-        _LOGGER.info(f"Service: Visonic Panel {panel} reconnect called")
-        if client is not None:
-            await client.async_service_panel_reconnect(call = call)    # user has explicitly asked for this
-        elif panel is not None:
-            sendHANotification(f"Service Panel reconnect failed - Panel {panel} not found")
-        else:
-            sendHANotification(f"Service Panel reconnect failed - Panel not found")
-    
-    async def async_service_panel_command(call : ServiceCall) -> ServiceResponse:
-        """Handler for panel command service"""
-        _LOGGER.info(f"Service Panel command called")
-        client, panel = getClient(call)
-        if client is not None:
-            didBypassSensor = await client.async_service_panel_command(call)
-            _LOGGER.info(f"Service Panel command called - command complete, starting delay")
-            # It takes up to a second for the command to be sent to the panel and then to get any changes in the sensor bypass state
-            await asyncio.sleep(1.0)
-            if didBypassSensor:
-                await asyncio.sleep(0.2)
-            _LOGGER.info(f"Service Panel command called - getting panel info to return to HA")
-            return await client.async_service_panel_zoneinfo(call)
-        elif panel is not None:
-            sendHANotification(f"Service Panel command failed - Panel {panel} not found")
-        else:
-            sendHANotification(f"Service Panel command failed - Panel not found")
-        return { "valid": False,
-                 "sensors": [],
-                 "batterylow" : [],
-                 "open" : [],
-                 "bypass": [],
-                 "switches": []
-               }
-
-    async def async_service_panel_x10(call):
-        """Handler for panel command service"""
-        _LOGGER.info(f"Service Panel x10 called")
-        client, panel = getClient(call)
-        if client is not None:
-            await client.service_panel_x10(call)
-        elif panel is not None:
-            sendHANotification(f"Service Panel x10 failed - Panel {panel} not found")
-        else:
-            sendHANotification(f"Service Panel x10 failed - Panel not found")
-
-    async def async_service_sensor_bypass(call):
-        """Handler for sensor bypass service"""
-        _LOGGER.info("Service Panel sensor bypass called")
-        client, panel = getClient(call)
-        if client is not None:
-            await client.async_service_sensor_bypass(call)
-        elif panel is not None:
-            sendHANotification(f"Service Panel sensor bypass failed - Panel {panel} not found")
-        else:
-            sendHANotification(f"Service Panel sensor bypass failed - Panel not found")
-    
-    async def async_service_panel_zoneinfo(call : ServiceCall) -> ServiceResponse:
-        """Handler for panel zones service"""
-        _LOGGER.info("Service Panel zones called")
-        client, panel = getClient(call)
-        if client is not None:
-            return await client.async_service_panel_zoneinfo(call)
-        elif panel is not None:
-            sendHANotification(f"Service Panel zone info failed - Panel {panel} not found")
-        else:
-            sendHANotification(f"Service Panel zone info failed - Panel not found")
-        return { "valid": False,
-                 "sensors": [],
-                 "batterylow" : [],
-                 "open" : [],
-                 "bypass": [],
-                 "switches": []
-               }
-    
-    async def async_service_sensor_image(call):
-        """Handler for sensor image service"""
-        _LOGGER.info("Service Panel sensor image update called")
-        client, panel = getClient(call)
-        if client is not None:
-            await client.async_service_sensor_image(call)
-        elif panel is not None:
-            sendHANotification(f"Service sensor image update - Panel {panel} not found")
-        else:
-            sendHANotification(f"Service sensor image update failed - Panel not found")
- 
-
     _LOGGER.info("Starting Visonic Component")
-    hass.data[VisonicConfigKey] = {}
-
-    # Install the 7 handlers for the HA service calls
-    hass.services.async_register(
-        domain = DOMAIN,
-        service = ALARM_PANEL_EVENTLOG,
-        service_func = async_service_panel_eventlog,
-        schema = ALARM_SCHEMA_EVENTLOG,
-    )
-    hass.services.async_register(
-        DOMAIN, 
-        ALARM_PANEL_RECONNECT, 
-        async_service_panel_reconnect, 
-        schema=ALARM_SCHEMA_RECONNECT,
-    )
-    hass.services.async_register(
-        DOMAIN,
-        ALARM_PANEL_COMMAND,
-        async_service_panel_command,
-        schema=ALARM_SCHEMA_COMMAND,
-        supports_response=SupportsResponse.OPTIONAL,
-    )
-    hass.services.async_register(
-        DOMAIN,
-        ALARM_PANEL_X10,
-        async_service_panel_x10,
-        schema=ALARM_SCHEMA_X10,
-    )
-    hass.services.async_register(
-        DOMAIN,
-        ALARM_SENSOR_BYPASS,
-        async_service_sensor_bypass,
-        schema=ALARM_SCHEMA_BYPASS,
-    )
-    hass.services.async_register(
-        DOMAIN,
-        ALARM_PANEL_ZONEINFO,
-        async_service_panel_zoneinfo,
-        schema=ALARM_SCHEMA_ZONE_INFO,
-        supports_response=SupportsResponse.ONLY,
-    )
-    
-    hass.services.async_register(
-        DOMAIN,
-        ALARM_SENSOR_IMAGE,
-        async_service_sensor_image,
-        schema=ALARM_SCHEMA_IMAGE,
-    )
-    
+    # Clear all data
+    hass.data.setdefault(VisonicEntryKey, {
+        PANELS: {},
+        SERVERS: {},
+        DISCOVERIES: {}
+    })
+    # Register the services
+    await async_register_services(hass)
     return True
 
+async def async_setup_server(hass: HomeAssistant, entry: ConfigEntry, server_id: int) -> bool:
+    """Setup a server that waits for a Powerlink Hardware connection from a visonic panel."""
 
-# This function is called with the flow data to create a client connection to the alarm panel
-# From one of:
-#    - the imported configuration.yaml values that have created a control flow
-#    - the original control flow if it existed
-async def async_setup_entry(hass: HomeAssistant, entry: VisonicConfigEntry) -> bool:
-    """Set up visonic from a config entry."""
-    global translatedLanguageAlready
-
-    def configured_hosts(hass):
-        """Return a set of the configured hosts."""
-        return len(hass.config_entries.async_entries(DOMAIN))
-
-    # Listener to handle fired events
-    def handle_core_config_updated(event):
-        _LOGGER.debug(f"[Visonic Setup] Core configuration has been Updated")
-        #hass = async_get_hass()
-        translateLanguage(hass)
-
-    _LOGGER.debug(f"[Visonic Setup] ************************************ create connection ************************************")
-    #_LOGGER.debug(f"[Visonic Setup]       Entry data={entry.data}   options={entry.options}")
-    _LOGGER.debug(f"[Visonic Setup]       Entry id={entry.entry_id} in a total of {configured_hosts(hass)} previously configured panels")
-
-    await cleanup_stale_entities(hass, entry)
-
-    device_type = entry.data.get(CONF_DEVICE_TYPE, "")     # This must be set so default is an invalid setting
-    if device_type == DEVICE_TYPE_USB:
-        try:
-            asu = None
-            serial_url = entry.data.get(CONF_PATH, "")
-            #parsed: ParseResult = urlparse(serial_url)
-            #if len(parsed.scheme) > 0:
-            asu = serialx.async_serial_for_url(
-                url=serial_url,
-                baudrate=9600,
-            )
-            await asu.open()
-            _ = asu.is_open
-            await asu.close()
-
-        except (OSError, serialx.SerialException) as err:
-            raise ConfigEntryNotReady("ESPHome serial proxy not ready, cannot continue") from err
-        finally:
-            if asu is not None and asu.is_open:
-                await asu.close()
-    elif device_type == DEVICE_TYPE_ETHERNET:
-        host = entry.data.get(CONF_HOST, "")
-        port = entry.data.get(CONF_PORT, "")
-        if validate_ethernet_connection(host, port) is not None: # not None means an error
-            raise ConfigEntryNotReady("Ethernet connection not ready, cannot continue")
-
-    if not translatedLanguageAlready:
-        translatedLanguageAlready = True
-        translateLanguage(hass)
-        # Listen for when EVENT_CORE_CONFIG_UPDATE is fired
-        hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, handle_core_config_updated)
-
-    # combine and convert python settings map to dictionary
-    conf = await combineSettings(entry)
-
-    panel_id = 0
-    if CONF_PANEL_NUMBER in conf:
-        panel_id = int(conf[CONF_PANEL_NUMBER])
-        #_LOGGER.debug(f"[Visonic Setup] Panel Config has panel number {panel_id}")
-    else:
-        _LOGGER.debug("[Visonic Setup] CONF_PANEL_NUMBER not in configuration, stopping configuration with an error")
-        return False
-
-    # Check for unique panel ids or HA gets really confused and we end up make a big mess in the config files.
-    if findClient(hass, panel_id) is not None:
-        _LOGGER.error(f"[Visonic Setup] The Panel Number {panel_id} is not Unique, you already have a Panel with this Number")
-        return False
-
-    # When here, panel_id should be unique in the panels configured so far.
-    _LOGGER.debug(f"[Visonic Setup]       Panel Ident {panel_id}")
-
-    # push the merged data back in to HA and update the title
-    hass.config_entries.async_update_entry(entry, title=f"Panel {panel_id}", options=conf)
-
-    client = None
-    # create client and connect to the panel
-    try:
-        # create the client ready to connect to the panel, this will initialse the client but nothing more
-        client = VisonicClient(hass, panel_id, conf, entry)
-
-        # save the client and its task
-        hass.data.setdefault(VisonicConfigKey, {})[entry.entry_id] = entry.runtime_data = VisonicConfigData(client, None, list(), dict())
-
-        totalAttempts = int(conf.get(CONF_RETRY_CONNECTION_COUNT, 0))
-
-        # make the client connection to the panel
-        if totalAttempts == 0:
-            # if total attempts is 0 then wait for the connection attempt and if it fails then inform the user straight away (i.e. return False)
-            #  setting this to 0 means no retries or reconnections
-            if await client.async_connect(force=True):    # total attempts will be 0 so force a single connection for initial creation, and then 0 reconnections
-
-                #_LOGGER.debug(f"[Visonic Setup] Setting client ID for entry id {entry.entry_id}")
-
-                # add update listener to unload.  The update listener is used when the user edits an existing configuration.
-                entry.async_on_unload(entry.add_update_listener(update_listener))
-
-                _LOGGER.debug(f"[Visonic Setup] Returning Success for entry id {entry.entry_id}")
-                # return true to indicate success
-                return True
-            else:
-                client = None
+    def panel_update_callback(
+        account: str,
+        panel: str,
+        transport: asyncio.Transport | None,
+        protocol: ServerProtocol | None,
+        vp_ok: bool,
+    ):
+        key = create_key(account, panel)
+        disc: VisonicDiscoveryData | None = hass.data[VisonicEntryKey][DISCOVERIES].get(key)
+        if transport is None or protocol is None:
+            _LOGGER.info("Callback to remove the discovery, account=%s  panel=%s", account, panel)
+            # Delete the panel connection
+            if key in hass.data[VisonicEntryKey][DISCOVERIES]:
+                del hass.data[VisonicEntryKey][DISCOVERIES][key]
+        elif disc:
+            # The panel has been discovered
+            # Update transport and protocol values (it might have disconnected and reconnected)
+            disc.protocol = protocol
+            disc.transport = transport
+            vcd: VisonicConfigData | None = get_panel_by_id(hass, disc.panel_id)
+            if vcd:
+                # The panel has been configured
+                if not isinstance(vcd.coordinator, VisonicDirectCoordinator):
+                    _LOGGER.info("***************** Programme Error, coordinator wrong type %s ******************", type(vcd.coordinator))
+                    return
+                coordinator: VisonicDirectCoordinator = vcd.coordinator
+                if coordinator.panel_id == disc.panel_id:    # Final check for consistency
+                    # Found the existing config entry
+                    if coordinator.hasStarted():
+                        # TODO: Calling this will no longer work
+                        coordinator.update_t_p(transport, protocol)
+                    else:
+                        #entry.async_create_background_task(hass, coordinator.async_server_connect(transport, protocol), name="Connect to server")
+                        hass.async_create_task(coordinator.async_server_connect(transport, protocol), name="Connect to server")
+                    return
+            # If vcd is None then we can't do anything here, we're waiting for the discovery to kick in further down
         else:
-            # add update listener to unload.  The update listener is used when the user edits an existing configuration.
-            entry.async_on_unload(entry.add_update_listener(update_listener))
-            # if total attempts is greater than 1 then connect as a separate task, and return success (i.e. True)
-            tmp = hass.loop.create_task(client.async_connect(force=False))
-            _LOGGER.debug(f"[Visonic Setup] Returning Success for entry id {entry.entry_id}")
+            # The panel has not been discovered
+            # Create a panel number that is unique
+            panel_no = get_next_panel_id(hass)
+            # New panel that we have no config for
+            _LOGGER.info("Callback to set up discovery, account=%s  panel=%s, the allocated panel number is %s", account, panel, panel_no)
+            vdd = VisonicDiscoveryData(panel_no, account, panel, protocol, transport)
+            data = hass.data.setdefault(VisonicEntryKey, {})
+            data.setdefault(DISCOVERIES, {})[key] = vdd
+            # Create a new entry config_flow as a "discovery" for discovered entries
+            #   The discovered panel has it's own config flow and setup
+            # Calls async_step_integration_discovery in config_flow
+            entry.async_create_background_task(
+                hass,
+                hass.config_entries.flow.async_init(
+                    DOMAIN,
+                    context={CONF_SOURCE: SOURCE_INTEGRATION_DISCOVERY},
+                    data={
+                        CONF_TYPE: DeviceType.TCP_DISCOVERED,
+                        CONF_PANEL_NUMBER: panel_no,
+                        "account": account,
+                        "panel": panel,
+                        "server_key": key,
+                    },
+                ),
+                name="Setting up TCP Server"
+            )
+
+    async def manage_tcp_server_stop_start(entry: ConfigEntry) -> bool:
+        rtd: VisonicServerData = entry.runtime_data
+        async with rtd.lock:
+            if rtd.server:
+                await rtd.server.async_stop()
+            rtd.server = None
+            host = entry.data.get(CONF_SERVER_HOST, "0.0.0.0")
+            port = int(entry.data.get(CONF_SERVER_PORT, 5001))
+            server = TCPServerConnection(hass=hass, entry=entry, connection_made_callback=panel_update_callback)
+            success = await server.async_start(hass=hass, host=host, port=port)
+            if success:
+                rtd.server = server
+            return success
+
+    async def config_updated(hass: HomeAssistant, entry: ConfigEntry):
+        _LOGGER.info("***************** config updated ******************")
+        await manage_tcp_server_stop_start(entry) # use the config entry
+
+    if server_id is None:
+        return False
+    vsd = VisonicServerData(None, server_id, asyncio.Lock())
+    entry.runtime_data = vsd
+    success = await manage_tcp_server_stop_start(entry)
+    if success:
+        data: VisonicDomainData = hass.data[VisonicEntryKey]
+        data.setdefault(SERVERS, {})[entry.entry_id] = vsd
+        entry.async_on_unload(
+            entry.add_update_listener(config_updated)
+        )
+    return success
+
+async def async_setup_discovered(hass: HomeAssistant, entry: ConfigEntry, panel_id: int) -> bool:
+    """Setup a discovered visonic panel, probably sourced from a TCP Server creation."""
+    # Panels that connect to port 5001 looking for a cloud server are redirected to a "discovered" connection by the TCP Server
+    # create coordinator and connect to the panel
+    # Hence, the TCP Server and Discovered devices are tied together
+    try:
+        # Create the coordinator for this panel
+        event_logger = logEvents(hass, entry, _LOGGER, panel_id)
+        coordinator = VisonicDirectCoordinator(hass, entry, panel_id, event_logger)
+        # Set the runtime data defaults
+        vcd = VisonicConfigData(coordinator, panel_id, None, {})
+        entry.runtime_data = vcd
+        data: VisonicDomainData = hass.data[VisonicEntryKey]
+        data.setdefault(PANELS, {})[entry.entry_id] = vcd
+        # Refresh the data for the first pass
+        await coordinator.async_config_entry_first_refresh()
+
+        account = entry.options.get("account", entry.data.get("account"))
+        panel = entry.options.get("panel", entry.data.get("panel"))
+        key = create_key(account, panel)
+        vdd: VisonicDiscoveryData = hass.data.setdefault(VisonicEntryKey, {}).setdefault(DISCOVERIES, {}).get(key)
+
+        if vdd is not None:
+            _LOGGER.info("***************** got transport and protocol from config ******************")
+            return await coordinator.async_server_connect(vdd.transport, vdd.protocol)
+        # The panel has not connected to the tcp server yet to match it up.
+        #    Create the discovery data and record it without transport and protocol set.
+        vdd = VisonicDiscoveryData(panel_id, account, panel, None, None)
+        data = hass.data.setdefault(VisonicEntryKey, {})
+        data.setdefault(DISCOVERIES, {})[key] = vdd
+        await coordinator.async_server_connect(None, None)
+
+        # Fall through to the return True
+    # Catch any exception and report it as a config error, connection failure
+    except (TimeoutError, ConnectionError, OSError) as error:
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key=TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE,
+            translation_placeholders={"panel_id": panel_id},
+        ) from error
+    return True
+
+async def async_setup_client(hass: HomeAssistant, entry: ConfigEntry, device_type: DeviceType, panel_id: int) -> bool:
+    """Setup a client that either:.
+
+    1. Connects directly to a visonic panel using ethernet/wifi or rs232/serial/USB hardware.
+    2. Connects to the visonic cloud server
+    3. Connects to the API in Home Assistant for an ESPHome device with a serial_proxy
+    """
+    try:
+        # Create the coordinator for this panel
+        event_logger = logEvents(hass, entry, _LOGGER, panel_id)
+        if device_type == DeviceType.CLOUD:
+            # create coordinator to the cloud server
+            coordinator = VisonicCloudCoordinator(hass, entry, panel_id, event_logger)
+        else:
+            # create coordinator to the panel
+            coordinator = VisonicDirectCoordinator(hass, entry, panel_id, event_logger)
+        vcd = VisonicConfigData(coordinator, panel_id, None, {})
+        entry.runtime_data = vcd
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        # Set the runtime data defaults
+        data: VisonicDomainData = hass.data[VisonicEntryKey]
+        data.setdefault(PANELS, {})[entry.entry_id] = vcd
+        if await coordinator.async_panel_connect():
             return True
+    # Catch any exception and report it as a config error, connection failure
+    except (VisonicException, TimeoutError, ConnectionError, OSError) as error:
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key=TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE,
+            translation_placeholders={"panel_id": panel_id},
+        ) from error
+    return False
+#    except Exception as ex:
+#        _LOGGER.info(f"**************** exception {ex}  *************")
 
-    except requests.exceptions.ConnectionError as error:
-        _LOGGER.error("[Visonic Setup] Visonic Panel could not be reached: [%s]", error)
-        raise ConfigEntryNotReady
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up visonic from a config entry. This is the main entry point."""
 
-    if entry.entry_id in hass.data[VisonicConfigKey]:
-        hass.data[VisonicConfigKey].pop(entry.entry_id)
-        _LOGGER.debug(f"[Visonic Setup]     wiped {entry.entry_id}")
+    # This function is called with the flow data to create a hub connection to the alarm panel
+    device_type: str = entry.data.get(CONF_TYPE)
+    if device_type is None:
+        return False
+    device_type_enum = DeviceType(device_type)
 
-    _LOGGER.debug(f"[Visonic Setup] Returning False for entry id {entry.entry_id}")
+    # Check for the id being unique
+    unique_id = -1
+    match device_type_enum:
+        case DeviceType.TCP_SERVER:
+            unique_id = await check_server_is_unique(hass, entry)
+        case DeviceType.TCP_DISCOVERED:
+            unique_id = await check_panel_is_unique(hass, entry)
+        case DeviceType.ETHERNET | DeviceType.SERIAL | DeviceType.CLOUD:
+            unique_id = await check_panel_is_unique(hass, entry)
+
+    _LOGGER.info("***************** creating connection %d to a %s device ******************", unique_id, device_type_enum)
+    _LOGGER.debug("Entry id=%s",entry.entry_id)
+    # _LOGGER.debug(f" Entry data={entry.data}   options={entry.options}")
+
+    # Test the connection to the device, if it fails then ask the config entry to try again "later"
+    connection_tester = ConnectionTest()
+    error = await connection_tester.test_connection(device_type=device_type_enum, user_input=entry.data)
+    if error is not None:
+        # Connection error
+        _LOGGER.info("***************** creating connection %d to a %s device, test connection failed so trying again later ******************", unique_id, device_type_enum)
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key=error,
+            translation_placeholders={"panel_id": unique_id})
+
+    # Connection test success so create the necessary servers and clients
+    match device_type_enum:
+        case DeviceType.TCP_SERVER:
+            return await async_setup_server(hass, entry, unique_id)
+        case DeviceType.TCP_DISCOVERED:
+            return await async_setup_discovered(hass, entry, unique_id)
+        case DeviceType.ETHERNET | DeviceType.SERIAL | DeviceType.CLOUD:
+            success = await async_setup_client(hass, entry, device_type_enum, unique_id)
+            _LOGGER.info("***************** creating connection %d to a %s device, success=%s ******************", unique_id, device_type_enum, success)
+            if not success:
+                raise ConfigEntryNotReady(
+                    translation_domain=DOMAIN,
+                    translation_key=error,
+                    translation_placeholders={"panel_id": unique_id})
+            return True
+    _LOGGER.info("***************** creating connection %d to a %s device, FAILED ******************", unique_id, device_type_enum)
     return False
 
-async def async_migrate_entry(hass: HomeAssistant, config_entry: VisonicConfigEntry) -> bool:
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:  # noqa: C901
     """Migrate old schema configuration entry to new."""
-    global update_version_panel_number
-    # This function is called when I change VERSION in the ConfigFlow
+    # This function is called when VERSION changes in the ConfigFlow
     # If the config schema ever changes then use this function to convert from old to new config parameters
-    version = config_entry.version
+    version = entry.version
     changed = False
 
-    _LOGGER.info(f"Migrating from version {version}")
-    conf = await combineSettings(config_entry)
+    # Removed from config settings, the user now selects the target/desired emulation mode
+    CONF_FS = "force_standard"  # noqa: N806
+
+    _LOGGER.info("**************** migrating connection ******************")
+    _LOGGER.info("Migrating from version %s", version)
+
+    data = deepcopy(dict(MappingProxyType(entry.data)))
+    options = deepcopy(dict(MappingProxyType(entry.options)))
 
     if version == 1:
-        # Leave CONF_FORCE_STANDARD in place but use it to add CONF_EMULATION_MODE
+        # Leave CONF_FS in place but use it to add CONF_EMULATION_MODE
         version = 2
-        CONF_FORCE_STANDARD = "force_standard"
-        
-        _LOGGER.debug(f"   Migrating CONF_FORCE_STANDARD from {conf[CONF_FORCE_STANDARD]}")
-        if CONF_FORCE_STANDARD in conf and isinstance(conf[CONF_FORCE_STANDARD], bool):
-            _LOGGER.debug(f"   Migrating CONF_FORCE_STANDARD from {conf[CONF_FORCE_STANDARD]} and its boolean")
-            if conf[CONF_FORCE_STANDARD]:
-                _LOGGER.info(f"   Migration: Force standard set so using {available_emulation_modes[1]}")
-                conf[CONF_EMULATION_MODE] = available_emulation_modes[1]
+
+        _LOGGER.debug(" CONF_FS from %s", options[CONF_FS])
+        if CONF_FS in options and isinstance(options[CONF_FS], bool):
+            _LOGGER.debug(" CONF_FS from %s", options[CONF_FS])
+            if options[CONF_FS]:
+                _LOGGER.info("  Force standard set, using %s", EmulationMode.STANDARD)
+                options[CONF_EMULATION_MODE] = EmulationMode.STANDARD
             else:
-                _LOGGER.info(f"   Migration: Force standard not set so using {available_emulation_modes[0]}")
-                conf[CONF_EMULATION_MODE] = available_emulation_modes[0]
-            _LOGGER.info(f"   Emulation mode set to {config_entry.options[CONF_EMULATION_MODE]}")
+                _LOGGER.info("  Force standard not set, using %s", EmulationMode.POWERLINK)
+                options[CONF_EMULATION_MODE] = EmulationMode.POWERLINK
+            _LOGGER.info(" Emulation mode set to %s", options[CONF_EMULATION_MODE])
         changed = True
 
     if version == 2:
         version = 3
 
-        CONF_FORCE_STANDARD = "force_standard"
-        CONF_FORCE_AUTOENROLL = "force_autoenroll"
-        CONF_AUTO_SYNC_TIME = "sync_time"
-        if CONF_FORCE_STANDARD in conf:
-            del conf[CONF_FORCE_STANDARD]       # decided to remove it
-        if CONF_FORCE_AUTOENROLL in conf:
-            del conf[CONF_FORCE_AUTOENROLL]
-        if CONF_AUTO_SYNC_TIME in conf:
-            del conf[CONF_AUTO_SYNC_TIME]
-        _LOGGER.debug("   Updated config settings to remove unused data")
-        
-        if CONF_MOTION_OFF_DELAY in conf:
+        CONF_FORCE_AUTOENROLL = "force_autoenroll"  # noqa: N806
+        CONF_AUTO_SYNC_TIME = "sync_time"  # noqa: N806
+        if CONF_FS in options:
+            del options[CONF_FS]  # decided to remove it
+        if CONF_FORCE_AUTOENROLL in options:
+            del options[CONF_FORCE_AUTOENROLL]
+        if CONF_AUTO_SYNC_TIME in options:
+            del options[CONF_AUTO_SYNC_TIME]
+        _LOGGER.debug(" Updated config settings to remove unused data")
+
+        if CONF_MOTION_OFF_DELAY in options:
             # Add the 2 new timeouts with the same values as the old setting
-            conf[CONF_MAGNET_CLOSED_DELAY] = conf[CONF_MOTION_OFF_DELAY]
-            conf[CONF_EMER_OFF_DELAY] = conf[CONF_MOTION_OFF_DELAY]
-            _LOGGER.debug("   Added additional trigger delay settings")
+            options[CONF_MAGNET_CLOSED_DELAY] = options[CONF_MOTION_OFF_DELAY]
+            options[CONF_EMER_OFF_DELAY] = options[CONF_MOTION_OFF_DELAY]
+            _LOGGER.info("   Added additional trigger delay settings")
 
-        conf[CONF_ALARM_NOTIFICATIONS] = [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]
-        _LOGGER.debug("   Alarm Notification list set to default")
+        options[CONF_ALARM_NOTIFICATIONS] = [
+            AvailableNotifications.CONNECTION,
+            AvailableNotifications.SIREN,
+        ]
+        _LOGGER.debug(" Alarm Notification list set to default")
         changed = True
 
-    if version == 3:
-        version = 4
-        if CONF_PANEL_NUMBER not in conf:
+    if version in [3, 4, 5]:
+        version = 6
+        if CONF_PANEL_NUMBER not in options and CONF_PANEL_NUMBER not in data:
             # We have to assume that multiple panels will be updated at the same time, otherwise it gets complicated
-            _LOGGER.debug(f"   Migrating Panel Number, using {update_version_panel_number}")
-            conf[CONF_PANEL_NUMBER] = update_version_panel_number
-            update_version_panel_number += 1
-        else:
-            _LOGGER.debug(f"   Panel Number already set to {conf[CONF_PANEL_NUMBER]} so updating config version number only")
+            # Create a panel number that is unique
+            data[CONF_PANEL_NUMBER] = get_next_panel_id(hass)
+        if CONF_ESPHOME_ENTITY_SELECT not in options and CONF_ESPHOME_ENTITY_SELECT not in data:
+            data[CONF_ESPHOME_ENTITY_SELECT] = ""
+
+        # Split the data and options correctly:
+        #     data is defined by the user on first creation and then only by reconfigure
+        #     options can be edited easily and are pushed in to the integration without reload
+
+        # Create a new data and options
+        data_out : dict[str, Any] = {}
+        options_out : dict[str, Any] = {}
+
+        # These contain all data and options settings
+        data_items = [FORM_DEVICE, FORM_ETHERNET, FORM_SERIAL, FORM_CLOUD, FORM_TCP_SERVER, FORM_TCP_DISCOVERED, FORM_POWERLINK]
+        option_items = [FORM_PARAM10, FORM_PARAM11, FORM_PARAM12, FORM_PARAM13, FORM_PARAM14]
+
+        # Build a set with all the "data" keys. Using a set removes duplication.
+        key_data_list: set[str] = set()
+        for d in data_items:
+            key_data_list.update(FormItems[d])
+
+        # Build a set with all the "option" keys. Using a set removes duplication.
+        key_option_list: set[str] = set()
+        for o in option_items:
+            key_option_list.update(FormItems[o])
+
+        # Set all data and option values to their defaults
+        config_items = build_config_items() # get a temporary list of all items to get their default
+        missing = (key_data_list | key_option_list) - config_items.keys()
+        if missing:
+            _LOGGER.warning("Missing config items: %s", missing)
+
+        for key in key_data_list:
+            data_out[key] = config_items[key].default
+        for key in key_option_list:
+            options_out[key] = config_items[key].default
+
+        # add title and name in to the set (not user settings but saved by the integration)
+        key_data_list.add(TEXT_TITLE)
+        data_out[TEXT_TITLE] = ""
+        key_data_list.add(CONF_NAME)
+        data_out[CONF_NAME] = ""
+
+        # By here we have 2 dicts with all their config key settings and default values
+
+        CONF_EXCLUDE_X10 = "exclude_x10"  # noqa: N806
+        # exclude_list explanation:
+        #   CONF_EXCLUDE_X10 changed to CONF_EXCLUDE_SWITCH after the for loops
+        #   CONF_DEVICE_BAUD is set after the for loops as it is no longer a user setting
+        #   CONF_NAME and CONF_USAGE are only used in the language files for discovery and zero_conf
+        exclude_list = (CONF_EXCLUDE_X10, CONF_DEVICE_BAUD, CONF_NAME, CONF_USAGE)
+        # Use the existing value to update the defaults from the current data and options
+        for key, value in data.items():
+            if key in key_data_list:
+                data_out[key] = value
+            elif key in key_option_list:
+                options_out[key] = value
+            elif key not in exclude_list:
+                _LOGGER.warning("User data setting %s not in either config list", key)
+        for key, value in options.items():
+            if key in key_data_list:
+                data_out[key] = value
+            elif key in key_option_list:
+                options_out[key] = value
+            elif key not in exclude_list:
+                _LOGGER.warning("User options setting %s not in either config list", key)
+
+        # New CONF names have been added but this is the only change of CONF name that has been made
+        data_out[CONF_EXCLUDE_SWITCH] = data.get(CONF_EXCLUDE_X10, "")   # changed to CONF_EXCLUDE_SWITCH
+        # Baud has been removed from the user config, but we need to copy the old value across
+        data_out[CONF_DEVICE_BAUD] = data.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD)
+
+        data = data_out
+        options = options_out
         changed = True
 
-    if version == 4:
-        version = 5
-        if CONF_ESPHOME_ENTITY_SELECT not in conf:
-            _LOGGER.debug(f"   Setting ESPHOME Baud Select Entity to empty string")
-            conf[CONF_ESPHOME_ENTITY_SELECT] = ""
-        changed = True
-
-    if changed:    
-        hass.config_entries.async_update_entry(config_entry, options=conf, version=version)
-        _LOGGER.info("Migration to version %s successful", config_entry.version)
+    if changed:
+        hass.config_entries.async_update_entry(entry, data=data, options=options, version=version)
+        _LOGGER.info("Migration to version %s successful", entry.version)
     else:
-        _LOGGER.info("Migration. Nothing changed, version is currently %s", config_entry.version)
+        _LOGGER.info("Migration. Nothing changed, version is currently %s", version)
     return True
 
-
-# This function is called to terminate a client connection to the alarm panel
-async def async_unload_entry(hass: HomeAssistant, entry: VisonicConfigEntry):
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload visonic entry."""
-    _LOGGER.debug("************* terminating connection **************")
+    # This function is called to terminate a hub connection to the alarm panel
 
+    #_LOGGER.info(
+    #    "UNLOAD ENTRY CALLED\n%s",
+    #    "".join(traceback.format_stack())
+    #)
+
+    _LOGGER.info("**************** terminating connection ****************")
     unload_ok = True
-    data = entry.runtime_data
-    if data.client is not None:
-        p = data.client.getPanelID()
-        # stop all activity in the client
-        unload_ok = await data.client.async_panel_stop()
-        if entry.entry_id in hass.data[VisonicConfigKey]:
-            hass.data[VisonicConfigKey].pop(entry.entry_id)
-        else:
-            _LOGGER.debug(f"************* Panel {p} nothing to pop config key entry **********************")
-    else:
+    p = ""
+
+    data: VisonicDomainData = hass.data[VisonicEntryKey]
+    device_type: str = entry.data.get(CONF_TYPE)
+    if device_type is None:
+        return False
+    device_type_enum = DeviceType(device_type)
+    _LOGGER.info("***************** async_unload_entry %s ******************", device_type_enum)
+    if device_type_enum == DeviceType.TCP_SERVER:
+        vsd : VisonicServerData | None = data[SERVERS].get(entry.entry_id)
+        if vsd:
+            p = str(vsd.server_id)
+            async with vsd.lock:
+                svr: TCPServerConnection = vsd.server
+                if svr:
+                    await svr.async_stop()
+                unload_ok = True # await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+                entry.runtime_data = None
+        _tmp = data[SERVERS].pop(entry.entry_id, None)
+
+    elif device_type_enum in (DeviceType.TCP_DISCOVERED, DeviceType.ETHERNET, DeviceType.SERIAL, DeviceType.CLOUD):
+        vcd : VisonicConfigData | None = data[PANELS].get(entry.entry_id)
+        if vcd:
+            # stop all activity in the hub
+            p = str(vcd.panel_id)
+            unload_ok = await vcd.coordinator.async_panel_stop()
+            _LOGGER.debug("........... Killing Dispatchers")
+            vcd.coordinator.platform_manager.terminate_all_dispatchers(entry)
         unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-        _LOGGER.debug("************* terminate connection fail, no client **************")
+        if not unload_ok:
+            _LOGGER.debug("***** terminate connection fail, no hub coordinator ****")
+        _tmp = data[PANELS].pop(entry.entry_id, None)
 
     if unload_ok:
-        _LOGGER.debug(f"************* Panel {p} terminate connection success **************")
+        _LOGGER.debug("************** Connection %s terminate success ***************", p)
     else:
-        _LOGGER.debug(f"************* Panel {p} terminate connection success (with platform unloading problems) **************")
+        _LOGGER.debug("******* Connection %s terminate success (but with problems) ******", p)
     return unload_ok
-
-
-# This function is called when there have been changes made to the parameters in the control flow
-async def update_listener(hass: HomeAssistant, entry: VisonicConfigEntry):
-    """Edit visonic entry."""
-
-    _LOGGER.debug("************* update connection data **************")
-    data = entry.runtime_data
-    if data.client is not None:
-        # combine and convert python settings map to dictionary
-        conf = await combineSettings(entry)
-        # update the client parameter set
-        data.client.updateConfig(conf)
-    return True

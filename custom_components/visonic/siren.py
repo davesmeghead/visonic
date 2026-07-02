@@ -1,194 +1,180 @@
-"""Create a connection to a Visonic PowerMax or PowerMaster Alarm System and Create a Simple Entity to Report Status only."""
+"""Visonic Siren entity for Home Assistant - reports status only."""
 
+from collections.abc import Mapping
 from typing import Any
 
-import logging
-from enum import IntEnum
-from homeassistant.util import slugify
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo, Entity
-from homeassistant.core import HomeAssistant, cached_property, callback
-from homeassistant.components.siren import DOMAIN as SIREN_DOMAIN
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.components.alarm_control_panel.const import AlarmControlPanelState
 from homeassistant.components.siren import SirenEntity, SirenEntityFeature
-#from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import slugify
 
-from .client import VisonicClient
-from . import VisonicConfigEntry
 from .const import (
+    CONF_SIREN_SOUNDING,
     DOMAIN,
-    VISONIC_TRANSLATION_KEY,
     MANUFACTURER,
     PANEL_ATTRIBUTE_NAME,
+    PARTITION_ID_WHEN_BASE,
+    VISONIC_TRANSLATION_KEY,
 )
-
-from .pyconst import AlPanelStatus, AlSensorDevice
-from .pyenum import EventDataEnum
-
-_LOGGER = logging.getLogger(__name__)
+from .coordinator_base import VisonicCoordinator
+from .exceptions import VisonicException
+from .utils import capitalize, create_sensor_unique_id
+from .visonic_entity_types import AlarmPanelData
+from .visonic_types import PanelStateData, TriggerAlarmType, VisonicConfigData
 
 PARALLEL_UPDATES = 1
 SUPPORT_FLAGS = SirenEntityFeature.TURN_OFF | SirenEntityFeature.TURN_ON
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: VisonicConfigEntry,
-    async_add_entities: AddEntitiesCallback
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Visonic Alarm Siren"""
-    #_LOGGER.debug(f"[async_setup_entry] start")
+    """Set up the Visonic siren entity."""
 
     @callback
-    def async_add_siren() -> None:
-        """Add Visonic Siren"""
-        entities: list[Entity] = []
-        entities.append(VisonicSiren(hass = hass, client = entry.runtime_data.client))
-        _LOGGER.debug(f"[async_setup_entry] adding entity")
-        async_add_entities(entities)
+    def async_add_siren(siren_data: AlarmPanelData) -> None:
+        """Add Visonic Siren entity."""
+        async_add_entities([VisonicSiren(entry=entry, siren_id=siren_data.siren_id, name=siren_data.siren_name, identifier=siren_data.identifier)])
 
-    entry.runtime_data.dispatchers[SIREN_DOMAIN] = async_dispatcher_connect(hass, f"{DOMAIN}_{entry.entry_id}_add_{SIREN_DOMAIN}", async_add_siren )
-    #_LOGGER.debug("[async_setup_entry] exit")
+    vce: VisonicConfigData = entry.runtime_data
+    vce.dispatchers[Platform.SIREN] = async_dispatcher_connect(
+        hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.SIREN}", async_add_siren
+    )
 
-class VisonicSiren(SirenEntity):
-    """Representation of a visonic siren device."""
 
-    def __init__(self, hass: HomeAssistant, client: VisonicClient):
-        """Initialize a Visonic security alarm."""
-        self._client = client
-        self.hass = hass
-        client.onChange(callback = self.onClientChange)
-        #self._partition_id = partition_id
+class VisonicSiren(CoordinatorEntity[VisonicCoordinator], SirenEntity):
+    """Representation of a Visonic siren device."""
+
+    def __init__(self, entry: ConfigEntry, siren_id: int, name: str, identifier: str) -> None:
+        """Initialize the siren entity."""
+        vce: VisonicConfigData = entry.runtime_data
+        vc: VisonicCoordinator = vce.coordinator
+        if vc is None:
+            raise VisonicException("Alarm has been given invalid coordinator", 101)
+        super().__init__(vce.coordinator)
+        self.siren_id = siren_id
+        self._name = "Siren"
+        self._panel_id = vce.panel_id
+        self._entry = entry
         self._mystate = False
-        pname = client.getMyString()
-        self._myname = pname + "s01"
-        self._panel = client.getPanelID()
         self.external = False
         self.trigger = ""
         self.alarmReason = ""
-        _LOGGER.debug(f"[VisonicSiren] panel {self._panel}, siren {self._myname}")
+        self.set_siren_sounding_filter(entry)
         self._attr_supported_features = SUPPORT_FLAGS
-        self._attr_is_on = False
-#        self._attr_available_tones = None
-#        if available_tones is not None:
-#            self._attr_supported_features |= SirenEntityFeature.TONES
-#        if support_volume_set:
-#            self._attr_supported_features |= SirenEntityFeature.VOLUME_SET
-#        if support_duration:
-#            self._attr_supported_features |= SirenEntityFeature.DURATION
-        self._attr_available_tones = None # available_tones
+        self._attr_available_tones = None
+        self._attr_name = "Siren"
         self._attr_should_poll = False
         self._attr_translation_key = VISONIC_TRANSLATION_KEY
-        self._attr_unique_id = slugify(self._myname + "_siren")
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, self._client.getAlarmPanelUniqueIdent())})
+        self._attr_unique_id = slugify(name + "_" + self._name)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            manufacturer=MANUFACTURER,
+        )
+        self.update()
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the siren on."""
-        self.external = True
-        if self.hass is not None and self.entity_id is not None:
-            self.schedule_update_ha_state(True)
+    def set_siren_sounding_filter(self, entry: ConfigEntry):
+        """Convert a list of strings in to the AlarmType enumeration."""
+        # The siren sounding options are stored as a list of strings
+        strings = entry.options.get(CONF_SIREN_SOUNDING, [])
+        if strings is None:
+            self.siren_sounding_list = []
+        else:
+            self.siren_sounding_list = [
+                m
+                for s in strings
+                if isinstance(s, str) and (m := TriggerAlarmType.from_name(s)) is not None
+            ]
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the siren off."""
-        self.external = False
-        if self.hass is not None and self.entity_id is not None:
-            self.schedule_update_ha_state(True)
+    async def _handle_entry_update(
+        self, _hass: HomeAssistant, entry: ConfigEntry
+    ) -> None:
+        """Handle updates from options."""
+        self._entry = entry
+        self.set_siren_sounding_filter(entry)
+        self.async_write_ha_state()
 
-    async def async_will_remove_from_hass(self):
-        """Remove from hass."""
-        _LOGGER.debug(f"[async_will_remove_from_hass] {self._myname} panel {self._panel}")
-        self._client = None
-        await super().async_will_remove_from_hass()
+    async def async_added_to_hass(self) -> None:
+        """Register update listener on entity added."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self._entry.add_update_listener(self._handle_entry_update))
 
-    # The callback handler from the client. All we need to do is schedule an update.
-    def onClientChange(self):
-        """HA Event Callback."""
-        #_LOGGER.debug(f"siren onChange {self.entity_id=}   {self.available=}")
-        if self.hass is not None and self.entity_id is not None:
-            self.schedule_update_ha_state(True)
-
-    def isPanelConnected(self) -> bool:
-        """Are we connected to the Alarm Panel."""
-        # If we are starting up or have been removed then assume we need a valid code
-        if self._client is None:
-            return False
-        return self._client.isPanelConnected()
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        #_LOGGER.debug(f"alarm control panel available {self.entity_id=}")
-        if self._client is None:
-            return False
-        return self._client.isPanelConnected()
-
-    @cached_property
-    def name(self) -> str | None:
-        """Name."""
-        return "Siren"
-
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Update entity state from coordinator."""
+        self.update()
+        self.async_write_ha_state()
 
     def update(self):
-        """Get the state of the device."""
-        #_LOGGER.debug(f"[update] {self.entity_id=}")
+        """Fetch the siren state from the coordinator."""
         oldstate = self._mystate
-        self._mystate = False   # If panel disconnected then set to False
-        if self.isPanelConnected():
-            stl = self._client.getSirenTriggerList()
-            ptu = self._client.getPartitionsInUse()
-            
-            self.alarmReason = ""
+        self._mystate = False
+        self.alarmReason = ""
 
-            if ptu is None:
-                isa, dev = self._client.isSirenActive()
-                psd = self._client.getPanelStatusDict()
-                #_LOGGER.debug(f"[update]    dict {psd}")
-                if EventDataEnum.ALARM in psd:
-                    self.alarmReason = psd[EventDataEnum.ALARM]
-            else:
-                isa = False
-                dev = None
-                for p in ptu:
-                    a, b = self._client.isSirenActive(p)
-                    #_LOGGER.debug(f"[update]    {self.entity_id=}  {p=}  {a=}  {b}")
-                    if a:
-                        isa = True
-                        dev = b
-                    psd = self._client.getPanelStatusDict(p)
-                    #_LOGGER.debug(f"[update]    partition {p}  dict {psd}")
-                    if EventDataEnum.ALARM in psd and psd[EventDataEnum.ALARM] in stl:
-                        self.alarmReason = psd[EventDataEnum.ALARM]
-                #_LOGGER.debug(f"[update]    {self.entity_id=}  {isa=}   {dev=}")
+#        if not self.coordinator or not hasattr(self.coordinator, "get_panel_and_partition_state"):
+#            self.coordinator.log.logstate_warning(
+#                "Coordinator not ready for siren %s", self._name
+#            )
+#            return
+        state: PanelStateData = self.coordinator.get_panel_and_partition_state(PARTITION_ID_WHEN_BASE)
 
-            if isa or self.alarmReason in stl:
+        # Update siren state
+        dev = -1
+        if state.alarm_state == AlarmControlPanelState.TRIGGERED:
+            dev, alarm_type = state.trigger_device
+            if alarm_type in self.siren_sounding_list:
                 self._mystate = True
-                _LOGGER.debug(f"[update]    siren triggered due to {isa=} or {self.alarmReason}")
+                self.alarmReason = capitalize(alarm_type.name)
+                self.coordinator.log.logstate_info("Siren Active (%s)", self.alarmReason)
+            else:
+                dev = -1
 
-            if not oldstate and self._mystate:
-                self.trigger = ""
-                # only set this when self._mystate goes from False to True
-                if isa and dev is not None:
-                    dname = dev.createFriendlyName()
-                    pname = self._client.getMyString()
-                    name = pname.lower() + dname.lower()
-                    self.trigger = name
+        if not self._mystate:
+            self.trigger = ""
+        elif dev is not None and dev >= 0 and not oldstate:
+            self.trigger = create_sensor_unique_id(self._panel_id, dev+1)
+
+    def turn_on(self, **kwargs: Any) -> None:
+        """Turn the siren on (external)."""
+        self.external = True
+        self.schedule_update_ha_state(True)
+
+    def turn_off(self, **kwargs: Any) -> None:
+        """Turn the siren off (external)."""
+        self.external = False
+        self.schedule_update_ha_state(True)
 
     @property
-    def is_on(self) -> bool:
+    def available(self) -> bool:  # pyright: ignore[reportIncompatibleVariableOverride]
+        """Return True if the siren is available."""
+        return bool(
+            self.coordinator
+            and self.coordinator.data
+            and self.coordinator.data.connected
+        )
+
+    @property
+    def is_on(self) -> bool | None:
         """Return true if siren is on."""
         return self._mystate or self.external
 
     @property
-    def extra_state_attributes(self):  #
-        """Return the state attributes of the device."""
-        trigger = "trigger"
-        attr = {}
-        attr[EventDataEnum.ALARM] = "none"
-        attr[trigger] = ""
-        if self.external:
-            attr[EventDataEnum.ALARM] = "external"
-        elif self._mystate:
-            attr[EventDataEnum.ALARM] = self.alarmReason
-            attr[trigger] = self.trigger
-            
-        attr[PANEL_ATTRIBUTE_NAME] = self._panel
-        return attr
+    def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        """Return only minimal attributes for Home Assistant."""
+        return {
+            "alarm": (
+                "external"
+                if self.external
+                else (self.alarmReason if self._mystate else "none")
+            ),
+            "trigger": self.trigger,
+            PANEL_ATTRIBUTE_NAME: self._panel_id,
+        }

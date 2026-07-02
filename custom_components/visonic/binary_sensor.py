@@ -1,274 +1,187 @@
-"""Sensors for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
+"""Binary Sensors for the connection to a Visonic PowerMax or PowerMaster Alarm System.
 
-import logging
+A Data Driven Binary Sensor Class for Visonic Sensors
+"""
 import asyncio
-import re
+import logging
 
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.core import HomeAssistant, cached_property, callback
+from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
-from homeassistant.util import slugify
-from homeassistant.const import (
-    ATTR_ARMED,
-    ATTR_BATTERY_LEVEL,
-    ATTR_LAST_TRIP_TIME,
-    ATTR_TRIPPED,
-)
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import VisonicConfigEntry
-from .pyconst import AlSensorDevice, AlSensorType, AlSensorCondition
-from .client import VisonicClient
-from .const import (
-    DOMAIN,
-    VISONIC_TRANSLATION_KEY,
-    SensorEntityFeature,
-    PANEL_ATTRIBUTE_NAME,
-    MANUFACTURER,
-    DEVICE_ATTRIBUTE_NAME,
+from .const import DOMAIN
+from .sensor_base_logic import VisonicBaseEntity
+from .utils import kill_asyncio_task
+from .visonic_entity_types import (
+    BINARY_SENSOR_DEFINITIONS,
+    STYPE_TO_HA_SENSOR_MAP,
+    BinarySensorData,
+    BinarySensorDefinition,
+    DeviceState,
+    PanelState,
+    SensorOnTimeout,
+    SensorState,
+    VisonicBinarySensorKey,
+    ZoneSensorData,
 )
+from .visonic_types import VisonicConfigData
 
 _LOGGER = logging.getLogger(__name__)
 
-# Dictionary mapping between the Pyvisonic sensor type and the HA Sensor Class
-_stype_to_ha_sensor_class = {
-    AlSensorType.IGNORED     : None,
-    AlSensorType.UNKNOWN     : None,
-    AlSensorType.MOTION      : BinarySensorDeviceClass.MOTION,
-    AlSensorType.CAMERA      : BinarySensorDeviceClass.MOTION,
-    AlSensorType.MAGNET      : BinarySensorDeviceClass.WINDOW,
-    AlSensorType.WIRED       : BinarySensorDeviceClass.DOOR,
-    AlSensorType.SMOKE       : BinarySensorDeviceClass.SMOKE,
-    AlSensorType.FLOOD       : BinarySensorDeviceClass.MOISTURE,
-    AlSensorType.GAS         : BinarySensorDeviceClass.GAS,
-    AlSensorType.VIBRATION   : BinarySensorDeviceClass.VIBRATION, 
-    AlSensorType.SHOCK       : BinarySensorDeviceClass.VIBRATION,
-    AlSensorType.TEMPERATURE : BinarySensorDeviceClass.HEAT,
-    AlSensorType.SOUND       : BinarySensorDeviceClass.SOUND,
-    AlSensorType.GLASS_BREAK : BinarySensorDeviceClass.VIBRATION,
-}
+SensorData = ZoneSensorData | BinarySensorData
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: VisonicConfigEntry,
+    entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Visonic Alarm Binary Sensors."""
-    #_LOGGER.debug(f"[async_setup_entry] start")
+    #_LOGGER.debug("[async_setup_entry] start")
 
     @callback
-    def async_add_binary_sensor(device: AlSensorDevice) -> None:
+    def async_add_binary_sensor(sensor_data: SensorData | list[SensorData]) -> None:
         """Add Visonic Binary Sensor."""
-        _LOGGER.debug(f"[async_setup_entry] adding {device.getDeviceID()}")
-        vbs = VisonicBinarySensor(hass, entry.runtime_data.client, device, entry)
-        entities: list[BinarySensorEntity] = []
-        entities.append(vbs)
-        async_add_entities(entities)
-        entry.runtime_data.sensors.append(vbs)
 
-    entry.runtime_data.dispatchers[BINARY_SENSOR_DOMAIN] = async_dispatcher_connect( hass, f"{DOMAIN}_{entry.entry_id}_add_{BINARY_SENSOR_DOMAIN}", async_add_binary_sensor )
+        if isinstance(sensor_data, SensorData):
+            sensor_data = [sensor_data] # make it a list of 1
+
+        entities: list[VisonicBinaryEntity] = []
+
+        for sensor in sensor_data:
+            if isinstance(sensor, BinarySensorData):
+                vbs = VisonicBinaryEntity(entry, sensor.device_id, sensor.identifier, sensor.initial_state, sensor.sensor_definition, sensor.timeout_type)
+                entities.append(vbs)
+
+        if len(entities) > 0:
+            async_add_entities(entities)
+
+    vce: VisonicConfigData = entry.runtime_data
+    vce.dispatchers[Platform.BINARY_SENSOR] = async_dispatcher_connect( hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.BINARY_SENSOR}", async_add_binary_sensor )
     #_LOGGER.debug("[async_setup_entry] exit")
 
 
-#   Each Sensor in Visonic Alarms can be Armed/Bypassed individually
-class VisonicBinarySensor(BinarySensorEntity):
-    """Representation of a Visonic Sensor."""
+class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
+    """Binary sensor entity."""
 
-    def __init__(self, hass, client: VisonicClient, sensor: AlSensorDevice, entry: VisonicConfigEntry):
+    entity_description: BinarySensorDefinition
+
+    # Explain the algorithm, there are 3 ways to use this class:
+    #  State based sensors - Simple sensors such as Battery, Tamper, Trouble:
+    #      Input: The returned self.definition.value_fn is a boolean
+    #             Uses various paramaters from the SensorState, SwitchState, PanelState classes
+    #      There is no timer, the output directly reflects the input.
+    #  State based sensors - Magnet/Wired:
+    #      Input: The returned self.definition.value_fn is a boolean
+    #             Uses "status" from the SensorState class
+    #      This uses the STATE timeout configuration setting
+    #      The timer is only initiated on False to True transitions, to hold the value True for the timeout period
+    #          ignoring any transitions to False in that timeout period (including toggling changes between True/False)
+    #      At the end of the timeout period, the output is set to the "live" latest value (True or False), so it could remain True
+    #          The timer is then initiated on the next False to True transition
+    #  Trigger based sensors - Motion/Camera/Gas/Shock etc:
+    #      There are 2 timeout values that can be used: MOTION and OTHER
+    #      Input: The returned self.definition.value_fn is not a boolean, currently it is an integer that changes on "trigger"
+    #             Uses "trigger" from the SensorState class
+    #                 (the current trigger implementation is a counter 0 to 99 that rolls over, but we cannot rely on this in this class)
+    #      A change in value indicates a trigger i.e. to change the output from False to True
+    #      The timer is only initiated on False to True transitions, to hold the output True for the timeout period
+    #          ignoring any input value changes i.e. triggers, in that timeout period
+    #      At the end of the timeout period, the output state is set to False, waiting for the next input change in value
+    #          At the end of the timeout period the current input value is saved, waiting again for a change in value.
+
+    def __init__(self, entry: ConfigEntry, sensor_id: int, identifier:str, initial_state: bool, definition: VisonicBinarySensorKey, timeout_type: SensorOnTimeout) -> None:
         """Initialize the sensor."""
-        #_LOGGER.debug("[VisonicBinarySensor]   In binary sensor VisonicSensor initialisation")
-        self.hass = hass
-        self._client = client
-        self.entry = entry
-
-        self._visonic_device = sensor
+        self.entity_description = BINARY_SENSOR_DEFINITIONS[definition]
+        super().__init__(entry, sensor_id, identifier, initial_state, self.entity_description)
+        self.initial_state = initial_state
+        self.timeout_type = timeout_type
+        self.save_state = initial_state
         self.timerTask = None
-
-        self._dname = sensor.createFriendlyName()
-        pname = client.getMyString()
-        self._name = str(pname + self._dname).lower()
-        _LOGGER.debug(f"[VisonicBinarySensor] friendlyname : {self._name}")
-        self._panel = client.getPanelID()
-        # Append device id to prevent name clashes in HA.
-        self._current_value = (self._visonic_device.isTriggered() or self._visonic_device.isOpen())
-        self._is_available = self._visonic_device.isEnrolled()
-        self._visonic_device.onChange(self.onChange)
-        self._attr_unique_id = slugify(f"{self._name}_sensor")
-        self._attr_should_poll = False
-        self._attr_translation_key = VISONIC_TRANSLATION_KEY
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, self._name)})
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
-        _LOGGER.debug(f"[async_will_remove_from_hass] id = {self.unique_id}")
         if self.timerTask is not None:
-            _LOGGER.debug(f"[async_will_remove_from_hass] id = {self.unique_id} killing timer task")
-            try:
-                self.timerTask.cancel()
-            except Exception as ex:
-                # Do not cause a full Home Assistant Exception, keep it local here
-                _LOGGER.debug("[async_will_remove_from_hass]...........             Caused an exception killing timer task")
-                _LOGGER.debug(f"[async_will_remove_from_hass]                           {ex}")   
-        self._visonic_device.onChange(None)
-        self._visonic_device = None
-        self._is_available = False
-        self._client = None
+            kill_asyncio_task(self.timerTask)
         await super().async_will_remove_from_hass()
 
-    async def _retainStateTimout(self):
-        timeout = self._client.getSensorOnDelay(self.device_class)
-        _LOGGER.debug(f"[_retainStateTimout] in   id = {self.unique_id}   timeout = {timeout}    dc={self.device_class}")
-        await asyncio.sleep(timeout) 
-        if self._visonic_device is not None:
-            self._current_value = self._visonic_device.isTriggered() or self._visonic_device.isOpen()
-            self._is_available = self._visonic_device.isEnrolled()
-        if self.hass is not None and self.entity_id is not None:
-            self.schedule_update_ha_state()
-        _LOGGER.debug(f"[_retainStateTimout] out  id = {self.unique_id}   timeout = {timeout}    current = {self._current_value}")
+    def _reset_state(self):
+        # reset
+        if self.timerTask is not None:
+            kill_asyncio_task(self.timerTask)
         self.timerTask = None
+        self.current_value = self.initial_state
+        self.save_state = self.initial_state
 
-    def onChange(self, sensor : AlSensorDevice, s : AlSensorCondition):
-        """Call on any change to the sensor."""
-        # the sensor parameter is the same as self._visonic_device, but it's a generic callback handler that cals this function
-        # Update the current value based on the device state
-        #_LOGGER.debug(f"[onChange]   In binary sensor VisonicSensor onchange {self._visonic_device}   self.checking_for_camera_type={self.checking_for_camera_type}")
-        if self.hass is not None and self._visonic_device is not None:
-
-            if self.timerTask is None:
-                newval = self._visonic_device.isTriggered() or self._visonic_device.isOpen()
-                if newval and not self._current_value:
-                    # kick off timer
-                    self.timerTask = self.hass.loop.create_task(self._retainStateTimout())
-                self._current_value = newval
-
-            self._is_available = self._visonic_device.isEnrolled()
-            _LOGGER.debug(f"[onChange] id = {self.unique_id}   self._is_available = {self._is_available}    self._current_value = {self._current_value}")
-            # Ask HA to schedule an update
-            if self.entity_id is not None:
-                self.schedule_update_ha_state()
+    def _set_current_data(self, state: SensorState | DeviceState | PanelState | None, force_non_bool_to_false: bool = False):
+        # Create the current_value, with optional timer
+        #   Get the data value and process it through the value function
+        data_raw = getattr(state, self.definition.data_key.value, None)
+        data = self.definition.value_fn(data_raw)
+        # data may be a bool, int or float
+        # If bool then use directly
+        # If not bool then use a change of value
+        if data is None:
+#            self._reset_state()
+            self.current_value = False
+        elif isinstance(data, bool):
+            # Used for "state" to set the current_value from a bool
+            self.current_value = data
+        elif force_non_bool_to_false:
+            # Used for post "trigger" to set values ready for next time
+            self.current_value = False  # set the output to False
+            self.save_state = data      # save the current input value
         else:
-            _LOGGER.debug("[onChange] called but sensor is not defined")
+            # Used for "trigger"
+            # Set the current_value from a float/int, has the data changed
+            changed : bool = False if self.save_state is None else self.save_state != data
+            self.current_value = changed
+            self.save_state = data
 
-    def getDeviceID(self) -> int:
-        if self._visonic_device is not None:
-            return self._visonic_device.getDeviceID()
-        return 0
+    def update_local(self, state: SensorState | DeviceState | PanelState | None):
+        """Set settings for this class i.e. binary entity."""
+        if self.entity_description.device_class is None:
+            self._attr_device_class = STYPE_TO_HA_SENSOR_MAP[state.sensor_type.type]
 
-    @cached_property
-    def name(self) -> str | None:
-        """Name."""
-        return "Zone"
+        if self.timerTask is None:
+            # The timer is not currently running, if the timer is already running then ignore any updates
+            old_value = self.current_value
+            # Update data
+            self._set_current_data(state=state)
+            if old_value is not True and self.current_value and self.timeout_type != SensorOnTimeout.NO_TIMEOUT:
+                # Transition from False/None to True, determine if a timeout is required
+                timeout = -1.0 # No timeout
+                match self.timeout_type:
+                    case SensorOnTimeout.MOTION:
+                        timeout = max(float(self.motion_timeout), 1.0) # at least 1 second for trigger based timeouts
+                    case SensorOnTimeout.STATE:
+                        timeout = max(float(self.magnet_timeout), 0.0) # For state based the timeout can be zero i.e. no timeout set
+                    case SensorOnTimeout.OTHER:
+                        timeout = max(float(self.other_timeout), 1.0) # at least 1 second for trigger based timeouts
+                if timeout >= 0.01:
+                    # kick off timer
+                    self.timerTask = self._entry.async_create_task(self.hass, self._retain_state_task(timeout), name=f"sensor_{self.sensor_id}_timeout_task")
+
+    async def _retain_state_task(self, timeout: float):
+        _LOGGER.debug(f"[binary sensor] in   id = {self.unique_id}   timeout = {timeout}    dc={self.device_class}")  # noqa: G004
+        await asyncio.sleep(timeout)
+        state: SensorState | None = self._get_data()
+        if state is None:
+            self._reset_state()
+        else:
+            # Set the very latest data value (after the timeout)
+            # State based then get latest value
+            # Trigger based, then force to False, waiting for next trigger
+            self._set_current_data(state=state, force_non_bool_to_false=True)
+            _LOGGER.debug(f"[binary sensor] out  id = {self.unique_id}   timeout = {timeout}    current = {self.current_value}")  # noqa: G004
+        self._attr_available = self.current_value is not None
+        self.timerTask = None
+        self.async_schedule_update_ha_state(True)
 
     @property
-    def has_entity_name(self) -> bool:
-        """Prevent HA adding the device name to the start of the entity name."""
-        return False
-
-    @property
-    def is_on(self):
+    def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
-        return self._current_value
-
-    @property
-    def supported_features(self) -> int:
-        return SensorEntityFeature.BYPASS_FEATURE | SensorEntityFeature.ARMED_FEATURE
-
-    @property
-    def device_class(self):
-        """Return the class of this sensor."""
-        if self._visonic_device is not None:
-            stype = self._visonic_device.getSensorType()
-            #_LOGGER.debug(f"[device_class] device_class self._is_available = {self._is_available}    self._current_value = {self._current_value}   stype = {stype}")
-            if stype is not None and stype in _stype_to_ha_sensor_class:                
-                return _stype_to_ha_sensor_class[stype]
-        return None
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        #_LOGGER.debug(f"   In binary sensor VisonicSensor available self._is_available = {self._is_available}    self._current_value = {self._current_value}")
-        return self._is_available
-
-    @property
-    def extra_state_attributes(self):
-        """Return the state attributes of the device."""
-        # _LOGGER.debug("in extra_state_attributes")
-        if self._client is not None and self._visonic_device is not None:
-            stype = self._visonic_device.getSensorType()
-
-            attr = {}
-            attr["device_name"] = self._dname
-
-            if (t := self._visonic_device.isTamper()) is None:
-                attr["device_tamper"] = "undefined"
-            else:
-                attr["device_tamper"] = t
-
-            attr[ATTR_ARMED] = not self._visonic_device.isBypass()
-
-            attr[ATTR_TRIPPED] = self._visonic_device.isTriggered()
-            
-            if self._visonic_device.getLastTriggerTime() is None:
-                attr[ATTR_LAST_TRIP_TIME] = "unknown"
-            else:
-                tm = self._visonic_device.getLastTriggerTime() # .strftime("%d/%m/%Y, %H:%M:%S")
-                #tm = self._visonic_device.getLastTriggerTime().isoformat()
-                # miss off the decimal hundredths seconds onwards
-                #tm = tm.replace("T", " ")[0:21]
-                attr[ATTR_LAST_TRIP_TIME] = tm
-                # attr[ATTR_LAST_TRIP_TIME] = self.pmTimeFunctionStr(self.triggertime)
-            
-            if stype != AlSensorType.MOTION and stype != AlSensorType.CAMERA:
-                attr["zone_open"] = self._visonic_device.isOpen()
-
-            if (t := self._visonic_device.isZoneTamper()) is None:
-                attr["zone_tamper"] = "undefined"
-            else:
-                attr["zone_tamper"] = t
-            
-            #attr["zone type"] = self.ztype
-            zn = self._visonic_device.getZoneLocation()
-            if len(zn) == 2:
-                attr["zone_name"] = zn[0]
-                attr["zone_name_panel"] = "Unknown" if zn[1] is None else zn[1]
-
-            attr["zone_type"] = self._visonic_device.getZoneType()
-            attr["zone_chime"] = self._visonic_device.getChimeType()
-            attr["zone_trouble"] = self._visonic_device.getProblem()
-            if self._client.isPowerMaster():
-                attr["zone_missing"] = self._visonic_device.isMissing()
-                attr["zone_oneway"] = self._visonic_device.isOneWay()
-                attr["zone_inactive"] = self._visonic_device.isInactive()
-            
-            if (l := self._visonic_device.getLux()) is not None:
-                attr["zone_lux"] = l
-
-            if (t := self._visonic_device.getTemperature()) is not None:
-                attr["zone_temperature"] = t
-            
-            if self._client.isPowerMaster() and self._visonic_device.getMotionDelayTime() is not None and len(str(self._visonic_device.getMotionDelayTime())) > 0:
-                attr["zone_motion_off_time"] = self._visonic_device.getMotionDelayTime()
-
-            attr[DEVICE_ATTRIBUTE_NAME] = self._visonic_device.getDeviceID()
-
-            if stype != AlSensorType.UNKNOWN:
-                attr["sensor_type"] = str(stype).lower()
-            elif self._visonic_device.getRawSensorIdentifier() is not None:
-                attr["sensor_type"] = "Undefined " + str(self._visonic_device.getRawSensorIdentifier())
-            else:
-                attr["sensor_type"] = "unknown"
-
-            if stype is not None and stype != AlSensorType.WIRED:
-                attr[ATTR_BATTERY_LEVEL] = 0 if self._visonic_device.isLowBattery() else 100
-
-            if self._client.getPartitionsInUse() is not None:   # Returns None when partitions not in use
-                if (p := self._visonic_device.getPartition()) is not None:
-                    attr["partition"] = list(p)
-
-            attr[PANEL_ATTRIBUTE_NAME] = self._panel
-            return attr
-            
-        return { }
+        return self.current_value

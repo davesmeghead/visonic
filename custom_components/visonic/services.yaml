@@ -68,7 +68,7 @@ alarm_panel_zoneinfo:
           integration: visonic
           domain: alarm_control_panel
 
-alarm_panel_x10:
+alarm_panel_switch:
   fields:
     entity_id:
       required: true
@@ -77,13 +77,13 @@ alarm_panel_x10:
         entity:
           integration: visonic
           domain: switch
-    x10command:
+    switch_command:
       required: true
       example: "off"
       default: "off"
       selector:
         select:
-          translation_key: "x10command"
+          translation_key: "switch_command"
           options:
             - "off"
             - "on"
@@ -97,7 +97,7 @@ alarm_sensor_bypass:
       selector:
         entity:
           integration: visonic
-          domain: binary_sensor
+          domain: select
     bypass:
       required: true
       example: "off"

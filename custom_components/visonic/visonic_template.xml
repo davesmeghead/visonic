@@ -2,7 +2,7 @@
 <rss version="2.0">
     <channel>
         <title>Visonic Event Log</title>
-        <description>Event Log has {{total}} Entries, there are a possible {{available}} from the panel</description>
+        <description>Event Log has {{available}} Entries, there are a possible {{total}} from the panel</description>
         <link>https://github.com/davesmeghead/visonic</link>
         {%for entry in entries %}
         <item>

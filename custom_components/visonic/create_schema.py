@@ -1,54 +1,49 @@
-"""Schema for the connection to a Visonic PowerMax or PowerMaster Alarm System."""
+"""Schema for the user input for connection to a Visonic PowerMax or PowerMaster Alarm System."""
 
-import logging
-import re
+from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import dataclass
+from typing import Any, Final, Protocol
 
 import voluptuous as vol
-from typing import Any
-
-from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PATH, CONF_PORT, CONF_USERNAME, CONF_PASSWORD, CONF_LANGUAGE
-from homeassistant.helpers import config_validation as cv
-from homeassistant.util.yaml.objects import NodeListClass
-from homeassistant.helpers import selector
-from homeassistant.const import CONF_NAME, CONF_SOURCE, UnitOfTime
 from voluptuous.schema_builder import UNDEFINED
 
+from homeassistant.const import (
+    CONF_CODE,
+    CONF_EMAIL,
+    CONF_EXTERNAL_URL,
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_PATH,
+    CONF_PORT,
+    CONF_SCAN_INTERVAL,
+    CONF_TYPE,
+)
+from homeassistant.helpers import config_validation as cv, selector
 from homeassistant.helpers.selector import (
-    ObjectSelector,
-    SelectOptionDict,
-    SelectSelector,
-    SelectSelectorConfig,
-    SelectSelectorMode,
-    validate_selector,
-    SerialPortSelector,
-    EntitySelector, 
+    EntitySelector,  # pyright: ignore[reportUnknownVariableType]
     EntitySelectorConfig,
+    SerialPortSelector,
 )
 
 from .const import (
-    CONF_EXCLUDE_SENSOR,
-    CONF_EXCLUDE_X10,
+    CONF_ALARM_NOTIFICATIONS,
+    CONF_ARM_CODE_AUTO,
+    CONF_ARM_HOME_ENABLED,
+    CONF_ARM_NIGHT_ENABLED,
+    CONF_DOWNLOAD_CODE,
+    CONF_EMER_OFF_DELAY,
+    CONF_EMULATION_MODE,
     CONF_ENABLE_REMOTE_ARM,
     CONF_ENABLE_REMOTE_DISARM,
     CONF_ENABLE_SENSOR_BYPASS,
-    CONF_ARM_CODE_AUTO,
+    CONF_EPROM_ATTRIBUTES,
+    CONF_ESPHOME_ENTITY_SELECT,
+    CONF_EXCLUDE_SENSOR,
+    CONF_EXCLUDE_SWITCH,
     CONF_FORCE_KEYPAD,
-    CONF_ARM_HOME_ENABLED,
-    CONF_ARM_NIGHT_ENABLED,
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
-    CONF_EPROM_ATTRIBUTES,
-    CONF_DEVICE_BAUD,
-    CONF_PANEL_NUMBER,
-    CONF_ESPHOME_ENTITY_SELECT,
-    CONF_DEVICE_TYPE,
-    CONF_DOWNLOAD_CODE,
-    CONF_EMULATION_MODE,
-    CONF_MOTION_OFF_DELAY,
-    CONF_MAGNET_CLOSED_DELAY,
-    CONF_EMER_OFF_DELAY,
-    CONF_SIREN_SOUNDING,
     CONF_LOG_CSV_FN,
     CONF_LOG_CSV_TITLE,
     CONF_LOG_DONE,
@@ -56,320 +51,442 @@ from .const import (
     CONF_LOG_MAX_ENTRIES,
     CONF_LOG_REVERSE,
     CONF_LOG_XML_FN,
-    CONF_ALARM_NOTIFICATIONS,
+    CONF_MAGNET_CLOSED_DELAY,
+    CONF_MOTION_OFF_DELAY,
+    CONF_PANEL_NUMBER,
+    CONF_PANEL_SERIAL,
     CONF_RETRY_CONNECTION_COUNT,
     CONF_RETRY_CONNECTION_DELAY,
-    DEFAULT_DEVICE_BAUD,
+    CONF_SERVER_HOST,
+    CONF_SERVER_PORT,
+    CONF_SIREN_SOUNDING,
+    CONF_USER_CODE_SLOT,
+    DEFAULT_CLOUD_SCAN_INTERVAL,
     DEFAULT_DEVICE_HOST,
     DEFAULT_DEVICE_PORT,
-    DEFAULT_DEVICE_TOPIC,
-    DEFAULT_DEVICE_USB,
-    DEVICE_TYPE_ETHERNET,
-    DEVICE_TYPE_USB,
+    DEFAULT_DEVICE_SERV_HOST,
+    DEFAULT_DEVICE_SERV_PORT,
+    DEFAULT_PANEL_USER_CODE,
+    FORM_CLOUD,
+    FORM_DEVICE,
+    FORM_ETHERNET,
+    FORM_PARAM10,
+    FORM_PARAM11,
+    FORM_PARAM12,
+    FORM_PARAM13,
+    FORM_PARAM14,
+    FORM_POWERLINK,
+    FORM_SERIAL,
+    FORM_TCP_DISCOVERED,
+    FORM_TCP_SERVER,
+)
+from .visonic_types import (
     AvailableNotifications,
-    available_emulation_modes,
+    DeviceType,
+    EmulationMode,
+    TriggerAlarmType,
 )
 
-from .pyconst import AlSensorCondition
+# fmt: off
 
-_LOGGER = logging.getLogger(__name__)
+# These are the Forms that are able to be produced to allow the user to enter configuration data.
+#    Each form lists the items on the form, in order.
+#    The same item may be on multiple forms to support the different configuration methods
+# These forms include those needed for discovery and zeroconf
+FormItems: Final[dict[str, list[str]]] = {
+    # Main connection type
+    #     parameters in entry.data
+    FORM_DEVICE: [CONF_TYPE, CONF_PANEL_NUMBER],
+    # The connection choices
+    #     parameters in entry.data
+    #     FORM_TCP_DISCOVERED is only used for reconnection, host and port cannot be edited
+    #     For those that support CONF_EMULATION_MODE then FORM_POWERLINK is shown next if Powerlink Emulation Mode is selected
+    FORM_ETHERNET: [CONF_HOST, CONF_PORT, CONF_ESPHOME_ENTITY_SELECT, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
+    FORM_SERIAL: [CONF_PATH, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
+    FORM_CLOUD: [CONF_EXTERNAL_URL, CONF_EMAIL, CONF_PASSWORD, CONF_CODE, CONF_PANEL_SERIAL, CONF_SCAN_INTERVAL, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
+    FORM_TCP_SERVER: [CONF_SERVER_HOST, CONF_SERVER_PORT],
+    FORM_TCP_DISCOVERED: [CONF_ESPHOME_ENTITY_SELECT, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
+    FORM_POWERLINK: [CONF_DOWNLOAD_CODE, CONF_USER_CODE_SLOT, CONF_EPROM_ATTRIBUTES],
+    # Supporting forms to get the config
+    #     parameters in entry.options
+    FORM_PARAM10: [CONF_SIREN_SOUNDING, CONF_ALARM_NOTIFICATIONS, CONF_RETRY_CONNECTION_COUNT, CONF_RETRY_CONNECTION_DELAY],
+    FORM_PARAM11: [CONF_MOTION_OFF_DELAY, CONF_MAGNET_CLOSED_DELAY, CONF_EMER_OFF_DELAY],
+    FORM_PARAM12: [CONF_ARM_CODE_AUTO, CONF_FORCE_KEYPAD, CONF_ARM_HOME_ENABLED, CONF_ARM_NIGHT_ENABLED, CONF_INSTANT_ARM_AWAY,
+                   CONF_INSTANT_ARM_HOME, CONF_ENABLE_REMOTE_ARM, CONF_ENABLE_REMOTE_DISARM, CONF_ENABLE_SENSOR_BYPASS],
+    FORM_PARAM13: [CONF_LOG_EVENT, CONF_LOG_DONE, CONF_LOG_REVERSE, CONF_LOG_CSV_TITLE, CONF_LOG_XML_FN, CONF_LOG_CSV_FN, CONF_LOG_MAX_ENTRIES],
+    FORM_PARAM14: [CONF_SIREN_SOUNDING, CONF_ALARM_NOTIFICATIONS],
+}
 
-# These need to match the "siren_sounding" selector in the language json file
-available_siren_values = [
-    "intruder",
-    "tamper",
-    "fire",
-    "emergency",
-    "gas",
-    "flood",
-    "x10",
-    "panic"
-]
+# fmt: on
 
-def capitalize(s):
-    return s[0].upper() + s[1:].lower()
+Validator = Callable[[Any], Any] | type | vol.Schema | selector.SelectSelector | selector.NumberSelector
 
-def titlecase(s):
-    return re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda word: capitalize(word.group(0)), s)
+class Marker(Protocol):
+    """Marker for vol creation."""
+    def __call__(self, key: str, *, default: Any) -> vol.Required | vol.Optional:
+        """Callable prototype."""
+        ...
+
+@dataclass(frozen=True)
+class ConfigItem:
+    """Individual Configuration Item."""
+    marker: Marker
+    validator: Validator
+    default: Any
+
+# ---- Helper functions ----
+def req(key: str, *, default: Any):
+    """Required."""
+    if default is UNDEFINED:
+        return vol.Required(key)
+    return vol.Required(key, default=default)
+
+def opt(key: str, *, default: Any):
+    """Optional."""
+    if default is UNDEFINED:
+        return vol.Optional(key)
+    return vol.Optional(key, default=default)
+
+def build_config_items() -> dict[str, ConfigItem]:
+    """Build the config_item dictionary."""
+
+    strlist = [
+        el.value
+        for el in AvailableNotifications
+        if el != AvailableNotifications.ALWAYS
+    ]
+    alarm_type_members = [
+        str(el.name).lower()
+        for el in TriggerAlarmType
+        if el
+        not in [TriggerAlarmType.NONE, TriggerAlarmType.UNKNOWN]  # Exclude UNKNOWN and NONE
+    ]
+    EMULATION_MODE_OPTIONS = [mode.value for mode in EmulationMode]  # noqa: N806
+
+    return {
+        CONF_TYPE: ConfigItem(
+            marker=req,
+            validator=vol.In(
+                    [
+                        DeviceType.ETHERNET.title(),
+                        DeviceType.SERIAL.title(),
+#                        DeviceType.TCP_SERVER.title(),    # Disabled as incomplete and untested
+                        DeviceType.CLOUD.title(),
+                    ]
+            ),
+            default=DeviceType.ETHERNET.title(),
+        ),
+        CONF_PANEL_NUMBER: ConfigItem(
+            marker=req,
+            validator=cv.positive_int,
+            default=0,
+        ),
+        CONF_PATH: ConfigItem(
+            marker=req,
+            validator=SerialPortSelector(),
+            default=UNDEFINED,
+        ),
+        CONF_HOST: ConfigItem(
+            marker=req,
+            validator=str,
+            default=DEFAULT_DEVICE_HOST,
+        ),
+        CONF_PORT: ConfigItem(
+            marker=req,
+            validator=str,
+            default=str(DEFAULT_DEVICE_PORT),
+        ),
+        CONF_ESPHOME_ENTITY_SELECT: ConfigItem(
+            marker=opt,
+            validator=EntitySelector(
+                EntitySelectorConfig(domain=["select"], multiple=False)
+            ),
+            default=UNDEFINED,
+        ),
+        CONF_EXTERNAL_URL: ConfigItem(
+            marker=req,
+            validator=str,
+            default="visonic.tycomonitor.com",
+        ),
+        CONF_EMAIL: ConfigItem(
+            marker=req,
+            validator=str,
+            default="",
+        ),
+        CONF_PASSWORD: ConfigItem(
+            marker=req,
+            validator=str,
+            default="",
+        ),
+        CONF_CODE: ConfigItem(
+            marker=req,
+            validator=str,
+            default=DEFAULT_PANEL_USER_CODE,
+        ),
+        CONF_PANEL_SERIAL: ConfigItem(
+            marker=opt,
+            validator=str,
+            default="",
+        ),
+        CONF_SERVER_HOST: ConfigItem(
+            marker=req,
+            validator=str,
+            default=DEFAULT_DEVICE_SERV_HOST,
+        ),
+        CONF_SERVER_PORT: ConfigItem(
+            marker=req,
+            validator=str,
+            default=str(DEFAULT_DEVICE_SERV_PORT),
+        ),
+        CONF_EXCLUDE_SENSOR: ConfigItem(
+            marker=opt,
+            validator=str,
+            default="",
+        ),
+        CONF_EXCLUDE_SWITCH: ConfigItem(
+            marker=opt,
+            validator=str,
+            default="",
+        ),
+        CONF_EMULATION_MODE: ConfigItem(
+            marker=opt,
+            validator=vol.In(EMULATION_MODE_OPTIONS),
+            default=EmulationMode.POWERLINK.value,
+        ),
+        CONF_DOWNLOAD_CODE: ConfigItem(
+            marker=opt,
+            validator=str,
+            default=UNDEFINED,
+        ),
+        CONF_USER_CODE_SLOT: ConfigItem(
+            marker=req,
+            validator=selector.NumberSelector
+                    (
+                        selector.NumberSelectorConfig(
+                            min=1,
+                            max=48,
+                            step=1,
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+            default=1,
+        ),
+        CONF_EPROM_ATTRIBUTES: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_SCAN_INTERVAL: ConfigItem(
+            marker=req,
+            validator=cv.positive_int,
+            default=DEFAULT_CLOUD_SCAN_INTERVAL,
+        ),
+        CONF_SIREN_SOUNDING: ConfigItem(
+            marker=opt,
+            validator=selector.SelectSelector
+                (  # type: ignore[type-arg]
+                    selector.SelectSelectorConfig(
+                        options=alarm_type_members,
+                        multiple=True,
+                        sort=True,
+                        translation_key=CONF_SIREN_SOUNDING,
+                    ),
+                ),
+            default=["intruder"],
+        ),
+        CONF_ALARM_NOTIFICATIONS: ConfigItem(
+            marker=opt,
+            validator=selector.SelectSelector
+                (  # type: ignore[type-arg]
+                    selector.SelectSelectorConfig(
+                        options=strlist,
+                        multiple=True,
+                        sort=True,
+                        translation_key=CONF_ALARM_NOTIFICATIONS,
+                    ),
+                ),
+            default=[AvailableNotifications.CONNECTION.value, AvailableNotifications.SIREN.value],
+        ),
+        CONF_RETRY_CONNECTION_COUNT: ConfigItem(
+            marker=opt,
+            validator=selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0, max=1000000, mode=selector.NumberSelectorMode.BOX)
+            ),
+            default=1,
+        ),
+        CONF_RETRY_CONNECTION_DELAY: ConfigItem(
+            marker=opt,
+            validator=selector.NumberSelector(
+                selector.NumberSelectorConfig(min=5, max=1000, mode=selector.NumberSelectorMode.BOX)
+            ),
+            default=90,
+        ),
+        CONF_MOTION_OFF_DELAY: ConfigItem(
+            marker=opt,
+            validator=selector.NumberSelector
+                (
+                    selector.NumberSelectorConfig(
+                        min=1, max=3000, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+            default=30,
+        ),
+        CONF_MAGNET_CLOSED_DELAY: ConfigItem(
+            marker=opt,
+            validator=selector.NumberSelector
+                (
+                    selector.NumberSelectorConfig(
+                        min=0, max=3000, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),  # type: ignore[type-arg]
+            default=5,
+        ),
+        CONF_EMER_OFF_DELAY: ConfigItem(
+            marker=opt,
+            validator=selector.NumberSelector
+                (
+                    selector.NumberSelectorConfig(
+                        min=1, max=3000, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),  # type: ignore[type-arg]
+            default=30,
+        ),
+        CONF_ARM_CODE_AUTO: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_FORCE_KEYPAD: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_ARM_HOME_ENABLED: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=True,
+        ),
+        CONF_ARM_NIGHT_ENABLED: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=True,
+        ),
+        CONF_INSTANT_ARM_AWAY: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_INSTANT_ARM_HOME: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_ENABLE_REMOTE_ARM: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_ENABLE_REMOTE_DISARM: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_ENABLE_SENSOR_BYPASS: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_LOG_EVENT: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_LOG_DONE: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_LOG_REVERSE: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_LOG_CSV_TITLE: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_LOG_XML_FN: ConfigItem(
+            marker=opt,
+            validator=str,
+            default="visonic_log_file.xml",
+        ),
+        CONF_LOG_CSV_FN: ConfigItem(
+            marker=opt,
+            validator=str,
+            default="visonic_log_file.csv",
+        ),
+        CONF_LOG_MAX_ENTRIES: ConfigItem(
+            marker=opt,
+            validator=cv.positive_int,
+            default=10000,
+        ),
+    }
+
+# Build the config items once and then use them by just updating the default/values
+_CONFIG_ITEMS = build_config_items()
 
 class VisonicSchema:
+    """Schema for the Visonic component."""
 
-    def __init__(self):
-        self.CONFIG_SCHEMA_DEVICE = {
-            vol.Required(CONF_DEVICE_TYPE, default=titlecase(DEVICE_TYPE_ETHERNET)): vol.In([titlecase(DEVICE_TYPE_ETHERNET), DEVICE_TYPE_USB.upper()]),
-            vol.Optional(CONF_PANEL_NUMBER, default=0): cv.positive_int,
-        }
-        self.CONFIG_SCHEMA_USB = {
-            vol.Required(
-                CONF_PATH,
-                default=UNDEFINED,
-            ): SerialPortSelector(),
-            vol.Optional(CONF_DEVICE_BAUD, default=str(DEFAULT_DEVICE_BAUD)): str,
-        }
-        
-        # These are the options that the user entered
-        self.options = {}
-        
-        # initially populate the options data with the default values from all possible settings
-        initialise = {
-            **self.CONFIG_SCHEMA_DEVICE,
-            **self.create_parameters_ethernet(self.options),
-            **self.CONFIG_SCHEMA_USB,
-            **self.create_parameters1(self.options),
-            **self.create_parameters10(self.options),
-            **self.create_parameters11(self.options),
-            **self.create_parameters12(self.options),
-            **self.create_parameters13(self.options),
-        }
-        # The key in initialise is not a text string, it is a vol.Required / vol.Optional structure
-        for key in initialise:
-            try:
-                d = key.default()
-                self.options[key] = d
-            except Exception as er:
-                self.options[key] = None
-
-    def create_default(self, options: dict, key: str, default: Any):
-        """Create a default value for the parameter using the previous value that the user entered."""
-        if options is not None and key in options:
-            # if type(options[key]) is not type(default):
-            # # create_default types are different for = siren_sounding <class 'list'> <class 'set'> ['intruder', 'panic', 'gas'] {'intruder'}
-            if isinstance(options[key], list) or isinstance(options[key], NodeListClass):
-                #_LOGGER.debug("      its a list")
-                if CONF_SIREN_SOUNDING == key:
-                    return list(options[key])
-                if CONF_ALARM_NOTIFICATIONS == key:
-                    return list(options[key])
-                if len(options[key]) > 0:
-                    my_string = ",".join(map(str, list(options[key])))
-                    return my_string
-                else:
-                    return ""
-            else:
-                return options[key]
-        #_LOGGER.debug(f"    returning {default=}")
-        return default
-
-    # These are only used on creation of the component
-    def create_parameters_ethernet(self, options: dict):
-        """Create parameter set 1."""
-        # Panel settings - can only be set on creation
-        return {
-            vol.Required(CONF_HOST, default=self.create_default(options, CONF_HOST, DEFAULT_DEVICE_HOST)): str,
-            vol.Required(CONF_PORT, default=self.create_default(options, CONF_PORT, str(DEFAULT_DEVICE_PORT))): str,
-            vol.Optional(
-                CONF_ESPHOME_ENTITY_SELECT,
-            ): EntitySelector(
-                EntitySelectorConfig(
-                    domain=["select"],
-                    multiple=False,
-                )
-            ),
+    def __init__(self) -> None:
+        """Initialize the schema."""
+        self._config_items = _CONFIG_ITEMS
+        # Set all options to their defaults
+        self._options = {
+            key: deepcopy(config_item.default)
+            for key, config_item in self._config_items.items()
+            if config_item.default is not UNDEFINED
         }
 
-    # These are only used on creation of the component
-    def create_parameters1(self, options: dict):
-        """Create parameter set 1."""
-        # Panel settings - can only be set on creation
-        return {
-            vol.Optional(
-                CONF_EXCLUDE_SENSOR,
-                default=self.create_default(options, CONF_EXCLUDE_SENSOR, ""),
-            ): str,
-            vol.Optional(
-                CONF_EXCLUDE_X10, default=self.create_default(options, CONF_EXCLUDE_X10, "")
-            ): str,
-            vol.Optional(
-                CONF_EMULATION_MODE,
-                default=self.create_default(options, CONF_EMULATION_MODE, available_emulation_modes[0]),
-            ): vol.In(available_emulation_modes),
-            vol.Optional(
-                CONF_DOWNLOAD_CODE, 
-                default=self.create_default(options, CONF_DOWNLOAD_CODE, "")
-            ): str,
-            vol.Optional(
-                CONF_EPROM_ATTRIBUTES,
-                default=self.create_default(options, CONF_EPROM_ATTRIBUTES, False),
-            ): bool,
-        }
+    def _merge_options(self, overrides: dict[str, Any] | None) -> dict[str, Any]:
+        base = deepcopy(self._options)
+        return {**base, **(overrides or {})}
 
-    def create_parameters10(self, options: dict):
-        """Create parameter set 10."""
-        # Panel settings - can be modified/edited
-        #_LOGGER.debug(f"create_parameters10 {options=}")
-        # options=AvailableSensorEvents.keys()   needs to be immutable so made it a list and copied it
-        strlist = [el.value 
-                   for el in AvailableNotifications 
-                   if el != AvailableNotifications.ALWAYS]
-        #_LOGGER.debug(f"create_parameters10 {strlist=}")
-        return {
-            vol.Optional(
-                CONF_SIREN_SOUNDING, 
-                default=self.create_default(options, CONF_SIREN_SOUNDING, ["intruder"]),
-            ): selector.SelectSelector(selector.SelectSelectorConfig(options=available_siren_values, multiple=True, sort=True, translation_key=CONF_SIREN_SOUNDING)),
-            vol.Optional(
-                CONF_ALARM_NOTIFICATIONS,
-                default=self.create_default(options, CONF_ALARM_NOTIFICATIONS, [AvailableNotifications.CONNECTION_PROBLEM, AvailableNotifications.SIREN]),
-            ): selector.SelectSelector(selector.SelectSelectorConfig(options=strlist, multiple=True, sort=True, translation_key=CONF_ALARM_NOTIFICATIONS)),
-            # https://developers.home-assistant.io/docs/data_entry_flow_index/#show-form
-            vol.Optional(
-                CONF_RETRY_CONNECTION_COUNT,
-                default=self.create_default(options, CONF_RETRY_CONNECTION_COUNT, 1),
-            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=1000000, mode=selector.NumberSelectorMode.BOX)),
-            vol.Optional(
-                CONF_RETRY_CONNECTION_DELAY,
-                default=self.create_default(options, CONF_RETRY_CONNECTION_DELAY, 90),
-            ): selector.NumberSelector(selector.NumberSelectorConfig(min=5, max=1000, mode=selector.NumberSelectorMode.BOX)),
-        }
+    def _build_schema(self, keys: list[str], overrides: dict[str, Any] | None = None) -> vol.Schema:
+        """Build a voluptuous schema from config item definitions."""
+        merged = self._merge_options(overrides)
+        schema: dict[Any, Any] = {}
 
-    def create_parameters11(self, options: dict, isPowerlinkEmulation : bool = False):
-        """Create parameter set 11."""
-        # Panel settings - can be modified/edited
-        retval = {}
-        if isPowerlinkEmulation:
-            retval = {
-                vol.Optional(
-                    CONF_EPROM_ATTRIBUTES,
-                    default=self.create_default(options, CONF_EPROM_ATTRIBUTES, False),
-                ): bool,
-            }
-        retval.update({
-            vol.Optional(
-                CONF_MOTION_OFF_DELAY,
-                default=self.create_default(options, CONF_MOTION_OFF_DELAY, 120),
-            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
-            vol.Optional(
-                CONF_MAGNET_CLOSED_DELAY,
-                default=self.create_default(options, CONF_MAGNET_CLOSED_DELAY, 5),
-            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
-            vol.Optional(
-                CONF_EMER_OFF_DELAY,
-                default=self.create_default(options, CONF_EMER_OFF_DELAY, 120),
-            ): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3000, mode=selector.NumberSelectorMode.BOX)),
-        })
-        return retval
+        for key in keys:
+            if key not in self._config_items:
+                raise KeyError(f"Unknown schema key: {key}")
+            config_item = self._config_items[key]
+            default = merged.get(key, config_item.default)
+            marker = config_item.marker(key, default=default)
+            schema[marker] = config_item.validator
 
-    def create_parameters12(self, options: dict):
-        """Create parameter set 12."""
-        # Panel settings - can be modified/edited
-        return {
-            vol.Optional(
-                CONF_ARM_CODE_AUTO,
-                default=self.create_default(options, CONF_ARM_CODE_AUTO, False),
-            ): bool,
-            vol.Optional(
-                CONF_FORCE_KEYPAD, default=self.create_default(options, CONF_FORCE_KEYPAD, False)
-            ): bool,
-            vol.Optional(
-                CONF_ARM_HOME_ENABLED,
-                default=self.create_default(options, CONF_ARM_HOME_ENABLED, True),
-            ): bool,
-            vol.Optional(
-                CONF_ARM_NIGHT_ENABLED,
-                default=self.create_default(options, CONF_ARM_NIGHT_ENABLED, True),
-            ): bool,
-            vol.Optional(
-                CONF_INSTANT_ARM_AWAY,
-                default=self.create_default(options, CONF_INSTANT_ARM_AWAY, False),
-            ): bool,
-            vol.Optional(
-                CONF_INSTANT_ARM_HOME,
-                default=self.create_default(options, CONF_INSTANT_ARM_HOME, False),
-            ): bool,
-            vol.Optional(
-                CONF_ENABLE_REMOTE_ARM,
-                default=self.create_default(options, CONF_ENABLE_REMOTE_ARM, False),
-            ): bool,
-            vol.Optional(
-                CONF_ENABLE_REMOTE_DISARM,
-                default=self.create_default(options, CONF_ENABLE_REMOTE_DISARM, False),
-            ): bool,
-            vol.Optional(
-                CONF_ENABLE_SENSOR_BYPASS,
-                default=self.create_default(options, CONF_ENABLE_SENSOR_BYPASS, False),
-            ): bool,
-        }
+        return vol.Schema(schema)
 
-    def create_parameters13(self, options: dict):
-        """Create parameter set 13."""
-        # Log Event file parameters
-        return {
-            vol.Optional(
-                CONF_LOG_EVENT, default=self.create_default(options, CONF_LOG_EVENT, False)
-            ): bool,
-            vol.Optional(
-                CONF_LOG_DONE, default=self.create_default(options, CONF_LOG_DONE, False)
-            ): bool,
-            vol.Optional(
-                CONF_LOG_REVERSE, default=self.create_default(options, CONF_LOG_REVERSE, False)
-            ): bool,
-            vol.Optional(
-                CONF_LOG_CSV_TITLE,
-                default=self.create_default(options, CONF_LOG_CSV_TITLE, False),
-            ): bool,
-            vol.Optional(
-                CONF_LOG_XML_FN,
-                default=self.create_default(options, CONF_LOG_XML_FN, "visonic_log_file.xml"),
-            ): str,
-            vol.Optional(
-                CONF_LOG_CSV_FN,
-                default=self.create_default(options, CONF_LOG_CSV_FN, "visonic_log_file.csv"),
-            ): str,
-            vol.Optional(
-                CONF_LOG_MAX_ENTRIES,
-                default=self.create_default(options, CONF_LOG_MAX_ENTRIES, 10000),
-            ): int,
-        }
-
-    def create_schema_device(self, defaults=None):
-        """Create schema device."""
-        self.update_options(defaults)
-        return vol.Schema(self.CONFIG_SCHEMA_DEVICE)
-
-    def create_schema_ethernet(self, defaults=None):
-        """Create schema ethernet."""
-        self.update_options(defaults)
-        return vol.Schema(self.create_parameters_ethernet(self.options))
-        #return vol.Schema(self.CONFIG_SCHEMA_ETHERNET)
-
-    def create_schema_usb(self, defaults=None):
-        """Create schema usb."""
-        self.update_options(defaults)
-        return vol.Schema(self.CONFIG_SCHEMA_USB)
-
-    def create_schema_parameters1(self, defaults=None):
-        """Create schema parameters 1."""
-        self.update_options(defaults)
-        return vol.Schema(self.create_parameters1(self.options))
-
-    def create_schema_parameters10(self, defaults=None):
-        """Create schema parameters 10."""
-        self.update_options(defaults)
-        return vol.Schema(self.create_parameters10(self.options))
-
-    def create_schema_parameters11(self, defaults=None, isPowerlinkEmulation : bool = False):
-        """Create schema parameters 11."""
-        self.update_options(defaults)
-        return vol.Schema(self.create_parameters11(self.options, isPowerlinkEmulation))
-
-    def create_schema_parameters12(self, defaults=None):
-        """Create schema parameters 12."""
-        self.update_options(defaults)
-        return vol.Schema(self.create_parameters12(self.options))
-
-    def create_schema_parameters13(self, defaults=None):
-        """Create schema parameters 13."""
-        self.update_options(defaults)
-        return vol.Schema(self.create_parameters13(self.options))
-
-    def update_options(self, options: dict):
+    def set_base_options(self, options: dict[str, Any] | None):
         """Set schema defaults."""
         if options:
-            for key in options:
-                self.options[key] = options[key]
+            self._options = {**self._options, **options}
 
-    def getConfig(self) -> dict:
-        dc = deepcopy(self.options)
-        # The key in dc is not a text string, it is a vol.Required / vol.Optional structure
-        return {str(k): v for k, v in dc.items()}
+    def get_options(self) -> dict[str, Any]:
+        """Get the current configuration as a dictionary."""
+        return deepcopy(self._options)
 
+    def create_schema(
+        self,
+        item: str,
+        overrides: dict[str, Any] | None = None,
+    ) -> vol.Schema:
+        """Create a schema for the given menu item."""
+        if item not in FormItems:
+            raise ValueError(f"Unknown menu item: {item}")
+        return self._build_schema(FormItems[item], overrides)
+
+    def is_valid(self, item: str) -> bool:
+        """Validate a menu item."""
+        return item in FormItems

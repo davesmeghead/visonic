@@ -1,61 +1,101 @@
 {
-    "title": "Visonic Alarm Panel",
+    "title": "Visonic Security System",
     "config": {
         "abort": {
-            "already_configured": "Alarm Panel Connection Already Configured",
-            "device_error": "Device must be either Ethernet or USB",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "settings_missing": "Import setting from yaml file but essential settings are missing",
-            "editing": "Thankyou for your edits"
+			"already_configured": "Alarm Connection Already Configured",
+			"device_error": "Device must be either Ethernet, Server or Serial",
+			"emulation_mode_error": "Incorrect Emulation Mode Setting",
+			"settings_missing": "Essential settings are missing",
+			"unknown": "Unexpected or unknown error",
+			"reconfigure_successful": "Reconfiguration Successful",
+			"already_in_progress": "Panel configuration already in progress",
+			"exclusion_list_invalid": "Either the Sensor or Switch exclusion lists are invalid",
+			"download_code_invalid": "The download code is invalid",
+			"cannot_configure_tcp_discovered": "A TCP discovered Hub cannot be reconfigured",
+			"select_entity_invalid": "The baud select entity is invalid"
         },
         "error": {
-            "eth_or_usb": "Must be one of Ethernet or USB",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "unknown": "Unexpected error",
-  		    "cannot_connect_timeout": "Connection timed out. Ensure the device is online.",
-			"cannot_connect_refused": "Connection refused. Is the ESPHome Stream Server active?"
+			"ethernet_server_or_serial": "Must be one of Ethernet, Server or Serial",
+			"emulation_mode_error": "Incorrect Emulation Mode Setting",
+			"cannot_connect_timeout": "Connection timed out. Ensure the device is online.",
+			"cannot_connect_refused": "Connection refused",
+			"already_in_progress": "Panel configuration already in progress",
+			"settings_missing": "Essential settings are missing",
+			"exclusion_list_invalid": "Either the Sensor or Switch exclusion lists are invalid",
+			"download_code_invalid": "The download code is invalid",
+			"select_entity_invalid": "The baud select entity is invalid"
         },
         "step": {
             "device": {
                 "description": "Enter your Device Type and Panel Number",
                 "title": "Connection",
                 "data": {
-                    "type": "Ethernet or USB",
-                    "panel_number": "Panel Number (if you only have 1 panel leave this set to 0)"
+                    "type": "Ethernet, Server or Serial",
+                    "panel_number": "Server/Panel Number (if you only have 1 panel leave this set to 0)"
                 }
             },
-            "myethernet": {
+            "form_tcp_server": {
+                "description": "Enter your TCP Server Settings",
+                "title": "TCP Server Configuration",
+                "data": {
+                    "host": "Listening Address",
+                    "port": "Local Port"
+                }
+            },
+            "form_ethernet": {
                 "description": "Enter your Ethernet Settings",
                 "title": "Ethernet Configuration",
                 "data": {
                     "host": "Host Address",
                     "port": "Port",
-					"esphome_entity_select": "ESPHome Baud Entity (PowerMaster only)"
-                }
-            },
-            "myusb": {
-                "description": "Enter your USB Settings",
-                "title": "USB Configuration",
-                "data": {
-                    "path": "USB Local Path",
-                    "baud": "Baud Rate"
-                }
-            },
-  		    "zeroconf_confirm": {
-				"description": "Do you want to add the Visonic Panel ({name}) to Home Assistant? It will be added with 'full use' values in Powerlink Emulation Mode.",
-				"title": "Discovered Visonic Panel"
-			},
-            "parameters1": {
-                "description": "",
-                "title": "Alarm Panel Settings",
-                "data": {
-                    "exclude_x10": "X10 Devices to Exclude (comma separated e.g. 2,4,5,6)",
+					"esphome_entity_select": "ESPHome Baud Entity (PowerMaster only)",
+                    "exclude_switch": "Switch Devices to Exclude (comma separated e.g. 2,4,5,6)",
                     "exclude_sensor": "Sensor List to Exclude (comma separated e.g. 2,3,4,5)",
-                    "emulation_mode": "Emulation Mode",
-                    "download_code": "EPROM Download Code",
-                    "show_eeprom_attributes": "Show the EPROM Data in the Alarm Attributes (if downloaded)"
+                    "emulation_mode": "Emulation Mode"
                 }
             },
+            "form_serial": {
+                "description": "Enter your Serial Settings",
+                "title": "Serial Configuration",
+                "data": {
+                    "path": "Serial Path",
+                    "baud": "Baud Rate",
+                    "exclude_switch": "Switch Devices to Exclude (comma separated e.g. 2,4,5,6)",
+                    "exclude_sensor": "Sensor List to Exclude (comma separated e.g. 2,3,4,5)",
+                    "emulation_mode": "Emulation Mode"
+                }
+            },
+            "form_cloud": {
+                "description": "Enter your Visonic Cloud Server Settings",
+                "title": "Visonic Cloud Server Configuration",
+                "data": {
+                    "external_url": "Server URL (e.g. visonic.tycomonitor.com)",
+                    "email": "Login Email",
+                    "password": "Login Password",
+                    "code": "Panel User Code",
+                    "panel_serial": "Panel Serial ID (6 characters, leave blank for 1st panel)",
+					"scan_interval": "The period of time between polling the cloud server (seconds)",
+                    "exclude_switch": "Switch Devices to Exclude (comma separated e.g. 2,4,5,6)",
+                    "exclude_sensor": "Sensor List to Exclude (comma separated e.g. 2,3,4,5)"
+                }
+            },
+  		    "form_powerlink": {
+				"description": "Powerlink settings.",
+				"title": "Visonic Security System",
+                "data": {
+                    "show_eeprom_attributes": "Show the EPROM Data in the Alarm Attributes",
+                    "user_code_slot": "Panel User Code for Commands",
+                    "download_code": "EPROM Download Code"
+                }
+			},
+  		    "discovery_confirm": {
+				"description": "Do you want to add the Visonic Alarm Panel ({name}) to Home Assistant?\n\nIt will be added with a 'full use' configuration.",
+				"title": "Visonic Security System"
+			},
+  		    "zeroconf_confirm": {
+				"description": "Do you want to add the Visonic Alarm Panel ({name}) to Home Assistant?\n\nIt will be added with a {usage} configuration.",
+				"title": "Visonic Security System"
+			},
             "parameters10": {
                 "description": "",
                 "title": "Alarm Panel Settings",
@@ -70,7 +110,6 @@
                 "description": "",
                 "title": "Alarm Panel Zone/Sensor Settings",
                 "data": {
-                    "show_eeprom_attributes": "Show the EPROM Data in the Alarm Attributes",
                     "motion_off_delay": "Motion/Camera off delay time (seconds)",
                     "magnet_closed_delay": "Magnet/Wired closed delay time (seconds)",
                     "emergency_off_delay": "Smoke/Fire off delay time (seconds)"
@@ -103,20 +142,30 @@
                     "panellog_reverse_order": "Reverse the output order",
                     "panellog_max_entries": "Only output the most recent X log entries"
                 }
+            },
+            "parameters14": {
+                "description": "",
+                "title": "Alarm Panel Settings",
+                "data": {
+                    "siren_sounding": "List of triggers for the siren",
+                    "panel_state_notifications": "List of triggers for Home Assistant Notifications"
+                }
             }
         }
     },
     "options": {
         "abort": {
-            "already_configured": "Alarm Panel Connection Already Configured",
+            "already_configured": "Alarm Connection Already Configured",
             "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "device_error": "Device must be either Ethernet or USB",
-            "editing": "Thankyou for your edits"
+            "device_error": "Device must be either Ethernet, Server or Serial",
+			"reconfigure_successful": "Reconfiguration Successful",
+			"cannot_edit_tcp_server": "TCP Server cannot be edited, please reconfigure it (which reloads it)",
+			"unknown": "Unexpected or unknown error"
         },
         "error": {
-            "eth_or_usb": "Must be one of Ethernet or USB",
-            "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "unknown": "Unexpected error"
+            "ethernet_server_or_serial": "Must be one of Ethernet or Serial",
+			"settings_missing": "Essential settings are missing",
+            "emulation_mode_error": "Incorrect Emulation Mode Setting"
         },
         "step": {
             "parameters10": {
@@ -133,7 +182,6 @@
                 "description": "",
                 "title": "Alarm Panel Zone/Sensor Settings",
                 "data": {
-                    "show_eeprom_attributes": "Show the EPROM Data in the Alarm Attributes",
                     "motion_off_delay": "Motion/Camera off delay time (seconds)",
                     "magnet_closed_delay": "Magnet/Wired closed delay time (seconds)",
                     "emergency_off_delay": "Smoke/Fire off delay time (seconds)"
@@ -165,6 +213,14 @@
                     "panellog_csv_filename": "The CSV Filename (and path)",
                     "panellog_reverse_order": "Reverse the output order",
                     "panellog_max_entries": "Only output the most recent X log entries"
+                }
+            },
+            "parameters14": {
+                "description": "",
+                "title": "Alarm Panel Settings",
+                "data": {
+                    "siren_sounding": "List of triggers for the siren",
+                    "panel_state_notifications": "List of triggers for Home Assistant Notifications"
                 }
             }
         }
@@ -232,17 +288,17 @@
                 }
             }
         },
-        "alarm_panel_x10": {
-            "name": "Command X10",
-            "description": "Send an X10 Command to an X10 Device.",
+        "alarm_panel_switch": {
+            "name": "Command Switch",
+            "description": "Send a Switch Command to a Switch Device.",
             "fields": {
                 "entity_id": {
-                    "name": "Visonic X10 Switch",
-                    "description": "Name of the visonic x10 switch. This is case sensitive and a mandatory setting. The 'switch.' text is optional."
+                    "name": "Visonic Switch",
+                    "description": "Name of the visonic switch. This is case sensitive and a mandatory setting. The 'switch.' text is optional."
                 },
-                "x10command": {
-                    "name": "X10 Command",
-                    "description": "X10 Command: Off, On, Dimmer, Brighten."
+                "switch_command": {
+                    "name": "Switch Command",
+                    "description": "Switch Command: Off, On, Dimmer, Brighten."
                 }
             }
         },
@@ -257,8 +313,8 @@
             }
         },
         "alarm_panel_zoneinfo": {
-            "name": "Panel Sensor and X10 information",
-            "description": "Retrieve the Sensor list, X10 list plus Open, Battery Low and Bypassed Sensors of the Alarm Panel.",
+            "name": "Panel Sensor and Switch information",
+            "description": "Retrieve the Sensor list, Switch list plus Open, Battery Low and Bypassed Sensors of the Alarm Panel.",
             "fields": {
                 "entity_id": {
                     "name": "Visonic Panel",
@@ -393,6 +449,7 @@
 						"name": "Emulation Mode",
 						"state": {
 							"unknown": "Unknown",
+							"cloud": "Visonic Cloud Server",
 							"problem": "Problem",
 							"starting": "Starting",
 							"standard": "Standard",
@@ -725,6 +782,7 @@
 						"name": "Emulation Mode",
 						"state": {
 							"unknown": "Unknown",
+							"cloud": "Visonic Cloud Server",
 							"problem": "Problem",
 							"starting": "Starting",
 							"standard": "Standard",
@@ -849,7 +907,7 @@
                 "on": "Bypass"
             }
         },
-        "x10command": {
+        "switch_command": {
             "options": {
                 "off": "Off",
                 "on": "On",
@@ -865,7 +923,7 @@
                 "emergency": "Emergency",
                 "gas": "Gas",
                 "flood": "Flood",
-                "x10": "X10",
+                "switch": "Switch",
                 "panic": "Panic"                  
             }
         },
@@ -880,7 +938,7 @@
 				"image_problem": "Image Retrieval Problems",
 				"eventlog_problem": "Event Log Problems",
 				"command_not_sent": "Command Not Sent To Panel",
-				"x10_problem": "X10 Problem"
+				"switch_problem": "Switch Problem"
 			}
 		}
     },
@@ -893,6 +951,33 @@
         },
         "invalid_arm_state_no_option": {
             "message": "Armed state not defined. Allowed states are: {options}"
+        },
+        "number_in_config_not_unique": {
+            "message": "Visonic configuration has a {ident} number {ref} that is not unique, cannot continue as it is invalid."
+        },
+        "panel_initial_connection_failure": {
+            "message": "Initial Visonic connection to panel number {panel_id} failure."
+        },
+        "no_unique_number_in_config": {
+            "message": "Visonic configuration does not include a {ident} number, cannot continue as it is invalid."
+        },
+        "no_entity_specified_in_service": {
+            "message": "Visonic service {service}, entity is invalid."
+        },
+        "entity_not_attached_to_device": {
+            "message": "Visonic service {service}, entity is not attached to a device {entity_id}"
+        },
+        "entity_not_in_registry": {
+            "message": "Visonic service {service}, entity not found in registry {entity_id}"
+        },
+        "invalid_device_for_entity": {
+            "message": "Visonic service {service}, invalid device for entity {entity_id}"
+        },
+        "device_not_linked_to_configuration": {
+            "message": "Visonic service {service}, device not linked to a config entity: {entity_id}"
+        },
+        "config_entry_not_found": {
+            "message": "Visonic service {service}, config Entry not found for entity {entity_id}"
         }
 	},
 	"entity_component": {
@@ -906,7 +991,7 @@
 				"pad"       : "Pad",
 				"siren"     : "Siren",
 				"2pad"      : "2Pad",
-				"x10"       : "X10",
+				"switch"    : "Switch",
 				"pgm"       : "PGM",
 				"gsm"       : "GSM",
 				"powerlink" : "P-LINK",

@@ -1,9 +1,9 @@
 {
   "domain": "visonic",
-  "name": "Visonic Intruder Alarm",
+  "name": "Visonic Security System",
   "codeowners": ["@davesmeghead"],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["zeroconf"],
   "documentation": "https://github.com/davesmeghead/visonic/wiki",
   "integration_type": "hub",
   "iot_class": "local_push",
@@ -11,7 +11,7 @@
   "loggers": ["visonic"],
   "requirements": ["Pillow", "serialx"],
   "single_config_entry": false,
-  "version": "0.12.6.0",
+  "version": "0.13.0.0",
   "zeroconf": [
     {
        "type": "_visonic._tcp.local.",

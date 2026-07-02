@@ -1,0 +1,81 @@
+"""Checksum calculator and validator."""
+
+import logging
+
+log = logging.getLogger(__name__)
+
+
+class MyChecksumCalc:
+    """Checksum Calculation Class."""
+
+    def __init__(self, logger = None) -> None:
+        """Initialize class."""
+        self.log = logger
+
+    # This is used for debugging from command line
+    def setLogger(self, loggy):
+        """Set the logger."""
+        self.log = loggy
+
+    # check the checksum of received messages
+    def _validatePDU(self, packet: bytearray) -> bool:
+        r"""Verify if packet is valid. Packets start with a preamble (\x0D) and end with postamble (\x0A)."""
+        # Does it start with a preamble
+        if packet[:1] != b"\x0D":
+            return False
+        # Does it end with a footer
+        if packet[-1:] != b"\x0A":
+            return False
+
+        # Check the CRC
+        if packet[-2:-1] == self._calculateCRC(packet[1:-2]):
+            # log.debug("[_validatePDU] VALID CRC PACKET!")
+            return True
+
+        # Check the CRC
+        if packet[-2:-1] == self._calculateCRCAlt(packet[1:-2]):
+            # log.debug("[_validatePDU] VALID ALT CRC PACKET!")
+            return True
+
+        if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] + 1:
+            #log.debug(f"[_validatePDU] Validated a Packet with a checksum that is 1 more than the actual checksum!!!! {toString(packet)} and {hex(self._calculateCRC(packet[1:-2])[0]).upper()} alt calc is {hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()}")
+            return True
+
+        if packet[-2:-1][0] == self._calculateCRC(packet[1:-2])[0] - 1:
+            #log.debug(f"[_validatePDU] Validated a Packet with a checksum that is 1 less than the actual checksum!!!! {toString(packet)} and {hex(self._calculateCRC(packet[1:-2])[0]).upper()} alt calc is {hex(self._calculateCRCAlt(packet[1:-2])[0]).upper()}")
+            return True
+
+        #log.debug("[_validatePDU] Not valid packet, CRC failed, may be ongoing and not final 0A")
+        return False
+
+    # alternative to calculate the checksum for sending and receiving messages
+    def _calculateCRCAlt(self, msg: bytearray):
+        """Calculate CRC Checksum."""
+
+        # log.debug("[_calculateCRC] Calculating for: %s", toString(msg))
+        # Calculate the checksum
+        checksum = 0
+        for char in msg[0: len(msg)]:
+            checksum += char
+        # 29/8/2022
+        #      This works for both my panels and always validates exactly (never using the +1 or -1 code in _validatePDU)
+        #      It also matches the checksums that the Powerlink 3.1 module generates.
+        checksum = 256 - (checksum % 255)
+        if checksum == 256:
+            checksum = 1
+        # log.debug("[_calculateCRC] Calculating for: {toString(msg)}     calculated CRC is: {toString(bytearray([checksum]))}")
+        return bytearray([checksum])
+
+    # calculate the checksum for sending and receiving messages
+    def _calculateCRC(self, msg: bytearray):
+        """Calculate CRC Checksum."""
+        # log.debug("[_calculateCRC] Calculating for: %s", toString(msg))
+        # Calculate the checksum
+        checksum = 0
+        for char in msg[0: len(msg)]:
+            checksum += char
+        checksum = 0xFF - (checksum % 0xFF)
+        if checksum == 0xFF:
+            checksum = 0x00
+        # log.debug("[_calculateCRC] Calculating for: {toString(msg)}     calculated CRC is: {toString(bytearray([checksum]))}")
+        return bytearray([checksum])

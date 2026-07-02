@@ -1,56 +1,38 @@
 """Diagnostics support for Visonic Integration."""
-from __future__ import annotations
-import logging
+
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PATH, CONF_PORT
+from homeassistant.core import HomeAssistant
 
-from . import VisonicConfigEntry
-from .const import CONF_DOWNLOAD_CODE
-from .client import VisonicClient
+from .const import CONF_DOWNLOAD_CODE, CONF_SERVER_HOST, CONF_SERVER_PORT
+from .coordinator_base import VisonicCoordinator
+from .exceptions import VisonicException
+from .visonic_types import VisonicConfigData
 
-_LOGGER = logging.getLogger(__name__)
-
-REDACT_ME = (CONF_DOWNLOAD_CODE, CONF_HOST, CONF_PORT, CONF_PATH)
+REDACT_ME = (CONF_DOWNLOAD_CODE, CONF_SERVER_HOST, CONF_SERVER_PORT,
+             CONF_HOST, CONF_PORT, CONF_PATH,
+             )
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant,
-    entry: VisonicConfigEntry,
+    _hass: HomeAssistant,
+    entry: ConfigEntry,
 ) -> dict[str, Any]:
     """Return diagnostics."""
-    diagdata = {}
-    cdata = entry.runtime_data
-    if cdata.client is not None:
-        visonic = { } 
-        client : VisonicClient = cdata.client
-        B = client.getClientStatusDict()
-        if ( piu := client.getPartitionsInUse() ) is not None:
-            partition = {}
-            partition["panel"] = client.getPanelStatusDict(0)
-            for p in piu:
-                partition[f"partition {p}"] = client.getPanelStatusDict(p)
-            visonic = { **partition, **B } 
-            #_LOGGER.error(f"async_get_config_entry_diagnostics {entry.as_dict()} {visonic}")
-        else:
-            A = client.getPanelStatusDict()
-            visonic = { **A, **B } 
-            #_LOGGER.error(f"async_get_config_entry_diagnostics {entry.as_dict()} {visonic}")
-        diagdata = {
-            "entry": entry.as_dict(),
-            "client connected": 'yes',
-            "panel connected": 'yes' if client.isPanelConnected() else 'no',
-            "visonic": visonic,
-            "sensor": client.dumpSensorsToStringList(),
-            "switch": client.dumpSwitchesToStringList(),
-            "clientlog": client.getStrLog(),
-        }
-    else:
-        diagdata = {
-            "entry": entry.as_dict(),
-            "client connected": 'no',
-            "panel connected": 'no',
-        }
+    vce: VisonicConfigData = entry.runtime_data
+    coordinator: VisonicCoordinator = vce.coordinator
+    if coordinator is None:
+        raise VisonicException("Diagnostics has been given invalid coordinator", 101)
 
-    return async_redact_data(diagdata, REDACT_ME)
+    if not coordinator:
+        diagdata = {
+            "integration connected": "no",
+            "panel connected": "no",
+        }
+        return async_redact_data(diagdata, REDACT_ME)
+
+    diagdata = coordinator.get_diagnostic_data()
+    ev = {"entry": entry.options, **diagdata}
+    return async_redact_data(ev, REDACT_ME)
