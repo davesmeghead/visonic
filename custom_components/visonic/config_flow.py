@@ -96,6 +96,7 @@ SERIAL_SCHEMA = vol.Schema(
     }
 )
 
+
 DEFAULT_TITLE = "Visonic Security System"
 VISONIC_CONFIG_VERSION = 6
 
