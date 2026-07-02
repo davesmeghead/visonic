@@ -8,14 +8,11 @@ import uuid
 
 import voluptuous as vol
 
-from homeassistant.components.esphome import DOMAIN as ESPHOME_DOMAIN, APIClient
-from homeassistant.components.esphome.entry_data import RuntimeEntryData
 from homeassistant.config_entries import (
     CONN_CLASS_LOCAL_POLL,
     HANDLERS,
     SOURCE_RECONFIGURE,
     ConfigEntry,
-    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
@@ -602,28 +599,6 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
             step_id="discovery_confirm",
             description_placeholders=self.config_data, # it may use CONF_NAME and CONF_USAGE
         )
-
-    def _find_runtime_data(self, address: str | None, name: str | None) -> ConfigEntry | None:
-        if address is not None:
-            entries = self.hass.config_entries.async_entries(ESPHOME_DOMAIN, include_disabled=False, include_ignore=False)
-            for e in entries:
-                if e.state != ConfigEntryState.LOADED:
-                    continue
-
-                d: RuntimeEntryData = e.runtime_data
-                c: APIClient = d.client
-
-                # Match by IP
-                if address and c.address == address:
-                    return e
-
-                # Match by hostname / device name
-                if name and (
-                    c.address.startswith(name)  # sometimes hostname used
-                    or e.title == name
-                ):
-                    return e
-        return None
 
     # Zeroconf - 1 possible config for zeroconf, using Ethernet
     async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo):
