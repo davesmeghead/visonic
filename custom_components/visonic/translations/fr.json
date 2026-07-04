@@ -182,7 +182,6 @@
                 "description": "",
                 "title": "Centrale d'Alarme Zone/Capteur Param\u00e8tres",
                 "data": {
-                    "show_eeprom_attributes": "Afficher les donn\u00e9es EPROM dans les attributs d'alarme",
                     "motion_off_delay": "D\u00e9lai du mouvement/de la cam\u00e9ra (secondes)",
                     "magnet_closed_delay": "D\u00e9lai de fermeture magn\u00e9tique/filaire (secondes)",
                     "emergency_off_delay": "D\u00e9lai de fum\u00e9e/incendie (secondes)"
@@ -542,6 +541,9 @@
 					"lasteventaction": { 
 					    "name" : "Action du dernier \u00e9v\u00e8nement"
 					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
 					"lasteventtime": { 
 					    "name" : "Heure du dernier \u00e9v\u00e9nement"
 					}
@@ -735,6 +737,18 @@
 							"true": "Alerte",
 							"undefined": "Ind\u00e9fini"
 						}
+					},
+					"lasteventname": {
+					    "name" : "Nom du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventaction": { 
+					    "name" : "Action du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
+					"lasteventtime": { 
+					    "name" : "Heure du dernier \u00e9v\u00e9nement"
 					}
 				}				
 			}
@@ -877,6 +891,9 @@
 					},
 					"lasteventaction": { 
 					    "name" : "Action du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
 					},
 					"lasteventtime": { 
 					    "name" : "Heure du dernier \u00e9v\u00e9nement"

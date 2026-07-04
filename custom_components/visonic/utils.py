@@ -56,6 +56,13 @@ def to_bool(val: bool | int | str | None) -> bool:
     _LOGGER.warning("Unable to decode boolean value %s    type is %s", val, type(val))
     return False
 
+def print_partition(part : int | set | list) -> str:
+    """Convert a partition value or set or list to a string, also adding 1 to the value."""
+    if isinstance(part, int):
+        part = [part]
+    tmp = [a+1 for a in part if a >= 0]
+    return ''.join(c for c in str(tmp) if c not in "{}[]() ")
+
 def create_base_prefix(panel_ident: int) -> str:
     """Get my string."""
     if panel_ident > 0:

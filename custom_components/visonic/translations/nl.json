@@ -182,7 +182,6 @@
 				"description": "",
 				"title": "Alarm Paneel Zone/Sensor Instellingen",
 				"data": {
-					"show_eeprom_attributes": "Toon de EPROM-gegevens in de alarmattributen",
 					"motion_off_delay": "Vertragingstijd bij uitschakelen beweging/camera (seconden)",
 					"magnet_closed_delay": "Vertragingstijd bij sluiten magneet/bedrade verbinding (seconden)",
 					"emergency_off_delay": "Vertragingstijd bij uitschakelen rook/brand (seconden)"
@@ -542,6 +541,9 @@
 					"lasteventaction": {
 						"name": "Actie Laatste Gebeurtenis"
 					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
 					"lasteventtime": {
 						"name": "Tijd Laatste Gebeurtenis"
 					}
@@ -735,6 +737,18 @@
 							"true": "Waarschuwing",
 							"undefined": "Ongedefinieerd"
 						}
+					},
+					"lasteventname": {
+						"name": "Naam Laatste Gebeurtenis"
+					},
+					"lasteventaction": {
+						"name": "Actie Laatste Gebeurtenis"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
+					"lasteventtime": {
+						"name": "Tijd Laatste Gebeurtenis"
 					}
 				}
 			}
@@ -877,6 +891,9 @@
 					},
 					"lasteventaction": {
 						"name": "Actie Laatste Gebeurtenis"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
 					},
 					"lasteventtime": {
 						"name": "Tijd Laatste Gebeurtenis"

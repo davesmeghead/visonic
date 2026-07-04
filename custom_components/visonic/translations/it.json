@@ -182,7 +182,6 @@
                 "description": "",
                 "title": "Impostazioni Pannello di Allarme",
                 "data": {
-                    "show_eeprom_attributes": "Mostra i Dati EPROM negli Attributi dell'Allarme",
                     "motion_off_delay": "Tempo di ritardo spegnimento Movimento/Telecamera (secondi)",
                     "magnet_closed_delay": "Tempo di ritardo chiusura Magnetico/Cablato (secondi)",
                     "emergency_off_delay": "Tempo di ritardo spegnimento Emergenza Incendio/Fumo (secondi)"
@@ -542,6 +541,9 @@
 					"lasteventaction": { 
 					    "name" : "Last Event Action"
 					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
 					"lasteventtime": { 
 					    "name" : "Last Event Time"
 					}
@@ -735,6 +737,18 @@
 							"true": "Alert",
 							"undefined": "Undefined"
 						}
+					},
+					"lasteventname": {
+					    "name" : "Last Event Name"
+					},
+					"lasteventaction": { 
+					    "name" : "Last Event Action"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
+					"lasteventtime": { 
+					    "name" : "Last Event Time"
 					}
 				}				
 			}
@@ -877,6 +891,9 @@
 					},
 					"lasteventaction": { 
 					    "name" : "Last Event Action"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
 					},
 					"lasteventtime": { 
 					    "name" : "Last Event Time"

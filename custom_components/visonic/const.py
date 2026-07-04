@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 
 # The client version and domain information for the integration
 DOMAIN: Final = "visonic"
-CLIENT_VERSION: Final = "0.13.0.0"
+CLIENT_VERSION: Final = "0.13.0.2"
 MANUFACTURER: Final = "Visonic"
 VISONIC_UNIQUE_NAME: Final = "Visonic Alarm"
 VISONIC_TRANSLATION_KEY: Final = "alarm_panel_key"
@@ -50,6 +50,7 @@ TEXT_DISCONNECTION_COUNT: Final = "Disconnection Count"
 TEXT_CLIENT_VERSION: Final = "Client Version"
 TEXT_LAST_EVENT_NAME: Final = "lasteventname"
 TEXT_LAST_EVENT_TIME: Final = "lasteventtime"
+TEXT_LAST_EVENT_PARTITION: Final = "lasteventpartition"
 TEXT_LAST_EVENT_ACTION: Final = "lasteventaction"
 
 TEXT_XML_LOG_FILE_TEMPLATE: Final = "visonic_template.xml"

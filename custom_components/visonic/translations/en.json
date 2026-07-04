@@ -541,6 +541,9 @@
 					"lasteventaction": { 
 					    "name" : "Last Event Action"
 					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
 					"lasteventtime": { 
 					    "name" : "Last Event Time"
 					}
@@ -734,6 +737,18 @@
 							"true": "Alert",
 							"undefined": "Undefined"
 						}
+					},
+					"lasteventname": {
+					    "name" : "Last Event Name"
+					},
+					"lasteventaction": { 
+					    "name" : "Last Event Action"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
+					"lasteventtime": { 
+					    "name" : "Last Event Time"
 					}
 				}				
 			}
@@ -876,6 +891,9 @@
 					},
 					"lasteventaction": { 
 					    "name" : "Last Event Action"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
 					},
 					"lasteventtime": { 
 					    "name" : "Last Event Time"

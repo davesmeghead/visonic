@@ -323,10 +323,10 @@ class PlatformManager:
         apd = AlarmPanelData(panel_unique_id, piu, siren_id, siren_name)
 
         if self.disable_all_panel_commands:
-            self.logger.logstate_debug("Creating Sensor for Alarm indications")
+            self.logger.logstate_debug("Creating Sensor for Alarm indications: %s", str(apd))
             self.setupVisonicEntity(Platform.SENSOR, apd)
         else:
-            self.logger.logstate_debug("Creating Alarm Panel Partition Entities")
+            self.logger.logstate_debug("Creating Alarm Panel Entities: %s", str(apd))
             self.setupVisonicEntity(Platform.ALARM_CONTROL_PANEL, apd)
         return apd
 
@@ -486,7 +486,7 @@ class PlatformManager:
                     model=s.title().replace("_", " "),
                     model_id=sensor.sensor_type.name,
                 )
-                self.logger.logstate_debug("Adding Device identifier %s with name %s", identifier, n)
+                self.logger.logstate_debug("Adding Sensor identifier %s with name %s", identifier, n)
                 self._sensor_dict[sensor.id] = sensor
                 if sensor.id not in self._sensor_created_set:
                     self._sensor_created_set.add(sensor.id)
@@ -552,6 +552,7 @@ class PlatformManager:
                     ),
                 )
                 #self.logger.logstate_debug(f"Adding Switch {switch.id=}")
+                self.logger.logstate_debug("Adding Switch identifier %s with name %s", identifier, n)
                 self._switch_dict[switch.id] = switch
                 if switch.id not in self._switch_created_set:
                     self._switch_created_set.add(switch.id)
@@ -595,20 +596,6 @@ class PlatformManager:
                 return f"{prefix}"
         return "DU"
 
-    def create_device_type_old(self, device: DeviceState) -> str:
-        """Create a device name string."""
-        dt = device.device_type.lower()
-        mapping = {
-            "fob": "KF",
-            "pad1": "KP",
-            "pad2": "KT",
-            "siren": "S",
-        }
-        for needle, prefix in mapping.items():
-            if needle in dt:
-                return f"{prefix}{device.id:02d}"
-        return f"DU{device.id:02d}"
-
     def device_update_or_create(
         self,
         device: DeviceState,
@@ -640,6 +627,7 @@ class PlatformManager:
                 ),
             )
             #self.logger.logstate_debug(f"Adding {device.name} {device.id}")
+            self.logger.logstate_debug("Adding Device identifier %s with name %s", identifier, n)
             self._device_dict[device.id] = device
             if device.id not in self._device_created_set:
                 self._device_created_set.add(device.id)

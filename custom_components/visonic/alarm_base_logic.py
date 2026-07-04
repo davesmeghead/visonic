@@ -69,7 +69,7 @@ class AlarmBaseLogic(CoordinatorEntity[VisonicCoordinator]):
             self.coordinator.set_partition_name(
                 partition=partition, panel_entity_name=self._name
             )
-            self.coordinator.log.logstate_info("[__init__] Setting partition %s", partition)
+            self.coordinator.log.logstate_info("[__init__] Setting partition %s", partition+1)
 
         self._attr_unique_id = slugify(self._name)
         self._attr_should_poll = False

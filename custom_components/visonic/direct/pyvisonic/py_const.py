@@ -2,8 +2,9 @@
 
 from datetime import timedelta
 from enum import IntEnum
+import os
 
-LIBRARY_VERSION = "2.0.0.0"
+LIBRARY_VERSION = "2.0.0.2"
 
 NOBYPASSSTR = "No Bypass"
 DISABLE_TEXT = "Disable"
@@ -38,7 +39,9 @@ TEXT_AC_FAIL    = "ac_failure"
 # Obfuscate sensitive data, regardless of the other Debug settings.
 #     Setting this to True limits the logging of messages sent to the panel to CMD or NONE
 #                     It also limits logging of received data
-OBFUS = True
+
+OBFUS = os.getenv("HA_DEBUG_NO_OBFUSCATION") != "1"
+#OBFUS = True
 
 # Whether to include B0 35 and B0 42 panel data decode in the log file.  Note that this is also combined with OBFUS.
 B0_35_PANEL_DATA_LOG = True  # True or False

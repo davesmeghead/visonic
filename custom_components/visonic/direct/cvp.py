@@ -127,9 +127,6 @@ async def async_create_tcp_client(
         sock = None
         try:
             # logger.logstate_debug(f"Setting TCP socket Options {address} {port}")
-            logger.logstate_debug(
-                "Creating TCP Connection, Creating socket and setting socket options"
-            )
             family = AddressFamily.AF_INET6 if ":" in address else AddressFamily.AF_INET
             timeout = 5.0 if family == AddressFamily.AF_INET6 else 1.0
             # Create the socket using the detected family
@@ -141,7 +138,7 @@ async def async_create_tcp_client(
             # Connection Logic
             sock.settimeout(timeout)
             # sock.connect works for both v4 and v6 tuples
-            logger.logstate_debug(f"Creating TCP {family.name} Connection to {address}")
+            logger.logstate_debug(f"Creating TCP {family.name} Connection")
             sock.connect((address, port))
 
             sock.settimeout(0.01)  # Set to 0.01s timeout for flushing

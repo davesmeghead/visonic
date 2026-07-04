@@ -571,7 +571,7 @@ class MessageHandling(MessageHandlingB0Data):
 
         if msg_cnt == 255 and (_piu := self.get_partitions_in_use()) is not None:
             log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions), cannot rely on anything in this message for a powermaster with partitions, data={toString(data)}")
-            ## I have tried for many hours to make sense of this message data for my PowerMAster 30 panel with 2 partitons set up for testing.
+            ## I have tried for many hours to make sense of this message data for my PowerMaster 30 panel with 2 partitons set up for testing.
             ## It looked like I had it with the code below and then it gave me ARMED_AWAY and DISARMED messages when they were not commanded, not even within the same hour.
             ## It looks like other messages that come in slow time e.g. low battery, maybe system reset, may be able to be processed.  Need to think about this more!
             ##     i.e. Although when i exit installer on the panel it sends a system reset, how do i know that the panel isn't going to send a random system reset message at any time?
@@ -597,7 +597,7 @@ class MessageHandling(MessageHandlingB0Data):
             #event_reason = int(data[6])
 
             #log.debug(f"[handle_msgtypeA7]      A7 FF message (partitions) contains data={toString(data)}")
-            #self._check_unknown("[handle_msgtypeA7]              A7 Message unknown byte is different to last time", f"handle_msgtypeA7_{msgCnt}", data[1])
+            #self._check_unknown("[handle_msgtypeA7]              A7 Message unknown byte is different to last time", f"handle_msgtypeA7_{msg_cnt}", data[1])
             #if valid:
             #    et = getType(event_reason)
             #    es = getTypeStr(event_reason)

@@ -145,6 +145,8 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         entry.add_update_listener(self._handle_entry_update)
         self.async_add_listener(self._dummy_listener)
 
+        self._event_logger.logstate_info(f"{update_interval=}")
+
         self.cloud_alarm: AlarmSystem | None = None
 
     def _dummy_listener(self):
