@@ -2,7 +2,9 @@
 
 import asyncio
 from collections.abc import Callable
+import os
 import re
+import time
 from typing import Any, NamedTuple
 
 from homeassistant.config_entries import ConfigEntry
@@ -23,7 +25,12 @@ from .const import (
     CONF_ENABLE_SENSOR_BYPASS,
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_SWITCH,
+    CONF_IMAGE_MEDIA_PATH,
+    DEFAULT_IMAGE_MEDIA_PATH,
     DOMAIN,
+    IMAGE_FRAME_DURATION_MS,
+    IMAGE_SEQUENCE_GAP,
+    IMAGE_SEQUENCE_MAX_FRAMES,
     MANUFACTURER,
     PANEL_ATTRIBUTE_NAME,
     PARTITION_ID_WHEN_BASE,
@@ -155,8 +162,13 @@ class PlatformManager:
         self._device_created_set : set[int] = set()
         # A set of sensor IDs that are PIR/Camera and have an image
         self._image_created_set: set[int] = set()
-        # Latest JPEG bytes per camera sensor id
+        # Rendered animated GIF bytes served to the image entity, per camera sensor id
         self._sensor_jpeg: dict[int, bytearray] = {}
+        # Buffered JPEG frames of the current capture, and per-sensor sequence bookkeeping
+        self._sensor_frames: dict[int, list[bytes]] = {}
+        self._sensor_seq_name: dict[int, str] = {}
+        self._sensor_last_frame: dict[int, float] = {}
+        self._sensor_frame_no: dict[int, int] = {}
 
         self._createdAlarmPanel = False
 
@@ -671,11 +683,74 @@ class PlatformManager:
         return False
 
     def set_sensor_jpeg(self, sensor_id: int, data: bytearray | None) -> None:
-        """Cache the latest JPEG bytes for a camera sensor (or drop it)."""
-        if data:
-            self._sensor_jpeg[sensor_id] = bytearray(data)
-        else:
-            self._sensor_jpeg.pop(sensor_id, None)
+        """Buffer a camera frame and render the capture to an animated GIF."""
+        if not data:
+            for store in (self._sensor_frames, self._sensor_seq_name, self._sensor_last_frame, self._sensor_frame_no, self._sensor_jpeg):
+                store.pop(sensor_id, None)
+            return
+        now = time.monotonic()
+        last = self._sensor_last_frame.get(sensor_id)
+        self._sensor_last_frame[sensor_id] = now
+        if sensor_id not in self._sensor_frames or last is None or now - last > IMAGE_SEQUENCE_GAP:
+            self._sensor_frames[sensor_id] = []
+            self._sensor_seq_name[sensor_id] = time.strftime("%Y%m%d_%H%M%S")
+            self._sensor_frame_no[sensor_id] = 0
+        frames = self._sensor_frames[sensor_id]
+        new_frame = bytes(data)
+        if frames and frames[-1] == new_frame:
+            return
+        self._sensor_frame_no[sensor_id] += 1
+        frame_no = self._sensor_frame_no[sensor_id]
+        frames.append(new_frame)
+        del frames[:-IMAGE_SEQUENCE_MAX_FRAMES]
+        self.hass.add_job(
+            self._render_sensor_media, sensor_id, list(frames), new_frame, self._sensor_seq_name[sensor_id], frame_no
+        )
+
+    def _render_sensor_media(self, sensor_id: int, frames: list[bytes], frame: bytes, seq_name: str, frame_no: int) -> None:
+        """Assemble the buffered frames into an animated GIF, and save the GIF + this frame (executor thread)."""
+        import io
+
+        try:
+            from PIL import Image
+        except ImportError:
+            self._sensor_jpeg[sensor_id] = bytearray(frame)
+            return
+        configured = self.entry.options.get(CONF_IMAGE_MEDIA_PATH, DEFAULT_IMAGE_MEDIA_PATH)
+        directory = configured if os.path.isabs(configured) else self.hass.config.path(configured)
+        stem = f"panel{self.panel_ident}_zone{sensor_id}_{seq_name}"
+        try:
+            os.makedirs(directory, exist_ok=True)
+            with open(os.path.join(directory, f"{stem}_frame{frame_no:02d}.jpg"), "wb") as handle:
+                handle.write(frame)
+        except OSError as ex:
+            self.logger.logstate_warning("Unable to save camera frame for zone %s: %s", sensor_id, ex)
+        try:
+            images = []
+            for buffered in frames:
+                try:
+                    image = Image.open(io.BytesIO(buffered))
+                    image.load()
+                    images.append(image.convert("RGB"))
+                except Exception:  # noqa: BLE001
+                    continue
+            if not images:
+                return
+            buffer = io.BytesIO()
+            images[0].save(
+                buffer,
+                format="GIF",
+                save_all=True,
+                append_images=images[1:],
+                duration=IMAGE_FRAME_DURATION_MS,
+                loop=0,
+            )
+            gif = buffer.getvalue()
+            self._sensor_jpeg[sensor_id] = bytearray(gif)
+            with open(os.path.join(directory, f"{stem}.gif"), "wb") as handle:
+                handle.write(gif)
+        except (OSError, ValueError) as ex:
+            self.logger.logstate_warning("Unable to render/save camera clip for zone %s: %s", sensor_id, ex)
 
     def _get_sensor_jpeg(self, sensor_id: int) -> bytearray | None:
         return self._sensor_jpeg.get(sensor_id)

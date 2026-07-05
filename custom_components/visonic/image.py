@@ -68,7 +68,7 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         self._attr_image_last_updated = None
         self._cached_image = None
         # self._attr_image_url = None
-        self._attr_content_type = "image/jpeg"
+        self._attr_content_type = "image/gif"
         self._image_data = None
         self._image_data_time = None
         self._attr_device_info = DeviceInfo(
