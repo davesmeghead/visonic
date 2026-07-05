@@ -436,6 +436,7 @@ class PlatformManager:
             self._image_created_set.add(zsd.device_id)
             # The connection to the panel allows interaction with the sensor, including asking to get the image from a camera
             self.setupVisonicEntity(Platform.IMAGE, zsd)
+            self.setupVisonicEntity(Platform.BUTTON, zsd)
 
     def sensor_create_entities(self, sensor: SensorState, identifier: str):
         """Create sensor entities."""

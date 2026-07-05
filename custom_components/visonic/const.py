@@ -146,6 +146,7 @@ PIN_REGEX: Final = re.compile(r"^[0-9]{4}$")
 PLATFORMS: Final = [
     Platform.ALARM_CONTROL_PANEL,
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.IMAGE,
     Platform.SELECT,
     Platform.SENSOR,
