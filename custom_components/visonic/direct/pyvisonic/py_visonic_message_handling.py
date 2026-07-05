@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import Enum, auto
 import io
 import logging
+import os
 import traceback
 from typing import NamedTuple
 
@@ -1087,7 +1088,15 @@ class MessageHandling(MessageHandlingB0Data):
                             self.SensorList[ir.zone - 1].has_jpg = True
                             self.SensorList[ir.zone - 1].notify(AlSensorCondition.CAMERA)
 
-                        if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD]:
+                        # An external bridge (e.g. an ESP32 stream-server built with F4-ack support) can
+                        # answer the panel's image acks directly over the serial link, ~3ms after the last
+                        # data chunk. When that is in use, HA must NOT also ack: two uncoordinated writers on
+                        # the same UART TX collide. Drop a file named 'visonic_no_ha_f4_ack' in the HA config
+                        # dir to offload F4 acking to the bridge. (Note: the wifi round-trip vs a local UART
+                        # ack was measured to make no difference to the panel's residual resends -- both drive
+                        # the panel through the sequence equally; resends are panel-side link/state behaviour.)
+                        _offload_f4_ack = os.path.exists("/config/visonic_no_ha_f4_ack")
+                        if not _offload_f4_ack and self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD]:
                             # Assume that we are managing the interaction/protocol with the panel
                             _body = f'f4 07 00 01 04 {ir.zone:>02} {hexify(izc.unique_id):>02} {hexify(ir.image_id):>02} 00'
                             _c1, _c2 = _f4_checksum(convert_bytearray(_body))
