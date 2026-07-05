@@ -1030,19 +1030,6 @@ class MessageHandling(MessageHandlingB0Data):
                     #0:08:13.484331  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 05 c9 cc 0a
                     #0:08:19.499364  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 00 6c 9c 0a  ## This seems to stop the panel sending F4 data
 
-                    # Tell the panel we received that one OK, we're ready for the next
-                    #     --> *************************** THIS DOES NOT WORK ***************************
-                    #         I assume because of do_not_know_1 and do_not_know_2 but I don't know what to set them to
-                    if image_id == 0:
-                        ident = data[14] - 1
-                        _body = f'f4 10 00 01 04 00 {zone:>02} {hexify(unique_id):>02} {hexify(ident):>02}'
-                        _c1, _c2 = _f4_checksum(convert_bytearray(_body))
-                        self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
-                    elif image_id >= 1:   #   image_id of 2 is the recorded sequence, I need to try this at 1
-                        _body = f'f4 10 00 01 04 00 {zone:>02} {hexify(unique_id):>02} {hexify(image_id - 1):>02}'
-                        _c1, _c2 = _f4_checksum(convert_bytearray(_body))
-                        self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
-
             else:
                 log.debug(f"[handle_msgtypeF4]        Panel sending image for Zone {zone} but it does not exist or is not a CAMERA")
 
@@ -1106,10 +1093,9 @@ class MessageHandling(MessageHandlingB0Data):
                             _c1, _c2 = _f4_checksum(convert_bytearray(_body))
                             self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
 
-                            if not ir.lastimage:
-                                _body = f'f4 10 00 01 04 00 {ir.zone:>02} {hexify(izc.unique_id):>02} 00'
-                                _c1, _c2 = _f4_checksum(convert_bytearray(_body))
-                                self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
+                            _body = f'f4 10 00 01 04 00 {ir.zone:>02} {hexify(izc.unique_id):>02} {hexify(ir.image_id):>02}'
+                            _c1, _c2 = _f4_checksum(convert_bytearray(_body))
+                            self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
 
                         if ir.lastimage:
                             # Tell the panel we received that one OK, we're ready for the next
