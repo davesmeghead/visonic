@@ -321,7 +321,9 @@ class VisonicDirectCoordinator(VisonicCoordinator):
 
     async def send_get_sensor_image(self, devid: int | None, eid: str | None):
         """Send the command to the panel to get a camera image."""
+        self.platform_manager.mark_image_request()
         await self._client.send_get_sensor_image(devid, eid)
+        self.async_update_listeners()
 
     def get_state_snapshot(self) -> VisonicCoordinatorData:
         """Return complete snapshot of current state."""

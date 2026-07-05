@@ -26,8 +26,10 @@ from .const import (
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_SWITCH,
     CONF_IMAGE_MEDIA_PATH,
+    CONF_IMAGE_SINGLE_FRAME,
     DEFAULT_IMAGE_MEDIA_PATH,
     DOMAIN,
+    IMAGE_DOWNLOAD_TIMEOUT,
     IMAGE_FRAME_DURATION_MS,
     IMAGE_SEQUENCE_GAP,
     IMAGE_SEQUENCE_MAX_FRAMES,
@@ -169,6 +171,7 @@ class PlatformManager:
         self._sensor_seq_name: dict[int, str] = {}
         self._sensor_last_frame: dict[int, float] = {}
         self._sensor_frame_no: dict[int, int] = {}
+        self._image_activity: float = 0.0
 
         self._createdAlarmPanel = False
 
@@ -689,6 +692,7 @@ class PlatformManager:
                 store.pop(sensor_id, None)
             return
         now = time.monotonic()
+        self._image_activity = now
         last = self._sensor_last_frame.get(sensor_id)
         self._sensor_last_frame[sensor_id] = now
         if sensor_id not in self._sensor_frames or last is None or now - last > IMAGE_SEQUENCE_GAP:
@@ -696,6 +700,8 @@ class PlatformManager:
             self._sensor_seq_name[sensor_id] = time.strftime("%Y%m%d_%H%M%S")
             self._sensor_frame_no[sensor_id] = 0
         frames = self._sensor_frames[sensor_id]
+        if frames and self.entry.options.get(CONF_IMAGE_SINGLE_FRAME, False):
+            return
         new_frame = bytes(data)
         if frames and frames[-1] == new_frame:
             return
@@ -751,6 +757,14 @@ class PlatformManager:
                 handle.write(gif)
         except (OSError, ValueError) as ex:
             self.logger.logstate_warning("Unable to render/save camera clip for zone %s: %s", sensor_id, ex)
+
+    def mark_image_request(self) -> None:
+        """Record that an image download has been requested from the panel."""
+        self._image_activity = time.monotonic()
+
+    def image_download_active(self) -> bool:
+        """Return True while the panel is streaming/retransmitting image frames."""
+        return self._image_activity > 0.0 and time.monotonic() - self._image_activity < IMAGE_DOWNLOAD_TIMEOUT
 
     def _get_sensor_jpeg(self, sensor_id: int) -> bytearray | None:
         return self._sensor_jpeg.get(sensor_id)

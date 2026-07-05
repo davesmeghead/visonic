@@ -1,5 +1,7 @@
 """Support for requesting a Visonic PIR Camera image."""
 
+from datetime import timedelta
+
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -14,6 +16,8 @@ from .const import DOMAIN, MANUFACTURER
 from .coordinator_base import VisonicCoordinator
 from .visonic_entity_types import ZoneSensorData
 from .visonic_types import VisonicConfigData
+
+SCAN_INTERVAL = timedelta(seconds=10)
 
 
 async def async_setup_entry(
@@ -49,11 +53,16 @@ class VisonicImageRequestButton(CoordinatorEntity[VisonicCoordinator], ButtonEnt
         self._sensor_id = sensor_id
         self._attr_unique_id = slugify(identifier + "_request_image")
         self._attr_name = "Request image"
-        self._attr_should_poll = False
+        self._attr_should_poll = True
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, identifier)},
             manufacturer=MANUFACTURER,
         )
+
+    @property
+    def available(self) -> bool:
+        """Only allow a request when the panel is not already sending images."""
+        return super().available and not self.coordinator.platform_manager.image_download_active()
 
     async def async_press(self) -> None:
         """Ask the panel to send an image for this camera sensor."""

@@ -48,6 +48,7 @@ DEFAULT_IMAGE_MEDIA_PATH: Final = "www/visonic"
 IMAGE_SEQUENCE_GAP: Final = 90.0
 IMAGE_SEQUENCE_MAX_FRAMES: Final = 15
 IMAGE_FRAME_DURATION_MS: Final = 500
+IMAGE_DOWNLOAD_TIMEOUT: Final = 60.0
 
 # Text strings for entity attributes
 TEXT_DISCONNECTION_COUNT: Final = "Disconnection Count"
@@ -133,6 +134,7 @@ CONF_LOG_CSV_TITLE: Final = "panellog_csv_add_title_row"
 CONF_LOG_XML_FN: Final = "panellog_xml_filename"
 CONF_LOG_CSV_FN: Final = "panellog_csv_filename"
 CONF_IMAGE_MEDIA_PATH: Final = "image_media_path"
+CONF_IMAGE_SINGLE_FRAME: Final = "image_single_frame"
 CONF_LOG_DONE: Final = "panellog_complete_event"
 CONF_LOG_REVERSE: Final = "panellog_reverse_order"
 CONF_LOG_MAX_ENTRIES: Final = "panellog_max_entries"
