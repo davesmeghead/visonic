@@ -144,6 +144,7 @@ class MaintainInterface:
         else:
             self._connection_baud_list = [ 9600, 38400, 9600, 38400 ]   # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
         self._baud_index = 0
+        self._baud_bumped = False
 
         self._system_started = False
         self.panel_last_event_name = self.language_decoder.getPowerMaxEntry(0)
@@ -356,7 +357,7 @@ class MaintainInterface:
             self.logger.logstate_debug(f"No options found for {self._select_entity_id}")
             return False
         # Check if the requested option is valid
-        if option not in options:
+        if option is not None and option not in options:
             #raise ValueError(f"Invalid option '{option}' for {self._select_entity_id}. Valid options: {options}")
             self.logger.logstate_debug(f"Invalid option '{option}' for {self._select_entity_id}. Valid options: {options}")
             return False

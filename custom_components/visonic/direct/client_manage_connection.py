@@ -745,6 +745,17 @@ class ManageConnection(MaintainInterface):
         except ValueError:
             # handle unknown values safely
             return
+        if (
+            not self._baud_bumped
+            and self.is_power_master()
+            and self.get_panel_mode() in (AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED)
+            and self.is_select_entity_valid("38400")
+        ):
+            select_state = self.hass.states.get(self._select_entity_id)
+            if select_state is not None and select_state.state == "9600":
+                self._baud_bumped = True
+                self._serial_baud_rate = 38400
+                self.update_baud()
         if event_id == PanelCondition.PANEL_UPDATE:
             if data is not None and PE_NAME in data and data[PE_NAME] >= 0:
                 self.event_coordinator(data)
