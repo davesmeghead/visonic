@@ -87,6 +87,16 @@ class ProcessFlag(Enum):
     B0 = auto()
     DOWNLOAD = auto()
 
+def _f4_checksum(body: bytearray) -> tuple[int, int]:
+    crc = 0
+    for by in body:
+        crc ^= by << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
+    if len(body) > 1 and body[1] == 0x07:
+        crc ^= 0xE700
+    return crc & 0xFF, (crc >> 8) & 0xFF
+
 class DecodeMessage(NamedTuple):
     """Used in decoding messages from the panel i.e. _handle_msgtype_XX()."""
     flag : ProcessFlag | bool
@@ -1003,10 +1013,6 @@ class MessageHandling(MessageHandlingB0Data):
                     #self.add_message_to_send_queue(Send.IMAGE_FB)
                     #self.add_message_to_send_queue(convert_bytearray('0d ab 0e 00 17 1e 00 00 03 01 05 00 43 c5 0a')) # 43 should be bytearray([Packet.POWERLINK_TERMINAL])
 
-                    # 0d f4 10 00 01 04 00 55 1e 01 f7 fc 0a
-                    do_not_know_1 = 0x6C
-                    do_not_know_2 = 0x9C
-
                     # I currently assume that f4 07 messages need to be sent to the panel to inform it that we have received the image OK.
                     #      I'm not sure how to tell the panel that we have not received it OK
                     # I also assume that f4 10 messages tell the panel what to do next, send the next image or stop sending image data
@@ -1029,9 +1035,13 @@ class MessageHandling(MessageHandlingB0Data):
                     #         I assume because of do_not_know_1 and do_not_know_2 but I don't know what to set them to
                     if image_id == 0:
                         ident = data[14] - 1
-                        self.add_message_to_send_queue(convert_bytearray(f'0d f4 10 00 01 04 00 {zone:>02} {hexify(unique_id):>02} {hexify(ident):>02} {hexify(do_not_know_1):>02} {hexify(do_not_know_2):>02} 0a'))
+                        _body = f'f4 10 00 01 04 00 {zone:>02} {hexify(unique_id):>02} {hexify(ident):>02}'
+                        _c1, _c2 = _f4_checksum(convert_bytearray(_body))
+                        self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
                     elif image_id >= 1:   #   image_id of 2 is the recorded sequence, I need to try this at 1
-                        self.add_message_to_send_queue(convert_bytearray(f'0d f4 10 00 01 04 00 {zone:>02} {hexify(unique_id):>02} {hexify(image_id - 1):>02} {hexify(do_not_know_1):>02} {hexify(do_not_know_2):>02} 0a'))
+                        _body = f'f4 10 00 01 04 00 {zone:>02} {hexify(unique_id):>02} {hexify(image_id - 1):>02}'
+                        _c1, _c2 = _f4_checksum(convert_bytearray(_body))
+                        self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
 
             else:
                 log.debug(f"[handle_msgtypeF4]        Panel sending image for Zone {zone} but it does not exist or is not a CAMERA")
@@ -1092,17 +1102,14 @@ class MessageHandling(MessageHandlingB0Data):
 
                         if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD]:
                             # Assume that we are managing the interaction/protocol with the panel
-                            do_not_know_1 = 0x15
-                            do_not_know_2 = 0x21
-                            # Tell the panel we received that one OK, we're ready for the next
-                            #                                         0d f4 07 00 01 04 55 1e 01 00 15 21 0a
-                            self.add_message_to_send_queue(convert_bytearray(f'0d f4 07 00 01 04 {ir.zone:>02} {hexify(izc.unique_id):>02} {hexify(ir.image_id):>02} 00 {hexify(do_not_know_1):>02} {hexify(do_not_know_2):>02} 0a'))
+                            _body = f'f4 07 00 01 04 {ir.zone:>02} {hexify(izc.unique_id):>02} {hexify(ir.image_id):>02} 00'
+                            _c1, _c2 = _f4_checksum(convert_bytearray(_body))
+                            self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
 
                             if not ir.lastimage:
-                                do_not_know_1 = 0xF7
-                                do_not_know_2 = 0xFC
-                                # Tell the panel we received that one OK, we're ready for the next
-                                self.add_message_to_send_queue(convert_bytearray(f'0d f4 10 00 01 04 00 {ir.zone:>02} {hexify(izc.unique_id):>02} 00 {hexify(do_not_know_1):>02} {hexify(do_not_know_2):>02} 0a'))
+                                _body = f'f4 10 00 01 04 00 {ir.zone:>02} {hexify(izc.unique_id):>02} 00'
+                                _c1, _c2 = _f4_checksum(convert_bytearray(_body))
+                                self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
 
                         if ir.lastimage:
                             # Tell the panel we received that one OK, we're ready for the next
