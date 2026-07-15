@@ -1,6 +1,6 @@
 """Support for requesting a Visonic PIR Camera image."""
 
-from datetime import timedelta
+import logging
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
@@ -17,7 +17,7 @@ from .coordinator_base import VisonicCoordinator
 from .visonic_entity_types import ZoneSensorData
 from .visonic_types import VisonicConfigData
 
-SCAN_INTERVAL = timedelta(seconds=10)
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -53,17 +53,25 @@ class VisonicImageRequestButton(CoordinatorEntity[VisonicCoordinator], ButtonEnt
         self._sensor_id = sensor_id
         self._attr_unique_id = slugify(identifier + "_request_image")
         self._attr_name = "Request image"
-        self._attr_should_poll = True
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, identifier)},
             manufacturer=MANUFACTURER,
         )
 
-    @property
-    def available(self) -> bool:
-        """Only allow a request when the panel is not already sending images."""
-        return super().available and not self.coordinator.platform_manager.image_download_active()
-
     async def async_press(self) -> None:
-        """Ask the panel to send an image for this camera sensor."""
+        """Ask the panel to send an image for this camera sensor.
+
+        The button is left available (rather than going unavailable) while a download is in
+        progress, so its history/logbook only ever shows genuine presses -- not availability
+        flips. A press made while the panel is already downloading is ignored here instead, with
+        a clear log line, keeping the protection against overlapping requests (which cause the
+        panel to drop into a slow retransmit loop).
+        """
+        if self.coordinator.platform_manager.image_download_active():
+            _LOGGER.info(
+                "Image request for %s ignored: the panel is already downloading an image sequence",
+                self.entity_id,
+            )
+            return
+        _LOGGER.info("Image requested for %s", self.entity_id)
         await self.coordinator.send_get_sensor_image(self._sensor_id, self.entity_id)
