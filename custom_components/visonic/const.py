@@ -44,23 +44,14 @@ DEFAULT_DEVICE_SERIAL: Final = "/dev/ttyUSB0"
 DEFAULT_DEVICE_BAUD: Final = 9600
 DEFAULT_PANEL_USER_CODE: Final = "1111"
 DEFAULT_CLOUD_SCAN_INTERVAL: Final = 20
-# Sub-path for saved camera captures. A relative value is resolved against HA's media directory
-# (hass.config.media_dirs -- e.g. /media in a container, <config>/media otherwise) so captures show
-# in the HA Media browser. An absolute value is used as-is.
-DEFAULT_IMAGE_MEDIA_PATH: Final = "visonic"
+DEFAULT_IMAGE_MEDIA_PATH: Final = "visonic"  # sub-path under HA's media dir (media_dirs); absolute values used as-is
 IMAGE_SEQUENCE_GAP: Final = 90.0
 IMAGE_SEQUENCE_MAX_FRAMES: Final = 15
 IMAGE_FRAME_DURATION_MS: Final = 500
 IMAGE_DOWNLOAD_TIMEOUT: Final = 60.0
-# Hard cap on how long the "download active" state can stay set, even if the panel keeps
-# trickling/retransmitting frames. Stops the state getting stuck on forever when the panel drops
-# into a slow retransmit loop. Measured from the start of the download burst.
-IMAGE_DOWNLOAD_MAX: Final = 300.0
-# Image requests made while a download is in progress are queued and sent one at a time (non-overlapping
-# requests keep the panel in its fast, resend-free streaming mode). Presses beyond this queue depth are
-# ignored. Configurable via the image_queue_max option.
+IMAGE_DOWNLOAD_MAX: Final = 300.0  # hard cap so the download-active state can't stick on during a long retransmit loop
 CONF_IMAGE_QUEUE_MAX: Final = "image_queue_max"
-DEFAULT_IMAGE_QUEUE_MAX: Final = 5
+DEFAULT_IMAGE_QUEUE_MAX: Final = 5  # requests queued behind an active download; further presses ignored
 
 # Text strings for entity attributes
 TEXT_DISCONNECTION_COUNT: Final = "Disconnection Count"

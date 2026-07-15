@@ -59,27 +59,13 @@ class VisonicImageRequestButton(CoordinatorEntity[VisonicCoordinator], ButtonEnt
         )
 
     async def async_press(self) -> None:
-        """Ask the panel to send an image for this camera sensor.
-
-        The button stays available (rather than going unavailable) during a download, so its
-        history/logbook only ever shows genuine presses. If the panel is already downloading, the
-        request is queued and sent when the current download finishes -- one at a time, so requests
-        never overlap (overlapping requests push the panel into its slow retransmit mode). Presses
-        beyond the configured queue depth (image_queue_max, default 5) are ignored.
-        """
+        """Send the image request, or queue it behind an in-progress download (drop if the queue is full)."""
         pm = self.coordinator.platform_manager
         action = pm.enqueue_image_request(self._sensor_id, self.entity_id)
         if action == "send":
             _LOGGER.info("Image requested for %s", self.entity_id)
             await self.coordinator.send_get_sensor_image(self._sensor_id, self.entity_id)
         elif action == "queued":
-            _LOGGER.info(
-                "Image request for %s queued behind the current download (%d waiting)",
-                self.entity_id,
-                pm.image_queue_depth(),
-            )
-        else:  # "full"
-            _LOGGER.info(
-                "Image request for %s ignored: the request queue is full",
-                self.entity_id,
-            )
+            _LOGGER.info("Image request for %s queued (%d waiting)", self.entity_id, pm.image_queue_depth())
+        else:
+            _LOGGER.info("Image request for %s ignored: queue full", self.entity_id)

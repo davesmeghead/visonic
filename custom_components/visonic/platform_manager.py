@@ -722,19 +722,13 @@ class PlatformManager:
         )
 
     def _camera_folder(self, sensor_id: int) -> str:
-        """Return a filesystem-safe per-camera sub-folder name (call from the event-loop thread).
-
-        Uses the camera device's name (the user-set name if there is one), falling back to the
-        stable zone number so captures are always grouped per camera in the media browser.
-        """
+        """Per-camera media sub-folder: the camera device name, else the zone number (event-loop thread)."""
         try:
             dev = dr.async_get(self.hass).async_get_device(
                 identifiers={(DOMAIN, create_sensor_unique_id(self.panel_ident, sensor_id))}
             )
-            if dev is not None:
-                name = dev.name_by_user or dev.name
-                if name and slugify(name):
-                    return slugify(name)
+            if dev is not None and (name := dev.name_by_user or dev.name) and (folder := slugify(name)):
+                return folder
         except Exception:  # noqa: BLE001
             pass
         return f"zone{sensor_id}"
@@ -794,12 +788,7 @@ class PlatformManager:
             self.logger.logstate_warning("Unable to render/save camera clip for zone %s: %s", sensor_id, ex)
 
     def _mark_image_activity(self) -> float:
-        """Record image activity now, (re)starting the download-burst clock on a fresh burst.
-
-        The burst start is only reset when we were previously idle (no activity within
-        IMAGE_DOWNLOAD_TIMEOUT), so a continuous stream of frames keeps one start time and the
-        hard cap in image_download_active() can eventually release the buttons. Returns 'now'.
-        """
+        """Record image activity; (re)start the burst clock only when previously idle. Returns now."""
         now = time.monotonic()
         if self._image_activity <= 0.0 or now - self._image_activity >= IMAGE_DOWNLOAD_TIMEOUT:
             self._image_download_start = now
@@ -811,12 +800,7 @@ class PlatformManager:
         self._mark_image_activity()
 
     def image_download_active(self) -> bool:
-        """Return True while the panel is streaming/retransmitting image frames.
-
-        Released 60s after the last frame (IMAGE_DOWNLOAD_TIMEOUT), OR after a hard cap from the
-        start of the burst (IMAGE_DOWNLOAD_MAX) so a slow retransmit loop can't keep the request
-        buttons disabled indefinitely.
-        """
+        """True while frames arrive (within IMAGE_DOWNLOAD_TIMEOUT of the last, capped at IMAGE_DOWNLOAD_MAX from burst start)."""
         if self._image_activity <= 0.0:
             return False
         now = time.monotonic()
@@ -826,13 +810,7 @@ class PlatformManager:
         )
 
     def enqueue_image_request(self, sensor_id: int, eid: str | None) -> str:
-        """Decide what to do with an image request press.
-
-        Returns "send" if it should be sent now (panel idle and nothing queued), "queued" if it was
-        added to the pending queue, or "full" if the queue is at its configured depth and the press
-        is ignored. The queue keeps requests one-at-a-time so they don't overlap (overlapping
-        requests push the panel into its slow retransmit mode).
-        """
+        """Return 'send' (dispatch now), 'queued', or 'full' for an image-request press."""
         if not self.image_download_active() and not self._image_queue:
             return "send"
         max_depth = int(self.entry.options.get(CONF_IMAGE_QUEUE_MAX, DEFAULT_IMAGE_QUEUE_MAX))

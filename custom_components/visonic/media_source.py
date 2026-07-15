@@ -1,10 +1,4 @@
-"""Expose saved Visonic PIR camera captures as a dedicated Media Source.
-
-Adds a top-level "Visonic Cameras" entry to the HA Media browser (like Frigate), with the captured
-clips grouped into one folder per camera. Browsing is served from the capture directory on disk;
-resolving a clip to a playable URL is delegated to HA's built-in local media source (which serves the
-media directories with authentication), so no extra unauthenticated static path is exposed.
-"""
+"""Dedicated "Visonic Cameras" media source exposing saved PIR camera captures, grouped per camera."""
 
 from __future__ import annotations
 
@@ -18,7 +12,7 @@ from homeassistant.components.media_source import (
     MediaSourceItem,
     PlayMedia,
     Unresolvable,
-    async_resolve_media,
+    async_resolve_media as _resolve_media,
 )
 from homeassistant.core import HomeAssistant
 
@@ -124,5 +118,5 @@ class VisonicMediaSource(MediaSource):
             rel = os.path.relpath(path, root)
             if not rel.startswith(".."):
                 uri = "media-source://media_source/" + key + "/" + rel.replace(os.sep, "/")
-                return await async_resolve_media(self.hass, uri)
+                return await _resolve_media(self.hass, uri)
         raise Unresolvable("Capture is outside the configured media directories")
