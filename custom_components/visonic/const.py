@@ -44,7 +44,10 @@ DEFAULT_DEVICE_SERIAL: Final = "/dev/ttyUSB0"
 DEFAULT_DEVICE_BAUD: Final = 9600
 DEFAULT_PANEL_USER_CODE: Final = "1111"
 DEFAULT_CLOUD_SCAN_INTERVAL: Final = 20
-DEFAULT_IMAGE_MEDIA_PATH: Final = "media/visonic"  # under <config>/media so captures show in the HA Media browser
+# Sub-path for saved camera captures. A relative value is resolved against HA's media directory
+# (hass.config.media_dirs -- e.g. /media in a container, <config>/media otherwise) so captures show
+# in the HA Media browser. An absolute value is used as-is.
+DEFAULT_IMAGE_MEDIA_PATH: Final = "visonic"
 IMAGE_SEQUENCE_GAP: Final = 90.0
 IMAGE_SEQUENCE_MAX_FRAMES: Final = 15
 IMAGE_FRAME_DURATION_MS: Final = 500

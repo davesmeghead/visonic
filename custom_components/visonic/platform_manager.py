@@ -749,7 +749,14 @@ class PlatformManager:
             self._sensor_jpeg[sensor_id] = bytearray(frame)
             return
         configured = self.entry.options.get(CONF_IMAGE_MEDIA_PATH, DEFAULT_IMAGE_MEDIA_PATH)
-        base = configured if os.path.isabs(configured) else self.hass.config.path(configured)
+        if os.path.isabs(configured):
+            base = configured
+        else:
+            # Resolve relative to HA's media directory so captures land where the Media browser looks
+            # ({"local": "/media"} in a container, {"local": "<config>/media"} otherwise).
+            media_dirs = self.hass.config.media_dirs or {}
+            media_root = media_dirs.get("local") or next(iter(media_dirs.values()), None) or self.hass.config.path("media")
+            base = os.path.join(media_root, configured)
         # Per-camera sub-folder so captures are browsable by camera in the media browser.
         directory = os.path.join(base, cam_folder)
         stem = f"panel{self.panel_ident}_zone{sensor_id}_{seq_name}"
