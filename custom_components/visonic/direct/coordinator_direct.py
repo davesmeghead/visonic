@@ -88,6 +88,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
             state_callback = self.state_changed_callback,
         )
         self._event_logger = event_logger
+        self._prev_panel_connected = False
 
     def ive_been_created(self):
         """Called when certain entities are first initialised to make sure they get the latest data."""
@@ -108,9 +109,30 @@ class VisonicDirectCoordinator(VisonicCoordinator):
     async def _async_update_data(self) -> VisonicCoordinatorData:
         """Override the parent function."""
         try:
+            self._service_image_queue()
             return self.get_state_snapshot()
         except Exception as err:
             raise UpdateFailed(str(err)) from err
+
+    def _service_image_queue(self) -> None:
+        """Reset image state on (re)connect and send the next queued image request when idle.
+
+        Runs each coordinator poll (~60s). On a transition to connected we drop any stale
+        download-active state and queued requests. While connected and no download is in progress,
+        the next queued request (if any) is dispatched -- one at a time so requests never overlap.
+        """
+        connected = bool(self._client and self._client.is_panel_connected())
+        if connected and not self._prev_panel_connected:
+            self.platform_manager.reset_image_state()
+        self._prev_panel_connected = connected
+        if connected and not self.platform_manager.image_download_active():
+            nxt = self.platform_manager.pop_image_request()
+            if nxt is not None:
+                # Mark active synchronously now: the actual send runs on a later task, so without
+                # this a second poll before that task runs would pop and send the next queued item
+                # too, overlapping the requests. mark_image_request() is idempotent (send does it again).
+                self.platform_manager.mark_image_request()
+                self.hass.async_create_task(self.send_get_sensor_image(nxt[0], nxt[1]))
 
 #    @callback
 #    def async_handle_client_update(self, data: VisonicCoordinatorData) -> None:

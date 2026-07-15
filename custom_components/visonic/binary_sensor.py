@@ -10,10 +10,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import slugify
 
 from .const import DOMAIN
+from .coordinator_base import VisonicCoordinator
 from .sensor_base_logic import VisonicBaseEntity
+from .utils import getAlarmPanelUniqueIdent
 from .utils import kill_asyncio_task
 from .visonic_entity_types import (
     BINARY_SENSOR_DEFINITIONS,
@@ -60,7 +65,37 @@ async def async_setup_entry(
 
     vce: VisonicConfigData = entry.runtime_data
     vce.dispatchers[Platform.BINARY_SENSOR] = async_dispatcher_connect( hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.BINARY_SENSOR}", async_add_binary_sensor )
+
+    # Panel-level indicator that an image download is in progress (drives request queuing).
+    pm = getattr(vce.coordinator, "platform_manager", None)
+    if pm is not None and hasattr(pm, "image_download_active"):
+        async_add_entities([VisonicImageDownloadBinarySensor(vce.coordinator, pm.panel_ident)])
     #_LOGGER.debug("[async_setup_entry] exit")
+
+
+class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], BinarySensorEntity):
+    """Panel-level indicator: on while the panel is downloading a PIR camera image sequence.
+
+    Reflects platform_manager.image_download_active(); resets to off on (re)connect (the coordinator
+    clears the download state then). While on, image request presses are queued rather than sent.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Image download active"
+    _attr_icon = "mdi:camera-timer"
+
+    def __init__(self, coordinator: VisonicCoordinator, panel_ident: int) -> None:
+        """Initialize the panel image-download indicator."""
+        super().__init__(coordinator)
+        puid = getAlarmPanelUniqueIdent(panel_ident)
+        self._attr_unique_id = slugify(puid + "_image_download_active")
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, puid)})
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while a panel image download/retransmit is in progress."""
+        pm = getattr(self.coordinator, "platform_manager", None)
+        return bool(pm and pm.image_download_active())
 
 
 class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):

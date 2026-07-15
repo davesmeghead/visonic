@@ -1,6 +1,7 @@
 """Helper classes for the coordinator."""
 
 import asyncio
+from collections import deque
 from collections.abc import Callable
 import os
 import re
@@ -26,8 +27,10 @@ from .const import (
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_SWITCH,
     CONF_IMAGE_MEDIA_PATH,
+    CONF_IMAGE_QUEUE_MAX,
     CONF_IMAGE_SINGLE_FRAME,
     DEFAULT_IMAGE_MEDIA_PATH,
+    DEFAULT_IMAGE_QUEUE_MAX,
     DOMAIN,
     IMAGE_DOWNLOAD_MAX,
     IMAGE_DOWNLOAD_TIMEOUT,
@@ -174,6 +177,7 @@ class PlatformManager:
         self._sensor_frame_no: dict[int, int] = {}
         self._image_activity: float = 0.0
         self._image_download_start: float = 0.0
+        self._image_queue: deque[tuple[int, str | None]] = deque()
 
         self._createdAlarmPanel = False
 
@@ -790,6 +794,36 @@ class PlatformManager:
             now - self._image_activity < IMAGE_DOWNLOAD_TIMEOUT
             and now - self._image_download_start < IMAGE_DOWNLOAD_MAX
         )
+
+    def enqueue_image_request(self, sensor_id: int, eid: str | None) -> str:
+        """Decide what to do with an image request press.
+
+        Returns "send" if it should be sent now (panel idle and nothing queued), "queued" if it was
+        added to the pending queue, or "full" if the queue is at its configured depth and the press
+        is ignored. The queue keeps requests one-at-a-time so they don't overlap (overlapping
+        requests push the panel into its slow retransmit mode).
+        """
+        if not self.image_download_active() and not self._image_queue:
+            return "send"
+        max_depth = int(self.entry.options.get(CONF_IMAGE_QUEUE_MAX, DEFAULT_IMAGE_QUEUE_MAX))
+        if max_depth <= 0 or len(self._image_queue) >= max_depth:
+            return "full"
+        self._image_queue.append((sensor_id, eid))
+        return "queued"
+
+    def pop_image_request(self) -> tuple[int, str | None] | None:
+        """Return the next queued image request, or None if the queue is empty."""
+        return self._image_queue.popleft() if self._image_queue else None
+
+    def image_queue_depth(self) -> int:
+        """Return the number of image requests currently waiting in the queue."""
+        return len(self._image_queue)
+
+    def reset_image_state(self) -> None:
+        """Clear the download-active state and drop any queued requests (used on (re)connect)."""
+        self._image_activity = 0.0
+        self._image_download_start = 0.0
+        self._image_queue.clear()
 
     def _get_sensor_jpeg(self, sensor_id: int) -> bytearray | None:
         return self._sensor_jpeg.get(sensor_id)

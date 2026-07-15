@@ -49,10 +49,15 @@ IMAGE_SEQUENCE_GAP: Final = 90.0
 IMAGE_SEQUENCE_MAX_FRAMES: Final = 15
 IMAGE_FRAME_DURATION_MS: Final = 500
 IMAGE_DOWNLOAD_TIMEOUT: Final = 60.0
-# Hard cap on how long the "download active" state (which disables the request buttons) can stay set,
-# even if the panel keeps trickling/retransmitting frames. Stops the buttons getting stuck unavailable
-# forever when the panel drops into a slow retransmit loop. Measured from the start of the download burst.
+# Hard cap on how long the "download active" state can stay set, even if the panel keeps
+# trickling/retransmitting frames. Stops the state getting stuck on forever when the panel drops
+# into a slow retransmit loop. Measured from the start of the download burst.
 IMAGE_DOWNLOAD_MAX: Final = 300.0
+# Image requests made while a download is in progress are queued and sent one at a time (non-overlapping
+# requests keep the panel in its fast, resend-free streaming mode). Presses beyond this queue depth are
+# ignored. Configurable via the image_queue_max option.
+CONF_IMAGE_QUEUE_MAX: Final = "image_queue_max"
+DEFAULT_IMAGE_QUEUE_MAX: Final = 5
 
 # Text strings for entity attributes
 TEXT_DISCONNECTION_COUNT: Final = "Disconnection Count"
