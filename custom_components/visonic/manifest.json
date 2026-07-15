@@ -3,7 +3,7 @@
   "name": "Visonic Security System",
   "codeowners": ["@davesmeghead"],
   "config_flow": true,
-  "dependencies": ["zeroconf"],
+  "dependencies": ["media_source", "zeroconf"],
   "documentation": "https://github.com/davesmeghead/visonic/wiki",
   "integration_type": "hub",
   "iot_class": "local_push",
