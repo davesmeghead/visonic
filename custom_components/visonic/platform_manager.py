@@ -714,11 +714,32 @@ class PlatformManager:
         frame_no = self._sensor_frame_no[sensor_id]
         frames.append(new_frame)
         del frames[:-IMAGE_SEQUENCE_MAX_FRAMES]
+        # Resolve the per-camera folder here (event-loop thread) so the executor call does no
+        # registry lookups.
         self.hass.add_job(
-            self._render_sensor_media, sensor_id, list(frames), new_frame, self._sensor_seq_name[sensor_id], frame_no
+            self._render_sensor_media, sensor_id, list(frames), new_frame,
+            self._sensor_seq_name[sensor_id], frame_no, self._camera_folder(sensor_id)
         )
 
-    def _render_sensor_media(self, sensor_id: int, frames: list[bytes], frame: bytes, seq_name: str, frame_no: int) -> None:
+    def _camera_folder(self, sensor_id: int) -> str:
+        """Return a filesystem-safe per-camera sub-folder name (call from the event-loop thread).
+
+        Uses the camera device's name (the user-set name if there is one), falling back to the
+        stable zone number so captures are always grouped per camera in the media browser.
+        """
+        try:
+            dev = dr.async_get(self.hass).async_get_device(
+                identifiers={(DOMAIN, create_sensor_unique_id(self.panel_ident, sensor_id))}
+            )
+            if dev is not None:
+                name = dev.name_by_user or dev.name
+                if name and slugify(name):
+                    return slugify(name)
+        except Exception:  # noqa: BLE001
+            pass
+        return f"zone{sensor_id}"
+
+    def _render_sensor_media(self, sensor_id: int, frames: list[bytes], frame: bytes, seq_name: str, frame_no: int, cam_folder: str) -> None:
         """Assemble the buffered frames into an animated GIF, and save the GIF + this frame (executor thread)."""
         import io
 
@@ -728,7 +749,9 @@ class PlatformManager:
             self._sensor_jpeg[sensor_id] = bytearray(frame)
             return
         configured = self.entry.options.get(CONF_IMAGE_MEDIA_PATH, DEFAULT_IMAGE_MEDIA_PATH)
-        directory = configured if os.path.isabs(configured) else self.hass.config.path(configured)
+        base = configured if os.path.isabs(configured) else self.hass.config.path(configured)
+        # Per-camera sub-folder so captures are browsable by camera in the media browser.
+        directory = os.path.join(base, cam_folder)
         stem = f"panel{self.panel_ident}_zone{sensor_id}_{seq_name}"
         try:
             os.makedirs(directory, exist_ok=True)
