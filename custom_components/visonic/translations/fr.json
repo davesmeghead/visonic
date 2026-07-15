@@ -6,6 +6,8 @@
             "device_error": "Le p\u00e9riph\u00e9rique doit \u00eatre Ethernet, Server ou Serial",
             "emulation_mode_error": "Param\u00e8tre de mode d'\u00e9mulation incorrect",
             "settings_missing": "Import des param\u00e8tres \u00e0 partir du fichier yaml mais les param\u00e8tres essentiels sont manquants",
+			"email_invalid": "The email address is invalid",
+			"settings_invalid": "There are invalid settings",
             "unknown": "Erreur inattendue",
 			"reconfigure_successful": "Reconfiguration Successful",
 			"already_in_progress": "Panel configuration already in progress",
@@ -21,6 +23,8 @@
 			"cannot_connect_refused": "Connection refused",
 			"already_in_progress": "Panel configuration already in progress",
             "settings_missing": "Essential settings are missing",
+			"email_invalid": "The email address is invalid",
+			"settings_invalid": "There are invalid settings",
 			"exclusion_list_invalid": "Either the Sensor or Switch exclusion lists are invalid",
 			"download_code_invalid": "The download code is invalid",
 			"select_entity_invalid": "The baud select entity is invalid"
@@ -165,6 +169,8 @@
         "error": {
             "ethernet_server_or_serial": "Doit \u00eatre Ethernet, Server ou Serial",
             "settings_missing": "Essential settings are missing",
+			"email_invalid": "The email address is invalid",
+			"settings_invalid": "There are invalid settings",
             "emulation_mode_error": "Param\u00e8tre de mode d'\u00e9mulation incorrect"
         },
         "step": {

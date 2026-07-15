@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 
 # The client version and domain information for the integration
 DOMAIN: Final = "visonic"
-CLIENT_VERSION: Final = "0.13.0.2"
+CLIENT_VERSION: Final = "0.13.0.3"
 MANUFACTURER: Final = "Visonic"
 VISONIC_UNIQUE_NAME: Final = "Visonic Alarm"
 VISONIC_TRANSLATION_KEY: Final = "alarm_panel_key"
@@ -58,17 +58,19 @@ TEXT_XML_LOG_FILE_TEMPLATE: Final = "visonic_template.xml"
 # These are the translation strings for the various abort and error indications to the user for the configuration
 TRANSLATE_ABORT_ALREADY_CONFIGURED: Final = "already_configured"
 TRANSLATE_ABORT_INVALID_DEVICE_TYPE: Final = "device_error"
-TRANSLATE_ERROR_SETTINGS_MISSING: Final = "settings_missing"
-TRANSLATE_ERROR_ETHERNET_SERVER_OR_SERIAL: Final = "ethernet_server_or_serial"
 TRANSLATE_ABORT_CANNOT_CONFIG_DISCOVERED: Final = "cannot_configure_tcp_discovered"
 TRANSLATE_ABORT_EMULATION_MODE: Final = "emulation_mode_error"
 TRANSLATE_ABORT_UNKNOWN: Final = "unknown"
+TRANSLATE_ABORT_CANNOT_EDIT_SERVER: Final = "cannot_edit_tcp_server"
+TRANSLATE_ERROR_SETTINGS_MISSING: Final = "settings_missing"
+TRANSLATE_ERROR_EMAIL_INVALID: Final = "email_invalid"
+TRANSLATE_ERROR_ETHERNET_SERVER_OR_SERIAL: Final = "ethernet_server_or_serial"
 TRANSLATE_ERROR_CONNECTION_TIMEOUT: Final = "cannot_connect_timeout"
 TRANSLATE_ERROR_CONNECTION_REFUSED: Final = "cannot_connect_refused"
+TRANSLATE_ERROR_SETTINGS_INVALID: Final = "settings_invalid"
 TRANSLATE_ERROR_EXCLUSIONS_INVALID: Final = "exclusion_list_invalid"
 TRANSLATE_ERROR_DL_CODE_INVALID: Final = "download_code_invalid"
 TRANSLATE_ERROR_SELECT_INVALID: Final = "select_entity_invalid"
-TRANSLATE_ABORT_CANNOT_EDIT_SERVER: Final = "cannot_edit_tcp_server"
 
 # Translation exceptions throughout the integration, maintained here to ensure consistency in language translation
 TRANSLATE_EXCEPTION_NO_PANEL_CONNECTION: Final = "no_panel_connection"

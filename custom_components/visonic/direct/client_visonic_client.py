@@ -7,7 +7,6 @@ import logging
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
-from homeassistant.util import Any
 
 from ..const import CLIENT_VERSION, CONF_ENABLE_SENSOR_BYPASS  # noqa: TID252
 from ..log_events import logEvents  # noqa: TID252  # noqa: TID252

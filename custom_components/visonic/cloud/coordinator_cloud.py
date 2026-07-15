@@ -143,7 +143,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         self._update_settings(entry)
         self.saved_config = self._grab_config_from_entry()
         entry.add_update_listener(self._handle_entry_update)
-        self.async_add_listener(self._dummy_listener)
+        self._remove_dummy_listener = self.async_add_listener(self._dummy_listener)
 
         self._event_logger.logstate_info(f"{update_interval=}")
 
@@ -242,6 +242,10 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
     async def async_panel_stop(self):
         """Disconnect from the cloud visonic server."""
+        self.async_set_updated_data(None)  # clears update cycle
+        if self._remove_dummy_listener:
+            self._remove_dummy_listener()
+            self._remove_dummy_listener = None
         if self.login_success and self.cloud_alarm:
             #await self.cloud_alarm.panel_logout()
             self.login_success = False

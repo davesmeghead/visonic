@@ -66,6 +66,7 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
 
         self._panel = vce.panel_id
         self._attr_image_last_updated = None
+        self._attr_image_last_retrieved = None
         self._cached_image = None
         # self._attr_image_url = None
         self._attr_content_type = "image/jpeg"
@@ -93,6 +94,7 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         # Update the current value based on the device state
         if (sensor := self._get_sensor()) is None:
             return
+
         self._attr_available = sensor.enrolled
         self._has_image = sensor.has_image
 
@@ -123,8 +125,8 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         image_time = sensor.image_time
 
         async with self._image_lock:
-            if image_time != self._attr_image_last_updated:
-                self._attr_image_last_updated = image_time
+            if image_time != self._attr_image_last_retrieved:
+                self._attr_image_last_retrieved = image_time
                 self._attr_state: StateType = (
                     STATE_OK  # pyright: ignore[reportIncompatibleVariableOverride]
                 )

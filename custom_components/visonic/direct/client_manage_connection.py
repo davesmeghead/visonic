@@ -4,6 +4,7 @@
 
 import asyncio
 from collections.abc import Callable
+import contextlib
 from datetime import datetime
 import logging
 
@@ -283,8 +284,13 @@ class ManageConnection(MaintainInterface):
 
     async def async_panel_stop(self):
         """Redirector to stop and unload the hub."""
+        if self._management_task:
+            self._management_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._management_task
+            self._management_task = None
         await self.async_stop()
-        self.kick_off_next_step(Connection_Status.STOP)
+        #self.kick_off_next_step(Connection_Status.STOP)
 
     async def connection_manager(self):  # noqa: C901
         """Connection manager task."""

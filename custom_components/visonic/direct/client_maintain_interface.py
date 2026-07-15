@@ -370,9 +370,10 @@ class MaintainInterface:
             lambda: self.entry.async_create_task(
                 self.hass,
                 self.hass.services.async_call(
-                    "select",
-                    "select_option",
-                    {"entity_id": self._select_entity_id, "option": option},
+                    domain="select",
+                    service="select_option",
+                    service_data={"entity_id": self._select_entity_id, "option": option},
+                    blocking=False,
                 ),
                 name="set select entity",
             )

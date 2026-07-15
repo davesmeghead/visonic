@@ -70,7 +70,7 @@ class VisonicSwitch(CoordinatorEntity[VisonicCoordinator], SwitchEntity):
         )
 
         self._current_value: bool = False
-        self.__available: bool = False
+        self._available: bool = False
 
     def getSwitch(self) -> SwitchState | None:
         """Get the sensor dictionary associated with this entity."""
@@ -85,7 +85,7 @@ class VisonicSwitch(CoordinatorEntity[VisonicCoordinator], SwitchEntity):
         switch : SwitchState | None = self.getSwitch()
         if switch is None:
             return
-        self.__available = switch.enabled
+        self._available = switch.enabled
         self._current_value = switch.status
         # if self.coordinator and self.coordinator.data.connected:
         self.async_write_ha_state()
@@ -93,7 +93,7 @@ class VisonicSwitch(CoordinatorEntity[VisonicCoordinator], SwitchEntity):
     @property
     def available(self) -> bool:  # pyright: ignore[reportIncompatibleVariableOverride]
         """Return True if entity is available."""
-        return False if self.getSwitch() is None else self.__available
+        return False if self.getSwitch() is None else self._available
 
     @cached_property
     def assumed_state(self):
