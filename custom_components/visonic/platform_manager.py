@@ -29,6 +29,7 @@ from .const import (
     CONF_IMAGE_SINGLE_FRAME,
     DEFAULT_IMAGE_MEDIA_PATH,
     DOMAIN,
+    IMAGE_DOWNLOAD_MAX,
     IMAGE_DOWNLOAD_TIMEOUT,
     IMAGE_FRAME_DURATION_MS,
     IMAGE_SEQUENCE_GAP,
@@ -172,6 +173,7 @@ class PlatformManager:
         self._sensor_last_frame: dict[int, float] = {}
         self._sensor_frame_no: dict[int, int] = {}
         self._image_activity: float = 0.0
+        self._image_download_start: float = 0.0
 
         self._createdAlarmPanel = False
 
@@ -691,8 +693,7 @@ class PlatformManager:
             for store in (self._sensor_frames, self._sensor_seq_name, self._sensor_last_frame, self._sensor_frame_no, self._sensor_jpeg):
                 store.pop(sensor_id, None)
             return
-        now = time.monotonic()
-        self._image_activity = now
+        now = self._mark_image_activity()
         last = self._sensor_last_frame.get(sensor_id)
         self._sensor_last_frame[sensor_id] = now
         if sensor_id not in self._sensor_frames or last is None or now - last > IMAGE_SEQUENCE_GAP:
@@ -758,13 +759,37 @@ class PlatformManager:
         except (OSError, ValueError) as ex:
             self.logger.logstate_warning("Unable to render/save camera clip for zone %s: %s", sensor_id, ex)
 
+    def _mark_image_activity(self) -> float:
+        """Record image activity now, (re)starting the download-burst clock on a fresh burst.
+
+        The burst start is only reset when we were previously idle (no activity within
+        IMAGE_DOWNLOAD_TIMEOUT), so a continuous stream of frames keeps one start time and the
+        hard cap in image_download_active() can eventually release the buttons. Returns 'now'.
+        """
+        now = time.monotonic()
+        if self._image_activity <= 0.0 or now - self._image_activity >= IMAGE_DOWNLOAD_TIMEOUT:
+            self._image_download_start = now
+        self._image_activity = now
+        return now
+
     def mark_image_request(self) -> None:
         """Record that an image download has been requested from the panel."""
-        self._image_activity = time.monotonic()
+        self._mark_image_activity()
 
     def image_download_active(self) -> bool:
-        """Return True while the panel is streaming/retransmitting image frames."""
-        return self._image_activity > 0.0 and time.monotonic() - self._image_activity < IMAGE_DOWNLOAD_TIMEOUT
+        """Return True while the panel is streaming/retransmitting image frames.
+
+        Released 60s after the last frame (IMAGE_DOWNLOAD_TIMEOUT), OR after a hard cap from the
+        start of the burst (IMAGE_DOWNLOAD_MAX) so a slow retransmit loop can't keep the request
+        buttons disabled indefinitely.
+        """
+        if self._image_activity <= 0.0:
+            return False
+        now = time.monotonic()
+        return (
+            now - self._image_activity < IMAGE_DOWNLOAD_TIMEOUT
+            and now - self._image_download_start < IMAGE_DOWNLOAD_MAX
+        )
 
     def _get_sensor_jpeg(self, sensor_id: int) -> bytearray | None:
         return self._sensor_jpeg.get(sensor_id)
