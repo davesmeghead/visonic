@@ -583,16 +583,24 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
                     processReceivedPacket(ackneeded=self.pmCurrentPDU.ackneeded, debugp=self.pmCurrentPDU.debugprint, msg=self.pmCurrentPDU.msg, packet=self.ReceiveData)
                 self._reset_message_data()
             else:
-                # CRC check failed
-                match (self.pmCurrentPDU.checksum):
-                    case ChecksumType.IGNORE:
-                        mess = "Checksum ignored, header and footer must be wrong"
-                    case ChecksumType.IMAGE_DATA:
-                        a,b = self.f4_checksum(self.ReceiveData[1:-3])
-                        mess = f"{hex(a).upper()}/{hex(b).upper()}"
-                    case _:
-                        a = self._calculateCRC(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
-                        mess = f"{hex(a).upper()}"
+                # CRC check failed, create a message for the log file and process it as a failure
+                if isinstance(self.pmCurrentPDU, PanelCallBack):
+                    match (self.pmCurrentPDU.checksum):
+                        case ChecksumType.IGNORE:
+                            mess = "Checksum ignored, header and footer must be wrong"
+                        case ChecksumType.IMAGE_DATA:
+                            a,b = self.f4_checksum(self.ReceiveData[1:-3])
+                            mess = f"{hexify(a)}/{hexify(b)}"
+                            pattern = bytearray([0x0d, 0xF4, 0x05])
+                            index = self.ReceiveData[1:].find(pattern)
+                            if index != -1:
+                                mess = f"{mess}, with a contained F4 05 at offset {index}"
+                        case _:
+                            a = self._calculateCRC(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
+                            mess = f"{hexify(a)}"
+                else:
+                    mess = "Unknown message type"
+
                 if len(self.ReceiveData) > PACKET_MAX_SIZE:
                     # If the length exceeds the max PDU size from the panel then stop and resync
                     log.warning(f"[data receiver] PDU with CRC error Message = {toString(self.ReceiveData)}   checksum calcs: {mess}")
