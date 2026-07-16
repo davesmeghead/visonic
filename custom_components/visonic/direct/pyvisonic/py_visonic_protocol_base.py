@@ -39,7 +39,7 @@ from .py_partition_state import PartitionStateClass
 from .py_sensor import AlSensorDeviceHelper
 from .py_switch import AlSwitchDeviceHelper
 from .py_types import AlPanelEventData
-from .py_types_receiving import PanelCallBack, pmReceiveMsg
+from .py_types_receiving import ChecksumType, PanelCallBack, pmReceiveMsg
 from .py_types_sending import PriorityQueueWithPeek, VisonicListEntry, pmSendMsg
 from .py_utils import get_local_time, get_utc_time, hexify, toString
 
@@ -399,7 +399,7 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
 
         def processCRCFailure():
             msg_type = self.ReceiveData[1]
-            if msg_type != Receive.UNKNOWN_F1:  # ignore CRC errors on F1 message
+            if msg_type not in (Receive.UNKNOWN_F1, Receive.IMAGE_DATA):  # ignore CRC errors on F1/F4 message
                 self._crc_error_count += 1
                 if self._crc_error_count >= MAX_CRC_ERROR:
                     self._crc_error_count = 0
@@ -562,7 +562,7 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
             # There is possibly a fault with some panels as they sometimes do not send the full EPROM data.
             #    - Rather than making it panel specific I decided to make this a generic capability
             self.ReceiveData.append(data)  # add byte to the message buffer
-            if isinstance(self.pmCurrentPDU, PanelCallBack) and (self.pmCurrentPDU.ignorechecksum or self._validatePDU(self.ReceiveData)):  # if the message passes CRC checks then process it
+            if isinstance(self.pmCurrentPDU, PanelCallBack) and self._validatePDU(self.pmCurrentPDU.checksum, self.ReceiveData):  # if the message passes CRC checks then process it
                 # We've got a validated message
                 #log.debug(f"[data receiver] Validated PDU: Got Validated PDU type {hexify(int(self.ReceiveData[1]))}   data {toString(self.ReceiveData)}")
                 processReceivedPacket(ackneeded=self.pmCurrentPDU.ackneeded, debugp=self.pmCurrentPDU.debugprint, msg=self.pmCurrentPDU.msg, packet=self.ReceiveData)
@@ -573,7 +573,7 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
             self.ReceiveData.append(data)  # add byte to the message buffer
             #log.debug(f"[data receiver] Building PDU: Checking it {toString(self.ReceiveData)}")
             msg_type = self.ReceiveData[1]
-            if isinstance(self.pmCurrentPDU, PanelCallBack) and (self.pmCurrentPDU.ignorechecksum or self._validatePDU(self.ReceiveData)):
+            if isinstance(self.pmCurrentPDU, PanelCallBack) and self._validatePDU(self.pmCurrentPDU.checksum, self.ReceiveData):
                 # We've got a validated message
                 #log.debug(f"[data receiver] Building PDU: Got Validated PDU type {hexify(int(msg_type))}   data {toString(self.ReceiveData)}")
                 if self.pmCurrentPDU.varlenbytepos < 0:  # is it an unknown message i.e. varlenbytepos is -1
@@ -584,16 +584,24 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
                 self._reset_message_data()
             else:
                 # CRC check failed
-                a = self._calculateCRC(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
+                match (self.pmCurrentPDU.checksum):
+                    case ChecksumType.IGNORE:
+                        mess = "Checksum ignored, header and footer must be wrong"
+                    case ChecksumType.IMAGE_DATA:
+                        a,b = self.f4_checksum(self.ReceiveData[1:-3])
+                        mess = f"{hex(a).upper()}/{hex(b).upper()}"
+                    case _:
+                        a = self._calculateCRC(self.ReceiveData[1:-2])[0]  # this is just used to output to the log file
+                        mess = f"{hex(a).upper()}"
                 if len(self.ReceiveData) > PACKET_MAX_SIZE:
                     # If the length exceeds the max PDU size from the panel then stop and resync
-                    log.warning(f"[data receiver] PDU with CRC error Message = {toString(self.ReceiveData)}   checksum calcs {hex(a).upper()}")
+                    log.warning(f"[data receiver] PDU with CRC error Message = {toString(self.ReceiveData)}   checksum calcs: {mess}")
                     processCRCFailure()
                     self._reset_message_data()
                 elif self.pmIncomingPduLen == 0:
                     if msg_type in pmReceiveMsg:
                         # A known message with zero length and an incorrect checksum. Reset the message data and resync
-                        log.warning(f"[data receiver] Warning : Construction of zero length incoming packet validation failed - Message = {toString(self.ReceiveData)}  checksum calcs {hex(a).upper()}")
+                        log.warning(f"[data receiver] Warning : Construction of zero length incoming packet validation failed - Message = {toString(self.ReceiveData)}  checksum calcs: {mess}")
 
                         # Send an ack even though the its an invalid packet to prevent the panel getting confused
                         if isinstance(self.pmCurrentPDU, PanelCallBack) and self.pmCurrentPDU.ackneeded:
@@ -605,10 +613,10 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
                         self._reset_message_data()
                     else:  # if msg_type != Receive.UNKNOWN_F1:        # ignore CRC errors on F1 message
                         # When self.pmIncomingPduLen == 0 then the message is unknown, the length is not known and we're waiting for a Packet.FOOTER where the checksum is correct, so carry on
-                        log.debug(f"[data receiver] Building PDU: Length is {len(self.ReceiveData)} bytes (apparently PDU not complete)  {toString(self.ReceiveData)}  checksum calcs {hex(a).upper()}")
+                        log.debug(f"[data receiver] Building PDU: Length is {len(self.ReceiveData)} bytes (apparently PDU not complete)  {toString(self.ReceiveData)}  checksum calcs: {mess}")
                 else:
                     # When here then the message is a known message type of the correct length but has failed it's validation
-                    log.warning(f"[data receiver] Warning : Construction of incoming packet validation failed - Message = {toString(self.ReceiveData)}   checksum calcs {hex(a).upper()}")
+                    log.warning(f"[data receiver] Warning : Construction of incoming packet validation failed - Message = {toString(self.ReceiveData)}   checksum calcs: {mess}")
 
                     # Send an ack even though the its an invalid packet to prevent the panel getting confused
                     if isinstance(self.pmCurrentPDU, PanelCallBack) and self.pmCurrentPDU.ackneeded:

@@ -1,5 +1,6 @@
 """Types for rad received data."""
 from dataclasses import dataclass, field
+from enum import Enum, auto
 import logging
 from typing import Final, NamedTuple
 
@@ -24,8 +25,14 @@ RecvDebugI = DebugLevel.NONE if OBFUS else DebugLevel.FULL  # Debug incoming ima
 #             the length is the fixed number of bytes in the message.  Add this to the flexiblelength when it is received to get the total packet length.
 #             varlenbytepos is the byte position of the variable length of the message.
 #    flexiblelength provides support for messages that have a variable length
-#    ignorechecksum is for messages that do not have a checksum.  These are F1 and F4 messages (so far)
+#    checksum defines the crc checksum that needs doing on the message to validate it, IGNORE is for messages that do not have a checksum.
 #    When length is 0 then we stop processing the message on the first Packet.FOOTER. This is only used for the short messages (4 or 5 bytes long) like ack, stop, denied and timeout
+
+class ChecksumType(Enum):
+    """Checksum type."""
+    NORMAL = auto()
+    IMAGE_DATA = auto()
+    IGNORE = auto()
 
 class PanelCallBack(NamedTuple):
     """Visonic Protocol Receiver Callback Definition."""
@@ -34,46 +41,46 @@ class PanelCallBack(NamedTuple):
     isvariablelength: bool
     varlenbytepos: int
     flexiblelength: int
-    ignorechecksum: bool
+    checksum: ChecksumType
     debugprint: DebugLevel  # Using the Enum type directly
     msg: str
 
-# PanelCallBack = collections.namedtuple("PanelCallBack", 'length ackneeded isvariablelength varlenbytepos flexiblelength ignorechecksum debugprint msg' )
+# PanelCallBack = collections.namedtuple("PanelCallBack", 'length ackneeded isvariablelength varlenbytepos flexiblelength checksum debugprint msg' )
 pmReceiveMsg: Final[dict[Receive, PanelCallBack | dict[int, PanelCallBack]]] = {
-    Receive.DUMMY_MESSAGE      : PanelCallBack(  0,  True, False, -1, 0, False, DebugLevel.NONE,                          "Dummy Message" ),       # Dummy message used in the algorithm when the message type is unknown. The -1 is used to indicate an unknown message in the algorithm
-    Receive.ACKNOWLEDGE        : PanelCallBack(  0, False, False,  0, 0, False, DebugLevel.NONE,                          "Acknowledge" ),         # Ack
-    Receive.TIMEOUT            : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Timeout" ),             # Timeout. See the receiver function for ACK handling
-    Receive.UNKNOWN_07         : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Unknown 07" ),          # No idea what this means but decode it anyway
-    Receive.ACCESS_DENIED      : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Access Denied" ),       # Access Denied
-    Receive.LOOPBACK_TEST      : PanelCallBack(  0, False, False,  0, 0, False, DebugLevel.FULL,                          "Loopback Test" ),       # THE PANEL DOES NOT SEND THIS. THIS IS USED FOR A LOOP BACK TEST
-    Receive.EXIT_DOWNLOAD      : PanelCallBack(  0,  True, False,  0, 0, False,      RecvDebugC,                          "Exit Download" ),       # The panel may send this during download to tell us to exit download
-    Receive.UNKNOWN_1F         : PanelCallBack(  0,  True, False,  0, 0, False, DebugLevel.FULL,                          "Do not know what this is" ), # My Powermaster 30 sent this
-    Receive.NOT_USED           : PanelCallBack( 14,  True, False,  0, 0, False, DebugLevel.FULL,                          "Not Used" ),            # 14 Panel Info (older visonic powermax panels so not used by this integration)
-    Receive.DOWNLOAD_RETRY     : PanelCallBack( 14,  True, False,  0, 0, False, DebugLevel.CMD  if OBFUS else RecvDebugD, "Download Retry" ),      # 14 Download Retry
-    Receive.DOWNLOAD_SETTINGS  : PanelCallBack( 14,  True, False,  0, 0, False, DebugLevel.NONE if OBFUS else RecvDebugD, "Download Settings" ),   # 14 Download Settings
-    Receive.PANEL_INFO         : PanelCallBack( 14,  True, False,  0, 0, False, DebugLevel.FULL,                          "Panel Info" ),          # 14 Panel Info
-    Receive.DOWNLOAD_BLOCK     : PanelCallBack(  7,  True,  True,  4, 5, False, DebugLevel.CMD  if OBFUS else RecvDebugD, "Download Block" ),      # Download Info in varying lengths  (For variable length, the length is the fixed number of bytes). This contains panel data so don't log it.
-    Receive.EVENT_LOG          : PanelCallBack( 15,  True, False,  0, 0, False,      RecvDebugM,                          "Event Log (A0)" ),      # 15 Event Log
-    Receive.ZONE_NAMES         : PanelCallBack( 15,  True, False,  0, 0, False,      RecvDebugM,                          "Zone Names (A3)" ),     # 15 Zone Names
-    Receive.STATUS_UPDATE      : PanelCallBack( 15,  True, False,  0, 0, False,      RecvDebugM,                          "Status Update (A5)" ),  # 15 Status Update       Length was 15 but panel seems to send different lengths
-    Receive.ZONE_TYPES         : PanelCallBack( 15,  True, False,  0, 0, False,      RecvDebugM,                          "Zone types (A6)" ),     # 15 Zone Types
-    Receive.PANEL_STATUS       : PanelCallBack( 15,  True, False,  0, 0, False,      RecvDebugM,                          "Panel Status (A7)" ),   # 15 Panel Status Change
-    Receive.POWERLINK          : PanelCallBack( 15,  True, False,  0, 0, False,      RecvDebugC,                          "Powerlink (AB)" ),      # 15 Enrol Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
-    Receive.SWITCH_NAMES       : PanelCallBack( 15,  True, False,  0, 0, False,      RecvDebugC,                          "Switch Names" ),        # 15 Switch Names
-    Receive.IMAGE_MGMT         : PanelCallBack( 15,  True, False,  0, 0, False, DebugLevel.CMD  if OBFUS else RecvDebugI, "JPG Mgmt" ),            # 15 Panel responds with this when we ask for JPG images
-    Receive.POWERMASTER        : PanelCallBack(  8,  True,  True,  4, 2, False, DebugLevel.CMD  if OBFUS else RecvDebugM, "PowerMaster (B0)" ),    # The B0 message comes in varying lengths, sometimes it is shorter than what it states and the CRC is sometimes wrong
-    Receive.REDIRECT           : PanelCallBack(  5, False,  True,  2, 0, False, DebugLevel.FULL,                          "Redirect" ),            # TESTING: These are redirected Powerlink messages. 0D C0 len <data> cs 0A   so 5 plus the original data length
-    Receive.PROXY              : PanelCallBack( 11,  True, False,  0, 0, False, DebugLevel.FULL,                          "Proxy" ),               # VISPROX : Interaction with Visonic Proxy
-    Receive.PROXY_COMMAND      : PanelCallBack(  7, False, False,  0, 0, False, DebugLevel.FULL,                          "Proxy Cmd Ringback"),   # VISPROX : Interaction with Visonic Proxy, this is a command that has ringback so something is wrong
+    Receive.DUMMY_MESSAGE      : PanelCallBack(  0,  True, False, -1, 0, ChecksumType.NORMAL, DebugLevel.NONE,                          "Dummy Message" ),       # Dummy message used in the algorithm when the message type is unknown. The -1 is used to indicate an unknown message in the algorithm
+    Receive.ACKNOWLEDGE        : PanelCallBack(  0, False, False,  0, 0, ChecksumType.NORMAL, DebugLevel.NONE,                          "Acknowledge" ),         # Ack
+    Receive.TIMEOUT            : PanelCallBack(  0,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugC,                          "Timeout" ),             # Timeout. See the receiver function for ACK handling
+    Receive.UNKNOWN_07         : PanelCallBack(  0,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugC,                          "Unknown 07" ),          # No idea what this means but decode it anyway
+    Receive.ACCESS_DENIED      : PanelCallBack(  0,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugC,                          "Access Denied" ),       # Access Denied
+    Receive.LOOPBACK_TEST      : PanelCallBack(  0, False, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Loopback Test" ),       # THE PANEL DOES NOT SEND THIS. THIS IS USED FOR A LOOP BACK TEST
+    Receive.EXIT_DOWNLOAD      : PanelCallBack(  0,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugC,                          "Exit Download" ),       # The panel may send this during download to tell us to exit download
+    Receive.UNKNOWN_1F         : PanelCallBack(  0,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Do not know what this is" ), # My Powermaster 30 sent this
+    Receive.NOT_USED           : PanelCallBack( 14,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Not Used" ),            # 14 Panel Info (older visonic powermax panels so not used by this integration)
+    Receive.DOWNLOAD_RETRY     : PanelCallBack( 14,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.CMD  if OBFUS else RecvDebugD, "Download Retry" ),      # 14 Download Retry
+    Receive.DOWNLOAD_SETTINGS  : PanelCallBack( 14,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.NONE if OBFUS else RecvDebugD, "Download Settings" ),   # 14 Download Settings
+    Receive.PANEL_INFO         : PanelCallBack( 14,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Panel Info" ),          # 14 Panel Info
+    Receive.DOWNLOAD_BLOCK     : PanelCallBack(  7,  True,  True,  4, 5, ChecksumType.NORMAL, DebugLevel.CMD  if OBFUS else RecvDebugD, "Download Block" ),      # Download Info in varying lengths  (For variable length, the length is the fixed number of bytes). This contains panel data so don't log it.
+    Receive.EVENT_LOG          : PanelCallBack( 15,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugM,                          "Event Log (A0)" ),      # 15 Event Log
+    Receive.ZONE_NAMES         : PanelCallBack( 15,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugM,                          "Zone Names (A3)" ),     # 15 Zone Names
+    Receive.STATUS_UPDATE      : PanelCallBack( 15,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugM,                          "Status Update (A5)" ),  # 15 Status Update       Length was 15 but panel seems to send different lengths
+    Receive.ZONE_TYPES         : PanelCallBack( 15,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugM,                          "Zone types (A6)" ),     # 15 Zone Types
+    Receive.PANEL_STATUS       : PanelCallBack( 15,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugM,                          "Panel Status (A7)" ),   # 15 Panel Status Change
+    Receive.POWERLINK          : PanelCallBack( 15,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugC,                          "Powerlink (AB)" ),      # 15 Enrol Request 0x0A  OR Ping 0x03      Length was 15 but panel seems to send different lengths
+    Receive.SWITCH_NAMES       : PanelCallBack( 15,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugC,                          "Switch Names" ),        # 15 Switch Names
+    Receive.IMAGE_MGMT         : PanelCallBack( 15,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.CMD  if OBFUS else RecvDebugI, "JPG Mgmt" ),            # 15 Panel responds with this when we ask for JPG images
+    Receive.POWERMASTER        : PanelCallBack(  8,  True,  True,  4, 2, ChecksumType.NORMAL, DebugLevel.CMD  if OBFUS else RecvDebugM, "PowerMaster (B0)" ),    # The B0 message comes in varying lengths, sometimes it is shorter than what it states and the CRC is sometimes wrong
+    Receive.REDIRECT           : PanelCallBack(  5, False,  True,  2, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Redirect" ),            # TESTING: These are redirected Powerlink messages. 0D C0 len <data> cs 0A   so 5 plus the original data length
+    Receive.PROXY              : PanelCallBack( 11,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Proxy" ),               # VISPROX : Interaction with Visonic Proxy
+    Receive.PROXY_COMMAND      : PanelCallBack(  7, False, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Proxy Cmd Ringback"),   # VISPROX : Interaction with Visonic Proxy, this is a command that has ringback so something is wrong
     # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it. Assume a minimum length of 9, a variable length and ignore the checksum calculation.
-    Receive.UNKNOWN_F1         : PanelCallBack(  9,  True,  True,  0, 0,  True,      RecvDebugC,                          "Unknown F1" ),          # Ignore checksum on all F1 messages
+    Receive.UNKNOWN_F1         : PanelCallBack(  9,  True,  True,  0, 0, ChecksumType.IGNORE,      RecvDebugC,                          "Unknown F1" ),          # Ignore checksum on all F1 messages
     # The F4 message comes in varying lengths. It is the image data from a PIR camera. Header/data (03/05) are
     # validated with the F4 CRC (see _validatePDU); footer/unknown (01/15) still skip the check.
     Receive.IMAGE_DATA : {
-        0x01 : PanelCallBack(  9, False, False,  0, 0,  True, RecvDebugI, "Image Footer" ),
-        0x03 : PanelCallBack(  9, False,  True,  5, 0, False, RecvDebugI, "Image Header" ),        # Image Header (checked with the F4 CRC)
-        0x05 : PanelCallBack(  9, False,  True,  5, 0, False, RecvDebugI, "Image Data" ),          # Image Data Sequence (checked with the F4 CRC)
-        0x15 : PanelCallBack( 13, False, False,  0, 0,  True, RecvDebugI, "Image Unknown" )
+        0x01 : PanelCallBack(  9, False, False,  0, 0, ChecksumType.IGNORE    , RecvDebugI, "Image Footer" ),
+        0x03 : PanelCallBack(  9, False,  True,  5, 0, ChecksumType.IMAGE_DATA, RecvDebugI, "Image Header" ),        # Image Header (checked with the F4 CRC)
+        0x05 : PanelCallBack(  9, False,  True,  5, 0, ChecksumType.IMAGE_DATA, RecvDebugI, "Image Data" ),          # Image Data Sequence (checked with the F4 CRC)
+        0x15 : PanelCallBack( 13, False, False,  0, 0, ChecksumType.IGNORE    , RecvDebugI, "Image Unknown" )
     }
 }
 

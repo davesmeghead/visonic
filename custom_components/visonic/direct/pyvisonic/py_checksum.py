@@ -2,6 +2,8 @@
 
 import logging
 
+from .py_types_receiving import ChecksumType
+
 log = logging.getLogger(__name__)
 
 class MyChecksumCalc:
@@ -17,7 +19,7 @@ class MyChecksumCalc:
         self.log = loggy
 
     # check the checksum of received messages
-    def _validatePDU(self, packet: bytearray) -> bool:
+    def _validatePDU(self, checksum_type: ChecksumType, packet: bytearray) -> bool:
         r"""Verify if packet is valid. Packets start with a preamble (\x0D) and end with postamble (\x0A)."""
         # Does it start with a preamble
         if packet[:1] != b"\x0D":
@@ -26,9 +28,17 @@ class MyChecksumCalc:
         if packet[-1:] != b"\x0A":
             return False
 
+        if checksum_type == ChecksumType.IGNORE:
+            # For ignore all we do is a basic header and footer check
+            return True
+
         # F4 PIR-image messages carry a 2-byte CRC-16, not the 1-byte panel checksum
-        if len(packet) > 3 and packet[1] == 0xF4:
-            return self.f4_checksum(packet[1:-3]) == (packet[-3], packet[-2])
+        if checksum_type == ChecksumType.IMAGE_DATA:
+            if len(packet) > 3:
+                return self.f4_checksum(packet[1:-3]) == (packet[-3], packet[-2])
+            return False
+
+        # fall through to do ChecksumType.NORMAL
 
         # Check the CRC
         if packet[-2:-1] == self._calculateCRC(packet[1:-2]):
