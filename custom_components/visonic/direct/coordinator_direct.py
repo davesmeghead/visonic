@@ -224,6 +224,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
 
     async def async_panel_stop(self):
         """Redirector to stop and unload the hub."""
+        self.async_set_updated_data(None)  # clears update cycle
         await self._client.async_panel_stop()
 
     # =======================================================================================================
@@ -276,9 +277,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                 )
                 did_bypass = True
 
-            result: CommandResult = await self._client.send_command(
-                command, code, partition_set
-            )
+            result: CommandResult = await self._client.send_command(command, code, partition_set)
 
             if did_bypass:
                 self._client.get_sensor_bypass_state()

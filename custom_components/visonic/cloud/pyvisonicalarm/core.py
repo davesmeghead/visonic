@@ -183,7 +183,6 @@ class API:
     def __raise_on_bad_request(self, error: bytes):
         """Raise an exception when the API returns a bad request."""
         api = self.__parse_error(error)
-        # print(api)
 
         if api["error"] == 10001:  # BadRequestParams
             for pair in api.get("extras", []):
@@ -230,7 +229,6 @@ class API:
     def __raise_on_forbidden(self, error: bytes):
         """Raise an exception when the API returns a forbidden error."""
         api = json.loads(error.decode("utf-8"))
-        # print(api)
 
         if api["error"] == 10010:  # NotAllowed
             raise NotAllowedError
@@ -244,16 +242,12 @@ class API:
     def __raise_on_unauthorized(self, error: bytes):
         """Raise an exception when the API returns a unauthorized error."""
         api = json.loads(error.decode("utf-8"))
-        # print(api)
 
         # Raise an exception when we are not authorized to access the endpoint
         raise UnauthorizedError(str(api))
 
     def __raise_on_internal_server_error(self):
         """Raise an exception when the API returns a unauthorized error."""
-        #api = json.loads(error.decode("utf-8"))
-        # print(api)
-
         # Raise an exception when we are not authorized to access the endpoint
         raise InternalServerError
 

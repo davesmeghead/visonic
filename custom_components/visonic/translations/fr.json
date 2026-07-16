@@ -6,6 +6,8 @@
             "device_error": "Le p\u00e9riph\u00e9rique doit \u00eatre Ethernet, Server ou Serial",
             "emulation_mode_error": "Param\u00e8tre de mode d'\u00e9mulation incorrect",
             "settings_missing": "Import des param\u00e8tres \u00e0 partir du fichier yaml mais les param\u00e8tres essentiels sont manquants",
+			"email_invalid": "The email address is invalid",
+			"settings_invalid": "There are invalid settings",
             "unknown": "Erreur inattendue",
 			"reconfigure_successful": "Reconfiguration Successful",
 			"already_in_progress": "Panel configuration already in progress",
@@ -21,6 +23,8 @@
 			"cannot_connect_refused": "Connection refused",
 			"already_in_progress": "Panel configuration already in progress",
             "settings_missing": "Essential settings are missing",
+			"email_invalid": "The email address is invalid",
+			"settings_invalid": "There are invalid settings",
 			"exclusion_list_invalid": "Either the Sensor or Switch exclusion lists are invalid",
 			"download_code_invalid": "The download code is invalid",
 			"select_entity_invalid": "The baud select entity is invalid"
@@ -165,6 +169,8 @@
         "error": {
             "ethernet_server_or_serial": "Doit \u00eatre Ethernet, Server ou Serial",
             "settings_missing": "Essential settings are missing",
+			"email_invalid": "The email address is invalid",
+			"settings_invalid": "There are invalid settings",
             "emulation_mode_error": "Param\u00e8tre de mode d'\u00e9mulation incorrect"
         },
         "step": {
@@ -182,7 +188,6 @@
                 "description": "",
                 "title": "Centrale d'Alarme Zone/Capteur Param\u00e8tres",
                 "data": {
-                    "show_eeprom_attributes": "Afficher les donn\u00e9es EPROM dans les attributs d'alarme",
                     "motion_off_delay": "D\u00e9lai du mouvement/de la cam\u00e9ra (secondes)",
                     "magnet_closed_delay": "D\u00e9lai de fermeture magn\u00e9tique/filaire (secondes)",
                     "emergency_off_delay": "D\u00e9lai de fum\u00e9e/incendie (secondes)"
@@ -542,6 +547,9 @@
 					"lasteventaction": { 
 					    "name" : "Action du dernier \u00e9v\u00e8nement"
 					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
 					"lasteventtime": { 
 					    "name" : "Heure du dernier \u00e9v\u00e9nement"
 					}
@@ -735,6 +743,18 @@
 							"true": "Alerte",
 							"undefined": "Ind\u00e9fini"
 						}
+					},
+					"lasteventname": {
+					    "name" : "Nom du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventaction": { 
+					    "name" : "Action du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
+					"lasteventtime": { 
+					    "name" : "Heure du dernier \u00e9v\u00e9nement"
 					}
 				}				
 			}
@@ -877,6 +897,9 @@
 					},
 					"lasteventaction": { 
 					    "name" : "Action du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
 					},
 					"lasteventtime": { 
 					    "name" : "Heure du dernier \u00e9v\u00e9nement"

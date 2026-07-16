@@ -6,6 +6,8 @@
 			"device_error": "Device must be either Ethernet, Server or Serial",
 			"emulation_mode_error": "Incorrect Emulation Mode Setting",
 			"settings_missing": "Essential settings are missing",
+			"email_invalid": "The email address is invalid",
+			"settings_invalid": "There are invalid settings",
 			"unknown": "Unexpected or unknown error",
 			"reconfigure_successful": "Reconfiguration Successful",
 			"already_in_progress": "Panel configuration already in progress",
@@ -21,6 +23,8 @@
 			"cannot_connect_refused": "Connection refused",
 			"already_in_progress": "Panel configuration already in progress",
 			"settings_missing": "Essential settings are missing",
+			"email_invalid": "The email address is invalid",
+			"settings_invalid": "There are invalid settings",
 			"exclusion_list_invalid": "Either the Sensor or Switch exclusion lists are invalid",
 			"download_code_invalid": "The download code is invalid",
 			"select_entity_invalid": "The baud select entity is invalid"
@@ -165,6 +169,8 @@
         "error": {
             "ethernet_server_or_serial": "Must be one of Ethernet or Serial",
 			"settings_missing": "Essential settings are missing",
+			"email_invalid": "The email address is invalid",
+			"settings_invalid": "There are invalid settings",
             "emulation_mode_error": "Incorrect Emulation Mode Setting"
         },
         "step": {
@@ -541,6 +547,9 @@
 					"lasteventaction": { 
 					    "name" : "Last Event Action"
 					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
 					"lasteventtime": { 
 					    "name" : "Last Event Time"
 					}
@@ -734,6 +743,18 @@
 							"true": "Alert",
 							"undefined": "Undefined"
 						}
+					},
+					"lasteventname": {
+					    "name" : "Last Event Name"
+					},
+					"lasteventaction": { 
+					    "name" : "Last Event Action"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
+					},
+					"lasteventtime": { 
+					    "name" : "Last Event Time"
 					}
 				}				
 			}
@@ -876,6 +897,9 @@
 					},
 					"lasteventaction": { 
 					    "name" : "Last Event Action"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last Event Partition"
 					},
 					"lasteventtime": { 
 					    "name" : "Last Event Time"

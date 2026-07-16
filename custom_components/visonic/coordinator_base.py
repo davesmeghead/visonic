@@ -37,6 +37,7 @@ from .utils import (
     capitalize,
     decode_code_from_dict_or_str,
     getAlarmPanelUniqueIdent,
+    print_partition,
     to_bool,
 )
 from .visonic_types import (
@@ -80,7 +81,6 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         self.panel_id = panel_id
         # do not use self.logger as it is defined in parent coordinator class
         self._event_logger = lo
-        self._event_logger.logstate_info(f"{update_interval=}")
         self.disable_all_panel_commands = False
 
         # Declare platform_manager using the base class so it can be used in this base class
@@ -223,9 +223,9 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 vcd.partition_armcode.values(), default=AlarmPanelStatus.UNKNOWN
             )
             stat: dict[str, Any] = deepcopy(vcd.panelstate.as_dict())
-            if vcd.panelstate.partition is not None and not isinstance(vcd.panelstate.partition, int):
-                # Update the partition numbers
-                stat["partition"] = {p+1 for p in vcd.panelstate.partition if p >= 0}
+            if vcd.panelstate.partition is not None:
+                # Update the partition numbers, list all partitions
+                stat["partition"] = print_partition(vcd.panelstate.partition)
 
         else:
             # A panel with partitions
@@ -235,9 +235,8 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 partition, (False, 0, TriggerAlarmType.NONE)
             )
             _armcode = vcd.partition_armcode.get(partition, AlarmPanelStatus.UNKNOWN)
-
-        if "partition" in stat:
-            stat["partition"] = ''.join(c for c in str(stat.get("partition", "")) if c not in "{}[]() " )
+            # Update the partition number, only identify the current partition
+            stat["partition"] = print_partition(partition)
 
         if isa:
             _mystate = AlarmControlPanelState.TRIGGERED

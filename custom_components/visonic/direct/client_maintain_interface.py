@@ -3,6 +3,7 @@
 # This child/parent class build up incorporates the interaction/interface to the low level pyvisonic library
 
 from collections.abc import Callable
+from copy import deepcopy
 import logging
 
 from homeassistant.components.alarm_control_panel import AlarmControlPanelState
@@ -24,6 +25,7 @@ from ..const import (  # noqa: TID252  # noqa: TID252  # noqa: TID252
     TEXT_CLIENT_VERSION,
     TEXT_LAST_EVENT_ACTION,
     TEXT_LAST_EVENT_NAME,
+    TEXT_LAST_EVENT_PARTITION,
     TEXT_LAST_EVENT_TIME,
 )
 from ..exceptions import VisonicException  # noqa: TID252
@@ -32,6 +34,7 @@ from ..panel_event_logger import PanelEventLogger  # noqa: TID252
 from ..platform_manager import PlatformManager  # noqa: TID252
 from ..utils import (  # noqa: TID252
     get_local_time,
+    print_partition,
     to_bool,
     update_config_entry_threadsafe,
 )
@@ -151,6 +154,7 @@ class MaintainInterface:
         # get the language translation for "Normal"
         self.panel_last_event_action = self.language_decoder.get_event_entry(0)
         self.panel_last_event_time = get_local_time()
+        self.panel_last_event_partition = -1
 
     def reset_baud_list(self):
         """Reset the baud list to the default."""
@@ -159,12 +163,6 @@ class MaintainInterface:
     def hasStarted(self) -> bool:
         """Has the system started?"""
         return self._system_started
-
-    def _set_panel_last_event(self, data: dict[str, Any] | None):
-        if data is not None:
-            self.panel_last_event_name = data.get(PE_NAME, "")
-            self.panel_last_event_action = data.get(PE_EVENT, "")
-            self.panel_last_event_time = data.get(PE_TIME, "")
 
     def get_panel_status_dict(
         self, include_extended_status: bool | None = None
@@ -188,6 +186,8 @@ class MaintainInterface:
         pd.attributes[TEXT_LAST_EVENT_NAME] = self.panel_last_event_name
         pd.attributes[TEXT_LAST_EVENT_ACTION] = self.panel_last_event_action
         pd.attributes[TEXT_LAST_EVENT_TIME] = self.panel_last_event_time
+        if self.panel_last_event_partition >= 0:
+            pd.attributes[TEXT_LAST_EVENT_PARTITION] = self.panel_last_event_partition
         pd.attributes[TEXT_CLIENT_VERSION] = CLIENT_VERSION
         return pd
 
@@ -371,9 +371,10 @@ class MaintainInterface:
             lambda: self.entry.async_create_task(
                 self.hass,
                 self.hass.services.async_call(
-                    "select",
-                    "select_option",
-                    {"entity_id": self._select_entity_id, "option": option},
+                    domain="select",
+                    service="select_option",
+                    service_data={"entity_id": self._select_entity_id, "option": option},
+                    blocking=False,
                 ),
                 name="set select entity",
             )
@@ -431,8 +432,19 @@ class MaintainInterface:
         except ValueError:
             # handle unknown values safely
             return
-        if event_id == PanelCondition.PANEL_UPDATE and data is not None and len(data) == 3:
-            self._set_panel_last_event(data)
+
+        if event_id == PanelCondition.PANEL_UPDATE and data is not None and len(data) >= 3:
+            self.panel_last_event_name = data.get(PE_NAME, "")
+            self.panel_last_event_action = data.get(PE_EVENT, "")
+            self.panel_last_event_partition = int(data.get(PE_PARTITION, -2)) + 1
+            self.panel_last_event_time = data.get(PE_TIME, "")
+
+        # We can alter data as it is only used to create the fire event
+        if data is not None and PE_PARTITION in data:
+            if isinstance(data[PE_PARTITION], int):
+                data[PE_PARTITION] = data[PE_PARTITION] + 1
+            elif isinstance(data[PE_PARTITION], set | list):
+                data[PE_PARTITION] = [p+1 for p in data[PE_PARTITION]]
 
         self.platform_manager.create_ha_fire_event(
             event_id=event_id, datadictionary=data if data is not None else {}
@@ -458,13 +470,13 @@ class MaintainInterface:
 
             if (p := self.get_partitions_in_use()) is not None:
                 self.logger.logstate_debug(
-                    "   Startup Complete, number of partitions in panel = %s   they are %s",
+                    "Startup Complete, number of partitions in panel = %s   they are %s",
                     len(p),
-                    p,
+                    print_partition(p)
                 )
             else:
                 self.logger.logstate_debug(
-                    "   Startup Complete, no partitions in panel"
+                    "Startup Complete, no partitions in panel"
                 )
 
             self.setupAlarmPanel(self.get_partitions_in_use())

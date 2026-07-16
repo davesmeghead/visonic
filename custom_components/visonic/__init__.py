@@ -478,7 +478,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     device_type: str = entry.data.get(CONF_TYPE)
     if device_type is None:
         return False
-    device_type_enum = DeviceType(device_type)
+    try:
+        device_type_enum = DeviceType(device_type)
+    except ValueError:
+        _LOGGER.error("Invalid device type: %s", device_type)
+        return False
     _LOGGER.info("***************** async_unload_entry %s ******************", device_type_enum)
     if device_type_enum == DeviceType.TCP_SERVER:
         vsd : VisonicServerData | None = data[SERVERS].get(entry.entry_id)
@@ -493,14 +497,21 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _tmp = data[SERVERS].pop(entry.entry_id, None)
 
     elif device_type_enum in (DeviceType.TCP_DISCOVERED, DeviceType.ETHERNET, DeviceType.SERIAL, DeviceType.CLOUD):
+        _LOGGER.debug("........... Unloading Platforms")
+        unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
         vcd : VisonicConfigData | None = data[PANELS].get(entry.entry_id)
         if vcd:
-            # stop all activity in the hub
             p = str(vcd.panel_id)
-            unload_ok = await vcd.coordinator.async_panel_stop()
-            _LOGGER.debug("........... Killing Dispatchers")
-            vcd.coordinator.platform_manager.terminate_all_dispatchers(entry)
-        unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+            if vcd.coordinator is not None:
+                #vcd.coordinator.async_set_updated_data(None)  # clears update cycle
+                if vcd.coordinator.data is not None:
+                    vcd.coordinator.data = None            # stop all activity in the hub
+                _LOGGER.debug("........... Killing Panel Connection")
+                await vcd.coordinator.async_panel_stop()
+                #_LOGGER.debug("........... Killing Dispatchers")
+                #vcd.coordinator.platform_manager.terminate_all_dispatchers(entry)
+                _LOGGER.debug("........... Killing Home Assistant Coordinator")
+                await vcd.coordinator.async_shutdown()
         if not unload_ok:
             _LOGGER.debug("***** terminate connection fail, no hub coordinator ****")
         _tmp = data[PANELS].pop(entry.entry_id, None)

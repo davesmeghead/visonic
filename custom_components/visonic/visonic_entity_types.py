@@ -24,7 +24,7 @@ from homeassistant.const import (
 )
 
 from .const import DEVICE_ATTRIBUTE_NAME, VISONIC_TRANSLATION_KEY
-from .utils import create_sensor_label
+from .utils import create_sensor_label, print_partition
 from .visonic_types import AlarmSensorType
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,7 +62,6 @@ class VisonicBinarySensorKey(StrEnum):
     """Keys for the BINARY_SENSOR_DEFINITIONS."""
     # I could have separated them for float and binary but ... I didn't
     ZONE_TRIGGER = "zone_trigger"
-    ZONE_SHOCK = "zone_shock"
     ZONE_STATUS = "zone_status"
     ZONE_CONTACT = "zone_contact"
     ZONE_BATTERY = "zone_battery"
@@ -211,7 +210,17 @@ class AlarmPanelData(BaseData):
     """Base Sensor Data."""
     partitions: set[int]
     siren_id: int
-    siren_name: int
+    siren_name: str
+
+    def __str__(self) -> str:  # noqa: D105
+        parts = [
+            f"identifier={self.identifier!r}",
+            f"siren={self.siren_name!r} ({self.siren_id})",
+        ]
+        if self.partitions:
+            p = [s+1 for s in self.partitions]
+            parts.append(f"partitions={', '.join(map(str, sorted(p)))}")
+        return ", ".join(parts)
 
 @dataclass(slots=True)
 class ZoneSensorData(BaseData):
@@ -365,7 +374,7 @@ device_basic_attributes = partial(
 
 panel_trouble_attributes = partial(
     obtain_attributes,
-    lst=["trouble", "lasteventname", "lasteventaction", "lasteventtime"]
+    lst=["trouble", "lasteventname", "lasteventaction", "lasteventpartition", "lasteventtime"]
 )
 
 def sensor_subset_attributes(
@@ -427,7 +436,7 @@ def sensor_full_attributes(
         attr[ATTR_BATTERY_LEVEL] = 0 if sensor.low_battery else 100
 
     if len(sensor.partition) > 0:
-        attr["partition"] = sensor.partition
+        attr["partition"] = print_partition(sensor.partition)
 
     attr["device_name"] = create_sensor_label(sensor.id)
 
@@ -490,17 +499,6 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         value_fn=lambda x: x,
         attributes_fn=sensor_full_attributes,
         friendly_name="Zone"
-    ),
-    VisonicBinarySensorKey.ZONE_SHOCK: BinarySensorDefinition(   # As ZONE_TRIGGER but named "Shock" for shock sensors, alongside "Contact"
-        key="zone_shock",
-        device_class=None, # None means it uses STYPE_TO_HA_SENSOR_MAP (VIBRATION for a shock sensor)
-        source=EntityDataType.ZONE,
-        data_key=StateField.TRIGGERED,
-        unique_extension="_shock",
-        translation_key=VISONIC_TRANSLATION_KEY,
-        value_fn=lambda x: x,
-        attributes_fn=sensor_full_attributes,
-        friendly_name="Shock"
     ),
     VisonicBinarySensorKey.ZONE_STATUS: BinarySensorDefinition(
         key="zone_status",

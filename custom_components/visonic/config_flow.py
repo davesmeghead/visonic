@@ -3,6 +3,7 @@
 Home Assistant config and options flow handling for Visonic PowerMax/PowerMaster alarm panel connections.
 """
 import logging
+import re
 from typing import Any
 import uuid
 
@@ -49,6 +50,7 @@ from .const import (
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_SWITCH,
     CONF_PANEL_NUMBER,
+    CONF_PANEL_SERIAL,
     CONF_SERVER_HOST,
     CONF_SERVER_NUMBER,
     CONF_SERVER_PORT,
@@ -75,9 +77,11 @@ from .const import (
     TRANSLATE_ABORT_INVALID_DEVICE_TYPE,
     TRANSLATE_ABORT_UNKNOWN,
     TRANSLATE_ERROR_DL_CODE_INVALID,
+    TRANSLATE_ERROR_EMAIL_INVALID,
     TRANSLATE_ERROR_ETHERNET_SERVER_OR_SERIAL,
     TRANSLATE_ERROR_EXCLUSIONS_INVALID,
     TRANSLATE_ERROR_SELECT_INVALID,
+    TRANSLATE_ERROR_SETTINGS_INVALID,
     TRANSLATE_ERROR_SETTINGS_MISSING,
     TRANSLATE_EXCEPTION_NO_UNIQUE_NUMBER_IN_CONFIG,
     VISONIC_CLOUD_SERVER,
@@ -107,6 +111,9 @@ MAP_DEVICE_TO_CONFIG_STEP: dict[DeviceType, str] = {
     DeviceType.TCP_SERVER: FORM_TCP_SERVER,
     DeviceType.CLOUD: FORM_CLOUD,
 }
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
 
 class VisonicHandler:
     """Shared logic for ConfigFlow and OptionsFlow.
@@ -167,10 +174,9 @@ class VisonicHandler:
         required = {"9600", "38400"}
         if not required.issubset(set(options)):
             raise vol.Invalid(f"Invalid options for {entity}, options: {options}")
-
         return entity
 
-    def validate_input(self, hass: HomeAssistant, data: dict[str, Any], dt: DeviceType | None = None) -> str | None:
+    def validate_input(self, hass: HomeAssistant, data: dict[str, Any], dt: DeviceType | None = None) -> str | None:  # noqa: C901
         """Validate the 'data' input (but not the 'options')."""
         # This does not validate the prescence of CONF, if they are there then they are tested
         device_type = data.get(CONF_TYPE, dt)
@@ -185,13 +191,21 @@ class VisonicHandler:
                     if not data.get(CONF_PATH):
                         return TRANSLATE_ERROR_SETTINGS_MISSING
                 case DeviceType.CLOUD:
-                    # Must be login settings to cloud server, panel serial can be missing
+                    # Must be login settings to cloud server
                     if not data.get(CONF_EXTERNAL_URL) or not data.get(CONF_EMAIL) or not data.get(CONF_PASSWORD) or not data.get(CONF_CODE):
                         return TRANSLATE_ERROR_SETTINGS_MISSING
-                    if CONF_CODE in data:
-                        c = data.get(CONF_CODE)
-                        if len(c) != 0 and len(c) != 4:
-                            return TRANSLATE_ERROR_SETTINGS_MISSING
+                    em = data.get(CONF_EMAIL, "").strip()
+                    if not _EMAIL_RE.fullmatch(em):  # check email address
+                        return TRANSLATE_ERROR_EMAIL_INVALID
+                    url = data.get(CONF_EXTERNAL_URL)
+                    if '.' not in url:  # Must be a . in a url address
+                        return TRANSLATE_ERROR_SETTINGS_INVALID
+                    ps: str = data.get(CONF_PANEL_SERIAL, "")
+                    if len(ps) != 0 and len(ps) != 6: # must be a length of 0 or 6
+                        return TRANSLATE_ERROR_SETTINGS_INVALID
+                    cd: str = data.get(CONF_CODE, "")
+                    if len(cd) != 4 or not cd.isdigit():  # code must be 4 characters and be a number
+                        return TRANSLATE_ERROR_SETTINGS_INVALID
                 case DeviceType.TCP_SERVER:
                     # There must be a host and port
                     if not data.get(CONF_SERVER_HOST) or not str(data.get(CONF_SERVER_PORT)).isdigit():
@@ -201,9 +215,11 @@ class VisonicHandler:
             c = data.get(CONF_DOWNLOAD_CODE)
             if len(c) != 0 and len(c) != 4:
                 return TRANSLATE_ERROR_DL_CODE_INVALID
+            if len(c) == 4 and not c.isdigit():
+                return TRANSLATE_ERROR_DL_CODE_INVALID
 
         if CONF_USER_CODE_SLOT in data:
-            c = data.get(CONF_USER_CODE_SLOT)
+            c: int = int(data.get(CONF_USER_CODE_SLOT))
             if c <= 0 or c > 48:  # Powermaster panels allow 48 usercodes
                 return TRANSLATE_ERROR_DL_CODE_INVALID
 
