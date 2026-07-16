@@ -67,11 +67,12 @@ pmReceiveMsg: Final[dict[Receive, PanelCallBack | dict[int, PanelCallBack]]] = {
     Receive.PROXY_COMMAND      : PanelCallBack(  7, False, False,  0, 0, False, DebugLevel.FULL,                          "Proxy Cmd Ringback"),   # VISPROX : Interaction with Visonic Proxy, this is a command that has ringback so something is wrong
     # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it. Assume a minimum length of 9, a variable length and ignore the checksum calculation.
     Receive.UNKNOWN_F1         : PanelCallBack(  9,  True,  True,  0, 0,  True,      RecvDebugC,                          "Unknown F1" ),          # Ignore checksum on all F1 messages
-    # The F4 message comes in varying lengths. It is the image data from a PIR camera. Ignore checksum on all F4 messages
+    # The F4 message comes in varying lengths. It is the image data from a PIR camera. Header/data (03/05) are
+    # validated with the F4 CRC (see _validatePDU); footer/unknown (01/15) still skip the check.
     Receive.IMAGE_DATA : {
         0x01 : PanelCallBack(  9, False, False,  0, 0,  True, RecvDebugI, "Image Footer" ),
-        0x03 : PanelCallBack(  9, False,  True,  5, 0,  True, RecvDebugI, "Image Header" ),        # Image Header
-        0x05 : PanelCallBack(  9, False,  True,  5, 0,  True, RecvDebugI, "Image Data" ),          # Image Data Sequence
+        0x03 : PanelCallBack(  9, False,  True,  5, 0, False, RecvDebugI, "Image Header" ),        # Image Header (checked with the F4 CRC)
+        0x05 : PanelCallBack(  9, False,  True,  5, 0, False, RecvDebugI, "Image Data" ),          # Image Data Sequence (checked with the F4 CRC)
         0x15 : PanelCallBack( 13, False, False,  0, 0,  True, RecvDebugI, "Image Unknown" )
     }
 }
