@@ -4,19 +4,6 @@ import logging
 
 log = logging.getLogger(__name__)
 
-
-def f4_checksum(body: bytearray) -> tuple[int, int]:
-    """CRC-16 for F4 PIR-image messages (XMODEM poly 0x1021, plus a 0xE700 xorout for F4-07 acks)."""
-    crc = 0
-    for by in body:
-        crc ^= by << 8
-        for _ in range(8):
-            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
-    if len(body) > 1 and body[1] == 0x07:
-        crc ^= 0xE700
-    return crc & 0xFF, (crc >> 8) & 0xFF
-
-
 class MyChecksumCalc:
     """Checksum Calculation Class."""
 
@@ -41,7 +28,7 @@ class MyChecksumCalc:
 
         # F4 PIR-image messages carry a 2-byte CRC-16, not the 1-byte panel checksum
         if len(packet) > 3 and packet[1] == 0xF4:
-            return f4_checksum(packet[1:-3]) == (packet[-3], packet[-2])
+            return self.f4_checksum(packet[1:-3]) == (packet[-3], packet[-2])
 
         # Check the CRC
         if packet[-2:-1] == self._calculateCRC(packet[1:-2]):
@@ -95,3 +82,14 @@ class MyChecksumCalc:
             checksum = 0x00
         # log.debug("[_calculateCRC] Calculating for: {toString(msg)}     calculated CRC is: {toString(bytearray([checksum]))}")
         return bytearray([checksum])
+
+    def f4_checksum(self, body: bytearray) -> tuple[int, int]:
+        """CRC-16 for F4 PIR-image messages (XMODEM poly 0x1021, plus a 0xE700 xorout for F4-07 acks)."""
+        crc = 0
+        for by in body:
+            crc ^= by << 8
+            for _ in range(8):
+                crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
+        if len(body) > 1 and body[1] == 0x07:
+            crc ^= 0xE700
+        return crc & 0xFF, (crc >> 8) & 0xFF

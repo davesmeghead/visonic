@@ -88,16 +88,6 @@ class ProcessFlag(Enum):
     B0 = auto()
     DOWNLOAD = auto()
 
-def _f4_checksum(body: bytearray) -> tuple[int, int]:
-    crc = 0
-    for by in body:
-        crc ^= by << 8
-        for _ in range(8):
-            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
-    if len(body) > 1 and body[1] == 0x07:
-        crc ^= 0xE700
-    return crc & 0xFF, (crc >> 8) & 0xFF
-
 class DecodeMessage(NamedTuple):
     """Used in decoding messages from the panel i.e. _handle_msgtype_XX()."""
     flag : ProcessFlag | bool
@@ -1099,11 +1089,11 @@ class MessageHandling(MessageHandlingB0Data):
                         if not _offload_f4_ack and self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD]:
                             # Assume that we are managing the interaction/protocol with the panel
                             _body = f'f4 07 00 01 04 {ir.zone:>02} {hexify(izc.unique_id):>02} {hexify(ir.image_id):>02} 00'
-                            _c1, _c2 = _f4_checksum(convert_bytearray(_body))
+                            _c1, _c2 = self.f4_checksum(convert_bytearray(_body))
                             self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
 
                             _body = f'f4 10 00 01 04 00 {ir.zone:>02} {hexify(izc.unique_id):>02} {hexify(ir.image_id):>02}'
-                            _c1, _c2 = _f4_checksum(convert_bytearray(_body))
+                            _c1, _c2 = self.f4_checksum(convert_bytearray(_body))
                             self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
 
                         if ir.lastimage:
