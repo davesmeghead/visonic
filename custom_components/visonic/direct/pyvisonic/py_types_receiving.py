@@ -74,13 +74,15 @@ pmReceiveMsg: Final[dict[Receive, PanelCallBack | dict[int, PanelCallBack]]] = {
     Receive.PROXY_COMMAND      : PanelCallBack(  7, False, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Proxy Cmd Ringback"),   # VISPROX : Interaction with Visonic Proxy, this is a command that has ringback so something is wrong
     # The F1 message needs to be ignored, I have no idea what it is but the crc is always wrong and only Powermax+ panels seem to send it. Assume a minimum length of 9, a variable length and ignore the checksum calculation.
     Receive.UNKNOWN_F1         : PanelCallBack(  9,  True,  True,  0, 0, ChecksumType.IGNORE,      RecvDebugC,                          "Unknown F1" ),          # Ignore checksum on all F1 messages
-    # The F4 message comes in varying lengths. It is the image data from a PIR camera. Header/data (03/05) are
-    # validated with the F4 CRC (see _validatePDU); footer/unknown (01/15) still skip the check.
+    # The F4 message comes in varying lengths. It is the image data from a PIR camera. The image path (01/03/05) is
+    # NOT checksum gated: this panel emits valid frames carrying a CRC that doesn't match the bytes, so gating drops
+    # good data. A genuinely corrupt image is caught downstream when it fails to decode. 15 is the handshake, so it
+    # is still checked. Verified against a real Powerlink on the wire, see PR #255.
     Receive.IMAGE_DATA : {
         0x01 : PanelCallBack(  9, False, False,  0, 0, ChecksumType.IGNORE    , RecvDebugI, "Image Footer" ),
-        0x03 : PanelCallBack(  9, False,  True,  5, 0, ChecksumType.IMAGE_DATA, RecvDebugI, "Image Header" ),        # Image Header (checked with the F4 CRC)
-        0x05 : PanelCallBack(  9, False,  True,  5, 0, ChecksumType.IMAGE_DATA, RecvDebugI, "Image Data" ),          # Image Data Sequence (checked with the F4 CRC)
-        0x15 : PanelCallBack( 13, False, False,  0, 0, ChecksumType.IGNORE    , RecvDebugI, "Image Unknown" )
+        0x03 : PanelCallBack(  9, False,  True,  5, 0, ChecksumType.IGNORE    , RecvDebugI, "Image Header" ),        # 32/33 passed on a clean-wire capture; the one failure was on an otherwise good image
+        0x05 : PanelCallBack(  9, False,  True,  5, 0, ChecksumType.IGNORE    , RecvDebugI, "Image Data" ),          # only 309/699 passed; gating drops chunks incl the JPEG SOF/SOS markers
+        0x15 : PanelCallBack( 13, False, False,  0, 0, ChecksumType.IMAGE_DATA, RecvDebugI, "Image Keep-Alive" )     # handshake, not image payload - validates cleanly
     }
 }
 
