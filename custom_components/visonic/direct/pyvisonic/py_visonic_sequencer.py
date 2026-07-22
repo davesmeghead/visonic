@@ -1441,7 +1441,12 @@ class Sequencer(Despatcher):
                     if self.is_power_master() and self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]: # not AlPanelMode.MINIMAL_ONLY
                         tnow = get_local_time()
                         diff = (tnow - _last_b0_wanted_request_time).total_seconds()
-                        if self._is_send_queue_empty() and diff >= 10: # There must be at least 10 seconds between subsequent requests
+                        if self.image_manager.isSequenceActive():
+                            # A Camera PIR download is underway. Sending B0 requests part way through makes the
+                            # panel break off the F4 stream and answer the B0 instead, so hold off. B0_Wanted
+                            # accumulates and goes out once the images have finished.
+                            log.debug("[_sequencer] Deferring B0 requests, camera image download in progress")
+                        elif self._is_send_queue_empty() and diff >= 10: # There must be at least 10 seconds between subsequent requests
                             if len(self.B0_Waiting) > 0:  # have we received the data that we last asked for last time
                                 log.debug(f"[_sequencer] ****************************** Waiting For B0_Waiting **************************** {toStringList(self.B0_Waiting)}")
                                 self.B0_Wanted.update(self.B0_Waiting) # ask again for them

@@ -127,6 +127,7 @@ class AlImageManager:
         self._current_zone: int | None = None             # when not None then building an image for this zone number
         self._current_id: int | None = None
         self._current_image: ImageRecord = None           # The current image being built
+        self._last_activity: datetime | None = None       # last time any F4 image data arrived, for isSequenceActive
 
     def _reset_current(self):
         """Reset the in-progress image build state."""
@@ -138,6 +139,22 @@ class AlImageManager:
         """Terminate the image creation."""
         self._reset_current()
         self.last_image = None
+        self._last_activity = None
+
+    def isSequenceActive(self, seconds: int = 15) -> bool:
+        """Is a camera image download underway, including the gaps between images.
+
+        hasStartedSequence() only covers a single image - _reset_current() runs as each
+        one completes - so it reads False during the several second gap before the panel
+        starts the next. This spans the whole sequence.
+
+        Deliberately a time window and not a flag: a download that is abandoned mid way
+        (panel stops sending, integration restarts) must not suppress the caller forever,
+        so it self clears `seconds` after the last F4 message.
+        """
+        if self._last_activity is None:
+            return False
+        return (get_utc_time() - self._last_activity) < timedelta(seconds=seconds)
 
     def isImageComplete(self) -> bool:
         """Is the image complete."""
@@ -186,6 +203,7 @@ class AlImageManager:
         self._current_zone = zone
         self._current_id = image_id
         self._current_image = image_record
+        self._last_activity = get_utc_time()
         self.last_image = None
 
         log.debug(f'[AlImageManager]  setCurrent zone = {self._current_zone}    unique_id = {hex(unique_id)}    image_id = {image_id}')
@@ -196,6 +214,7 @@ class AlImageManager:
         """Add image data to the current image record."""
         if not self._current_image:
             return False
+        self._last_activity = get_utc_time()
         insequence = self._current_image.addBufferData(databuffer, sequence)
         if self._current_image.isImageComplete():
             self.last_image = self._current_image
