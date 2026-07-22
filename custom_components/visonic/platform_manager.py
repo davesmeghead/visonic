@@ -168,13 +168,15 @@ class PlatformManager:
         self._device_created_set : set[int] = set()
         # A set of sensor IDs that are PIR/Camera and have an image
         self._image_created_set: set[int] = set()
-        # Rendered animated GIF bytes served to the image entity, per camera sensor id
+        # Latest JPEG frame served to the image entity, per camera sensor id
         self._sensor_jpeg: dict[int, bytearray] = {}
         # Buffered JPEG frames of the current capture, and per-sensor sequence bookkeeping
         self._sensor_frames: dict[int, list[bytes]] = {}
         self._sensor_seq_name: dict[int, str] = {}
         self._sensor_last_frame: dict[int, float] = {}
         self._sensor_frame_no: dict[int, int] = {}
+        # The capture's audio clip (the panel sends a RIFF/WAVE clip as the last "image" of a sequence)
+        self._sensor_audio: dict[int, bytes] = {}
         self._image_activity: float = 0.0
         self._image_download_start: float = 0.0
         self._image_queue: deque[tuple[int, str | None]] = deque()
@@ -679,10 +681,15 @@ class PlatformManager:
             return True
         return False
 
+    @staticmethod
+    def _is_wav(data: bytes) -> bool:
+        """True if the buffer is a RIFF/WAVE clip rather than a JPEG frame."""
+        return len(data) > 12 and data[:4] == b"RIFF" and data[8:12] == b"WAVE"
+
     def set_sensor_jpeg(self, sensor_id: int, data: bytearray | None) -> None:
-        """Buffer a camera frame and render the capture to an animated GIF."""
+        """Buffer a camera frame (or the capture's audio clip) and render the capture to MP4."""
         if not data:
-            for store in (self._sensor_frames, self._sensor_seq_name, self._sensor_last_frame, self._sensor_frame_no, self._sensor_jpeg):
+            for store in (self._sensor_frames, self._sensor_seq_name, self._sensor_last_frame, self._sensor_frame_no, self._sensor_jpeg, self._sensor_audio):
                 store.pop(sensor_id, None)
             return
         now = self._mark_image_activity()
@@ -692,6 +699,19 @@ class PlatformManager:
             self._sensor_frames[sensor_id] = []
             self._sensor_seq_name[sensor_id] = time.strftime("%Y%m%d_%H%M%S")
             self._sensor_frame_no[sensor_id] = 0
+            self._sensor_audio.pop(sensor_id, None)
+        # The panel closes a capture with an IMA ADPCM WAV clip (arrives as the last "image" of the
+        # sequence). It is not a frame, so keep it aside and re-render so the MP4 gains its audio.
+        if self._is_wav(bytes(data)):
+            self._sensor_audio[sensor_id] = bytes(data)
+            frames = self._sensor_frames.get(sensor_id) or []
+            if frames:
+                self.hass.add_job(
+                    self._render_sensor_media, sensor_id, list(frames), frames[-1],
+                    self._sensor_seq_name[sensor_id], self._sensor_frame_no[sensor_id],
+                    self._camera_folder(sensor_id), bytes(data),
+                )
+            return
         frames = self._sensor_frames[sensor_id]
         if frames and self.entry.options.get(CONF_IMAGE_SINGLE_FRAME, False):
             return
@@ -706,7 +726,8 @@ class PlatformManager:
         # registry lookups.
         self.hass.add_job(
             self._render_sensor_media, sensor_id, list(frames), new_frame,
-            self._sensor_seq_name[sensor_id], frame_no, self._camera_folder(sensor_id)
+            self._sensor_seq_name[sensor_id], frame_no, self._camera_folder(sensor_id),
+            self._sensor_audio.get(sensor_id),
         )
 
     def _camera_folder(self, sensor_id: int) -> str:
@@ -721,15 +742,29 @@ class PlatformManager:
             pass
         return f"zone{sensor_id}"
 
-    def _render_sensor_media(self, sensor_id: int, frames: list[bytes], frame: bytes, seq_name: str, frame_no: int, cam_folder: str) -> None:
-        """Assemble the buffered frames into an animated GIF, and save the GIF + this frame (executor thread)."""
-        import io
+    @staticmethod
+    def _ffmpeg_binary() -> str | None:
+        """Locate an ffmpeg binary; HA ships one but it is not always on PATH."""
+        import shutil
 
-        try:
-            from PIL import Image
-        except ImportError:
-            self._sensor_jpeg[sensor_id] = bytearray(frame)
-            return
+        if found := shutil.which("ffmpeg"):
+            return found
+        for candidate in ("/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/opt/ffmpeg/ffmpeg"):
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+        return None
+
+    def _render_sensor_media(self, sensor_id: int, frames: list[bytes], frame: bytes, seq_name: str, frame_no: int, cam_folder: str, audio: bytes | None = None) -> None:
+        """Save this frame plus the capture's audio, and mux the sequence into an MP4 (executor thread).
+
+        A capture is a run of JPEG frames closed by an IMA ADPCM WAV clip, so the natural artefact is
+        a video with sound. The clip is built when the audio arrives (the panel's own end-of-capture
+        marker) so ffmpeg runs once per capture rather than once per frame. Falls back to an animated
+        GIF where ffmpeg is unavailable.
+        """
+        import io
+        import subprocess
+
         configured = self.entry.options.get(CONF_IMAGE_MEDIA_PATH, DEFAULT_IMAGE_MEDIA_PATH)
         if os.path.isabs(configured):
             base = configured
@@ -742,12 +777,48 @@ class PlatformManager:
         # Per-camera sub-folder so captures are browsable by camera in the media browser.
         directory = os.path.join(base, cam_folder)
         stem = f"panel{self.panel_ident}_zone{sensor_id}_{seq_name}"
+        # The image entity shows the latest still; the clip itself lands in the media browser.
+        self._sensor_jpeg[sensor_id] = bytearray(frame)
         try:
             os.makedirs(directory, exist_ok=True)
             with open(os.path.join(directory, f"{stem}_frame{frame_no:02d}.jpg"), "wb") as handle:
                 handle.write(frame)
         except OSError as ex:
             self.logger.logstate_warning("Unable to save camera frame for zone %s: %s", sensor_id, ex)
+            return
+        wav_path = os.path.join(directory, f"{stem}.wav")
+        if audio:
+            try:
+                with open(wav_path, "wb") as handle:
+                    handle.write(audio)
+            except OSError as ex:
+                self.logger.logstate_warning("Unable to save camera audio for zone %s: %s", sensor_id, ex)
+        # Build the clip once the panel closes the capture with its audio, and only if there is
+        # more than a single still to animate.
+        if not audio or len(frames) < 2:
+            return
+        if ffmpeg := self._ffmpeg_binary():
+            fps = max(1, round(1000 / IMAGE_FRAME_DURATION_MS))
+            cmd = [ffmpeg, "-y", "-loglevel", "error", "-framerate", str(fps),
+                   "-i", os.path.join(directory, f"{stem}_frame%02d.jpg")]
+            if os.path.isfile(wav_path):
+                cmd += ["-i", wav_path, "-c:a", "aac", "-shortest"]
+            cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", os.path.join(directory, f"{stem}.mp4")]
+            try:
+                completed = subprocess.run(cmd, capture_output=True, timeout=120, check=False)  # noqa: S603
+                if completed.returncode == 0:
+                    return
+                self.logger.logstate_warning(
+                    "ffmpeg could not build the clip for zone %s: %s",
+                    sensor_id, completed.stderr.decode(errors="replace").strip()[:200],
+                )
+            except (OSError, subprocess.SubprocessError) as ex:
+                self.logger.logstate_warning("Unable to run ffmpeg for zone %s: %s", sensor_id, ex)
+        # No usable ffmpeg: fall back to an animated GIF so a clip is still produced (without audio).
+        try:
+            from PIL import Image
+        except ImportError:
+            return
         try:
             images = []
             for buffered in frames:
@@ -768,10 +839,8 @@ class PlatformManager:
                 duration=IMAGE_FRAME_DURATION_MS,
                 loop=0,
             )
-            gif = buffer.getvalue()
-            self._sensor_jpeg[sensor_id] = bytearray(gif)
             with open(os.path.join(directory, f"{stem}.gif"), "wb") as handle:
-                handle.write(gif)
+                handle.write(buffer.getvalue())
         except (OSError, ValueError) as ex:
             self.logger.logstate_warning("Unable to render/save camera clip for zone %s: %s", sensor_id, ex)
 

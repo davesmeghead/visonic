@@ -19,6 +19,19 @@ from homeassistant.core import HomeAssistant
 from .const import CONF_IMAGE_MEDIA_PATH, DEFAULT_IMAGE_MEDIA_PATH, DOMAIN
 
 _IMAGE_EXT = (".gif", ".jpg", ".jpeg", ".png")
+_VIDEO_EXT = (".mp4",)
+_AUDIO_EXT = (".wav",)
+_MEDIA_EXT = _IMAGE_EXT + _VIDEO_EXT + _AUDIO_EXT
+
+
+def _media_class(name: str) -> MediaClass:
+    """Media class for a capture file: the clip, its audio, or a still."""
+    lowered = name.lower()
+    if lowered.endswith(_VIDEO_EXT):
+        return MediaClass.VIDEO
+    if lowered.endswith(_AUDIO_EXT):
+        return MediaClass.MUSIC
+    return MediaClass.IMAGE
 
 
 async def async_get_media_source(hass: HomeAssistant) -> MediaSource:
@@ -82,13 +95,13 @@ class VisonicMediaSource(MediaSource):
                             children_media_class=MediaClass.IMAGE,
                         )
                     )
-                elif name.lower().endswith(_IMAGE_EXT):
+                elif name.lower().endswith(_MEDIA_EXT):
                     children.append(
                         BrowseMediaSource(
                             domain=DOMAIN,
                             identifier=child_ident,
-                            media_class=MediaClass.IMAGE,
-                            media_content_type=mimetypes.guess_type(name)[0] or "image/gif",
+                            media_class=_media_class(name),
+                            media_content_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
                             title=name,
                             can_play=True,
                             can_expand=False,

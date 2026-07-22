@@ -69,7 +69,8 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         self._attr_image_last_retrieved = None
         self._cached_image = None
         # self._attr_image_url = None
-        self._attr_content_type = "image/gif"
+        # The entity shows the latest still; the capture's clip (MP4 with audio) is in the media browser
+        self._attr_content_type = "image/jpeg"
         self._image_data = None
         self._image_data_time = None
         self._attr_device_info = DeviceInfo(

@@ -1043,15 +1043,23 @@ class MessageHandling(MessageHandlingB0Data):
                         # get time now to store image
                         t = get_local_time()
 
+                        # The panel sends 11 "images" per capture: 1 to 10 are JPEG frames, and the 11th
+                        # (marked as image 0) is not an image at all, it is the capture's audio - a RIFF/WAVE
+                        # clip, IMA ADPCM mono 8kHz. It used to be logged as a corrupt image because it was
+                        # handed to PIL. Identify it up front instead so it can be kept.
+                        is_audio = (
+                            ir.buffer is not None
+                            and len(ir.buffer) > 12
+                            and bytes(ir.buffer[:4]) == b"RIFF"
+                            and bytes(ir.buffer[8:12]) == b"WAVE"
+                        )
                         # Assume a corrupt image
                         width = 100000
                         height = 100000
-                        # Get the width and height of the image. I assume that if PIL can't load the image then it is corrupt.
-                        #   The panel always sends 11 images:
-                        #           images 1 to 10 are sent first in order and are always good,
-                        #           image 11 (marked as image 0) is always corrupt and has lots more bytes than the other 10
-                        #                I wonder if its a different image/video format --> But the PIL library doesn't recognise it
-                        if ir.buffer is not None:
+                        if is_audio:
+                            log.debug(f"[handle_msgtypeF4]           Got Audio clip for sensor {ir.zone}, {len(ir.buffer)} bytes (RIFF/WAVE)")
+                        elif ir.buffer is not None:
+                            # Get the width and height of the image. I assume that if PIL can't load the image then it is corrupt.
                             try:
                                 img = Image.open(io.BytesIO(ir.buffer))
                                 width, height = img.size
@@ -1071,8 +1079,8 @@ class MessageHandling(MessageHandlingB0Data):
                         #    f1.write(buffer)
                         #    f1.close()
 
-                        if ir.zone - 1 in self.SensorList and width <= 1024 and height <= 768:
-                            log.debug(f"[handle_msgtypeF4]           Saving Image sensor {ir.zone}   width {width}    height {height}")
+                        if ir.zone - 1 in self.SensorList and (is_audio or (width <= 1024 and height <= 768)):
+                            log.debug(f"[handle_msgtypeF4]           Saving {'Audio' if is_audio else 'Image'} sensor {ir.zone}   width {width}    height {height}")
                             self.SensorList[ir.zone - 1].jpg_data = ir.buffer
                             self.SensorList[ir.zone - 1].jpg_timestamp = t
                             self.SensorList[ir.zone - 1].has_jpg = True
