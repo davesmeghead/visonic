@@ -140,9 +140,6 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
         #self.log = vloggerclass(panel_id=panel_id)
         self.suspendAllOperations = False
 
-        # install the packet callback handler
-        self._packet_callback = self._processReceivedPacket
-
         # Set these from the panel config dictionary (that may not have all settings in)
         self.ForceStandardMode : bool = force_standard_mode        # INTERFACE : Get user variable from HA to force standard mode or try for PowerLink
         self.DisableAllCommands : bool = disable_all_commands       # INTERFACE : Get user variable from HA to allow or disable all commands to the panel
@@ -308,8 +305,9 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
 
     def _is_send_queue_empty(self, priority : MessagePriority | None = None) -> bool:
         """Is the send message queue empty (at the given priority level)."""
-        if priority is None or self._send_queue.empty():
-            return self._send_queue.empty()
+        sq_empty = self._send_queue.empty()
+        if priority is None or sq_empty:
+            return sq_empty
         # Here when the queue is not empty and priority is set to something
         item_priority, _ = self._send_queue.peek_nowait()
         return item_priority > priority
@@ -427,7 +425,7 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
             e = VisonicListEntry(command=message)
             self.add_message_to_send_queue(message = e, priority = MessagePriority.ACK)
 
-        def processReceivedPacket(ackneeded : bool, debugp : DebugLevel, packet : bytearray, msg: str):
+        def process_received_message(ackneeded : bool, debugp : DebugLevel, packet : bytearray, msg: str):
             """Decode the received packet and call the message handler."""
 
             def statelist():
@@ -453,9 +451,9 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
                     self.pmExpectedResponse.remove(msg_type)
 
             if packet is not None and debugp == DebugLevel.FULL:
-                log.debug(f"[processReceivedPacket] Received {msg}   raw packet {toString(packet)}          response list {[hex(no).upper() for no in self.pmExpectedResponse]}")
+                log.debug(f"[process_received_message] Received {msg}   raw packet {toString(packet)}          response list {[hex(no).upper() for no in self.pmExpectedResponse]}")
             elif packet is not None and debugp == DebugLevel.CMD:
-                log.debug(f"[processReceivedPacket] Received {msg}   raw packet {toString(packet[1:4])}          response list {[hex(no).upper() for no in self.pmExpectedResponse]}")
+                log.debug(f"[process_received_message] Received {msg}   raw packet {toString(packet[1:4])}          response list {[hex(no).upper() for no in self.pmExpectedResponse]}")
 
             if self.suspendAllOperations:
                 # log.debug('[Disconnection] Suspended. Sorry but all operations have been suspended, please recreate connection')
@@ -470,28 +468,27 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
             self._last_packet = packet
 
             if self._last_packet_counter == SAME_PACKET_ERROR:
-                log.debug(f"[processReceivedPacket] Had the same packet for {SAME_PACKET_ERROR} times in a row : {toString(packet)}")
+                log.debug(f"[process_received_message] Had the same packet for {SAME_PACKET_ERROR} times in a row : {toString(packet)}")
                 self._report_problem(AlTerminationType.SAME_PACKET_ERROR)
                 return
 
             # Handle the message
-            if self._packet_callback is not None:
-                # Record all main variables to see if the message content changes any
-                old_state = statelist() # make it a function so if it's changed it remains consistent
-                old_power_master = self.PowerMaster
+            # Record all main variables to see if the message content changes any
+            old_state = statelist() # make it a function so if it's changed it remains consistent
+            old_power_master = self.PowerMaster
 
-                #process_ab         = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]
-                process_ab          = not self.pmDownloadMode and not self.ForceStandardMode and self.PanelMode not in [AlPanelMode.POWERLINK_BRIDGED]
-                process_normal_data = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.MINIMAL_ONLY, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]
-                process_b0          = self.EnableB0ReceiveProcessing or process_normal_data
+            #process_ab         = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]
+            process_ab          = not self.pmDownloadMode and not self.ForceStandardMode and self.PanelMode not in [AlPanelMode.POWERLINK_BRIDGED]
+            process_normal_data = not self.pmDownloadMode and self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.MINIMAL_ONLY, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]
+            process_b0          = self.EnableB0ReceiveProcessing or process_normal_data
 
-                pushchange = self._packet_callback(packet, process_ab, process_normal_data, process_b0, self.pmDownloadMode)
+            pushchange = self._processReceivedPacket(packet, process_ab, process_normal_data, process_b0, self.pmDownloadMode)
 
-                if self.send_panel_event_data(): # sent at least 1 event so no need to send PUSH_CHANGE
-                    pushchange = False
+            if self.send_panel_event_data(): # sent at least 1 event so no need to send PUSH_CHANGE
+                pushchange = False
 
-                if pushchange or old_power_master != self.PowerMaster or old_state != statelist():   # make statelist a function so if it's changed it remains consistent
-                    self.send_panel_update(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
+            if pushchange or old_power_master != self.PowerMaster or old_state != statelist():   # make statelist a function so if it's changed it remains consistent
+                self.send_panel_update(AlCondition.PUSH_CHANGE)  # push through a panel update to the HA Frontend
 
         if self.suspendAllOperations:
             return
@@ -565,7 +562,7 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
             if isinstance(self.pmCurrentPDU, PanelCallBack) and self._validatePDU(self.pmCurrentPDU.checksum, self.ReceiveData):  # if the message passes CRC checks then process it
                 # We've got a validated message
                 #log.debug(f"[data receiver] Validated PDU: Got Validated PDU type {hexify(int(self.ReceiveData[1]))}   data {toString(self.ReceiveData)}")
-                processReceivedPacket(ackneeded=self.pmCurrentPDU.ackneeded, debugp=self.pmCurrentPDU.debugprint, msg=self.pmCurrentPDU.msg, packet=self.ReceiveData)
+                process_received_message(ackneeded=self.pmCurrentPDU.ackneeded, debugp=self.pmCurrentPDU.debugprint, msg=self.pmCurrentPDU.msg, packet=self.ReceiveData)
                 self._reset_message_data()
 
         elif (self.pmIncomingPduLen == 0 and data == Packet.FOOTER) or (pdu_len + 1 == self.pmIncomingPduLen): # postamble (the +1 is to include the current data byte)
@@ -580,7 +577,7 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
                     log.warning(f"[data receiver] Received Valid but Unknown PDU {hex(msg_type)}")
                     sendAck()  # assume we need to send an ack for an unknown message
                 else:  # Process the received known message
-                    processReceivedPacket(ackneeded=self.pmCurrentPDU.ackneeded, debugp=self.pmCurrentPDU.debugprint, msg=self.pmCurrentPDU.msg, packet=self.ReceiveData)
+                    process_received_message(ackneeded=self.pmCurrentPDU.ackneeded, debugp=self.pmCurrentPDU.debugprint, msg=self.pmCurrentPDU.msg, packet=self.ReceiveData)
                 self._reset_message_data()
             else:
                 # CRC check failed, create a message for the log file and process it as a failure
@@ -643,11 +640,17 @@ class ProtocolBase(AlPanelInterface, MyChecksumCalc):
             self._reset_message_data()
         # log.debug(f"[data receiver] Building PDU {toString(self.ReceiveData)}")
 
-    def add_message_to_send_queue(self, message : Send | bytearray | VisonicListEntry, priority : MessagePriority = MessagePriority.NORMAL, options : list | None = None, response : list | None = None):
+    def add_message_to_send_queue(
+        self,
+        message : Send | bytearray | VisonicListEntry,
+        priority : MessagePriority = MessagePriority.NORMAL,
+        options : list[tuple[int,int|bytearray]] | None = None,
+        response : list[Receive] | None = None
+    ):
         """Add a message to the send queue, the despatcher manages the actual sending and the timing."""
         if message is not None:
             if isinstance(message, Send):
-                m = pmSendMsg[message]
+                m = pmSendMsg.get(message)
                 assert m is not None
                 e = VisonicListEntry(command = m, response = response, options = [] if options is None else options)
             elif isinstance(message, bytearray):

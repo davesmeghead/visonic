@@ -321,7 +321,7 @@ class Receive(IntEnum):
     LOOPBACK_TEST     = 0x0B
     EXIT_DOWNLOAD     = 0x0F
     UNKNOWN_1F        = 0x1F
-    NOT_USED          = 0x22
+    UNKNOWN_22        = 0x22
     DOWNLOAD_RETRY    = 0x25
     DOWNLOAD_SETTINGS = 0x33
     PANEL_INFO        = 0x3C

@@ -55,7 +55,7 @@ pmReceiveMsg: Final[dict[Receive, PanelCallBack | dict[int, PanelCallBack]]] = {
     Receive.LOOPBACK_TEST      : PanelCallBack(  0, False, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Loopback Test" ),       # THE PANEL DOES NOT SEND THIS. THIS IS USED FOR A LOOP BACK TEST
     Receive.EXIT_DOWNLOAD      : PanelCallBack(  0,  True, False,  0, 0, ChecksumType.NORMAL,      RecvDebugC,                          "Exit Download" ),       # The panel may send this during download to tell us to exit download
     Receive.UNKNOWN_1F         : PanelCallBack(  0,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Do not know what this is" ), # My Powermaster 30 sent this
-    Receive.NOT_USED           : PanelCallBack( 14,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Not Used" ),            # 14 Panel Info (older visonic powermax panels so not used by this integration)
+    Receive.UNKNOWN_22         : PanelCallBack( 14,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Not Used" ),            # 14 Panel Info (older visonic powermax panels so not used by this integration)
     Receive.DOWNLOAD_RETRY     : PanelCallBack( 14,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.CMD  if OBFUS else RecvDebugD, "Download Retry" ),      # 14 Download Retry
     Receive.DOWNLOAD_SETTINGS  : PanelCallBack( 14,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.NONE if OBFUS else RecvDebugD, "Download Settings" ),   # 14 Download Settings
     Receive.PANEL_INFO         : PanelCallBack( 14,  True, False,  0, 0, ChecksumType.NORMAL, DebugLevel.FULL,                          "Panel Info" ),          # 14 Panel Info
@@ -79,10 +79,11 @@ pmReceiveMsg: Final[dict[Receive, PanelCallBack | dict[int, PanelCallBack]]] = {
     # good data. A genuinely corrupt image is caught downstream when it fails to decode. 15 is the handshake, so it
     # is still checked. Verified against a real Powerlink on the wire, see PR #255.
     Receive.IMAGE_DATA : {
-        0x01 : PanelCallBack(  9, False, False,  0, 0, ChecksumType.IGNORE    , RecvDebugI, "Panel Ack" ),            # not an image footer - a constant 0d f4 01 00 00 00 e4 c0 0a the panel sends after F4-10/F4-05/AB/F4-03 alike
+        0x01 : PanelCallBack(  9, False, False,  0, 0, ChecksumType.IGNORE    , RecvDebugI, "Image Ack" ),           # not an image footer - a constant 0d f4 01 00 00 00 e4 c0 0a the panel sends after F4-10/F4-05/AB/F4-03 alike
         0x03 : PanelCallBack(  9, False,  True,  5, 0, ChecksumType.IGNORE    , RecvDebugI, "Image Header" ),        # 32/33 passed on a clean-wire capture; the one failure was on an otherwise good image
         0x05 : PanelCallBack(  9, False,  True,  5, 0, ChecksumType.IGNORE    , RecvDebugI, "Image Data" ),          # only 309/699 passed; gating drops chunks incl the JPEG SOF/SOS markers
-        0x15 : PanelCallBack( 13, False, False,  0, 0, ChecksumType.IMAGE_DATA, RecvDebugI, "Image Keep-Alive" )     # handshake, not image payload - validates cleanly
+        #0x15 : PanelCallBack( 13, False, False,  0, 0, ChecksumType.IMAGE_DATA, RecvDebugI, "Image Keep-Alive" ),    # handshake, not image payload - validates cleanly
+        0x15 : PanelCallBack( 12, False, False,  0, 0, ChecksumType.IMAGE_DATA, RecvDebugI, "Image Keep-Alive" ),    # handshake, not image payload - validates cleanly
     }
 }
 

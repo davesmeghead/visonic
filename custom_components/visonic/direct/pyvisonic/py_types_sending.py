@@ -39,7 +39,7 @@ SendDebugI = DebugLevel.NONE if OBFUS else DebugLevel.FULL  # Debug sending imag
 
 #VisonicCommand = collections.namedtuple('VisonicCommand', 'data replytype waitforack download debugprint waittime msg')
 pmSendMsg: dict[Any, VisonicCommand] = {
-    #                        data                                                                 replytype            waitforack download   debugprint waittime   msg
+    #                        data                                                                              replytype            waitforack download   debugprint waittime   msg
     # Quick command codes to start and stop download/powerlink are a single value
     Send.BUMP         : VisonicCommand(convert_bytearray('09')                                          , [Receive.PANEL_INFO]        , False, False,      SendDebugM, 0.5, "Bump Panel Data From Panel" ),  # Bump to try to get the panel to send a 3C
     Send.START        : VisonicCommand(convert_bytearray('0A')                                          , [Receive.LOOPBACK_TEST]     , False, False,      SendDebugM, 0.0, "Start" ),                          # waiting for STOP from panel for download complete
@@ -76,7 +76,8 @@ pmSendMsg: dict[Any, VisonicCommand] = {
     # Send.IMAGE_FB     : VisonicCommand(convert_bytearray('AB 0E 00 17 1E 00 00 03 01 05 00 43')         , None                        ,  True, False,      SendDebugM, 0.0, "PowerMaster after jpg feedback" ),
 
     Send.SWITCH_NAMES : VisonicCommand(convert_bytearray('AC 00 00 00 00 00 00 00 00 00 00 43')         , [Receive.SWITCH_NAMES]      , False, False,      SendDebugM, 0.0, "Requesting Switch Names" ),
-    Send.GET_IMAGE    : VisonicCommand(convert_bytearray('AD 99 99 0A FF FF 00 00 00 00 00 43')         , [Receive.IMAGE_MGMT]        ,  True, False,      SendDebugI, 0.0, "Requesting JPG Image" ),           # The first 99 might be the number of images. Request a jpg image, second 99 is the zone.
+    #Send.GET_IMAGE    : VisonicCommand(convert_bytearray('AD 99 99 0A FF FF 00 00 00 00 00 43')         , [Receive.IMAGE_MGMT]        ,  True, False,      SendDebugI, 0.0, "Requesting JPG Image" ),           #
+    Send.GET_IMAGE    : VisonicCommand(convert_bytearray('AD 0B 99 99 FF FF 00 00 00 00 00 43')         , [Receive.IMAGE_MGMT]        ,  True, False,      SendDebugI, 0.0, "Requesting JPG Image" ),           # Request a jpg image, first 99 is the zone, the second 99 is the number of images.
     # DISCONNECT_MESSAGE = "0d ad 0a 00 00 00 00 00 00 00 00 00 43 05 0a"
 
     # Acknowledges

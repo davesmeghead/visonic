@@ -192,6 +192,7 @@ class AlImageManager:
     def setCurrent(self, zone, unique_id, image_id, size, sequence, lastimage, totalimages) -> bool:
         """Start a new (current) image record."""
         if self.hasStartedSequence() or zone not in self.ImageZone:
+            log.debug(f'[AlImageManager]  Setup not successful for zone = {self._current_zone}    unique_id = {hex(unique_id)}    image_id = {image_id}')
             return False
 
         # Set or update the image zone parameters

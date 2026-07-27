@@ -103,6 +103,9 @@ class Sequencer(Despatcher):
         self._last_send_download_eprom = get_utc_time() - timedelta(seconds=DOWNLOAD_RETRY_DELAY + 100)
         self._first_send_download_eprom = get_utc_time()
         self._paused_state_save = AlPanelMode.UNKNOWN
+        self.image_manager: AlImageManager = AlImageManager()
+        self.ignoreF4DataMessages : bool = True
+        self.image_ignore: set[int] = set()
 
     def _reset_full(self):
         """Reset all non-permanent variables."""
@@ -155,8 +158,8 @@ class Sequencer(Despatcher):
         # Current F4 jpg image
         #    Leave these here for the time being as they might be needed in the sequencer
         self.image_manager: AlImageManager = AlImageManager()
-        self.ignoreF4DataMessages : bool = False
-        self.image_ignore = set()
+        self.ignoreF4DataMessages : bool = True
+        self.image_ignore: set[int] = set()
 
     def _shutdown(self):
         """Shutdown the connection to the panel."""

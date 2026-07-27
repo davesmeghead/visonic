@@ -291,8 +291,9 @@ class VisonicProtocol(MessageHandling):
         if device - 1 in self.SensorList:
             if device in self.image_ignore:
                 return AlCommandStatus.FAIL_INVALID_STATE
+            count = 3
             if self.image_manager.create(device, count):   # This makes sure that there isn't an ongoing image retrieval for this sensor
-                self.add_message_to_send_queue(Send.GET_IMAGE, options=[ [1, count], [2, device] ])
+                self.add_message_to_send_queue(Send.GET_IMAGE, options=[ [3, count], [2, device] ])
                 return AlCommandStatus.SUCCESS
         return AlCommandStatus.FAIL_ENTITY_INCORRECT
 

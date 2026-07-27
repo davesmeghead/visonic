@@ -77,9 +77,6 @@ powermaster_devices: dict[str, int] = {
 ###################################################################################
 ##########################  Data Driven Message Decode ############################
 ###################################################################################
-PAYLOAD_START = 2
-CHECKSUM_AND_FOOTER_SIZE = 2
-
 
 class ProcessFlag(Enum):
     """Used for the 4 boolean flags."""
@@ -92,6 +89,8 @@ class DecodeMessage(NamedTuple):
     """Used in decoding messages from the panel i.e. _handle_msgtype_XX()."""
     flag : ProcessFlag | bool
     func : Callable[[bytearray], bool | None] | None
+    payload_start: int    # All payloads currently start at offset 2
+    payload_end: int      # All payloads currently end at offset -2, except for F4 which is -3 (footer and 2 checksum bytes)
     pushchange : bool
     message : str | None
 
@@ -104,31 +103,31 @@ class MessageHandling(MessageHandlingB0Data):
 
         # Create the received message handler dict. The basic protocol messages are always processed.
         self.decode_message_handlers: dict[Receive, DecodeMessage] = {
-            Receive.ACKNOWLEDGE       : DecodeMessage(                 True , self._handle_msgtype_02, False, None ),  # ACK
-            Receive.TIMEOUT           : DecodeMessage(                 True , self._handle_msgtype_06, False, None ),  # Timeout
-            Receive.UNKNOWN_07        : DecodeMessage(                 True , self._handle_msgtype_07, False, None ),  # No idea what this means
-            Receive.ACCESS_DENIED     : DecodeMessage(                 True , self._handle_msgtype_08, False, None ),  # Access Denied
-            Receive.LOOPBACK_TEST     : DecodeMessage(                 True , self._handle_msgtype_0B, False, None ),  # # LOOPBACK TEST, STOP (0x0B) IS THE FIRST COMMAND SENT TO THE PANEL WHEN THIS INTEGRATION STARTS
-            Receive.EXIT_DOWNLOAD     : DecodeMessage(                 True , self._handle_msgtype_0F, False, None ),  # Exit
-            Receive.UNKNOWN_1F        : DecodeMessage(                False , None                   , False, "WARNING: Message 0x1F is not decoded" ),
-            Receive.NOT_USED          : DecodeMessage(                False , None                   , False, "WARNING: Message 0x22 is not decoded, are you using an old Powermax Panel as this is not supported?" ),
-            Receive.DOWNLOAD_RETRY    : DecodeMessage(                 True , self._handle_msgtype_25, False, None ),  # Download retry
-            Receive.DOWNLOAD_SETTINGS : DecodeMessage( ProcessFlag.DOWNLOAD , self._handle_msgtype_33, False, "Received 33 Message, we are in the wrong mode (so I'm ignoring the message)"),  # Settings send after a MSGV_START
-            Receive.PANEL_INFO        : DecodeMessage(                 True , self._handle_msgtype_3C, False, None ),  # Message when start the download
-            Receive.DOWNLOAD_BLOCK    : DecodeMessage( ProcessFlag.DOWNLOAD , self._handle_msgtype_3F, False, "Received 3F Message, we are in the wrong mode (so I'm ignoring the message)"),  # Download information
-            Receive.EVENT_LOG         : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_A0, False, None ),  # Event log
-            Receive.ZONE_NAMES        : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_A3,  True, None ),  # Zone Names
-            Receive.STATUS_UPDATE     : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_A5,  True, None ),  # Zone Information/Update
-            Receive.ZONE_TYPES        : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_A6,  True, None ),  # Zone Types
-            Receive.PANEL_STATUS      : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_A7,  True, None ),  # Panel Information/Update
-            Receive.POWERLINK         : DecodeMessage(       ProcessFlag.AB , self._handle_msgtype_AB,  True, "Received AB Message, we are in the wrong mode (so I'm ignoring the message)"),
-            Receive.SWITCH_NAMES      : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_AC,  True, None ),  # Switch Names
-            Receive.IMAGE_MGMT        : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_AD,  True, None ),  # No idea what this means, it might ...  send it just before transferring F4 video data ?????
-            Receive.POWERMASTER       : DecodeMessage(       ProcessFlag.B0 , self._handle_msgtype_B0,  True, None ),
-            Receive.IMAGE_DATA        : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_F4, False, None ),  # F4 Message from a Powermaster, can't decode it yet but this will accept it and ignore it
-            Receive.REDIRECT          : DecodeMessage(                 True , self._handle_msgtype_C0, False, None ),
-            Receive.PROXY_COMMAND     : DecodeMessage(                 True , self._handle_msgtype_E1, False, None ),
-            Receive.PROXY             : DecodeMessage(                 True , self._handle_msgtype_E0, False, None )
+            Receive.ACKNOWLEDGE       : DecodeMessage(                 True , self._handle_msgtype_02, 2, -2, False, None ),  # ACK
+            Receive.TIMEOUT           : DecodeMessage(                 True , self._handle_msgtype_06, 2, -2, False, None ),  # Timeout
+            Receive.UNKNOWN_07        : DecodeMessage(                 True , self._handle_msgtype_07, 2, -2, False, None ),  # No idea what this means
+            Receive.ACCESS_DENIED     : DecodeMessage(                 True , self._handle_msgtype_08, 2, -2, False, None ),  # Access Denied
+            Receive.LOOPBACK_TEST     : DecodeMessage(                 True , self._handle_msgtype_0B, 2, -2, False, None ),  # # LOOPBACK TEST, STOP (0x0B) IS THE FIRST COMMAND SENT TO THE PANEL WHEN THIS INTEGRATION STARTS
+            Receive.EXIT_DOWNLOAD     : DecodeMessage(                 True , self._handle_msgtype_0F, 2, -2, False, None ),  # Exit
+            Receive.UNKNOWN_1F        : DecodeMessage(                False , None                   , 2, -2, False, "WARNING: Message 0x1F is not decoded" ),
+            Receive.UNKNOWN_22        : DecodeMessage(                False , None                   , 2, -2, False, "WARNING: Message 0x22 is not decoded, are you using an old Powermax Panel as this is not supported?" ),
+            Receive.DOWNLOAD_RETRY    : DecodeMessage(                 True , self._handle_msgtype_25, 2, -2, False, None ),  # Download retry
+            Receive.DOWNLOAD_SETTINGS : DecodeMessage( ProcessFlag.DOWNLOAD , self._handle_msgtype_33, 2, -2, False, "Received 33 Message, we are in the wrong mode (so I'm ignoring the message)"),  # Settings send after a MSGV_START
+            Receive.PANEL_INFO        : DecodeMessage(                 True , self._handle_msgtype_3C, 2, -2, False, None ),  # Message when start the download
+            Receive.DOWNLOAD_BLOCK    : DecodeMessage( ProcessFlag.DOWNLOAD , self._handle_msgtype_3F, 2, -2, False, "Received 3F Message, we are in the wrong mode (so I'm ignoring the message)"),  # Download information
+            Receive.EVENT_LOG         : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_A0, 2, -2, False, None ),  # Event log
+            Receive.ZONE_NAMES        : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_A3, 2, -2,  True, None ),  # Zone Names
+            Receive.STATUS_UPDATE     : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_A5, 2, -2,  True, None ),  # Zone Information/Update
+            Receive.ZONE_TYPES        : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_A6, 2, -2,  True, None ),  # Zone Types
+            Receive.PANEL_STATUS      : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_A7, 2, -2,  True, None ),  # Panel Information/Update
+            Receive.POWERLINK         : DecodeMessage(       ProcessFlag.AB , self._handle_msgtype_AB, 2, -2,  True, "Received AB Message, we are in the wrong mode (so I'm ignoring the message)"),
+            Receive.SWITCH_NAMES      : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_AC, 2, -2,  True, None ),  # Switch Names
+            Receive.IMAGE_MGMT        : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_AD, 2, -2,  True, None ),  # No idea what this means, it might ...  send it just before transferring F4 video data ?????
+            Receive.POWERMASTER       : DecodeMessage(       ProcessFlag.B0 , self._handle_msgtype_B0, 2, -2,  True, None ),
+            Receive.IMAGE_DATA        : DecodeMessage(   ProcessFlag.NORMAL , self._handle_msgtype_F4, 2, -3, False, None ),  # F4 Message from a Powermaster, decode image and audio data. Footer and 2 checksum bytes.
+            Receive.REDIRECT          : DecodeMessage(                 True , self._handle_msgtype_C0, 2, -2, False, None ),
+            Receive.PROXY_COMMAND     : DecodeMessage(                 True , self._handle_msgtype_E1, 2, -2, False, None ),
+            Receive.PROXY             : DecodeMessage(                 True , self._handle_msgtype_E0, 2, -2, False, None )
         }
 
     # This is abstract so implement the function
@@ -164,7 +163,7 @@ class MessageHandling(MessageHandlingB0Data):
 
                 if dm.func is not None and condition:
                     # There is a valid function and the condition is True so we process the packet
-                    pc = dm.func(packet[PAYLOAD_START : -CHECKSUM_AND_FOOTER_SIZE])    # Use the return value if the function returns
+                    pc = dm.func(packet[dm.payload_start : dm.payload_end])    # Use the return value if the function returns
                     return pc if pc is not None and isinstance(pc,bool) else dm.pushchange
                 if dm.message is not None:
                     log.debug(f"[_processReceivedPacket]     {dm.message}, data bytes are {toString(packet)}")
@@ -958,7 +957,12 @@ class MessageHandling(MessageHandlingB0Data):
 
         pushchange = False
 
-        if msgtype == 0x03:     # JPG Header
+        if self.PanelMode not in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
+            log.debug(f"[handle_msgtypeF4] PanelMode is {self.PanelMode} so not processing F4 data")
+            self.ignoreF4DataMessages = True   # Ignore 0x05 data packets
+            self.image_manager.stop()          # Stop all image processing
+
+        elif msgtype == 0x03:     # JPG Header
             log.debug(f"[handle_msgtypeF4]  data {toString(data)}")
             pushchange = True
             zone = (10 * int(data[5] // 16)) + (data[5] % 16)         # the // does integer floor division so always rounds down
@@ -972,6 +976,7 @@ class MessageHandling(MessageHandlingB0Data):
                 log.debug(f"[handle_msgtypeF4]        Ignoring Image Header, so not processing F4 data.      zone = {zone}    size = {size}    unique_id = {hex(unique_id)}    image_id = {image_id}     lastimage = {lastimage}    totalimages = {totalimages}")
                 if lastimage:
                     self.image_ignore.remove(zone)
+
             elif self.image_manager.isImageDataInProgress():
                 # We have received an unexpected F4 message header when the previous image transfer is still in progress
                 log.debug(f"[handle_msgtypeF4]        Previous Image transfer incomplete, so not processing F4 data and terminating image creation for zone {zone}")
@@ -979,47 +984,12 @@ class MessageHandling(MessageHandlingB0Data):
                 self.ignoreF4DataMessages = True   # Ignore 0x05 data packets
                 self.image_manager.stop()
 
-            elif self.PanelMode in [AlPanelMode.UNKNOWN, AlPanelMode.STARTING, AlPanelMode.DOWNLOAD, AlPanelMode.STOPPED]: # AlPanelMode.PROBLEM,
-                log.debug(f"[handle_msgtypeF4]        PanelMode is {self.PanelMode} so not processing F4 data")
-                self.image_ignore.add(zone)        # Prevent the user being able to ask for this zone again until we've cleared all the current data
-                self.ignoreF4DataMessages = True   # Ignore 0x05 data packets
-                self.image_manager.stop()
-
             elif zone - 1 in self.SensorList:
-                log.debug("[handle_msgtypeF4]        Processing")
-                # Here when PanelMode is MINIMAL_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
-
-                if self.PanelMode == AlPanelMode.MINIMAL_ONLY:
-                    # Support externally requested images, from a real PowerLink Hardware device for example
-                    if not self.image_manager.isValidZone(zone):
-                        self.image_manager.create(zone, 11)   # This makes sure that there isn't an ongoing image retrieval for this sensor
-
+                log.debug("[handle_msgtypeF4]        Processing Image Header data")
                 # Initialise the receipt of an image in the ImageManager
-                self.image_manager.setCurrent(zone = zone, unique_id = unique_id, image_id = image_id, size = size, sequence = sequence, lastimage = lastimage, totalimages = totalimages)
-
-                if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS, AlPanelMode.STANDARD]:
-                    # Assume that we are managing the interaction/protocol with the panel
-                    self.ignoreF4DataMessages = False
-
-                    #self.add_message_to_send_queue(Send.IMAGE_FB)
-                    #self.add_message_to_send_queue(convert_bytearray('0d ab 0e 00 17 1e 00 00 03 01 05 00 43 c5 0a')) # 43 should be bytearray([Packet.POWERLINK_TERMINAL])
-
-                    # I currently assume that f4 07 messages need to be sent to the panel to inform it that we have received the image OK.
-                    #      I'm not sure how to tell the panel that we have not received it OK
-                    # I also assume that f4 10 messages tell the panel what to do next, send the next image or stop sending image data
-                    #0:07:40.988370  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 01 00 82 02 0a
-                    #0:07:49.337453  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 02 00 d1 57 0a
-                    #0:07:57.429574  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 03 00 e0 64 0a
-                    #0:08:05.520413  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 04 00 77 fd 0a
-                    #0:08:13.298995  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 05 00 46 ce 0a
-                    #0:08:19.445386  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 07 00 01 04 55 33 00 00 b3 31 0a
-
-                    #0:07:42.090978  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 01 4d 8c 0a
-                    #0:07:49.644125  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 02 2e bc 0a
-                    #0:07:57.599319  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 03 0f ac 0a
-                    #0:08:05.621363  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 04 e8 dc 0a
-                    #0:08:13.484331  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 05 c9 cc 0a
-                    #0:08:19.499364  <pyvisonic.py   : 4326>    DEBUG   [handle_msgtypeC0] Received Powerlink Redirect message (len = 13)    data = 0d f4 10 00 01 04 00 55 33 00 6c 9c 0a  ## This seems to stop the panel sending F4 data
+                success = self.image_manager.setCurrent(zone = zone, unique_id = unique_id, image_id = image_id, size = size, sequence = sequence, lastimage = lastimage, totalimages = totalimages)
+                # Assume that we are managing the interaction/protocol with the panel
+                self.ignoreF4DataMessages = not success
 
             else:
                 log.debug(f"[handle_msgtypeF4]        Panel sending image for Zone {zone} but it does not exist or is not a CAMERA")
@@ -1027,9 +997,9 @@ class MessageHandling(MessageHandlingB0Data):
         elif msgtype == 0x05:   # JPG Data
             if self.ignoreF4DataMessages:
                 log.debug("[handle_msgtypeF4]        Not processing F4 0x05 data")
+
             elif self.image_manager.hasStartedSequence():
                 # Image receipt has been initialised by self.image_manager.setCurrent
-                #     Therefore we only get here when PanelMode is MINIMAL_ONLY, STANDARD, STANDARD_PLUS, POWERLINK
                 datastart = 4
                 is_in_sequence = self.image_manager.addData(data[datastart:datastart+datalen], sequence)
                 if is_in_sequence:
@@ -1067,11 +1037,7 @@ class MessageHandling(MessageHandlingB0Data):
                                 tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
                                 log.debug("[handle_msgtypeF4] Image Processing, caused an exception\n%s", tb_str)
 
-                            total = 0
-                            for b in ir.buffer:
-                                total = total + b
-
-                            log.debug(f"[handle_msgtypeF4]           Got Image width {width}    height {height}      total = {total} = {hex(total)}")
+                            log.debug(f"[handle_msgtypeF4]           Got Image width {width}    height {height}")
 
                         # Got all the data so write it out to a jpg file
                         #fn = f"camera_image_z{ir.zone:0>2}_{t.day:0>2}{t.month:0>2}{t.year - 2000:0>2}_{t.hour:0>2}{t.minute:0>2}{t.second:0>2}.jpg"
@@ -1080,7 +1046,7 @@ class MessageHandling(MessageHandlingB0Data):
                         #    f1.close()
 
                         if ir.zone - 1 in self.SensorList and (is_audio or (width <= 1024 and height <= 768)):
-                            log.debug(f"[handle_msgtypeF4]           Saving {'Audio' if is_audio else 'Image'} sensor {ir.zone}   width {width}    height {height}")
+                            log.debug(f"[handle_msgtypeF4]           Saving {'Audio' if is_audio else 'Image'} for sensor {ir.zone}")
                             self.SensorList[ir.zone - 1].jpg_data = ir.buffer
                             self.SensorList[ir.zone - 1].jpg_timestamp = t
                             self.SensorList[ir.zone - 1].has_jpg = True
@@ -1094,12 +1060,15 @@ class MessageHandling(MessageHandlingB0Data):
                         # ack was measured to make no difference to the panel's residual resends -- both drive
                         # the panel through the sequence equally; resends are panel-side link/state behaviour.)
                         _offload_f4_ack = os.path.exists("/config/visonic_no_ha_f4_ack")
-                        if not _offload_f4_ack and self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD]:
-                            # Assume that we are managing the interaction/protocol with the panel
+                        if not _offload_f4_ack:
+                            # I currently assume that f4 07 messages need to be sent to the panel to inform it that we have received the image OK.
+                            #      I'm not sure how to tell the panel that we have not received it OK
                             _body = f'f4 07 00 01 04 {ir.zone:>02} {hexify(izc.unique_id):>02} {hexify(ir.image_id):>02} 00'
                             _c1, _c2 = self.f4_checksum(convert_bytearray(_body))
                             self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
 
+                            # I also assume that f4 10 messages tell the panel what to do next, send the next image or stop sending image data
+                            # Assume that we are managing the interaction/protocol with the panel
                             _body = f'f4 10 00 01 04 00 {ir.zone:>02} {hexify(izc.unique_id):>02} {hexify(ir.image_id):>02}'
                             _c1, _c2 = self.f4_checksum(convert_bytearray(_body))
                             self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))

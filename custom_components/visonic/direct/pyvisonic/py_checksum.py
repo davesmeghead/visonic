@@ -21,6 +21,9 @@ class MyChecksumCalc:
     # check the checksum of received messages
     def _validatePDU(self, checksum_type: ChecksumType, packet: bytearray) -> bool:
         r"""Verify if packet is valid. Packets start with a preamble (\x0D) and end with postamble (\x0A)."""
+        # Does it have at least 4 bytes: header, command, optional data, checksum (command and data), footer
+        if len(packet) < 4:
+            return False
         # Does it start with a preamble
         if packet[:1] != b"\x0D":
             return False
