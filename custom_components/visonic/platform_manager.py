@@ -3,11 +3,13 @@
 import asyncio
 from collections import deque
 from collections.abc import Callable
+from datetime import timedelta
 import os
 import re
 import time
 from typing import Any, NamedTuple
 
+from homeassistant.components.http.auth import async_sign_path
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
@@ -78,6 +80,8 @@ from .visonic_types import (
     PanelCondition,
     VisonicConfigEntry,
 )
+
+CLIP_URL_VALID = timedelta(days=1)  # how long the signed clip/poster URLs stay usable
 
 MESSAGE_REASON_DICT = {
     AlarmCommandStatus.SUCCESS: "Success, sent Command to Panel",
@@ -809,19 +813,38 @@ class PlatformManager:
         registry, so the event itself is fired on the event loop.
         """
         path = os.path.join(directory, filename)
-        media_url = None
+        stem = os.path.splitext(filename)[0]
+        # A clip carries no still of its own. The frames it was built from are right here, so hand
+        # one over for anything that needs a picture - a notification thumbnail, a poster frame.
+        frames = sorted(
+            f for f in os.listdir(directory)
+            if f.startswith(f"{stem}_frame") and f.lower().endswith(".jpg")
+        )
+        poster = os.path.join(directory, frames[len(frames) // 2]) if frames else None
+        self.hass.loop.call_soon_threadsafe(
+            self._fire_clip_event, sensor_id, cam_folder, filename, path, poster
+        )
+
+    def _media_url(self, path: str | None) -> str | None:
+        """Path under a configured media dir as the URL that serves it, or None if outside them."""
+        if path is None:
+            return None
         for key, root in (self.hass.config.media_dirs or {}).items():
             rel = os.path.relpath(path, root)
             if not rel.startswith(".."):
-                media_url = f"/media/{key}/{rel.replace(os.sep, '/')}"
-                break
-        self.hass.loop.call_soon_threadsafe(
-            self._fire_clip_event, sensor_id, cam_folder, filename, path, media_url
-        )
+                return f"/media/{key}/{rel.replace(os.sep, '/')}"
+        return None
 
     @callback
-    def _fire_clip_event(self, sensor_id: int, cam_folder: str, filename: str, path: str, media_url: str | None) -> None:
-        """Fire the finished-capture event (event-loop thread)."""
+    def _fire_clip_event(self, sensor_id: int, cam_folder: str, filename: str, path: str, poster: str | None) -> None:
+        """Fire the finished-capture event (event-loop thread).
+
+        Signed copies of both URLs go out alongside the plain ones: /media needs authentication, and
+        a consumer handed the path in YAML - a notification attachment, say - has no way to sign it
+        itself.
+        """
+        media_url = self._media_url(path)
+        poster_url = self._media_url(poster)
         self.hass.bus.async_fire(CAMERA_CLIP_EVENT, {
             PANEL_ATTRIBUTE_NAME: self.panel_ident,
             "zone": sensor_id,
@@ -830,6 +853,9 @@ class PlatformManager:
             "file": filename,
             "path": path,
             "media_url": media_url,
+            "poster_url": poster_url,
+            "signed_media_url": async_sign_path(self.hass, media_url, CLIP_URL_VALID) if media_url else None,
+            "signed_poster_url": async_sign_path(self.hass, poster_url, CLIP_URL_VALID) if poster_url else None,
         })
 
     def _render_sensor_media(self, sensor_id: int, frames: list[bytes], frame: bytes, seq_name: str, frame_no: int, cam_folder: str, audio: bytes | None = None) -> None:
