@@ -82,6 +82,7 @@ from .visonic_types import (
 )
 
 CLIP_URL_VALID = timedelta(days=1)  # how long the signed clip/poster URLs stay usable
+_FRAME_RE = re.compile(r"_frame\d+\.jpg$", re.I)  # a saved still from a capture, not a finished clip
 
 MESSAGE_REASON_DICT = {
     AlarmCommandStatus.SUCCESS: "Success, sent Command to Panel",
@@ -825,6 +826,17 @@ class PlatformManager:
             self._fire_clip_event, sensor_id, cam_folder, filename, path, poster
         )
 
+    def _media_base(self) -> str:
+        """Directory captures are filed under, absolute or relative to HA's media root."""
+        configured = self.entry.options.get(CONF_IMAGE_MEDIA_PATH, DEFAULT_IMAGE_MEDIA_PATH)
+        if os.path.isabs(configured):
+            return configured
+        # Relative goes under HA's media directory so captures land where the Media browser looks
+        # ({"local": "/media"} in a container, {"local": "<config>/media"} otherwise).
+        media_dirs = self.hass.config.media_dirs or {}
+        root = media_dirs.get("local") or next(iter(media_dirs.values()), None) or self.hass.config.path("media")
+        return os.path.join(root, configured)
+
     def _media_url(self, path: str | None) -> str | None:
         """Path under a configured media dir as the URL that serves it, or None if outside them."""
         if path is None:
@@ -869,17 +881,8 @@ class PlatformManager:
         import io
         import subprocess
 
-        configured = self.entry.options.get(CONF_IMAGE_MEDIA_PATH, DEFAULT_IMAGE_MEDIA_PATH)
-        if os.path.isabs(configured):
-            base = configured
-        else:
-            # Resolve relative to HA's media directory so captures land where the Media browser looks
-            # ({"local": "/media"} in a container, {"local": "<config>/media"} otherwise).
-            media_dirs = self.hass.config.media_dirs or {}
-            media_root = media_dirs.get("local") or next(iter(media_dirs.values()), None) or self.hass.config.path("media")
-            base = os.path.join(media_root, configured)
         # Per-camera sub-folder so captures are browsable by camera in the media browser.
-        directory = os.path.join(base, cam_folder)
+        directory = os.path.join(self._media_base(), cam_folder)
         stem = f"panel{self.panel_ident}_zone{sensor_id}_{seq_name}"
         # The image entity shows the latest still; the clip itself lands in the media browser.
         self._sensor_jpeg[sensor_id] = bytearray(frame)
@@ -1030,9 +1033,35 @@ class PlatformManager:
         """Get the binary image data from a camera sensor."""
         return self._get_sensor_jpeg(sensor_id)
 
+    def _newest_frame_on_disk(self, sensor_id: int, cam_folder: str) -> bytearray | None:
+        """Most recent saved frame for a camera, or None if it has never captured (executor thread).
+
+        Frame names carry the capture timestamp then the frame number, so they sort into order.
+        """
+        directory = os.path.join(self._media_base(), cam_folder)
+        try:
+            frames = sorted(f for f in os.listdir(directory) if _FRAME_RE.search(f))
+            if not frames:
+                return None
+            with open(os.path.join(directory, frames[-1]), "rb") as handle:
+                return bytearray(handle.read())
+        except OSError:
+            return None
+
     async def async_get_jpg_image(self, sensor_id: int) -> bytearray | None:
         """Get the binary image data from a camera sensor."""
-        return self._get_sensor_jpeg(sensor_id)
+        if (cached := self._get_sensor_jpeg(sensor_id)) is not None:
+            return cached
+        # Nothing buffered: the panel only sends frames on request, so after a restart the entity
+        # has no picture at all until the next capture - even though every frame it has ever
+        # received is sitting on disk. Naming the folder needs the device registry, so resolve it
+        # here on the event loop and let the executor do the file work.
+        frame = await self.hass.async_add_executor_job(
+            self._newest_frame_on_disk, sensor_id, self._camera_folder(sensor_id)
+        )
+        if frame is not None:
+            self._sensor_jpeg[sensor_id] = frame
+        return frame
 
     def terminate_all_dispatchers(self, entry: VisonicConfigEntry):
         """Kill all the dispatchers for this entry."""

@@ -125,8 +125,10 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         """Return bytes of image on-demand."""
         if (sensor := self._get_sensor()) is None:
             return None
-        if not self._has_image:
-            return None
+        # Deliberately not gated on has_image: the panel only reports that once it has sent frames
+        # this session, so after a restart the entity served nothing at all - a 500 from
+        # /api/image_proxy - even though the last capture was still on disk. With no bytes anywhere
+        # the coordinator returns None, which is the same answer as before.
 
         image_time = sensor.image_time
 
