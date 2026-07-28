@@ -695,14 +695,21 @@ class PlatformManager:
         now = self._mark_image_activity()
         last = self._sensor_last_frame.get(sensor_id)
         self._sensor_last_frame[sensor_id] = now
-        if sensor_id not in self._sensor_frames or last is None or now - last > IMAGE_SEQUENCE_GAP:
+        is_wav = self._is_wav(bytes(data))
+        # The panel closes every capture with its audio clip, so a frame arriving after one belongs
+        # to the next capture. That marker is exact, where the time gap is only a guess - and now
+        # that the image count is settable a short capture finishes well inside the gap, so two
+        # requests in a row would otherwise land in the same file set.
+        if (sensor_id not in self._sensor_frames or last is None
+                or now - last > IMAGE_SEQUENCE_GAP
+                or (sensor_id in self._sensor_audio and not is_wav)):
             self._sensor_frames[sensor_id] = []
             self._sensor_seq_name[sensor_id] = time.strftime("%Y%m%d_%H%M%S")
             self._sensor_frame_no[sensor_id] = 0
             self._sensor_audio.pop(sensor_id, None)
-        # The panel closes a capture with an IMA ADPCM WAV clip (arrives as the last "image" of the
-        # sequence). It is not a frame, so keep it aside and re-render so the MP4 gains its audio.
-        if self._is_wav(bytes(data)):
+        # The clip is IMA ADPCM WAV and arrives as the last "image" of the sequence. It is not a
+        # frame, so keep it aside and re-render so the MP4 gains its audio.
+        if is_wav:
             self._sensor_audio[sensor_id] = bytes(data)
             frames = self._sensor_frames.get(sensor_id) or []
             if frames:
