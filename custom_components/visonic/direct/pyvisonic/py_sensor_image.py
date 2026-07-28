@@ -5,6 +5,7 @@
 from datetime import datetime, timedelta
 import logging
 
+from .py_const import IMAGE_TRANSFER_TIMEOUT
 from .py_utils import f4_crc16, get_utc_time
 
 log = logging.getLogger(__name__)
@@ -230,8 +231,14 @@ class AlImageManager:
         # set up an entry in ImageZone with no images
         #    count is the number of images that the user asked for
         if self.hasStartedSequence():
-            # Do not allow create when in the middle of creating an image
-            return False
+            # A transfer is under way. The panel serialises these over one link and an F4-05 data
+            # message carries no zone - only the F4-03 header does - so there is exactly one image
+            # in flight at a time, whatever camera it belongs to. That makes this refusal correct,
+            # but it must not outlive the transfer: a record left behind by a panel that stopped
+            # sending would otherwise block every camera indefinitely. Drop a dead one first.
+            self.terminateIfExceededTimeout(IMAGE_TRANSFER_TIMEOUT)
+            if self.hasStartedSequence():
+                return False
         if zone not in self.ImageZone:
             self.ImageZone[zone] = ImageZoneClass()
         self.last_image = None

@@ -272,6 +272,25 @@ def test_an_in_progress_image_reports_itself_as_in_progress():
     assert not m.isImageDataInProgress(), "a finished image is not in progress"
 
 
+def test_a_dead_transfer_does_not_block_the_next_request():
+    """A part built image the panel abandoned must not lock out later captures.
+
+    There is one in-flight record for the whole manager, because an F4-05 carries no zone and
+    the panel only sends one image at a time. Correct, but it meant a transfer that died left
+    create() refusing every request, for every camera, until HA restarted.
+    """
+    m = _start()
+    seq, payload = _chunks()[0]
+    assert m.addData(payload, seq) is True          # then the panel goes quiet
+    assert m.hasStartedSequence()
+
+    assert m.create(ZONE, 1) is False, "a live transfer still blocks, as it should"
+    assert m.create(9, 1) is False, "and blocks other cameras too, since there is one link"
+
+    m._current_image._last -= timedelta(seconds=img.IMAGE_TRANSFER_TIMEOUT + 1)
+    assert m.create(9, 1) is True, "but a dead transfer is dropped rather than blocking forever"
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):
