@@ -20,6 +20,7 @@ ALARM_SENSOR_CHANGE_EVENT: Final = f"{DOMAIN}_alarm_sensor_state"
 ALARM_COMMAND_EVENT: Final = f"{DOMAIN}_alarm_command_to_panel"
 ALARM_PANEL_LOG_FILE_COMPLETE: Final = f"{DOMAIN}_alarm_panel_event_log_complete"
 ALARM_PANEL_LOG_FILE_ENTRY: Final = f"{DOMAIN}_alarm_panel_event_log_entry"
+CAMERA_CLIP_EVENT: Final = f"{DOMAIN}_camera_clip"  # a PIR capture finished rendering
 
 # Template for partition names
 PARTITION_NAME_TEMPLATE: Final = "{panel_ident} Partition {partition_index}"

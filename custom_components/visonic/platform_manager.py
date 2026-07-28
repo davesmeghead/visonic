@@ -10,7 +10,7 @@ from typing import Any, NamedTuple
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity import UNDEFINED
@@ -22,6 +22,7 @@ from .const import (
     ALARM_PANEL_LOG_FILE_COMPLETE,
     ALARM_PANEL_LOG_FILE_ENTRY,
     ALARM_SENSOR_CHANGE_EVENT,
+    CAMERA_CLIP_EVENT,
     CONF_EMULATION_MODE,
     CONF_ENABLE_SENSOR_BYPASS,
     CONF_EXCLUDE_SENSOR,
@@ -800,6 +801,37 @@ class PlatformManager:
             return None
         return n_data / byte_rate
 
+    def _announce_clip(self, sensor_id: int, cam_folder: str, directory: str, filename: str) -> None:
+        """Say a capture finished rendering (executor thread).
+
+        The path only exists in here, so without this an automation has no way to find the clip it
+        should act on - a template cannot list a directory. Naming the camera needs the device
+        registry, so the event itself is fired on the event loop.
+        """
+        path = os.path.join(directory, filename)
+        media_url = None
+        for key, root in (self.hass.config.media_dirs or {}).items():
+            rel = os.path.relpath(path, root)
+            if not rel.startswith(".."):
+                media_url = f"/media/{key}/{rel.replace(os.sep, '/')}"
+                break
+        self.hass.loop.call_soon_threadsafe(
+            self._fire_clip_event, sensor_id, cam_folder, filename, path, media_url
+        )
+
+    @callback
+    def _fire_clip_event(self, sensor_id: int, cam_folder: str, filename: str, path: str, media_url: str | None) -> None:
+        """Fire the finished-capture event (event-loop thread)."""
+        self.hass.bus.async_fire(CAMERA_CLIP_EVENT, {
+            PANEL_ATTRIBUTE_NAME: self.panel_ident,
+            "zone": sensor_id,
+            "camera": self.camera_name(sensor_id),
+            "folder": cam_folder,
+            "file": filename,
+            "path": path,
+            "media_url": media_url,
+        })
+
     def _render_sensor_media(self, sensor_id: int, frames: list[bytes], frame: bytes, seq_name: str, frame_no: int, cam_folder: str, audio: bytes | None = None) -> None:
         """Save this frame plus the capture's audio, and mux the sequence into an MP4 (executor thread).
 
@@ -871,11 +903,13 @@ class PlatformManager:
             has_audio = os.path.isfile(wav_path)
             try:
                 if _mux(has_audio):
+                    self._announce_clip(sensor_id, cam_folder, directory, f"{stem}.mp4")
                     return
                 # The soundtrack is unusable - a capture whose audio never passed its CRC will not
                 # parse as a WAV at all. Still produce the video, silent, rather than losing it.
                 if has_audio and _mux(False):
                     self.logger.logstate_warning("Zone %s clip rendered without its damaged audio", sensor_id)
+                    self._announce_clip(sensor_id, cam_folder, directory, f"{stem}.mp4")
                     return
             except (OSError, subprocess.SubprocessError) as ex:
                 self.logger.logstate_warning("Unable to run ffmpeg for zone %s: %s", sensor_id, ex)
@@ -906,6 +940,7 @@ class PlatformManager:
             )
             with open(os.path.join(directory, f"{stem}.gif"), "wb") as handle:
                 handle.write(buffer.getvalue())
+            self._announce_clip(sensor_id, cam_folder, directory, f"{stem}.gif")
         except (OSError, ValueError) as ex:
             self.logger.logstate_warning("Unable to render/save camera clip for zone %s: %s", sensor_id, ex)
 
