@@ -124,7 +124,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
             nxt = self.platform_manager.pop_image_request()
             if nxt is not None:
                 # mark active now so a re-poll before the send task runs can't dispatch a second request
-                self.platform_manager.mark_image_request()
+                self.platform_manager.mark_image_request(nxt[0])
                 self.hass.async_create_task(self.send_get_sensor_image(nxt[0], nxt[1]))
 
 #    @callback
@@ -335,7 +335,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
 
     async def send_get_sensor_image(self, devid: int | None, eid: str | None):
         """Send the command to the panel to get a camera image."""
-        self.platform_manager.mark_image_request()
+        self.platform_manager.mark_image_request(devid)
         await self._client.send_get_sensor_image(devid, eid)
         self.async_update_listeners()
 

@@ -179,6 +179,7 @@ class PlatformManager:
         self._sensor_audio: dict[int, bytes] = {}
         self._image_activity: float = 0.0
         self._image_download_start: float = 0.0
+        self._image_active_sensor: int | None = None
         self._image_queue: deque[tuple[int, str | None]] = deque()
 
         self._createdAlarmPanel = False
@@ -692,7 +693,7 @@ class PlatformManager:
             for store in (self._sensor_frames, self._sensor_seq_name, self._sensor_last_frame, self._sensor_frame_no, self._sensor_jpeg, self._sensor_audio):
                 store.pop(sensor_id, None)
             return
-        now = self._mark_image_activity()
+        now = self._mark_image_activity(sensor_id)
         last = self._sensor_last_frame.get(sensor_id)
         self._sensor_last_frame[sensor_id] = now
         # Trust the caller's classification first: it comes from the image_id in the F4-03 header,
@@ -747,16 +748,25 @@ class PlatformManager:
         """Public name for the per-camera media sub-folder, used by the image entity."""
         return self._camera_folder(sensor_id)
 
-    def _camera_folder(self, sensor_id: int) -> str:
-        """Per-camera media sub-folder: the camera device name, else the zone number (event-loop thread)."""
+    def camera_name(self, sensor_id: int) -> str:
+        """Display name for a camera zone: the device name, else the zone number."""
+        return self._camera_device_name(sensor_id) or f"Zone {sensor_id}"
+
+    def _camera_device_name(self, sensor_id: int) -> str | None:
+        """Name the user gave this camera's device, or None if it has no device yet."""
         try:
             dev = dr.async_get(self.hass).async_get_device(
                 identifiers={(DOMAIN, create_sensor_unique_id(self.panel_ident, sensor_id))}
             )
-            if dev is not None and (name := dev.name_by_user or dev.name) and (folder := slugify(name)):
-                return folder
         except Exception:  # noqa: BLE001
-            pass
+            return None
+        return (dev.name_by_user or dev.name) if dev is not None else None
+
+    def _camera_folder(self, sensor_id: int) -> str:
+        """Per-camera media sub-folder: the camera device name, else the zone number (event-loop thread)."""
+        name = self._camera_device_name(sensor_id)
+        if name and (folder := slugify(name)):
+            return folder
         return f"zone{sensor_id}"
 
     @staticmethod
@@ -899,17 +909,19 @@ class PlatformManager:
         except (OSError, ValueError) as ex:
             self.logger.logstate_warning("Unable to render/save camera clip for zone %s: %s", sensor_id, ex)
 
-    def _mark_image_activity(self) -> float:
+    def _mark_image_activity(self, sensor_id: int | None = None) -> float:
         """Record image activity; (re)start the burst clock only when previously idle. Returns now."""
         now = time.monotonic()
         if self._image_activity <= 0.0 or now - self._image_activity >= IMAGE_DOWNLOAD_TIMEOUT:
             self._image_download_start = now
         self._image_activity = now
+        if sensor_id is not None:
+            self._image_active_sensor = sensor_id
         return now
 
-    def mark_image_request(self) -> None:
+    def mark_image_request(self, sensor_id: int | None = None) -> None:
         """Record that an image download has been requested from the panel."""
-        self._mark_image_activity()
+        self._mark_image_activity(sensor_id)
 
     def image_download_active(self) -> bool:
         """True while frames arrive (within IMAGE_DOWNLOAD_TIMEOUT of the last, capped at IMAGE_DOWNLOAD_MAX from burst start)."""
@@ -920,6 +932,10 @@ class PlatformManager:
             now - self._image_activity < IMAGE_DOWNLOAD_TIMEOUT
             and now - self._image_download_start < IMAGE_DOWNLOAD_MAX
         )
+
+    def image_download_sensor(self) -> int | None:
+        """Zone of the camera currently downloading, or None when idle."""
+        return self._image_active_sensor if self.image_download_active() else None
 
     def enqueue_image_request(self, sensor_id: int, eid: str | None) -> str:
         """Return 'send' (dispatch now), 'queued', or 'full' for an image-request press."""
@@ -943,6 +959,7 @@ class PlatformManager:
         """Clear the download-active state and drop any queued requests (used on (re)connect)."""
         self._image_activity = 0.0
         self._image_download_start = 0.0
+        self._image_active_sensor = None
         self._image_queue.clear()
 
     def _get_sensor_jpeg(self, sensor_id: int) -> bytearray | None:

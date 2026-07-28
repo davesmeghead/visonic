@@ -4,6 +4,7 @@ A Data Driven Binary Sensor Class for Visonic Sensors
 """
 import asyncio
 import logging
+from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -96,6 +97,19 @@ class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], Bi
         """Return True while a panel image download/retransmit is in progress."""
         pm = getattr(self.coordinator, "platform_manager", None)
         return bool(pm and pm.image_download_active())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Which camera the panel is sending, and how many requests are waiting behind it."""
+        pm = getattr(self.coordinator, "platform_manager", None)
+        if pm is None:
+            return {}
+        zone = pm.image_download_sensor()
+        return {
+            "zone": zone,
+            "camera": pm.camera_name(zone) if zone is not None else None,
+            "queued": pm.image_queue_depth(),
+        }
 
 
 class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
