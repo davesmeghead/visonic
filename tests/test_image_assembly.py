@@ -291,6 +291,23 @@ def test_a_dead_transfer_does_not_block_the_next_request():
     assert m.create(9, 1) is True, "but a dead transfer is dropped rather than blocking forever"
 
 
+def test_a_record_with_no_data_yet_is_still_released_by_the_timeout():
+    """A header that arrives and is then never followed by data must not block for ever.
+
+    isOngoing() requires _current > 0, so a record holding zero bytes is invisible to
+    isImageDataInProgress() while still making hasStartedSequence() true - which is what
+    create() refuses on. The timeout has to key off the record existing, not off it having
+    received something.
+    """
+    m = _start()
+    assert m.hasStartedSequence(), "the header created a record"
+    assert not m.isImageDataInProgress(), "but no data has arrived for it"
+
+    m._current_image._last -= timedelta(seconds=img.IMAGE_TRANSFER_TIMEOUT + 1)
+    m.terminateIfExceededTimeout(img.IMAGE_TRANSFER_TIMEOUT)
+    assert not m.hasStartedSequence(), "an empty stale record must be released too"
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

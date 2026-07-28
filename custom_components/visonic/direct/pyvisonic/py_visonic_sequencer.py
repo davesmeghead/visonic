@@ -1433,7 +1433,7 @@ class Sequencer(Despatcher):
                     if dotrigger:
                         self._trigger_restore_status()     # Clear message buffers and send a Restore (if in Powerlink or standard plus) or Status (not in Powerlink) to the Panel
 
-                    if self.image_manager.isImageDataInProgress():
+                    if self.image_manager.hasStartedSequence():
                         # Release an image the panel stopped sending part way through. Without this
                         # the record stays in progress for ever, and create() refuses every later
                         # request - for every camera, not just this one - until HA restarts.
