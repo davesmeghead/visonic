@@ -220,11 +220,14 @@ class AlImageManager:
         return self._current_image is not None and self._current_image.isOngoing()
 
     def terminateIfExceededTimeout(self, seconds) -> None:
-        """Terminate image if exceeded timeout."""
+        """Abandon the in-progress image if the panel has gone quiet for too long."""
         if self._current_image is not None:
             interval = get_utc_time() - self._current_image.last_time
             if interval is not None and interval >= timedelta(seconds=seconds):
-                self.stop()   # it takes longer to include the code to check so just reset anyway
+                log.warning(f"[AlImageManager]  Abandoning image {self._current_image.image_id} for zone "
+                            f"{self._current_image.zone} after {seconds}s with no data "
+                            f"({self._current_image._current} of {self._current_image.size} bytes)")
+                self.stop()
 
     def create(self, zone, count) -> bool:
         """Create a new image record. But does not start a new image."""
