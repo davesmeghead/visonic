@@ -3,10 +3,15 @@
 AlImageManager is pure logic - no HA, no panel, no serial - so the reassembly path can be
 driven directly with synthetic F4 data, including the corrupt kind a real panel produces.
 
+These assert the behaviour we want, not the behaviour we have. Where the code does not yet
+meet it the test is marked @expected_failure, which passes while the gap exists and fails
+loudly once it is closed, as a prompt to drop the marker.
+
 Run with:  python3 -m pytest tests/ -v      (or just: python3 tests/test_image_assembly.py)
 """
 
 from datetime import timedelta
+import functools
 import importlib.util
 import pathlib
 import sys
@@ -30,6 +35,27 @@ def _load():
 
 img = _load()
 
+
+def expected_failure(reason):
+    """Mark a requirement the code does not meet yet.
+
+    Passes while the gap is present, and fails once the test starts passing so that the
+    marker gets removed rather than quietly hiding a since-fixed bug. Behaves the same
+    under pytest and the standalone runner, so it needs neither.
+    """
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper():
+            try:
+                fn()
+            except AssertionError as ex:
+                print(f"        known gap: {reason}\n          ({ex})")
+                return
+            raise AssertionError(f"passes now - fix landed? drop @expected_failure: {reason}")
+        return wrapper
+    return deco
+
+
 ZONE, UID, IMAGE_ID = 2, 0x14, 1
 JPEG = bytes.fromhex("ffd8ffdb") + b"\x00" * 92 + bytes.fromhex("ffd9")  # 98 bytes
 CHUNK = 14  # 7 chunks of 14 bytes
@@ -52,7 +78,7 @@ def _chunks(data=JPEG, n=CHUNK):
 
 
 def test_clean_image_assembles():
-    """Baseline: an undamaged image reassembles byte for byte."""
+    """An undamaged image reassembles byte for byte."""
     m = _start()
     for seq, payload in _chunks():
         assert m.addData(payload, seq) is True
@@ -60,42 +86,73 @@ def test_clean_image_assembles():
     assert bytes(m.getImage(ZONE, IMAGE_ID)) == JPEG
 
 
-def test_dropped_chunk_wedges_the_image():
-    """A single lost F4-05 stops every later chunk being accepted.
+def test_a_dropped_chunk_can_be_recovered_by_a_resend():
+    """A lost F4-05 must be recoverable: the panel resends it and the image still completes.
 
-    addBufferData only advances _next_sequence on a match, so once one chunk goes missing
-    the expected sequence never catches up and the rest of the image is rejected.
+    Underpins the resend-on-False approach - the expected sequence has to stay put while
+    the missing chunk is outstanding, or the resend has nothing to match against.
     """
     m = _start()
-    accepted = 0
-    for i, (seq, payload) in enumerate(_chunks()):
-        if i == 3:
-            continue  # the panel drops one chunk mid image
-        accepted += m.addData(payload, seq) is True
-    assert accepted == 3, "everything after the gap is refused, not just the missing chunk"
-    assert not m.isImageComplete()
-    assert m.hasStartedSequence(), "and the record is left in progress indefinitely"
+    seqs = _chunks()
+    for seq, payload in seqs[:3]:
+        assert m.addData(payload, seq) is True
+
+    lost_seq, lost_payload = seqs[3]
+    for seq, payload in seqs[4:]:            # panel carries on; these arrive out of order
+        assert m.addData(payload, seq) is False, "must not accept data past the gap"
+
+    assert m.addData(lost_payload, lost_seq) is True, "the resent chunk is accepted"
+    for seq, payload in seqs[4:]:            # and the rest are resent behind it
+        assert m.addData(payload, seq) is True
+    assert m.isImageComplete()
+    assert bytes(m.getImage(ZONE, IMAGE_ID)) == JPEG
 
 
-def test_oversized_chunk_overruns_the_buffer():
-    """An over-long chunk grows the bytearray past size, so completion can never trigger.
+def test_a_rejected_chunk_never_advances_the_expected_sequence():
+    """Rejecting a chunk must leave the sequence counter alone, so a resend can land.
 
-    _buffer[_current:_current+datalen] = data is a slice assignment: on a bytearray it
-    extends rather than truncating. _current then exceeds _size and the completion test
-    (_current == size) is an equality, so it is skipped over and never fires again.
+    Guards the ordering trap in a size check: validate before mutating _next_sequence.
+    Advancing first and then returning False makes every resend of that chunk mismatch,
+    so it is refused for the same reason each time until the retries run out.
+    """
+    m = _start()
+    seq, payload = _chunks()[0]
+    assert m.addData(payload, seq) is True
+    before = m._current_image._next_sequence
+
+    assert m.addData(b"\x00" * CHUNK, 0x99) is False, "wrong sequence is refused"
+    assert m._current_image._next_sequence == before, "a refusal must not move the counter"
+
+    nxt_seq, nxt_payload = _chunks()[1]
+    assert m.addData(nxt_payload, nxt_seq) is True, "the correct chunk still fits after a refusal"
+
+
+@expected_failure("no size check, so an over-long chunk extends the bytearray past size")
+def test_an_oversized_chunk_is_rejected_without_corrupting_the_record():
+    """Too much data must be refused, leaving the record intact for a resend.
+
+    Slice assignment on a bytearray extends rather than truncating, so an over-long chunk
+    pushes _current past _size. Completion is tested with _current == size, an equality
+    that has then been stepped over, so the image never completes and sits in progress
+    until the timeout.
     """
     m = _start()
     seqs = _chunks()
     for seq, payload in seqs[:-1]:
         assert m.addData(payload, seq) is True
+    before = m._current_image._next_sequence
+
     seq, payload = seqs[-1]
-    m.addData(payload + b"\xff" * 32, seq)  # panel sends a longer chunk than declared
-    assert not m.isImageComplete(), "overrun sails past the == size check"
-    assert len(m._current_image.buffer) > len(JPEG), "buffer grew beyond the declared size"
+    assert m.addData(payload + b"\xff" * 32, seq) is False, "over-long chunk is refused"
+    assert len(m._current_image.buffer) == len(JPEG), "buffer must not grow past the declared size"
+    assert m._current_image._next_sequence == before, "so the resend can land"
+
+    assert m.addData(payload, seq) is True, "the correctly sized resend completes the image"
+    assert m.isImageComplete()
 
 
-def test_truncated_transfer_needs_the_timeout():
-    """A transfer that stops dead never completes; only the timeout clears it."""
+def test_truncated_transfer_is_cleared_by_the_timeout():
+    """A transfer that stops dead never completes; the timeout is what releases it."""
     m = _start()
     for seq, payload in _chunks()[:4]:
         assert m.addData(payload, seq) is True
@@ -106,7 +163,7 @@ def test_truncated_transfer_needs_the_timeout():
 
     m._current_image._last -= timedelta(seconds=41)
     m.terminateIfExceededTimeout(40)
-    assert not m.hasStartedSequence(), "timeout is what rescues a dead transfer"
+    assert not m.hasStartedSequence(), "timeout rescues a dead transfer"
 
 
 def test_sequence_active_spans_the_gap_between_images():
@@ -122,8 +179,10 @@ def test_sequence_active_spans_the_gap_between_images():
 def test_sequence_active_self_clears_after_an_abandoned_download():
     """An abandoned download must not suppress B0 polling forever."""
     m = _start()
-    m.addData(*reversed(_chunks()[0]))  # addData(databuffer, sequence)
+    seq, payload = _chunks()[0]
+    assert m.addData(payload, seq) is True
     assert m.isSequenceActive()
+
     m._last_activity -= timedelta(seconds=16)
     assert not m.isSequenceActive(seconds=15), "window lapses, caller resumes"
     m.stop()
