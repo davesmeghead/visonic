@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 import mimetypes
 import os
 import re
@@ -15,11 +16,13 @@ from homeassistant.components.media_source import (
     Unresolvable,
     async_resolve_media as _resolve_media,
 )
+from homeassistant.components.http.auth import async_sign_path
 from homeassistant.core import HomeAssistant
 
 from .const import CONF_IMAGE_MEDIA_PATH, DEFAULT_IMAGE_MEDIA_PATH, DOMAIN
 
 _FRAME_RE = re.compile(r"_frame\d+\.jpg$", re.I)   # the stills ffmpeg is fed, not captures in their own right
+_THUMB_VALID = timedelta(days=1)                  # how long a poster URL stays signed for
 
 _IMAGE_EXT = (".gif", ".jpg", ".jpeg", ".png")
 _VIDEO_EXT = (".mp4",)
@@ -73,7 +76,35 @@ class VisonicMediaSource(MediaSource):
         """Browse the capture folders and clips."""
         base = self._base_dir()
         parts = self._safe_parts(item.identifier)
-        return await self.hass.async_add_executor_job(self._browse, base, parts)
+        result = await self.hass.async_add_executor_job(self._browse, base, parts)
+        for child in result.children or []:
+            if child.thumbnail:
+                child.thumbnail = self._sign_media_path(child.thumbnail)
+        return result
+
+    def _sign_media_path(self, abs_path: str) -> str | None:
+        """Turn an on-disk media path into a signed URL the frontend may load."""
+        for key, root in (self.hass.config.media_dirs or {}).items():
+            rel = os.path.relpath(abs_path, root)
+            if not rel.startswith(".."):
+                url = f"/media/{key}/{rel.replace(os.sep, '/')}"
+                return async_sign_path(self.hass, url, _THUMB_VALID)
+        return None
+
+    @staticmethod
+    def _poster_for(directory: str, name: str) -> str | None:
+        """Absolute path of a frame to use as a clip's poster, or None for non-clips."""
+        if not name.lower().endswith(_VIDEO_EXT):
+            return None
+        stem = os.path.splitext(name)[0]
+        frames = sorted(
+            f for f in os.listdir(directory)
+            if f.startswith(f"{stem}_frame") and f.lower().endswith(".jpg")
+        )
+        if not frames:
+            return None
+        # A frame from the middle of the burst says more than the first one.
+        return os.path.join(directory, frames[len(frames) // 2])
 
     def _browse(self, base: str, parts: list[str]) -> BrowseMediaSource:
         """Build the browse tree for a directory (executor thread)."""
@@ -101,17 +132,21 @@ class VisonicMediaSource(MediaSource):
                         )
                     )
                 elif name.lower().endswith(_MEDIA_EXT) and not _FRAME_RE.search(name):
-                    children.append(
-                        BrowseMediaSource(
-                            domain=DOMAIN,
-                            identifier=child_ident,
-                            media_class=_media_class(name),
-                            media_content_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
-                            title=name,
-                            can_play=True,
-                            can_expand=False,
-                        )
+                    child = BrowseMediaSource(
+                        domain=DOMAIN,
+                        identifier=child_ident,
+                        media_class=_media_class(name),
+                        media_content_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
+                        title=name,
+                        can_play=True,
+                        can_expand=False,
                     )
+                    # A clip has no poster of its own, so borrow one of the frames it was built
+                    # from. Stashed unsigned here because signing needs the event loop; the caller
+                    # turns it into a URL.
+                    if (poster := self._poster_for(target, name)) is not None:
+                        child.thumbnail = poster
+                    children.append(child)
         return BrowseMediaSource(
             domain=DOMAIN,
             identifier=ident,
