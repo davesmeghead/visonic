@@ -66,20 +66,23 @@ class ImageRecord:
 
     def addBufferData(self, databuffer, sequence) -> bool:
         """Add image buffer data."""
-        if self._ongoing and self._next_sequence is not None and sequence == self._next_sequence:
-            self._next_sequence = (self._next_sequence + 0x10) & 0xFF
-            self._last = get_utc_time()
-            datalen = len(databuffer)
-            self._buffer[self._current: self._current+datalen] = databuffer
-            self._current = self._current + datalen
-            if self._current == self.size:
-                # Could check the data for a jpg Start of Image "FF D8", Quantization Table "FF DB" and Start of Frame "FF C0", and maybe end of image "FF D9"
-                #   So "ff d8 ff db" at the start and "ff d9" at the end
-                #      "ff c0" is in the middle for the start of the image data itself
-                self._ongoing = False
-            log.debug(f"[handle_msgtypeF4]         {self}")
-            return True
-        log.debug("[handle_msgtypeF4]       ERROR: Attempt to add image data and the record has not been created")
+        if self._ongoing:
+            if self._next_sequence is not None and sequence == self._next_sequence:
+                self._next_sequence = (self._next_sequence + 0x10) & 0xFF
+                self._last = get_utc_time()
+                datalen = len(databuffer)
+                self._buffer[self._current: self._current+datalen] = databuffer
+                self._current = self._current + datalen
+                if self._current == self.size:
+                    # Could check the data for a jpg Start of Image "FF D8", Quantization Table "FF DB" and Start of Frame "FF C0", and maybe end of image "FF D9"
+                    #   So "ff d8 ff db" at the start and "ff d9" at the end
+                    #      "ff c0" is in the middle for the start of the image data itself
+                    self._ongoing = False
+                log.debug(f"[handle_msgtypeF4]         {self}")
+                return True
+            log.debug("[handle_msgtypeF4]       ERROR: Received Image data out of sequence")
+        else:
+            log.debug("[handle_msgtypeF4]       ERROR: Attempt to add image data and the record has not been created")
         return False
 
     def isImageComplete(self) -> bool:
@@ -105,7 +108,7 @@ class ImageZoneClass:
         """Return a string representation."""
         return f"{self.totalimages=}  {self.count=}  {self.unique_id=}  {self.start=}"
 
-    def add_replace(self, image_id: int, image_record):
+    def add_replace(self, image_id: int, image_record: ImageRecord):
         """Add or replace an image in the image list, and make it current."""
         if image_id in self.images:
             del self.images[image_id]
@@ -129,7 +132,7 @@ class AlImageManager:
         self._current_image: ImageRecord = None           # The current image being built
         self._last_activity: datetime | None = None       # last time any F4 image data arrived, for isSequenceActive
 
-    def _reset_current(self):
+    def reset_current(self):
         """Reset the in-progress image build state."""
         self._current_zone = None             # when not None then building an image for this zone number
         self._current_id = None
@@ -137,14 +140,14 @@ class AlImageManager:
 
     def stop(self):
         """Terminate the image creation."""
-        self._reset_current()
+        self.reset_current()
         self.last_image = None
         self._last_activity = None
 
     def isSequenceActive(self, seconds: int = 15) -> bool:
         """Is a camera image download underway, including the gaps between images.
 
-        hasStartedSequence() only covers a single image - _reset_current() runs as each
+        hasStartedSequence() only covers a single image - reset_current() runs as each
         one completes - so it reads False during the several second gap before the panel
         starts the next. This spans the whole sequence.
 
@@ -220,13 +223,19 @@ class AlImageManager:
         if self._current_image.isImageComplete():
             self.last_image = self._current_image
             self.ImageZone[self._current_zone].add_replace(self._current_id, self._current_image)
-            self._reset_current()
+            self.reset_current()
         return insequence
 
     def getLastImageRecord(self) -> tuple[ImageZoneClass, ImageRecord]:
         """Get the last image record."""
         if self.last_image is not None and self.last_image.hasParent():
             return (self.last_image.parent, self.last_image)
+        return (None, None)
+
+    def getCurrentImageRecord(self) -> tuple[ImageZoneClass, ImageRecord]:
+        """Get the last image record."""
+        if self._current_image is not None and self._current_image.hasParent():
+            return (self._current_image.parent, self._current_image)
         return (None, None)
 
     def isValidImage(self, zone: int, image_id: int) -> bool:

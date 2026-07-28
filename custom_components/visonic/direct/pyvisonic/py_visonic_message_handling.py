@@ -945,6 +945,21 @@ class MessageHandling(MessageHandlingB0Data):
     def _handle_msgtype_F4(self, data : bytearray) -> bool:  # Static JPG Image
         """MsgType=F4 - Static JPG Image."""
 
+        def send_f4_07(zone: int, unique_id: int, image_id: int, status: int):
+            # I currently assume that f4 07 messages need to be sent to the panel to inform it that we have received the image OK.
+            #      I'm not sure how to tell the panel that we have not received it OK
+            _body = f'f4 07 00 01 04 {zone:>02} {hexify(unique_id):>02} {hexify(image_id):>02} {status:>02}'
+            _c1, _c2 = self.f4_checksum(convert_bytearray(_body))
+            self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
+
+        def send_f4_10(zone: int, unique_id: int, image_id: int, status: int):
+            # I also assume that f4 10 messages tell the panel what to do next, send the next image or stop sending image data
+            # Assume that we are managing the interaction/protocol with the panel
+            _body = f'f4 10 00 01 04 {status:>02} {zone:>02} {hexify(unique_id):>02} {hexify(image_id):>02}'
+            _c1, _c2 = self.f4_checksum(convert_bytearray(_body))
+            self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
+
+
         #log.debug(f"[handle_msgtypeF4]  data {toString(data)}")
 
         #      0 - message type  ==>  3=start, 5=data
@@ -1061,17 +1076,8 @@ class MessageHandling(MessageHandlingB0Data):
                         # the panel through the sequence equally; resends are panel-side link/state behaviour.)
                         _offload_f4_ack = os.path.exists("/config/visonic_no_ha_f4_ack")
                         if not _offload_f4_ack:
-                            # I currently assume that f4 07 messages need to be sent to the panel to inform it that we have received the image OK.
-                            #      I'm not sure how to tell the panel that we have not received it OK
-                            _body = f'f4 07 00 01 04 {ir.zone:>02} {hexify(izc.unique_id):>02} {hexify(ir.image_id):>02} 00'
-                            _c1, _c2 = self.f4_checksum(convert_bytearray(_body))
-                            self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
-
-                            # I also assume that f4 10 messages tell the panel what to do next, send the next image or stop sending image data
-                            # Assume that we are managing the interaction/protocol with the panel
-                            _body = f'f4 10 00 01 04 00 {ir.zone:>02} {hexify(izc.unique_id):>02} {hexify(ir.image_id):>02}'
-                            _c1, _c2 = self.f4_checksum(convert_bytearray(_body))
-                            self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
+                            send_f4_07(ir.zone, izc.unique_id, ir.image_id, 0)
+                            send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
 
                         if ir.lastimage:
                             # Tell the panel we received that one OK, we're ready for the next
@@ -1079,8 +1085,17 @@ class MessageHandling(MessageHandlingB0Data):
                             self.image_manager.stop()
 
                 else:
-                    log.debug("[handle_msgtypeF4]         Message out of sequence, dumping all data")
-                    self.image_manager.stop()
+                    # Received an F4-05 data message out of sequence, get the current image data
+                    izc, ir = self.image_manager.getCurrentImageRecord()
+                    if izc is not None:
+                        # Ask for same image again
+                        log.debug(f"[handle_msgtypeF4]         Message out of sequence, requesting resend of zone {ir.zone}, image {ir.image_id}")
+                        send_f4_07(ir.zone, izc.unique_id, ir.image_id, 1)
+                        send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
+                        self.image_manager.reset_current()
+                    else:
+                        log.debug("[handle_msgtypeF4]         Message out of sequence, dumping all data")
+                        self.image_manager.stop()
 
         elif msgtype == 0x01:
             log.debug(f"[handle_msgtypeF4]  data {toString(data)}")
