@@ -211,12 +211,7 @@ class AlImageManager:
         return self._current_image is None and self.last_image is not None and self.last_image.isImageComplete()
 
     def isImageDataInProgress(self) -> bool:
-        """Is an image part built right now.
-
-        This used to read last_image, which is only assigned once an image COMPLETES, and a
-        completed record has _ongoing False - so it could never return True and every caller
-        was dead code. The in-progress record is _current_image.
-        """
+        """Is an image part built right now. Note last_image is the finished one, not this."""
         return self._current_image is not None and self._current_image.isOngoing()
 
     def terminateIfExceededTimeout(self, seconds) -> None:
@@ -234,11 +229,9 @@ class AlImageManager:
         # set up an entry in ImageZone with no images
         #    count is the number of images that the user asked for
         if self.hasStartedSequence():
-            # A transfer is under way. The panel serialises these over one link and an F4-05 data
-            # message carries no zone - only the F4-03 header does - so there is exactly one image
-            # in flight at a time, whatever camera it belongs to. That makes this refusal correct,
-            # but it must not outlive the transfer: a record left behind by a panel that stopped
-            # sending would otherwise block every camera indefinitely. Drop a dead one first.
+            # Only one image is ever in flight: an F4-05 carries no zone, so the receiver cannot
+            # tell two apart. Refusing here is therefore right, but a record left behind by a panel
+            # that stopped sending must not block every camera, so drop a dead one first.
             self.terminateIfExceededTimeout(IMAGE_TRANSFER_TIMEOUT)
             if self.hasStartedSequence():
                 return False

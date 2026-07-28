@@ -50,10 +50,9 @@ def _is_wav(buffer) -> bool:
 def _is_capture_audio(record) -> bool:
     """Is this record the capture's audio clip.
 
-    image_id comes from the F4-03 header, which carries its own frame CRC, so it survives
-    damage to the payload. The RIFF magic does not: corrupt the first byte and the clip stops
-    looking like audio, which previously meant a damaged clip was thrown away as a bad JPEG
-    and the capture rendered nothing at all.
+    image_id comes from the F4-03 header, which has its own frame CRC, so it survives damage to
+    the payload. The RIFF magic does not: corrupt the first byte and the clip stops looking like
+    audio at all.
     """
     return record.image_id == AUDIO_IMAGE_ID or _is_wav(record.buffer)
 
