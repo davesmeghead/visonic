@@ -40,13 +40,13 @@ JPEG = bytes.fromhex("ffd8ffdb") + b"\x00" * 92 + bytes.fromhex("ffd9")  # 98 by
 CHUNK = 14  # 7 chunks of 14 bytes
 
 
-def _start(size=len(JPEG)):
+def _start(size=len(JPEG), crc=None, totalimages=1, image_id=IMAGE_ID):
     """A manager with an image sequence started, ready for data at sequence 0x10."""
     m = img.AlImageManager()
     assert m.create(ZONE, 1)
     assert m.setCurrent(
-        zone=ZONE, unique_id=UID, image_id=IMAGE_ID, size=size,
-        sequence=0x00, lastimage=True, totalimages=1,
+        zone=ZONE, unique_id=UID, image_id=image_id, size=size,
+        sequence=0x00, lastimage=True, totalimages=totalimages, crc=crc,
     )
     return m
 
@@ -159,6 +159,97 @@ def test_sequence_active_self_clears_after_an_abandoned_download():
     assert not m.isSequenceActive(seconds=15), "window lapses, caller resumes"
     m.stop()
     assert not m.isSequenceActive()
+
+
+# Real frames captured off the wire, used as CRC vectors. Body is the frame without the 0x0D
+# preamble and without the two CRC bytes and 0x0A footer, which is what f4_crc16 is fed.
+WIRE_VECTORS = [
+    ("f4 07 ack",   "f4 07 00 01 04 06 70 00 00", (0xA9, 0x7C)),
+    ("f4 10 ack",   "f4 10 00 01 04 00 06 70 00", (0x6D, 0xC3)),
+    ("f4 01 panel", "f4 01 00 00 00",             (0xE4, 0xC0)),
+]
+
+
+def test_f4_crc16_matches_frames_captured_off_the_wire():
+    """The CRC must reproduce real panel and Powerlink frames byte for byte."""
+    for name, body, expected in WIRE_VECTORS:
+        got = img.f4_crc16(bytes.fromhex(body.replace(" ", "")))
+        assert got == expected, f"{name}: got {got}, wire says {expected}"
+
+
+def test_a_good_image_passes_its_header_crc():
+    """An intact image matches the CRC the panel declared for it."""
+    m = _start(crc=img.f4_crc16(JPEG))
+    for seq, payload in _chunks():
+        assert m.addData(payload, seq) is True
+    _, ir = m.getLastImageRecord()
+    assert ir.isChecksumValid()
+
+
+def test_a_corrupted_image_fails_its_header_crc():
+    """A single flipped byte is caught, which the per-chunk F4-05 CRC cannot do reliably."""
+    m = _start(crc=img.f4_crc16(JPEG))
+    chunks = _chunks()
+    damaged = bytearray(chunks[2][1])
+    damaged[0] ^= 0xFF                       # one byte, mid image
+    chunks[2] = (chunks[2][0], bytes(damaged))
+    for seq, payload in chunks:
+        assert m.addData(payload, seq) is True
+    _, ir = m.getLastImageRecord()
+    assert not ir.isChecksumValid(), "a flipped byte must not pass"
+
+
+def test_an_image_with_no_declared_crc_is_not_treated_as_bad():
+    """No CRC means unchecked, not failed - an unchecked image is still served."""
+    m = _start(crc=None)
+    for seq, payload in _chunks():
+        assert m.addData(payload, seq) is True
+    _, ir = m.getLastImageRecord()
+    assert ir.isChecksumValid()
+
+
+def test_first_header_total_of_0xff_does_not_overwrite_a_known_total():
+    """The panel says 0xFF in the first header of a capture, which means "not told yet"."""
+    m = _start(totalimages=img.TOTAL_IMAGES_UNKNOWN)
+    assert m.ImageZone[ZONE].totalimages == img.TOTAL_IMAGES_UNKNOWN, "still unknown after the first header"
+    for seq, payload in _chunks():
+        m.addData(payload, seq)
+
+    assert m.setCurrent(zone=ZONE, unique_id=UID, image_id=2, size=len(JPEG),
+                        sequence=0x00, lastimage=False, totalimages=4)
+    assert m.ImageZone[ZONE].totalimages == 4, "the real total is taken when the panel sends it"
+
+    for seq, payload in _chunks():
+        m.addData(payload, seq)
+    assert m.setCurrent(zone=ZONE, unique_id=UID, image_id=3, size=len(JPEG),
+                        sequence=0x00, lastimage=False, totalimages=img.TOTAL_IMAGES_UNKNOWN)
+    assert m.ImageZone[ZONE].totalimages == 4, "0xFF must not clobber what we already knew"
+
+
+def test_a_bad_image_is_retried_a_bounded_number_of_times():
+    """Retries are capped so an unrecoverable image cannot stall the capture forever."""
+    m = _start()
+    for n in range(1, img.MAX_IMAGE_ATTEMPTS + 1):
+        assert m.note_attempt(ZONE, IMAGE_ID) == n
+        expect_more = n < img.MAX_IMAGE_ATTEMPTS
+        assert m.attempts_left(ZONE, IMAGE_ID) is expect_more
+    assert not m.attempts_left(ZONE, IMAGE_ID), "must give up rather than loop"
+    m.stop()
+    assert m.attempts_left(ZONE, IMAGE_ID), "a new capture starts the count again"
+
+
+def test_discarding_a_bad_image_removes_it_from_the_store():
+    """A failed image must not be left behind for the user to see."""
+    m = _start(crc=(0x00, 0x00))             # a CRC the image cannot match
+    for seq, payload in _chunks():
+        m.addData(payload, seq)
+    assert m.getImage(ZONE, IMAGE_ID) is not None
+    _, ir = m.getLastImageRecord()
+    assert not ir.isChecksumValid()
+
+    m.discard_last()
+    assert m.getImage(ZONE, IMAGE_ID) is None, "the bad image is dropped"
+    assert m.getLastImageRecord() == (None, None)
 
 
 if __name__ == "__main__":

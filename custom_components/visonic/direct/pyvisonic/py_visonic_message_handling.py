@@ -985,7 +985,8 @@ class MessageHandling(MessageHandlingB0Data):
             image_id = data[7]
             lastimage = data[11] == 1
             size = (data[13] * 256) + data[12]
-            totalimages = data[14]
+            totalimages = data[14]                    # 0xFF in the first header of a capture, the real total after that
+            crc = (data[15], data[16])                # CRC-16 of the finished image, low byte first
 
             if zone in self.image_ignore:
                 log.debug(f"[handle_msgtypeF4]        Ignoring Image Header, so not processing F4 data.      zone = {zone}    size = {size}    unique_id = {hex(unique_id)}    image_id = {image_id}     lastimage = {lastimage}    totalimages = {totalimages}")
@@ -1002,7 +1003,7 @@ class MessageHandling(MessageHandlingB0Data):
             elif zone - 1 in self.SensorList:
                 log.debug("[handle_msgtypeF4]        Processing Image Header data")
                 # Initialise the receipt of an image in the ImageManager
-                success = self.image_manager.setCurrent(zone = zone, unique_id = unique_id, image_id = image_id, size = size, sequence = sequence, lastimage = lastimage, totalimages = totalimages)
+                success = self.image_manager.setCurrent(zone = zone, unique_id = unique_id, image_id = image_id, size = size, sequence = sequence, lastimage = lastimage, totalimages = totalimages, crc = crc)
                 # Assume that we are managing the interaction/protocol with the panel
                 self.ignoreF4DataMessages = not success
 
@@ -1022,6 +1023,25 @@ class MessageHandling(MessageHandlingB0Data):
                         izc, ir = self.image_manager.getLastImageRecord()
                         log.debug(f"[handle_msgtypeF4]        Image Complete       Current Data     zone={ir.zone}    unique_id={hex(izc.unique_id)}    image_id={ir.image_id}    total_images={izc.totalimages}    lastimage={ir.lastimage}")
                         pushchange = True
+
+                        # The F4-03 header carries a CRC-16 of the finished image, so a damaged one
+                        # can be spotted and asked for again. Give up after MAX_IMAGE_ATTEMPTS and
+                        # let the capture carry on: nine good frames beat hanging on a bad fifth.
+                        attempt = self.image_manager.note_attempt(ir.zone, ir.image_id)
+                        if not ir.isChecksumValid():
+                            if self.image_manager.attempts_left(ir.zone, ir.image_id):
+                                log.debug(f"[handle_msgtypeF4]        Image checksum wrong for zone {ir.zone} image {ir.image_id} (attempt {attempt}), asking for it again")
+                                self.image_manager.discard_last()
+                                send_f4_07(ir.zone, izc.unique_id, ir.image_id, 1)
+                                send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
+                                return pushchange
+                            log.warning(f"[handle_msgtypeF4]        Image checksum still wrong for zone {ir.zone} image {ir.image_id} after {attempt} attempts, skipping it")
+                            self.image_manager.discard_last()
+                            send_f4_07(ir.zone, izc.unique_id, ir.image_id, 0)   # accept it so the panel moves on
+                            send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
+                            if ir.lastimage:
+                                self.image_manager.stop()
+                            return pushchange
 
                         #self.add_message_to_send_queue(Send.IMAGE_FB)
 

@@ -3,6 +3,7 @@
 import logging
 
 from .py_types_receiving import ChecksumType
+from .py_utils import f4_crc16
 
 log = logging.getLogger(__name__)
 
@@ -97,14 +98,5 @@ class MyChecksumCalc:
         return bytearray([checksum])
 
     def f4_checksum(self, body: bytearray) -> tuple[int, int]:
-        """CRC-16/CCITT (poly 0x1021, init 0, no xorout) for F4 messages, output byte-swapped.
-
-        Both F4-07 and F4-10 acks use this unchanged - verified byte-for-byte against a real
-        Powerlink on the wire (104/105 captured acks). The earlier 0xE700 xorout on F4-07 was wrong.
-        """
-        crc = 0
-        for by in body:
-            crc ^= by << 8
-            for _ in range(8):
-                crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
-        return crc & 0xFF, (crc >> 8) & 0xFF
+        """CRC-16/CCITT for F4 messages. Shared with the reassembled-image check, see f4_crc16."""
+        return f4_crc16(body)

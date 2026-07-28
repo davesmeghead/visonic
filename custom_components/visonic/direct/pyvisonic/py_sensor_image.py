@@ -5,15 +5,18 @@
 from datetime import datetime, timedelta
 import logging
 
-from .py_utils import get_utc_time
+from .py_utils import f4_crc16, get_utc_time
 
 log = logging.getLogger(__name__)
+
+TOTAL_IMAGES_UNKNOWN = 0xFF   # what the panel puts in the first F4-03 header of a capture
+MAX_IMAGE_ATTEMPTS = 3        # asks for a bad image this many times before giving up on it
 
 
 class ImageRecord:
     """Image Record Class. The details of an individual image."""
 
-    def __init__(self, zone: int, image_id: int, size: int, next_seq: int, lastimage: bool, parent: ImageZoneClass) -> None:
+    def __init__(self, zone: int, image_id: int, size: int, next_seq: int, lastimage: bool, parent: ImageZoneClass, crc: tuple[int, int] | None = None) -> None:
         """Initialize the ImageRecord."""
         self._current_id = image_id               # The image_id is the image number from the panel.  The panel outputs a sequence of images.
         self._buffer: bytearray = bytearray(size) # Data buffer
@@ -25,6 +28,7 @@ class ImageRecord:
         self._zone: int = zone                    # The zone that the image is from
         self._size: int = size                    # The size of the image in bytes
         self.parent: ImageZoneClass = parent      # The parent ImageZoneClass
+        self._crc: tuple[int, int] | None = crc   # CRC-16 of the finished image, from the F4-03 header
 
     def __str__(self) -> str:
         """Return a string representation."""
@@ -63,6 +67,25 @@ class ImageRecord:
     def hasParent(self):
         """There should always be a parent but just check."""
         return self.parent is not None
+
+    @property
+    def crc(self) -> tuple[int, int] | None:
+        """Return the CRC the panel declared for this image, or None if it did not."""
+        return self._crc
+
+    def isChecksumValid(self) -> bool:
+        """Does the assembled image match the CRC the panel put in its F4-03 header.
+
+        This is the only integrity check on an image that actually works. The per-chunk CRC in
+        the F4-05 messages cannot be used: 46 of 205 chunks on a clean wire fail their own CRC
+        every time, including the ones carrying the JPEG SOF and SOS markers. This one is over
+        the finished buffer and holds for the audio clip as well as the JPEGs.
+
+        Returns True when no CRC was supplied, so an unchecked image is never treated as bad.
+        """
+        if self._crc is None:
+            return True
+        return f4_crc16(self._buffer) == self._crc
 
     def addBufferData(self, databuffer, sequence) -> bool:
         """Add image buffer data."""
@@ -103,7 +126,7 @@ class ImageZoneClass:
         """Initialize the ImageZoneClass."""
         self.start = get_utc_time()                 # Start time
         self.count = 0                              # How many images did the user ask for, this defaults to 11 as we can't set this to the panel and 11 is how many the panel sends anyway
-        self.totalimages = 255                      # After the first image, the panel tells us how many images
+        self.totalimages = TOTAL_IMAGES_UNKNOWN     # The panel only tells us from the second header onwards
         self.unique_id = -1                         # Each sequence has a unique id
         self.images: dict[int, ImageRecord] = { }   # Image Store, images are replaced when a new one is sent
 
@@ -134,6 +157,25 @@ class AlImageManager:
         self._current_id: int | None = None
         self._current_image: ImageRecord = None           # The current image being built
         self._last_activity: datetime | None = None       # last time any F4 image data arrived, for isSequenceActive
+        self._attempts: dict[tuple[int, int], int] = {}   # (zone, image_id) -> times the panel has sent it
+
+    def note_attempt(self, zone: int, image_id: int) -> int:
+        """Count an attempt at an image and return how many there have now been."""
+        key = (zone, image_id)
+        self._attempts[key] = self._attempts.get(key, 0) + 1
+        return self._attempts[key]
+
+    def attempts_left(self, zone: int, image_id: int) -> bool:
+        """Is it worth asking the panel for this image again."""
+        return self._attempts.get((zone, image_id), 0) < MAX_IMAGE_ATTEMPTS
+
+    def discard_last(self):
+        """Drop the image just completed, so a failed one is not served to the user."""
+        if self.last_image is not None:
+            zone, image_id = self.last_image.zone, self.last_image.image_id
+            if zone in self.ImageZone:
+                self.ImageZone[zone].delete(image_id)
+        self.last_image = None
 
     def reset_current(self):
         """Reset the in-progress image build state."""
@@ -146,6 +188,7 @@ class AlImageManager:
         self.reset_current()
         self.last_image = None
         self._last_activity = None
+        self._attempts = {}
 
     def isSequenceActive(self, seconds: int = 15) -> bool:
         """Is a camera image download underway, including the gaps between images.
@@ -187,6 +230,7 @@ class AlImageManager:
         if zone not in self.ImageZone:
             self.ImageZone[zone] = ImageZoneClass()
         self.last_image = None
+        self._attempts = {}
         self.ImageZone[zone].count = count
         log.debug(f'[AlImageManager]  Create JPG: zone = {zone}   start time = {self.ImageZone[zone].start}   count = {self.ImageZone[zone].count}')
         return True
@@ -195,7 +239,7 @@ class AlImageManager:
         """Has started image sequence."""
         return self._current_image is not None
 
-    def setCurrent(self, zone, unique_id, image_id, size, sequence, lastimage, totalimages) -> bool:
+    def setCurrent(self, zone, unique_id, image_id, size, sequence, lastimage, totalimages, crc: tuple[int, int] | None = None) -> bool:
         """Start a new (current) image record."""
         if self.hasStartedSequence() or zone not in self.ImageZone:
             log.debug(f'[AlImageManager]  Setup not successful for zone = {self._current_zone}    unique_id = {hex(unique_id)}    image_id = {image_id}')
@@ -203,10 +247,13 @@ class AlImageManager:
 
         # Set or update the image zone parameters
         self.ImageZone[zone].unique_id = unique_id
-        self.ImageZone[zone].totalimages = totalimages
+        # The panel sends 0xFF in the first header of a capture and the real total in every one
+        # after, so treat 0xFF as "not told yet" and keep whatever we already know.
+        if totalimages != TOTAL_IMAGES_UNKNOWN:
+            self.ImageZone[zone].totalimages = totalimages
 
         # Always replace the existing ImageRecord if one already exists
-        image_record = ImageRecord(zone = zone, image_id = image_id, size = size, lastimage = lastimage, next_seq = (sequence + 0x10) & 0xFF, parent = self.ImageZone[zone])
+        image_record = ImageRecord(zone = zone, image_id = image_id, size = size, lastimage = lastimage, next_seq = (sequence + 0x10) & 0xFF, parent = self.ImageZone[zone], crc = crc)
         self._current_zone = zone
         self._current_id = image_id
         self._current_image = image_record
