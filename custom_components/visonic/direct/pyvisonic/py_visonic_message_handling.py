@@ -1008,17 +1008,18 @@ class MessageHandling(MessageHandlingB0Data):
             totalimages = data[14]                    # 0xFF in the first header of a capture, the real total after that
             crc = (data[15], data[16])                # CRC-16 of the finished image, low byte first
 
+            if self.image_manager.isImageDataInProgress():
+                # A new header arrived while the previous image was still part built, so that one
+                # is lost. Drop just that image and carry on with this header: binning the whole
+                # capture and locking the zone out until a lastimage happens to arrive costs far
+                # more than the single frame actually lost.
+                log.warning(f"[handle_msgtypeF4]        Previous image incomplete, dropping it and continuing with image {image_id} for zone {zone}")
+                self.image_manager.reset_current()
+
             if zone in self.image_ignore:
                 log.debug(f"[handle_msgtypeF4]        Ignoring Image Header, so not processing F4 data.      zone = {zone}    size = {size}    unique_id = {hex(unique_id)}    image_id = {image_id}     lastimage = {lastimage}    totalimages = {totalimages}")
                 if lastimage:
                     self.image_ignore.remove(zone)
-
-            elif self.image_manager.isImageDataInProgress():
-                # We have received an unexpected F4 message header when the previous image transfer is still in progress
-                log.debug(f"[handle_msgtypeF4]        Previous Image transfer incomplete, so not processing F4 data and terminating image creation for zone {zone}")
-                self.image_ignore.add(zone)        # Prevent the user being able to ask for this zone again until we've cleared all the current data
-                self.ignoreF4DataMessages = True   # Ignore 0x05 data packets
-                self.image_manager.stop()
 
             elif zone - 1 in self.SensorList:
                 log.debug("[handle_msgtypeF4]        Processing Image Header data")

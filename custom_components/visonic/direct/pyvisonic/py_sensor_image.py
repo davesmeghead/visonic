@@ -210,8 +210,13 @@ class AlImageManager:
         return self._current_image is None and self.last_image is not None and self.last_image.isImageComplete()
 
     def isImageDataInProgress(self) -> bool:
-        """Is the image data ongoing."""
-        return False if self.last_image is None else self.last_image.isOngoing()
+        """Is an image part built right now.
+
+        This used to read last_image, which is only assigned once an image COMPLETES, and a
+        completed record has _ongoing False - so it could never return True and every caller
+        was dead code. The in-progress record is _current_image.
+        """
+        return self._current_image is not None and self._current_image.isOngoing()
 
     def terminateIfExceededTimeout(self, seconds) -> None:
         """Terminate image if exceeded timeout."""

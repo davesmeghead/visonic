@@ -252,6 +252,26 @@ def test_discarding_a_bad_image_removes_it_from_the_store():
     assert m.getLastImageRecord() == (None, None)
 
 
+def test_an_in_progress_image_reports_itself_as_in_progress():
+    """isImageDataInProgress must be true while an image is part built.
+
+    It used to read last_image, which is only assigned once an image completes, and a
+    completed record has _ongoing False - so it could never be true and every caller was
+    dead code, including the stuck-image timeout.
+    """
+    m = _start()
+    assert not m.isImageDataInProgress(), "nothing received yet"
+
+    seq, payload = _chunks()[0]
+    assert m.addData(payload, seq) is True
+    assert m.isImageDataInProgress(), "part built image must report in progress"
+
+    for seq, payload in _chunks()[1:]:
+        m.addData(payload, seq)
+    assert m.isImageComplete()
+    assert not m.isImageDataInProgress(), "a finished image is not in progress"
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):
