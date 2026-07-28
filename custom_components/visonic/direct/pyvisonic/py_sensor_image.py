@@ -68,9 +68,12 @@ class ImageRecord:
         """Add image buffer data."""
         if self._ongoing:
             if self._next_sequence is not None and sequence == self._next_sequence:
+                datalen = len(databuffer)
+                if self._current + datalen > self.size:
+                    log.debug("[handle_msgtypeF4]       ERROR: Attempt to add too much image data and the record size has been exceeded")
+                    return False
                 self._next_sequence = (self._next_sequence + 0x10) & 0xFF
                 self._last = get_utc_time()
-                datalen = len(databuffer)
                 self._buffer[self._current: self._current+datalen] = databuffer
                 self._current = self._current + datalen
                 if self._current == self.size:
