@@ -39,7 +39,8 @@ from .py_utils import b2i, convert_bytearray, get_local_time, hexify, toString
 from .py_visonic_message_b0_chunk import MessageHandlingB0Data
 
 AUDIO_IMAGE_ID = 0   # the panel closes a capture with its audio clip, always as image 0
-
+IMAGE_GOOD = 0       # Used in F4-07 messages to the panel
+IMAGE_BAD = 1        # Used in F4-07 messages to the panel
 
 def _is_wav(buffer) -> bool:
     """Does this buffer look like a RIFF/WAVE clip rather than a JPEG frame."""
@@ -965,16 +966,16 @@ class MessageHandling(MessageHandlingB0Data):
         """MsgType=F4 - Static JPG Image."""
 
         def send_f4_07(zone: int, unique_id: int, image_id: int, status: int):
-            # I currently assume that f4 07 messages need to be sent to the panel to inform it that we have received the image OK.
-            #      I'm not sure how to tell the panel that we have not received it OK
+            # The f4 07 messages need to be sent to the panel to inform it that we have received the image OK or not.
+            #      status=0 for success, status=1 for failure, asking the panel to resent the image
             _body = f'f4 07 00 01 04 {zone:>02} {hexify(unique_id):>02} {hexify(image_id):>02} {status:>02}'
             _c1, _c2 = self.f4_checksum(convert_bytearray(_body))
             self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
 
-        def send_f4_10(zone: int, unique_id: int, image_id: int, status: int):
-            # I also assume that f4 10 messages tell the panel what to do next, send the next image or stop sending image data
+        def send_f4_10(zone: int, unique_id: int, image_id: int):
+            # The f4 10 messages tell the panel what to do next, send the next image or stop sending image data
             # Assume that we are managing the interaction/protocol with the panel
-            _body = f'f4 10 00 01 04 {status:>02} {zone:>02} {hexify(unique_id):>02} {hexify(image_id):>02}'
+            _body = f'f4 10 00 01 04 00 {zone:>02} {hexify(unique_id):>02} {hexify(image_id):>02}'
             _c1, _c2 = self.f4_checksum(convert_bytearray(_body))
             self.add_message_to_send_queue(convert_bytearray(f'0d {_body} {_c1:02x} {_c2:02x} 0a'))
 
@@ -1052,8 +1053,8 @@ class MessageHandling(MessageHandlingB0Data):
                             if self.image_manager.attempts_left(ir.zone, ir.image_id):
                                 log.debug(f"[handle_msgtypeF4]        Image checksum wrong for zone {ir.zone} image {ir.image_id} (attempt {attempt}), asking for it again")
                                 self.image_manager.discard_last()
-                                send_f4_07(ir.zone, izc.unique_id, ir.image_id, 1)
-                                send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
+                                send_f4_07(ir.zone, izc.unique_id, ir.image_id, IMAGE_BAD)
+                                send_f4_10(ir.zone, izc.unique_id, ir.image_id)
                                 return pushchange
                             # Out of attempts. The audio is kept even when it is bad, because it is
                             # also the end-of-capture marker: dropping it means the clip is never
@@ -1063,8 +1064,8 @@ class MessageHandling(MessageHandlingB0Data):
                             if not _is_capture_audio(ir):
                                 log.warning(f"[handle_msgtypeF4]        Image checksum still wrong for zone {ir.zone} image {ir.image_id} after {attempt} attempts, skipping it")
                                 self.image_manager.discard_last()
-                                send_f4_07(ir.zone, izc.unique_id, ir.image_id, 0)   # accept it so the panel moves on
-                                send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
+                                send_f4_07(ir.zone, izc.unique_id, ir.image_id, IMAGE_GOOD)   # accept it so the panel moves on
+                                send_f4_10(ir.zone, izc.unique_id, ir.image_id)
                                 if ir.lastimage:
                                     self.image_manager.stop()
                                 return pushchange
@@ -1119,8 +1120,8 @@ class MessageHandling(MessageHandlingB0Data):
                         # the panel through the sequence equally; resends are panel-side link/state behaviour.)
                         _offload_f4_ack = os.path.exists("/config/visonic_no_ha_f4_ack")
                         if not _offload_f4_ack:
-                            send_f4_07(ir.zone, izc.unique_id, ir.image_id, 0)
-                            send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
+                            send_f4_07(ir.zone, izc.unique_id, ir.image_id, IMAGE_GOOD)
+                            send_f4_10(ir.zone, izc.unique_id, ir.image_id)
 
                         if ir.lastimage:
                             # Tell the panel we received that one OK, we're ready for the next
@@ -1133,8 +1134,8 @@ class MessageHandling(MessageHandlingB0Data):
                     if izc is not None:
                         # Ask for same image again
                         log.debug(f"[handle_msgtypeF4]         Message out of sequence, requesting resend of zone {ir.zone}, image {ir.image_id}")
-                        send_f4_07(ir.zone, izc.unique_id, ir.image_id, 1)
-                        send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
+                        send_f4_07(ir.zone, izc.unique_id, ir.image_id, IMAGE_BAD)
+                        send_f4_10(ir.zone, izc.unique_id, ir.image_id)
                         self.image_manager.reset_current()
                     else:
                         log.debug("[handle_msgtypeF4]         Message out of sequence, dumping all data")
