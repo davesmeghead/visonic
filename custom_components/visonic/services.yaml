@@ -122,3 +122,4 @@ alarm_sensor_image:
         entity:
           integration: visonic
           domain: image
+          multiple: true

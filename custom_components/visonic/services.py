@@ -112,7 +112,9 @@ ALARM_SCHEMA_ZONE_INFO = vol.Schema(
 
 ALARM_SCHEMA_IMAGE = vol.Schema(
     {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        # Accept a list as well as a single entity, so one press can ask every camera. The panel
+        # serialises image transfers anyway, and the coordinator queues them.
+        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
     }
 )
 
