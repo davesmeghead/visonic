@@ -38,6 +38,26 @@ from .py_types_sending import pmSendMsgB0, pmSendMsgB0_reverseLookup
 from .py_utils import b2i, convert_bytearray, get_local_time, hexify, toString
 from .py_visonic_message_b0_chunk import MessageHandlingB0Data
 
+AUDIO_IMAGE_ID = 0   # the panel closes a capture with its audio clip, always as image 0
+
+
+def _is_wav(buffer) -> bool:
+    """Does this buffer look like a RIFF/WAVE clip rather than a JPEG frame."""
+    return (buffer is not None and len(buffer) > 12
+            and bytes(buffer[:4]) == b"RIFF" and bytes(buffer[8:12]) == b"WAVE")
+
+
+def _is_capture_audio(record) -> bool:
+    """Is this record the capture's audio clip.
+
+    image_id comes from the F4-03 header, which carries its own frame CRC, so it survives
+    damage to the payload. The RIFF magic does not: corrupt the first byte and the clip stops
+    looking like audio, which previously meant a damaged clip was thrown away as a bad JPEG
+    and the capture rendered nothing at all.
+    """
+    return record.image_id == AUDIO_IMAGE_ID or _is_wav(record.buffer)
+
+
 log = logging.getLogger(__name__)
 
 powermax_devices: dict[str, int] = {
@@ -1035,13 +1055,20 @@ class MessageHandling(MessageHandlingB0Data):
                                 send_f4_07(ir.zone, izc.unique_id, ir.image_id, 1)
                                 send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
                                 return pushchange
-                            log.warning(f"[handle_msgtypeF4]        Image checksum still wrong for zone {ir.zone} image {ir.image_id} after {attempt} attempts, skipping it")
-                            self.image_manager.discard_last()
-                            send_f4_07(ir.zone, izc.unique_id, ir.image_id, 0)   # accept it so the panel moves on
-                            send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
-                            if ir.lastimage:
-                                self.image_manager.stop()
-                            return pushchange
+                            # Out of attempts. The audio is kept even when it is bad, because it is
+                            # also the end-of-capture marker: dropping it means the clip is never
+                            # rendered and the user gets loose stills and no video. A glitch in a
+                            # few hundred ms of sound is the lesser problem. A bad JPEG has no such
+                            # second job, so that one is dropped.
+                            if not _is_capture_audio(ir):
+                                log.warning(f"[handle_msgtypeF4]        Image checksum still wrong for zone {ir.zone} image {ir.image_id} after {attempt} attempts, skipping it")
+                                self.image_manager.discard_last()
+                                send_f4_07(ir.zone, izc.unique_id, ir.image_id, 0)   # accept it so the panel moves on
+                                send_f4_10(ir.zone, izc.unique_id, ir.image_id, 0)
+                                if ir.lastimage:
+                                    self.image_manager.stop()
+                                return pushchange
+                            log.warning(f"[handle_msgtypeF4]        Audio checksum still wrong for zone {ir.zone} after {attempt} attempts, keeping it so the capture still renders")
 
                         #self.add_message_to_send_queue(Send.IMAGE_FB)
 
@@ -1052,12 +1079,7 @@ class MessageHandling(MessageHandlingB0Data):
                         # (marked as image 0) is not an image at all, it is the capture's audio - a RIFF/WAVE
                         # clip, IMA ADPCM mono 8kHz. It used to be logged as a corrupt image because it was
                         # handed to PIL. Identify it up front instead so it can be kept.
-                        is_audio = (
-                            ir.buffer is not None
-                            and len(ir.buffer) > 12
-                            and bytes(ir.buffer[:4]) == b"RIFF"
-                            and bytes(ir.buffer[8:12]) == b"WAVE"
-                        )
+                        is_audio = _is_capture_audio(ir)
                         # Assume a corrupt image
                         width = 100000
                         height = 100000
@@ -1083,6 +1105,7 @@ class MessageHandling(MessageHandlingB0Data):
                         if ir.zone - 1 in self.SensorList and (is_audio or (width <= 1024 and height <= 768)):
                             log.debug(f"[handle_msgtypeF4]           Saving {'Audio' if is_audio else 'Image'} for sensor {ir.zone}")
                             self.SensorList[ir.zone - 1].jpg_data = ir.buffer
+                            self.SensorList[ir.zone - 1].jpg_is_audio = is_audio
                             self.SensorList[ir.zone - 1].jpg_timestamp = t
                             self.SensorList[ir.zone - 1].has_jpg = True
                             self.SensorList[ir.zone - 1].notify(AlSensorCondition.CAMERA)

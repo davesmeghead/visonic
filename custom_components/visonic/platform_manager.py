@@ -686,7 +686,7 @@ class PlatformManager:
         """True if the buffer is a RIFF/WAVE clip rather than a JPEG frame."""
         return len(data) > 12 and data[:4] == b"RIFF" and data[8:12] == b"WAVE"
 
-    def set_sensor_jpeg(self, sensor_id: int, data: bytearray | None) -> None:
+    def set_sensor_jpeg(self, sensor_id: int, data: bytearray | None, is_audio: bool = False) -> None:
         """Buffer a camera frame (or the capture's audio clip) and render the capture to MP4."""
         if not data:
             for store in (self._sensor_frames, self._sensor_seq_name, self._sensor_last_frame, self._sensor_frame_no, self._sensor_jpeg, self._sensor_audio):
@@ -695,7 +695,9 @@ class PlatformManager:
         now = self._mark_image_activity()
         last = self._sensor_last_frame.get(sensor_id)
         self._sensor_last_frame[sensor_id] = now
-        is_wav = self._is_wav(bytes(data))
+        # Trust the caller's classification first: it comes from the image_id in the F4-03 header,
+        # which survives damage to the payload. Sniffing RIFF only works while the magic is intact.
+        is_wav = is_audio or self._is_wav(bytes(data))
         # The panel closes every capture with its audio clip, so a frame arriving after one belongs
         # to the next capture. That marker is exact, where the time gap is only a guess - and now
         # that the image count is settable a short capture finishes well inside the gap, so two
@@ -723,7 +725,11 @@ class PlatformManager:
         if frames and self.entry.options.get(CONF_IMAGE_SINGLE_FRAME, False):
             return
         new_frame = bytes(data)
-        if frames and frames[-1] == new_frame:
+        # Drop a frame we already hold for this capture. The panel sometimes re-sends images part
+        # way through a sequence, byte for byte identical, and not always adjacently: a 5,6,5,6,5,6
+        # run would slip past a check against only the previous frame and put a visible stutter in
+        # the clip. Resends are identical, so comparing content catches them wherever they land.
+        if new_frame in frames:
             return
         self._sensor_frame_no[sensor_id] += 1
         frame_no = self._sensor_frame_no[sensor_id]
@@ -831,19 +837,32 @@ class PlatformManager:
             fps = max(1, round(1000 / IMAGE_FRAME_DURATION_MS))
             if (secs := self._wav_duration(audio)) and secs > 0:
                 fps = len(frames) / secs
-            cmd = [ffmpeg, "-y", "-loglevel", "error", "-framerate", f"{fps:.6f}",
-                   "-i", os.path.join(directory, f"{stem}_frame%02d.jpg")]
-            if os.path.isfile(wav_path):
-                cmd += ["-i", wav_path, "-c:a", "aac", "-shortest"]
-            cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", os.path.join(directory, f"{stem}.mp4")]
-            try:
+            def _mux(with_audio: bool) -> bool:
+                """Render the clip, with or without its soundtrack. True if ffmpeg was happy."""
+                cmd = [ffmpeg, "-y", "-loglevel", "error", "-framerate", f"{fps:.6f}",
+                       "-i", os.path.join(directory, f"{stem}_frame%02d.jpg")]
+                if with_audio:
+                    cmd += ["-i", wav_path, "-c:a", "aac", "-shortest"]
+                cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", os.path.join(directory, f"{stem}.mp4")]
                 completed = subprocess.run(cmd, capture_output=True, timeout=120, check=False)  # noqa: S603
                 if completed.returncode == 0:
-                    return
+                    return True
                 self.logger.logstate_warning(
-                    "ffmpeg could not build the clip for zone %s: %s",
-                    sensor_id, completed.stderr.decode(errors="replace").strip()[:200],
+                    "ffmpeg could not build the clip for zone %s%s: %s", sensor_id,
+                    "" if with_audio else " (even without audio)",
+                    completed.stderr.decode(errors="replace").strip()[:200],
                 )
+                return False
+
+            has_audio = os.path.isfile(wav_path)
+            try:
+                if _mux(has_audio):
+                    return
+                # The soundtrack is unusable - a capture whose audio never passed its CRC will not
+                # parse as a WAV at all. Still produce the video, silent, rather than losing it.
+                if has_audio and _mux(False):
+                    self.logger.logstate_warning("Zone %s clip rendered without its damaged audio", sensor_id)
+                    return
             except (OSError, subprocess.SubprocessError) as ex:
                 self.logger.logstate_warning("Unable to run ffmpeg for zone %s: %s", sensor_id, ex)
         # No usable ffmpeg: fall back to an animated GIF so a clip is still produced (without audio).
