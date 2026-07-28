@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import re
 
 from homeassistant.components.media_player import MediaClass
 from homeassistant.components.media_source import (
@@ -17,6 +18,8 @@ from homeassistant.components.media_source import (
 from homeassistant.core import HomeAssistant
 
 from .const import CONF_IMAGE_MEDIA_PATH, DEFAULT_IMAGE_MEDIA_PATH, DOMAIN
+
+_FRAME_RE = re.compile(r"_frame\d+\.jpg$", re.I)   # the stills ffmpeg is fed, not captures in their own right
 
 _IMAGE_EXT = (".gif", ".jpg", ".jpeg", ".png")
 _VIDEO_EXT = (".mp4",)
@@ -82,6 +85,8 @@ class VisonicMediaSource(MediaSource):
             for name in sorted(os.listdir(target), reverse=True):
                 path = os.path.join(target, name)
                 child_ident = f"{ident}/{name}" if ident else name
+                if name.startswith((".", "@")):
+                    continue          # Synology @eaDir and friends
                 if os.path.isdir(path):
                     children.append(
                         BrowseMediaSource(
@@ -95,7 +100,7 @@ class VisonicMediaSource(MediaSource):
                             children_media_class=MediaClass.IMAGE,
                         )
                     )
-                elif name.lower().endswith(_MEDIA_EXT):
+                elif name.lower().endswith(_MEDIA_EXT) and not _FRAME_RE.search(name):
                     children.append(
                         BrowseMediaSource(
                             domain=DOMAIN,

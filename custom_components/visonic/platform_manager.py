@@ -743,6 +743,10 @@ class PlatformManager:
             self._sensor_audio.get(sensor_id),
         )
 
+    def camera_folder(self, sensor_id: int) -> str:
+        """Public name for the per-camera media sub-folder, used by the image entity."""
+        return self._camera_folder(sensor_id)
+
     def _camera_folder(self, sensor_id: int) -> str:
         """Per-camera media sub-folder: the camera device name, else the zone number (event-loop thread)."""
         try:

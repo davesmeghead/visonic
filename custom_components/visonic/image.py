@@ -112,9 +112,13 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         """Return the state attributes of the device."""
         if self._get_sensor() is None:
             return None
-        attr: Mapping[str, Any] = {}
+        attr: dict[str, Any] = {}
         attr[PANEL_ATTRIBUTE_NAME] = self._panel_id
         attr[DEVICE_ATTRIBUTE_NAME] = self._sensor_id
+        # Where this camera's captures are filed. The frontend would otherwise have to guess it
+        # from the device name, so a dashboard can link straight to the right media folder.
+        if (folder := self.coordinator.platform_manager.camera_folder(self._sensor_id)):
+            attr["media_folder"] = folder
         return attr
 
     async def async_image(self) -> bytes | None:
