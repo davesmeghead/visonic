@@ -20,6 +20,7 @@ from .py_const import (
     NO_RECEIVE_DATA_TIMEOUT,
     OBFUS,
     POWERLINK_IMALIVE_RETRY_DELAY,
+    IMAGE_TRANSFER_TIMEOUT,
     POWERMASTER_CHECK_TIME_INTERVAL,
     POWERMAX_CHECK_TIME_INTERVAL,
     STANDARD_STATUS_RETRY_DELAY,
@@ -1432,10 +1433,11 @@ class Sequencer(Despatcher):
                     if dotrigger:
                         self._trigger_restore_status()     # Clear message buffers and send a Restore (if in Powerlink or standard plus) or Status (not in Powerlink) to the Panel
 
-                    #if self.image_manager.isImageDataInProgress():
-                    #    # Manage the download of the F4 messages for Camera PIRs
-                    #    # As this does not use acknowledges or checksums then prevent the expected response timer from kicking in
-                    #    self.image_manager.terminateIfExceededTimeout(40)
+                    if self.image_manager.isImageDataInProgress():
+                        # Release an image the panel stopped sending part way through. Without this
+                        # the record stays in progress for ever, and create() refuses every later
+                        # request - for every camera, not just this one - until HA restarts.
+                        self.image_manager.terminateIfExceededTimeout(IMAGE_TRANSFER_TIMEOUT)
 
                     # log.debug(f"[_sequencer] is {self._watchdog_counter}")
 

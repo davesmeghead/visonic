@@ -127,6 +127,7 @@ LAST_RECEIVE_DATA_TIMEOUT = 240  # 4 minutes
 # Interval (in seconds) to get the time and for most panels to try and set it if it's out by more than TIME_INTERVAL_ERROR seconds
 #     PowerMaster uses time interval for checking motion triggers so more critical to keep it updated
 POWERMASTER_CHECK_TIME_INTERVAL =   180  # 3 minutes  (this uses B0 messages and not DOWNLOAD panel state)  Divisible by 4
+IMAGE_TRANSFER_TIMEOUT =            40  # seconds of silence before a part built camera image is abandoned
 POWERMAX_CHECK_TIME_INTERVAL    = 14400  # 4 hours    (this uses the DOWNLOAD panel state)
 TIME_INTERVAL_ERROR = 3
 
