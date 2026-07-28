@@ -761,6 +761,25 @@ class PlatformManager:
                 return candidate
         return None
 
+    @staticmethod
+    def _wav_duration(data: bytes) -> float | None:
+        """Seconds of audio in a RIFF/WAVE buffer, or None if the header cannot be read."""
+        if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+            return None
+        pos, byte_rate, n_data = 12, None, None
+        while pos + 8 <= len(data):
+            chunk = data[pos:pos + 4]
+            size = int.from_bytes(data[pos + 4:pos + 8], "little")
+            body = pos + 8
+            if chunk == b"fmt " and body + 12 <= len(data):
+                byte_rate = int.from_bytes(data[body + 8:body + 12], "little")
+            elif chunk == b"data":
+                n_data = min(size, len(data) - body)
+            pos = body + size + (size & 1)   # chunks are word aligned
+        if not byte_rate or not n_data:
+            return None
+        return n_data / byte_rate
+
     def _render_sensor_media(self, sensor_id: int, frames: list[bytes], frame: bytes, seq_name: str, frame_no: int, cam_folder: str, audio: bytes | None = None) -> None:
         """Save this frame plus the capture's audio, and mux the sequence into an MP4 (executor thread).
 
@@ -805,8 +824,14 @@ class PlatformManager:
         if not audio or len(frames) < 2:
             return
         if ffmpeg := self._ffmpeg_binary():
+            # Pace the stills to the clip so the two end together. The panel's audio covers the
+            # whole capture window - about 0.6s per frame - so a fixed 2fps runs the video short
+            # and -shortest then truncates the sound. Fall back to the constant if the WAV header
+            # cannot be read.
             fps = max(1, round(1000 / IMAGE_FRAME_DURATION_MS))
-            cmd = [ffmpeg, "-y", "-loglevel", "error", "-framerate", str(fps),
+            if (secs := self._wav_duration(audio)) and secs > 0:
+                fps = len(frames) / secs
+            cmd = [ffmpeg, "-y", "-loglevel", "error", "-framerate", f"{fps:.6f}",
                    "-i", os.path.join(directory, f"{stem}_frame%02d.jpg")]
             if os.path.isfile(wav_path):
                 cmd += ["-i", wav_path, "-c:a", "aac", "-shortest"]
