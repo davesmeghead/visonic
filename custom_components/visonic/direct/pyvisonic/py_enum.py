@@ -483,6 +483,7 @@ class AlCondition(IntEnum):
     NO_DATA_FROM_PANEL = 10
     COMMAND_REJECTED = 11
     STARTUP_SUCCESS = 12        # In the client this triggers the setting of the string name in the Config settings to the panel type
+    IMAGE_UPDATE = 13
 
 # This class represents the panels trouble state
 class AlTroubleType(IntEnum):

@@ -404,6 +404,7 @@ class PanelCondition(IntEnum):
     NO_DATA_FROM_PANEL = 10
     COMMAND_REJECTED = 11
     STARTUP_SUCCESS = 12        # In the client this triggers the setting of the string name in the Config settings to the panel type
+    IMAGE_UPDATE = 13
     # These start at 100 to ensure uniqueness when mixing with AlCondition (pyvisonic library).
     #  Used for AlarmPanelEventActionList and event dispatching.
     CHECK_ARM_DISARM_COMMAND = 100

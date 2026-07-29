@@ -33,6 +33,8 @@ from .pyvisonic.py_enum import (
 
 _LOGGER = logging.getLogger(__name__)
 
+TIME_DELTA_BETWEEN_IMAGES = 0.6
+
 class VisonicClient(ManageConnection):
     """Set up for Visonic devices."""
 
@@ -151,9 +153,25 @@ class VisonicClient(ManageConnection):
                 "Visonic Alarm Panel: Panel Disconnected",
             )
             return
-        time_between_images = 0.6 # seconds
-        image_count = int(float(duration) / time_between_images) + 2 if duration > 0 else 1
-        protocol.get_sensor_image(devid, image_count)
+        # Convert duration in seconds to a number of images to request from the panel
+        #    This is the number of jpg images, there is also an additional single audio image
+        #    Limit to between 1 and 10 images, 10 is what a Powerlink 3.1 Hardware module asks for
+        image_count = min(int(float(duration) / TIME_DELTA_BETWEEN_IMAGES) + 2 if duration > 0 else 1, 10)
+        status: AlCommandStatus = protocol.get_sensor_image(devid, image_count)
+        # This is the check for whether the command has succeeded
+        if status != AlCommandStatus.SUCCESS:
+            message = ""
+            match (status):
+                case AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
+                    message = "eeprom download in progress."
+                case AlCommandStatus.FAIL_INVALID_STATE:
+                    message = "invalid panel state."
+                case AlCommandStatus.FAIL_ENTITY_INCORRECT:
+                    message = "invalid or unknown sensor."
+            self.logger.create_ha_notification(
+                AvailableNotifications.IMAGE,
+                f"Attempt to retrieve sensor image for panel {self.panel_ident}, entity {eid} failed, {message}",
+            )
 
     def convert_to_alarm_status(self, value: AlCommandStatus) -> AlarmCommandStatus:
         """Convert between pyvisonic library and main integration."""

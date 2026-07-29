@@ -107,6 +107,7 @@ AlarmPanelEventActionList: dict[PanelCondition, HA_Event_Type]= {
     PanelCondition.ZONE_UPDATE                : HA_Event_Type(ALARM_SENSOR_CHANGE_EVENT,     ""),
     PanelCondition.PANEL_UPDATE               : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "panelupdate"),
     PanelCondition.PANEL_RESET                : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "panelreset"),
+    PanelCondition.IMAGE_UPDATE               : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "imageupdate"),
     PanelCondition.PIN_REJECTED               : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "pinrejected"),
     PanelCondition.DOWNLOAD_TIMEOUT           : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "timeoutdownload"),
     PanelCondition.WATCHDOG_TIMEOUT_GIVINGUP  : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "timeoutwaiting"),
@@ -121,7 +122,7 @@ AlarmPanelEventActionList: dict[PanelCondition, HA_Event_Type]= {
     PanelCondition.CHECK_ARM_DISARM_COMMAND   : HA_Event_Type(ALARM_COMMAND_EVENT,           "armdisarm"),
     PanelCondition.CHECK_BYPASS_COMMAND       : HA_Event_Type(ALARM_COMMAND_EVENT,           "bypass"),
     PanelCondition.CHECK_EVENT_LOG_COMMAND    : HA_Event_Type(ALARM_COMMAND_EVENT,           "eventlog"),
-    PanelCondition.CHECK_SWITCH_COMMAND          : HA_Event_Type(ALARM_COMMAND_EVENT,           "switch")
+    PanelCondition.CHECK_SWITCH_COMMAND       : HA_Event_Type(ALARM_COMMAND_EVENT,           "switch")
 }
 # fmt: on
 
@@ -303,18 +304,19 @@ class PlatformManager:
         partition: set[int] | None = None,
     ) -> dict:
         """Generate an HA Bus Event with a Reason Code."""
+        full_message = message + " " + MESSAGE_REASON_DICT[reason]
         datadict = self.populateSensorDictionary()
         datadict["command"] = command.title()
         datadict["reason"] = int(reason)
         datadict["reason_str"] = reason.name.title()
-        datadict["message"] = message + " " + MESSAGE_REASON_DICT[reason]
+        datadict["message"] = full_message
         if partition is not None:
             datadict[PE_PARTITION] = partition
         self.create_ha_fire_event(event_id, datadict)
         if reason != AlarmCommandStatus.SUCCESS:
             self.logger.create_ha_notification(
                 AvailableNotifications.COMMAND,
-                message + " " + MESSAGE_REASON_DICT[reason],
+                full_message,
             )
         return datadict
 

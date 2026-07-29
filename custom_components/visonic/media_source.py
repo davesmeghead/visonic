@@ -1,12 +1,11 @@
 """Dedicated "Visonic Cameras" media source exposing saved PIR camera captures, grouped per camera."""
 
-from __future__ import annotations
-
 from datetime import timedelta
 import mimetypes
 import os
 import re
 
+from homeassistant.components.http.auth import async_sign_path
 from homeassistant.components.media_player import MediaClass
 from homeassistant.components.media_source import (
     BrowseMediaSource,
@@ -16,7 +15,6 @@ from homeassistant.components.media_source import (
     Unresolvable,
     async_resolve_media as _resolve_media,
 )
-from homeassistant.components.http.auth import async_sign_path
 from homeassistant.core import HomeAssistant
 
 from .const import CONF_IMAGE_MEDIA_PATH, DEFAULT_IMAGE_MEDIA_PATH, DOMAIN
