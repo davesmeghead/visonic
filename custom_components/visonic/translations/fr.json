@@ -333,8 +333,12 @@
             "description": "R\u00e9cup\u00e9rer l'image du capteur, cela ne fonctionne que si le capteur est une cam\u00e9ra PIR.",
             "fields": {
                 "entity_id": {
-                    "name": "Capteur Visonic (Image)",
+                    "name": "Capteur Visonic",
                     "description": "Nom du capteur Visonic."
+                },
+                "duration": {
+                    "name": "Video Duration",
+                    "description": "Video Duration in seconds, set to 0 for still image."
                 }
             }
         },

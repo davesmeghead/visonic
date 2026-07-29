@@ -491,8 +491,8 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             "Send get event log"
         )
 
-    async def send_get_sensor_image(self, devid: int | None, eid: str | None):
-        """Send the command to the panel to get a camera image."""
+    async def send_get_sensor_image(self, devid: int | None, eid: str | None, duration: int):
+        """Send the command to the panel to get a camera image. NOT IMPLEMENTED."""
 
     def set_partition_name(
         self, partition: int | None = None, panel_entity_name: str | None = None

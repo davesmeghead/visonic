@@ -22,6 +22,7 @@ from homeassistant.util import slugify
 
 from .const import (
     ATTR_BYPASS,
+    ATTR_DURATION,
     CONF_ENABLE_SENSOR_BYPASS,
     CONF_SWITCH_COMMAND,
     DEVICE_ATTRIBUTE_NAME,
@@ -187,7 +188,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         """Send get event log."""
 
     @abstractmethod
-    async def send_get_sensor_image(self, devid: int | None, eid: str | None):
+    async def send_get_sensor_image(self, devid: int | None, eid: str | None, duration: int):
         """Send the command to the panel to get a camera image."""
 
     def get_panel_and_partition_state(self, partition: int | None) -> PanelStateData:
@@ -439,6 +440,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         # decode_entity only ever looks at the first entity, so walk the list and ask for each.
         # The requests queue in the coordinator and go out one at a time.
         entities = call.data.get(ATTR_ENTITY_ID) or []
+        duration = call.data.get(ATTR_DURATION, 5)
         if not isinstance(entities, list):
             entities = [entities]
         for entity in entities:
@@ -453,7 +455,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 AvailableNotifications.IMAGE,
             )
             if devid is not None:
-                await self.send_get_sensor_image(devid, eid)
+                await self.send_get_sensor_image(devid, eid, duration)
 
     async def async_service_sensor_bypass(self, call: ServiceCall):
         """Service call to bypass a sensor in the panel."""

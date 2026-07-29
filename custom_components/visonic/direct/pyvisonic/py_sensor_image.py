@@ -56,6 +56,11 @@ class ImageRecord:
         return self._current_id
 
     @property
+    def current_position(self) -> int:
+        """Return the current position in building this image."""
+        return self._current
+
+    @property
     def size(self) -> int:
         """Return the size for this image."""
         return self._size
@@ -180,7 +185,7 @@ class AlImageManager:
 
     def reset_current(self):
         """Reset the in-progress image build state."""
-        self._current_zone = None             # when not None then building an image for this zone number
+        self._current_zone = None            # when not None then building an image for this zone number
         self._current_id = None
         self._current_image = None           # The current image being built
 
@@ -220,8 +225,8 @@ class AlImageManager:
             interval = get_utc_time() - self._current_image.last_time
             if interval is not None and interval >= timedelta(seconds=seconds):
                 log.warning(f"[AlImageManager]  Abandoning image {self._current_image.image_id} for zone "
-                            f"{self._current_image.zone} after {seconds}s with no data "
-                            f"({self._current_image._current} of {self._current_image.size} bytes)")
+                            f"{self._current_image.zone} after {seconds}s with no data, "
+                            f"({self._current_image.current_position} of {self._current_image.size} bytes)")
                 self.stop()
 
     def create(self, zone, count) -> bool:

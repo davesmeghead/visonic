@@ -98,6 +98,7 @@ TRANSLATE_EXCEPTION_SERVICE_CONFIG_ENTRY_NOT_FOUND: Final = "config_entry_not_fo
 
 # Supplement the HA attributes with a bypass, this is for individual sensors in the service call. It is used as a boolean.
 ATTR_BYPASS: Final = "bypass"
+ATTR_DURATION: Final = "duration"
 
 PARTITION_ID_WHEN_BASE: Final = -1
 

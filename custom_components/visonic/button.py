@@ -64,7 +64,7 @@ class VisonicImageRequestButton(CoordinatorEntity[VisonicCoordinator], ButtonEnt
         action = pm.enqueue_image_request(self._sensor_id, self.entity_id)
         if action == "send":
             _LOGGER.info("Image requested for %s", self.entity_id)
-            await self.coordinator.send_get_sensor_image(self._sensor_id, self.entity_id)
+            await self.coordinator.send_get_sensor_image(self._sensor_id, self.entity_id, 0)
         elif action == "queued":
             _LOGGER.info("Image request for %s queued (%d waiting)", self.entity_id, pm.image_queue_depth())
         else:

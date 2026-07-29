@@ -333,8 +333,12 @@
             "description": "Recupera un'immagine dal Sensore, funziona solo se il Sensore \u00E8 una telecamera PIR.",
             "fields": {
                 "entity_id": {
-                    "name": "Sensore Visonic (Immagine)",
+                    "name": "Sensore Visonic",
                     "description": "Nome del sensore Visonic."
+                },
+                "duration": {
+                    "name": "Video Duration",
+                    "description": "Video Duration in seconds, set to 0 for still image."
                 }
             }
         },

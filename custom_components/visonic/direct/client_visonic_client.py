@@ -130,7 +130,7 @@ class VisonicClient(ManageConnection):
     # get_panel_pin_code_simple: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
     #   This is used from the bypass command and the get event log command
 
-    async def send_get_sensor_image(self, devid: int | None, eid: str | None):
+    async def send_get_sensor_image(self, devid: int | None, eid: str | None, duration: int):
         """Send the command to the panel to get a camera image."""
         if eid is None:
             self.logger.create_ha_notification(
@@ -151,7 +151,9 @@ class VisonicClient(ManageConnection):
                 "Visonic Alarm Panel: Panel Disconnected",
             )
             return
-        protocol.get_sensor_image(devid, 11)
+        time_between_images = 0.6 # seconds
+        image_count = int(float(duration) / time_between_images) + 2 if duration > 0 else 1
+        protocol.get_sensor_image(devid, image_count)
 
     def convert_to_alarm_status(self, value: AlCommandStatus) -> AlarmCommandStatus:
         """Convert between pyvisonic library and main integration."""

@@ -28,6 +28,7 @@ from .const import (
     ALARM_SENSOR_BYPASS,
     ALARM_SENSOR_IMAGE,
     ATTR_BYPASS,
+    ATTR_DURATION,
     CONF_SWITCH_COMMAND,
     DOMAIN,
     PANELS,
@@ -115,6 +116,7 @@ ALARM_SCHEMA_IMAGE = vol.Schema(
         # Accept a list as well as a single entity, so one press can ask every camera. The panel
         # serialises image transfers anyway, and the coordinator queues them.
         vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
+        vol.Required(ATTR_DURATION, default=5): cv.positive_int,
     }
 )
 
