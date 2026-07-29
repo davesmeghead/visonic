@@ -337,8 +337,8 @@
                     "description": "Name of the visonic sensor."
                 },
                 "duration": {
-                    "name": "Video Duration",
-                    "description": "Video Duration in seconds, set to 0 for still image."
+                    "name": "Duration",
+                    "description": "Duration (length of captured video) in seconds, set to 0 for still image."
                 }
             }
         },
