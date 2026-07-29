@@ -187,6 +187,8 @@ class PlatformManager:
         self._image_download_start: float = 0.0
         self._image_active_sensor: int | None = None
         self._image_queue: deque[tuple[int, str | None, int]] = deque()
+        # Cameras whose current capture was asked for as a single still (duration 0)
+        self._sensor_stills_only: dict[int, bool] = {}
 
         self._createdAlarmPanel = False
 
@@ -719,7 +721,11 @@ class PlatformManager:
         # The clip is IMA ADPCM WAV and arrives as the last "image" of the sequence. It is not a
         # frame, so keep it aside and re-render so the MP4 gains its audio.
         if is_wav:
+            # Keep it as the end-of-capture marker either way: dropping it here is what makes the
+            # next capture merge into this one. It just is not written out or muxed for a still.
             self._sensor_audio[sensor_id] = bytes(data)
+            if self.stills_only(sensor_id):
+                return
             frames = self._sensor_frames.get(sensor_id) or []
             if frames:
                 self.hass.add_job(
@@ -729,7 +735,8 @@ class PlatformManager:
                 )
             return
         frames = self._sensor_frames[sensor_id]
-        if frames and self.entry.options.get(CONF_IMAGE_SINGLE_FRAME, False):
+        if frames and (self.entry.options.get(CONF_IMAGE_SINGLE_FRAME, False)
+                       or self.stills_only(sensor_id)):
             return
         new_frame = bytes(data)
         # Drop a frame we already hold for this capture. The panel sometimes re-sends images part
@@ -983,9 +990,19 @@ class PlatformManager:
             self._image_active_sensor = sensor_id
         return now
 
-    def mark_image_request(self, sensor_id: int | None = None) -> None:
-        """Record that an image download has been requested from the panel."""
+    def mark_image_request(self, sensor_id: int | None = None, duration: int = -1) -> None:
+        """Record that an image download has been requested from the panel.
+
+        duration 0 means the user wants a still rather than a clip, so the capture keeps the
+        first frame and skips the video. -1 leaves the previous setting alone.
+        """
+        if sensor_id is not None and duration >= 0:
+            self._sensor_stills_only[sensor_id] = duration == 0
         self._mark_image_activity(sensor_id)
+
+    def stills_only(self, sensor_id: int) -> bool:
+        """Was this camera's current capture asked for as a single still."""
+        return self._sensor_stills_only.get(sensor_id, False)
 
     def image_download_active(self) -> bool:
         """True while frames arrive (within IMAGE_DOWNLOAD_TIMEOUT of the last, capped at IMAGE_DOWNLOAD_MAX from burst start)."""

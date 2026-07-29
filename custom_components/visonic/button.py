@@ -19,6 +19,9 @@ from .visonic_types import VisonicConfigData
 
 _LOGGER = logging.getLogger(__name__)
 
+# The button takes a single still: a few hundred ms of video is not worth the wait.
+BUTTON_IMAGE_DURATION = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -61,10 +64,10 @@ class VisonicImageRequestButton(CoordinatorEntity[VisonicCoordinator], ButtonEnt
     async def async_press(self) -> None:
         """Send the image request, or queue it behind an in-progress download (drop if the queue is full)."""
         pm = self.coordinator.platform_manager
-        action = pm.enqueue_image_request(self._sensor_id, self.entity_id)
+        action = pm.enqueue_image_request(self._sensor_id, self.entity_id, BUTTON_IMAGE_DURATION)
         if action == "send":
             _LOGGER.info("Image requested for %s", self.entity_id)
-            await self.coordinator.send_get_sensor_image(self._sensor_id, self.entity_id, 0)
+            await self.coordinator.send_get_sensor_image(self._sensor_id, self.entity_id, BUTTON_IMAGE_DURATION)
         elif action == "queued":
             _LOGGER.info("Image request for %s queued (%d waiting)", self.entity_id, pm.image_queue_depth())
         else:
