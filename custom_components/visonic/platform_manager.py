@@ -730,7 +730,7 @@ class PlatformManager:
                 return
             frames = self._sensor_frames.get(sensor_id) or []
             if frames:
-                self.hass.add_job(
+                self.hass.async_add_executor_job(
                     self._render_sensor_media, sensor_id, list(frames), frames[-1],
                     self._sensor_seq_name[sensor_id], self._sensor_frame_no[sensor_id],
                     self._camera_folder(sensor_id), bytes(data),
@@ -753,7 +753,7 @@ class PlatformManager:
         del frames[:-IMAGE_SEQUENCE_MAX_FRAMES]
         # Resolve the per-camera folder here (event-loop thread) so the executor call does no
         # registry lookups.
-        self.hass.add_job(
+        self.hass.async_add_executor_job(
             self._render_sensor_media, sensor_id, list(frames), new_frame,
             self._sensor_seq_name[sensor_id], frame_no, self._camera_folder(sensor_id),
             self._sensor_audio.get(sensor_id),
