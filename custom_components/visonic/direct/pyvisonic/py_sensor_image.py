@@ -128,10 +128,10 @@ class ImageRecord:
 class ImageZoneClass:
     """Image Zone Class."""
 
-    def __init__(self) -> None:
+    def __init__(self, count: int = 10) -> None:
         """Initialize the ImageZoneClass."""
         self.start = get_utc_time()                 # Start time
-        self.count = 0                              # How many images did the user ask for, this defaults to 11 as we can't set this to the panel and 11 is how many the panel sends anyway
+        self.count = count                          # How many images did the user ask for, this defaults to 10 as per a powerlink hardware module
         self.totalimages = TOTAL_IMAGES_UNKNOWN     # The panel only tells us from the second header onwards
         self.unique_id = -1                         # Each sequence has a unique id
         self.images: dict[int, ImageRecord] = { }   # Image Store, images are replaced when a new one is sent
@@ -248,12 +248,10 @@ class AlImageManager:
             self.terminateIfExceededTimeout(IMAGE_TRANSFER_TIMEOUT)
             if self.hasStartedSequence():
                 return False
-        if zone not in self.ImageZone:
-            self.ImageZone[zone] = ImageZoneClass()
+        #if zone not in self.ImageZone:
+        self.ImageZone[zone] = ImageZoneClass(count)
         self.last_image = None
         self._attempts = {}
-        self.ImageZone[zone].count = count
-        self.ImageZone[zone].degraded = False
         log.debug(f'[AlImageManager]  Create JPG: zone = {zone}   start time = {self.ImageZone[zone].start}   count = {self.ImageZone[zone].count}')
         return True
 
