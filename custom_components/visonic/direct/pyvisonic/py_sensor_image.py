@@ -135,6 +135,16 @@ class ImageZoneClass:
         self.totalimages = TOTAL_IMAGES_UNKNOWN     # The panel only tells us from the second header onwards
         self.unique_id = -1                         # Each sequence has a unique id
         self.images: dict[int, ImageRecord] = { }   # Image Store, images are replaced when a new one is sent
+        self._degraded = False
+
+    @property
+    def degraded(self) -> bool:
+        """Get the degraded state."""
+        return self._degraded
+
+    def set_degraded(self) -> None:
+        """Set the degraded state."""
+        self._degraded = True
 
     def __str__(self) -> str:
         """Return a string representation."""

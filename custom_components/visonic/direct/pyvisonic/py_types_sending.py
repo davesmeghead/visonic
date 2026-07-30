@@ -76,7 +76,6 @@ pmSendMsg: dict[Any, VisonicCommand] = {
     # Send.IMAGE_FB     : VisonicCommand(convert_bytearray('AB 0E 00 17 1E 00 00 03 01 05 00 43')         , None                        ,  True, False,      SendDebugM, 0.0, "PowerMaster after jpg feedback" ),
 
     Send.SWITCH_NAMES : VisonicCommand(convert_bytearray('AC 00 00 00 00 00 00 00 00 00 00 43')         , [Receive.SWITCH_NAMES]      , False, False,      SendDebugM, 0.0, "Requesting Switch Names" ),
-    #Send.GET_IMAGE    : VisonicCommand(convert_bytearray('AD 99 99 0A FF FF 00 00 00 00 00 43')         , [Receive.IMAGE_MGMT]        ,  True, False,      SendDebugI, 0.0, "Requesting JPG Image" ),           #
     Send.GET_IMAGE    : VisonicCommand(convert_bytearray('AD 0B 99 99 FF FF 00 00 00 00 00 43')         , [Receive.IMAGE_MGMT]        ,  True, False,      SendDebugI, 0.0, "Requesting JPG Image" ),           # Request a jpg image, first 99 is the zone, the second 99 is the number of images.
     # DISCONNECT_MESSAGE = "0d ad 0a 00 00 00 00 00 00 00 00 00 43 05 0a"
 
