@@ -42,6 +42,12 @@ AUDIO_IMAGE_ID = 0   # the panel closes a capture with its audio clip, always as
 IMAGE_GOOD = 0       # Used in F4-07 messages to the panel
 IMAGE_BAD = 1        # Used in F4-07 messages to the panel
 
+FAILED="failed"
+DEGRADED="degraded"
+SUCCESS="success"
+DELAYED="delayed"
+UNEXPECTED="unexpected"
+
 def _is_wav(buffer) -> bool:
     """Does this buffer look like a RIFF/WAVE clip rather than a JPEG frame."""
     return (buffer is not None and len(buffer) > 12
@@ -998,7 +1004,7 @@ class MessageHandling(MessageHandlingB0Data):
             self.image_manager.stop()          # Stop all image processing
             if msgtype == 0x03:
                 zone = (10 * int(data[5] // 16)) + (data[5] % 16)         # the // does integer floor division so always rounds down
-                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": None, "state": "unexpected", "zone": zone, "message": "invalid panel mode"})
+                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": None, "state": UNEXPECTED, "zone": zone, "message": "invalid panel mode"})
 
         elif msgtype == 0x03:     # JPG Header
             log.debug(f"[handle_msgtypeF4]  data {toString(data)}")
@@ -1018,9 +1024,9 @@ class MessageHandling(MessageHandlingB0Data):
                 # more than the single frame actually lost.
                 log.warning(f"[handle_msgtypeF4]        Previous image incomplete, dropping it and continuing with image {image_id} for zone {zone}")
                 izc, _ = self.image_manager.getCurrentImageRecord()
-                izc.set_degraded()
+                izc.degraded = True
                 self.image_manager.reset_current()
-                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": False, "state": "degraded", "zone": zone, "message": "previous image incomplete, ignoring it and continuing"})
+                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": False, "state": DEGRADED, "zone": zone, "message": "previous image incomplete, ignoring it and continuing"})
 
             if zone in self.image_ignore:
                 log.debug(f"[handle_msgtypeF4]        Ignoring Image Header, so not processing F4 data.      zone = {zone}    size = {size}    unique_id = {hex(unique_id)}    image_id = {image_id}     lastimage = {lastimage}    totalimages = {totalimages}")
@@ -1058,7 +1064,7 @@ class MessageHandling(MessageHandlingB0Data):
                         if not ir.isChecksumValid():
                             if self.image_manager.attempts_left(ir.zone, ir.image_id):
                                 log.debug(f"[handle_msgtypeF4]        Image checksum wrong for zone {ir.zone} image {ir.image_id} (attempt {attempt}), asking for it again")
-                                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": False, "state": "delayed", "zone": ir.zone, "message": f"image checksum wrong for image {ir.image_id} (attempt {attempt}), asking for it again"})
+                                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": False, "state": DELAYED, "zone": ir.zone, "message": f"image checksum wrong for image {ir.image_id} (attempt {attempt}), asking for it again"})
                                 self.image_manager.discard_last()
                                 send_f4_07(ir.zone, izc.unique_id, ir.image_id, IMAGE_BAD)
                                 send_f4_10(ir.zone, izc.unique_id, ir.image_id)
@@ -1075,14 +1081,14 @@ class MessageHandling(MessageHandlingB0Data):
                                 send_f4_10(ir.zone, izc.unique_id, ir.image_id)
                                 if ir.lastimage:
                                     self.image_manager.stop()
-                                    self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": True, "state": "failed", "zone": ir.zone, "message": "image checksum wrong, stopping image retrieval"})
+                                    self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": True, "state": FAILED, "zone": ir.zone, "message": "image checksum wrong, stopping image retrieval"})
                                 else:
-                                    izc.set_degraded()
-                                    self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": False, "state": "degraded", "zone": ir.zone, "message": f"image checksum wrong for image {ir.image_id} after {attempt} attempts, skipping it"})
+                                    izc.degraded = True
+                                    self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": False, "state": DEGRADED, "zone": ir.zone, "message": f"image checksum wrong for image {ir.image_id} after {attempt} attempts, skipping it"})
                                 return pushchange
                             log.warning(f"[handle_msgtypeF4]        Audio checksum still wrong for zone {ir.zone} after {attempt} attempts, keeping it so the capture still renders")
-                            self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": False, "state": "degraded", "zone": ir.zone, "message": f"audio checksum still wrong after {attempt} attempts, keeping it so the capture still renders"})
-                            izc.set_degraded()
+                            self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": False, "state": DEGRADED, "zone": ir.zone, "message": f"audio checksum still wrong after {attempt} attempts, keeping it so the capture still renders"})
+                            izc.degraded = True
 
                         #self.add_message_to_send_queue(Send.IMAGE_FB)
 
@@ -1107,8 +1113,8 @@ class MessageHandling(MessageHandlingB0Data):
                             except Exception as ex:
                                 tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
                                 log.debug("[handle_msgtypeF4] Image Processing, caused an exception\n%s", tb_str)
-                                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": False, "state": "degraded", "zone": ir.zone, "message": "image processing, caused an exception but continuing"})
-                                izc.set_degraded()
+                                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": False, "state": DEGRADED, "zone": ir.zone, "message": "image processing, caused an exception but continuing"})
+                                izc.degraded = True
 
                             log.debug(f"[handle_msgtypeF4]           Got Image width {width}    height {height}")
 
@@ -1142,9 +1148,9 @@ class MessageHandling(MessageHandlingB0Data):
                             # Tell the panel we received that one OK, we're ready for the next
                             log.debug("[handle_msgtypeF4]         Finished everything so stopping as we've just received the last image")
                             if izc.degraded:
-                                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": True, "state": "degraded", "zone": ir.zone, "message": "transfer complete but degraded"})
+                                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": True, "state": DEGRADED, "zone": ir.zone, "message": "transfer complete but degraded"})
                             else:
-                                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": True, "state": "success", "zone": ir.zone, "message": "transfer complete"})
+                                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": True, "state": SUCCESS, "zone": ir.zone, "message": "transfer complete"})
                             self.image_manager.stop()
 
                 else:
@@ -1158,7 +1164,7 @@ class MessageHandling(MessageHandlingB0Data):
                         self.image_manager.reset_current()
                     else:
                         log.debug("[handle_msgtypeF4]         Message out of sequence, dumping all data")
-                        self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": True, "state": "failed", "zone": ir.zone, "message": "image processing out of sequence, stopping image retrieval"})
+                        self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": True, "state": FAILED, "zone": ir.zone, "message": "image processing out of sequence, stopping image retrieval"})
                         self.image_manager.stop()
 
         elif msgtype == 0x01:
