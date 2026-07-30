@@ -308,6 +308,24 @@ def test_a_record_with_no_data_yet_is_still_released_by_the_timeout():
     assert not m.hasStartedSequence(), "an empty stale record must be released too"
 
 
+def test_the_timeout_reports_what_it_abandoned():
+    """The caller has to be told, or a capture that dies just leaves the user waiting.
+
+    Nothing else notices a panel going quiet part way through: images stop arriving, so no
+    further message handling runs, and the record is dropped on a timer with no other trace.
+    """
+    m = _start()
+    assert m.terminateIfExceededTimeout(img.IMAGE_TRANSFER_TIMEOUT) is None, "nothing stale yet"
+
+    seq, payload = _chunks()[0]
+    assert m.addData(payload, seq) is True
+    m._current_image._last -= timedelta(seconds=img.IMAGE_TRANSFER_TIMEOUT + 1)
+
+    dropped = m.terminateIfExceededTimeout(img.IMAGE_TRANSFER_TIMEOUT)
+    assert dropped == (ZONE, IMAGE_ID), f"should name the zone and image, got {dropped}"
+    assert not m.hasStartedSequence(), "and still clear the record"
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

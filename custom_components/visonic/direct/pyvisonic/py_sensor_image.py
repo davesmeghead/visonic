@@ -219,15 +219,22 @@ class AlImageManager:
         """Is an image part built right now. Note last_image is the finished one, not this."""
         return self._current_image is not None and self._current_image.isOngoing()
 
-    def terminateIfExceededTimeout(self, seconds) -> None:
-        """Abandon the in-progress image if the panel has gone quiet for too long."""
+    def terminateIfExceededTimeout(self, seconds) -> tuple[int, int] | None:
+        """Abandon the in-progress image if the panel has gone quiet for too long.
+
+        Returns (zone, image_id) when a capture was abandoned so the caller can tell the user,
+        or None when there was nothing to abandon.
+        """
         if self._current_image is not None:
             interval = get_utc_time() - self._current_image.last_time
             if interval is not None and interval >= timedelta(seconds=seconds):
-                log.warning(f"[AlImageManager]  Abandoning image {self._current_image.image_id} for zone "
-                            f"{self._current_image.zone} after {seconds}s with no data, "
+                zone, image_id = self._current_image.zone, self._current_image.image_id
+                log.warning(f"[AlImageManager]  Abandoning image {image_id} for zone "
+                            f"{zone} after {seconds}s with no data, "
                             f"({self._current_image.current_position} of {self._current_image.size} bytes)")
                 self.stop()
+                return (zone, image_id)
+        return None
 
     def create(self, zone, count) -> bool:
         """Create a new image record. But does not start a new image."""

@@ -1437,7 +1437,13 @@ class Sequencer(Despatcher):
                         # Release an image the panel stopped sending part way through. Without this
                         # the record stays in progress for ever, and create() refuses every later
                         # request - for every camera, not just this one - until HA restarts.
-                        self.image_manager.terminateIfExceededTimeout(IMAGE_TRANSFER_TIMEOUT)
+                        if (dropped := self.image_manager.terminateIfExceededTimeout(IMAGE_TRANSFER_TIMEOUT)) is not None:
+                            # The panel went quiet part way through. Nothing else reports this, so
+                            # without it the user waits for a capture that is never coming.
+                            _zone, _image_id = dropped
+                            self.send_panel_update(AlCondition.IMAGE_UPDATE,
+                                                   {"state": "failed", "zone": _zone,
+                                                    "message": f"no image data for {IMAGE_TRANSFER_TIMEOUT} seconds, abandoned during image {_image_id}"})
 
                     # log.debug(f"[_sequencer] is {self._watchdog_counter}")
 
