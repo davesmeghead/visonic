@@ -329,12 +329,16 @@
             }
         },
         "alarm_sensor_image": {
-            "name": "Retrieve Image from Sensor",
-            "description": "Retrieve Image from Sensor, this only works if the Sensor is a Camera PIR.",
+            "name": "Retrieve Image/Video from Sensor",
+            "description": "Retrieve Image/Video from Sensor, this only works if the Sensor is a Camera PIR.",
             "fields": {
                 "entity_id": {
-                    "name": "Visonic Sensor (Image)",
+                    "name": "Visonic Sensor",
                     "description": "Name of the visonic sensor."
+                },
+                "duration": {
+                    "name": "Duration",
+                    "description": "Duration (length of captured video) in seconds, set to 0 for still image."
                 }
             }
         },

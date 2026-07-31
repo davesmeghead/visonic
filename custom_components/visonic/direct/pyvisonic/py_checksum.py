@@ -2,8 +2,10 @@
 
 import logging
 
-log = logging.getLogger(__name__)
+from .py_types_receiving import ChecksumType
+from .py_utils import f4_crc16
 
+log = logging.getLogger(__name__)
 
 class MyChecksumCalc:
     """Checksum Calculation Class."""
@@ -18,14 +20,29 @@ class MyChecksumCalc:
         self.log = loggy
 
     # check the checksum of received messages
-    def _validatePDU(self, packet: bytearray) -> bool:
+    def _validatePDU(self, checksum_type: ChecksumType, packet: bytearray) -> bool:
         r"""Verify if packet is valid. Packets start with a preamble (\x0D) and end with postamble (\x0A)."""
+        # Does it have at least 4 bytes: header, command, optional data, checksum (command and data), footer
+        if len(packet) < 4:
+            return False
         # Does it start with a preamble
         if packet[:1] != b"\x0D":
             return False
         # Does it end with a footer
         if packet[-1:] != b"\x0A":
             return False
+
+        if checksum_type == ChecksumType.IGNORE:
+            # For ignore all we do is a basic header and footer check
+            return True
+
+        # F4 PIR-image messages carry a 2-byte CRC-16, not the 1-byte panel checksum
+        if checksum_type == ChecksumType.IMAGE_DATA:
+            if len(packet) > 3:
+                return self.f4_checksum(packet[1:-3]) == (packet[-3], packet[-2])
+            return False
+
+        # fall through to do ChecksumType.NORMAL
 
         # Check the CRC
         if packet[-2:-1] == self._calculateCRC(packet[1:-2]):
@@ -79,3 +96,7 @@ class MyChecksumCalc:
             checksum = 0x00
         # log.debug("[_calculateCRC] Calculating for: {toString(msg)}     calculated CRC is: {toString(bytearray([checksum]))}")
         return bytearray([checksum])
+
+    def f4_checksum(self, body: bytearray) -> tuple[int, int]:
+        """CRC-16/CCITT for F4 messages. Shared with the reassembled-image check, see f4_crc16."""
+        return f4_crc16(body)

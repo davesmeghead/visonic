@@ -57,6 +57,7 @@ class AlSensorDevice(CallbackHandler, ABC):
         #self._model: str | None = None
         self.jpg_timestamp: datetime | None = None
         self.jpg_data: bytearray | None = None
+        self.jpg_is_audio: bool = False           # the buffer is the capture's audio clip, not a frame
         self.last_trigger_time: datetime | None = None
         self.zone_chime: str = ""
         self._zone_trip: bool = False

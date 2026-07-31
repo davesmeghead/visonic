@@ -33,6 +33,8 @@ from .pyvisonic.py_enum import (
 
 _LOGGER = logging.getLogger(__name__)
 
+TIME_DELTA_BETWEEN_IMAGES = 0.6
+
 class VisonicClient(ManageConnection):
     """Set up for Visonic devices."""
 
@@ -130,7 +132,7 @@ class VisonicClient(ManageConnection):
     # get_panel_pin_code_simple: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
     #   This is used from the bypass command and the get event log command
 
-    async def send_get_sensor_image(self, devid: int | None, eid: str | None):
+    async def send_get_sensor_image(self, devid: int | None, eid: str | None, duration: int):
         """Send the command to the panel to get a camera image."""
         if eid is None:
             self.logger.create_ha_notification(
@@ -151,7 +153,25 @@ class VisonicClient(ManageConnection):
                 "Visonic Alarm Panel: Panel Disconnected",
             )
             return
-        protocol.get_sensor_image(devid, 11)
+        # Convert duration in seconds to a number of images to request from the panel
+        #    This is the number of jpg images, there is also an additional single audio image
+        #    Limit to between 1 and 10 images, 10 is what a Powerlink 3.1 Hardware module asks for
+        image_count = min(int(float(duration) / TIME_DELTA_BETWEEN_IMAGES) + 2 if duration > 0 else 1, 10)
+        status: AlCommandStatus = protocol.get_sensor_image(devid, image_count)
+        # This is the check for whether the command has succeeded
+        if status != AlCommandStatus.SUCCESS:
+            message = ""
+            match (status):
+                case AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
+                    message = "eeprom download in progress."
+                case AlCommandStatus.FAIL_INVALID_STATE:
+                    message = "invalid panel state."
+                case AlCommandStatus.FAIL_ENTITY_INCORRECT:
+                    message = "invalid or unknown sensor."
+            self.logger.create_ha_notification(
+                AvailableNotifications.IMAGE,
+                f"Attempt to retrieve sensor image for panel {self.panel_ident}, entity {eid} failed, {message}",
+            )
 
     def convert_to_alarm_status(self, value: AlCommandStatus) -> AlarmCommandStatus:
         """Convert between pyvisonic library and main integration."""

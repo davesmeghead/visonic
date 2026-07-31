@@ -15,11 +15,13 @@ from .py_const import (
     DOWNLOAD_RETRY_DELAY,
     DOWNLOAD_TIMEOUT,
     EPROM_DOWNLOAD_ALL,
+    FAILED,
     LAST_RECEIVE_DATA_TIMEOUT,
     MAX_TIME_BETWEEN_POWERLINK_ALIVE,
     NO_RECEIVE_DATA_TIMEOUT,
     OBFUS,
     POWERLINK_IMALIVE_RETRY_DELAY,
+    IMAGE_TRANSFER_TIMEOUT,
     POWERMASTER_CHECK_TIME_INTERVAL,
     POWERMAX_CHECK_TIME_INTERVAL,
     STANDARD_STATUS_RETRY_DELAY,
@@ -103,6 +105,9 @@ class Sequencer(Despatcher):
         self._last_send_download_eprom = get_utc_time() - timedelta(seconds=DOWNLOAD_RETRY_DELAY + 100)
         self._first_send_download_eprom = get_utc_time()
         self._paused_state_save = AlPanelMode.UNKNOWN
+        self.image_manager: AlImageManager = AlImageManager()
+        self.ignoreF4DataMessages : bool = True
+        self.image_ignore: set[int] = set()
 
     def _reset_full(self):
         """Reset all non-permanent variables."""
@@ -155,8 +160,8 @@ class Sequencer(Despatcher):
         # Current F4 jpg image
         #    Leave these here for the time being as they might be needed in the sequencer
         self.image_manager: AlImageManager = AlImageManager()
-        self.ignoreF4DataMessages : bool = False
-        self.image_ignore = set()
+        self.ignoreF4DataMessages : bool = True
+        self.image_ignore: set[int] = set()
 
     def _shutdown(self):
         """Shutdown the connection to the panel."""
@@ -1429,10 +1434,17 @@ class Sequencer(Despatcher):
                     if dotrigger:
                         self._trigger_restore_status()     # Clear message buffers and send a Restore (if in Powerlink or standard plus) or Status (not in Powerlink) to the Panel
 
-                    #if self.image_manager.isImageDataInProgress():
-                    #    # Manage the download of the F4 messages for Camera PIRs
-                    #    # As this does not use acknowledges or checksums then prevent the expected response timer from kicking in
-                    #    self.image_manager.terminateIfExceededTimeout(40)
+                    if self.image_manager.hasStartedSequence():
+                        # Release an image the panel stopped sending part way through. Without this
+                        # the record stays in progress for ever, and create() refuses every later
+                        # request - for every camera, not just this one - until HA restarts.
+                        if (dropped := self.image_manager.terminateIfExceededTimeout(IMAGE_TRANSFER_TIMEOUT)) is not None:
+                            # The panel went quiet part way through. Nothing else reports this, so
+                            # without it the user waits for a capture that is never coming.
+                            _zone, _image_id = dropped
+                            self.send_panel_update(AlCondition.IMAGE_UPDATE,
+                                                   {"finished": True, "state": FAILED, "zone": _zone,
+                                                    "message": f"no image data for {IMAGE_TRANSFER_TIMEOUT} seconds, abandoned during image {_image_id}"})
 
                     # log.debug(f"[_sequencer] is {self._watchdog_counter}")
 
@@ -1441,7 +1453,12 @@ class Sequencer(Despatcher):
                     if self.is_power_master() and self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]: # not AlPanelMode.MINIMAL_ONLY
                         tnow = get_local_time()
                         diff = (tnow - _last_b0_wanted_request_time).total_seconds()
-                        if self._is_send_queue_empty() and diff >= 10: # There must be at least 10 seconds between subsequent requests
+                        if self.image_manager.isSequenceActive():
+                            # A Camera PIR download is underway. Sending B0 requests part way through makes the
+                            # panel break off the F4 stream and answer the B0 instead, so hold off. B0_Wanted
+                            # accumulates and goes out once the images have finished.
+                            log.debug("[_sequencer] Deferring B0 requests, camera image download in progress")
+                        elif self._is_send_queue_empty() and diff >= 10: # There must be at least 10 seconds between subsequent requests
                             if len(self.B0_Waiting) > 0:  # have we received the data that we last asked for last time
                                 log.debug(f"[_sequencer] ****************************** Waiting For B0_Waiting **************************** {toStringList(self.B0_Waiting)}")
                                 self.B0_Wanted.update(self.B0_Waiting) # ask again for them

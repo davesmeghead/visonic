@@ -661,6 +661,8 @@ class ManageConnection(MaintainInterface):
             self.logger.logstate_warning("Sensor callback but Sensor Device is None")
             return
         sensor = SensorStateExt.from_dict(self._visonic_protocol.is_power_master(), py_sensor.as_dict())
+        if py_sensor.has_jpg and py_sensor.jpg_data is not None:
+            self.platform_manager.set_sensor_jpeg(sensor.id, py_sensor.jpg_data, py_sensor.jpg_is_audio)
         self.platform_manager.sensor_update_or_create(sensor)
         self.logger.logstate_debug(f"onSensorChange {c.name} {sensor.id}")
         if self.state_changed_callback:

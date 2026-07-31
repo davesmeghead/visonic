@@ -8,7 +8,7 @@ from homeassistant.const import Platform
 
 # The client version and domain information for the integration
 DOMAIN: Final = "visonic"
-CLIENT_VERSION: Final = "0.13.0.3"
+CLIENT_VERSION: Final = "0.13.0.4"
 MANUFACTURER: Final = "Visonic"
 VISONIC_UNIQUE_NAME: Final = "Visonic Alarm"
 VISONIC_TRANSLATION_KEY: Final = "alarm_panel_key"
@@ -20,6 +20,7 @@ ALARM_SENSOR_CHANGE_EVENT: Final = f"{DOMAIN}_alarm_sensor_state"
 ALARM_COMMAND_EVENT: Final = f"{DOMAIN}_alarm_command_to_panel"
 ALARM_PANEL_LOG_FILE_COMPLETE: Final = f"{DOMAIN}_alarm_panel_event_log_complete"
 ALARM_PANEL_LOG_FILE_ENTRY: Final = f"{DOMAIN}_alarm_panel_event_log_entry"
+CAMERA_CLIP_EVENT: Final = f"{DOMAIN}_camera_clip"  # a PIR capture finished rendering
 
 # Template for partition names
 PARTITION_NAME_TEMPLATE: Final = "{panel_ident} Partition {partition_index}"
@@ -45,6 +46,14 @@ DEFAULT_DEVICE_SERIAL: Final = "/dev/ttyUSB0"
 DEFAULT_DEVICE_BAUD: Final = 9600
 DEFAULT_PANEL_USER_CODE: Final = "1111"
 DEFAULT_CLOUD_SCAN_INTERVAL: Final = 20
+DEFAULT_IMAGE_MEDIA_PATH: Final = "visonic"  # sub-path under HA's media dir (media_dirs); absolute values used as-is
+IMAGE_SEQUENCE_GAP: Final = 90.0
+IMAGE_SEQUENCE_MAX_FRAMES: Final = 15
+IMAGE_FRAME_DURATION_MS: Final = 500
+IMAGE_DOWNLOAD_TIMEOUT: Final = 60.0
+IMAGE_DOWNLOAD_MAX: Final = 300.0  # hard cap so the download-active state can't stick on during a long retransmit loop
+CONF_IMAGE_QUEUE_MAX: Final = "image_queue_max"
+DEFAULT_IMAGE_QUEUE_MAX: Final = 5  # requests queued behind an active download; further presses ignored
 
 # Text strings for entity attributes
 TEXT_DISCONNECTION_COUNT: Final = "Disconnection Count"
@@ -89,6 +98,7 @@ TRANSLATE_EXCEPTION_SERVICE_CONFIG_ENTRY_NOT_FOUND: Final = "config_entry_not_fo
 
 # Supplement the HA attributes with a bypass, this is for individual sensors in the service call. It is used as a boolean.
 ATTR_BYPASS: Final = "bypass"
+ATTR_DURATION: Final = "duration"
 
 PARTITION_ID_WHEN_BASE: Final = -1
 
@@ -132,6 +142,8 @@ CONF_LOG_EVENT: Final = "panellog_logentry_event"
 CONF_LOG_CSV_TITLE: Final = "panellog_csv_add_title_row"
 CONF_LOG_XML_FN: Final = "panellog_xml_filename"
 CONF_LOG_CSV_FN: Final = "panellog_csv_filename"
+CONF_IMAGE_MEDIA_PATH: Final = "image_media_path"
+CONF_IMAGE_SINGLE_FRAME: Final = "image_single_frame"
 CONF_LOG_DONE: Final = "panellog_complete_event"
 CONF_LOG_REVERSE: Final = "panellog_reverse_order"
 CONF_LOG_MAX_ENTRIES: Final = "panellog_max_entries"
@@ -150,6 +162,7 @@ PIN_REGEX: Final = re.compile(r"^[0-9]{4}$")
 PLATFORMS: Final = [
     Platform.ALARM_CONTROL_PANEL,
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.IMAGE,
     Platform.SELECT,
     Platform.SENSOR,

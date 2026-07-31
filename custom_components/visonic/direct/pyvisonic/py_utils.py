@@ -59,3 +59,18 @@ def b2i(data: bytearray | bytes, big_endian: bool = False) -> int:
         data if isinstance(data, (bytearray, bytes)) else bytes(data),
         "big" if big_endian else "little"
     )
+
+
+def f4_crc16(body: bytearray | bytes) -> tuple[int, int]:
+    """CRC-16/CCITT (poly 0x1021, init 0, no xorout) for F4 messages, output byte-swapped.
+
+    Used for three things: validating a received F4 frame, building the F4-07/F4-10 acks,
+    and checking a reassembled camera image against the CRC in its F4-03 header. Verified
+    byte-for-byte against a real Powerlink on the wire (104/105 captured acks).
+    """
+    crc = 0
+    for by in body:
+        crc ^= by << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
+    return crc & 0xFF, (crc >> 8) & 0xFF

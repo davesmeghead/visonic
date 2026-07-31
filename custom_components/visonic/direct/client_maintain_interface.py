@@ -356,7 +356,7 @@ class MaintainInterface:
             self.logger.logstate_debug(f"No options found for {self._select_entity_id}")
             return False
         # Check if the requested option is valid
-        if option not in options:
+        if option is not None and option not in options:
             #raise ValueError(f"Invalid option '{option}' for {self._select_entity_id}. Valid options: {options}")
             self.logger.logstate_debug(f"Invalid option '{option}' for {self._select_entity_id}. Valid options: {options}")
             return False

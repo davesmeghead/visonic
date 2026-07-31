@@ -333,9 +333,13 @@
 			"description": "Haal een afbeelding op van de sensor, dit werkt alleen als de sensor een Camera PIR is.",
 			"fields": {
 				"entity_id": {
-					"name": "Visonic Sensor (Afbeelding)",
+					"name": "Visonic Sensor",
 					"description": "Naam van de Visonic-sensor."
-				}
+                },
+                "duration": {
+                    "name": "Duration",
+                    "description": "Duration (length of captured video) in seconds, set to 0 for still image."
+                }
 			}
 		},
 		"alarm_sensor_bypass": {

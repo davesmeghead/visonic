@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, fields
 from datetime import date, datetime
-from enum import Enum, IntEnum, StrEnum
+from enum import Enum, IntEnum, StrEnum, auto
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Self, TypedDict, cast
 
@@ -332,6 +332,12 @@ class AlarmSensorType(IntEnum):
     SIREN = 103
     SWITCH = 200
 
+class ImageQueueState(Enum):
+    """Image queue state."""
+    SEND = auto()
+    FULL = auto()
+    QUEUED = auto()
+
 class EnumType(IntEnum):
     """Common implementation of class methods."""
 
@@ -404,6 +410,7 @@ class PanelCondition(IntEnum):
     NO_DATA_FROM_PANEL = 10
     COMMAND_REJECTED = 11
     STARTUP_SUCCESS = 12        # In the client this triggers the setting of the string name in the Config settings to the panel type
+    IMAGE_UPDATE = 13
     # These start at 100 to ensure uniqueness when mixing with AlCondition (pyvisonic library).
     #  Used for AlarmPanelEventActionList and event dispatching.
     CHECK_ARM_DISARM_COMMAND = 100

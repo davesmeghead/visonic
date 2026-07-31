@@ -122,3 +122,13 @@ alarm_sensor_image:
         entity:
           integration: visonic
           domain: image
+          multiple: true
+    duration:
+      required: true
+      default: 4
+      selector:
+        number:
+          min: 0
+          max: 5
+          step: 1
+          mode: slider

@@ -69,8 +69,10 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         self._attr_image_last_retrieved = None
         self._cached_image = None
         # self._attr_image_url = None
+        # The entity shows the latest still; the capture's clip (MP4 with audio) is in the media browser
         self._attr_content_type = "image/jpeg"
         self._image_data = None
+        self._image_data_time = None
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, identifier)},
             manufacturer=MANUFACTURER,
@@ -110,26 +112,29 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         """Return the state attributes of the device."""
         if self._get_sensor() is None:
             return None
-        attr: Mapping[str, Any] = {}
+        attr: dict[str, Any] = {}
         attr[PANEL_ATTRIBUTE_NAME] = self._panel_id
         attr[DEVICE_ATTRIBUTE_NAME] = self._sensor_id
+        # Where this camera's captures are filed. The frontend would otherwise have to guess it
+        # from the device name, so a dashboard can link straight to the right media folder.
+        if (folder := self.coordinator.platform_manager.camera_folder(self._sensor_id)):
+            attr["media_folder"] = folder
         return attr
 
     async def async_image(self) -> bytes | None:
         """Return bytes of image on-demand."""
         if (sensor := self._get_sensor()) is None:
             return None
-        if not self._has_image:
-            return None
+        # Deliberately not gated on has_image: the panel only reports that once it has sent frames
+        # this session, so after a restart the entity served nothing at all - a 500 from
+        # /api/image_proxy - even though the last capture was still on disk. With no bytes anywhere
+        # the coordinator returns None, which is the same answer as before.
 
         image_time = sensor.image_time
 
         async with self._image_lock:
-            if image_time != self._attr_image_last_retrieved:
-                self._attr_image_last_retrieved = image_time
-                self._attr_state: StateType = (
-                    STATE_OK  # pyright: ignore[reportIncompatibleVariableOverride]
-                )
+            if image_time != self._image_data_time or self._image_data is None:
+                self._image_data_time = image_time
                 # Fetch from the client; use async if possible
                 self._image_data: bytearray | None = (
                     await self.coordinator.get_cached_image(self._sensor_id)

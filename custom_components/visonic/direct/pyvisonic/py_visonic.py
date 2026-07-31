@@ -288,11 +288,16 @@ class VisonicProtocol(MessageHandling):
             return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
         if self.PanelMode not in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
             return AlCommandStatus.FAIL_INVALID_STATE
-        if device - 1 in self.SensorList and self.SensorList[device-1].has_jpg:
-            if device in self.image_ignore:
-                return AlCommandStatus.FAIL_INVALID_STATE
+        if device - 1 in self.SensorList and count >= 1:
+            # Both flags only reset on a fresh F4-03, which the panel will not send while it is
+            # stuck resending an image we are discarding - so they latch and refuse every later
+            # request. An explicit user request is the right point to drop them.
+            if self.ignoreF4DataMessages or device in self.image_ignore:
+                log.debug(f"[get_sensor_image] Clearing stale ignore state for zone {device} before requesting images")
+                self.image_ignore.discard(device)
+                self.ignoreF4DataMessages = False
             if self.image_manager.create(device, count):   # This makes sure that there isn't an ongoing image retrieval for this sensor
-                self.add_message_to_send_queue(Send.GET_IMAGE, options=[ [1, count], [2, device] ])
+                self.add_message_to_send_queue(Send.GET_IMAGE, options=[ [3, count], [2, device] ])
                 return AlCommandStatus.SUCCESS
         return AlCommandStatus.FAIL_ENTITY_INCORRECT
 
