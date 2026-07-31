@@ -1022,7 +1022,7 @@ class PlatformManager:
         return self._image_active_sensor if self.image_download_active() else None
 
     def enqueue_image_request(self, sensor_id: int, eid: str | None, duration: int) -> ImageQueueState:
-        """Return 'send' (dispatch now), 'queued', or 'full' for an image-request press."""
+        """Return SEND (dispatch now), QUEUED, or FULL for an image-request press."""
         if not self.image_download_active() and not self._image_queue:
             return ImageQueueState.SEND
         max_depth = int(self.entry.options.get(CONF_IMAGE_QUEUE_MAX, DEFAULT_IMAGE_QUEUE_MAX))

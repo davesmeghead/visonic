@@ -13,7 +13,16 @@ from typing import NamedTuple
 
 from PIL import Image
 
-from .py_const import DOWNLOAD_PDU_RETRY_COUNT, OBFUS, notknown
+from .py_const import (
+    ABORTED,
+    DEGRADED,
+    DELAYED,
+    DOWNLOAD_PDU_RETRY_COUNT,
+    FAILED,
+    OBFUS,
+    SUCCESS,
+    notknown,
+)
 from .py_enum import (
     EVENT_TYPE,
     RAW,
@@ -41,12 +50,6 @@ from .py_visonic_message_b0_chunk import MessageHandlingB0Data
 AUDIO_IMAGE_ID = 0   # the panel closes a capture with its audio clip, always as image 0
 IMAGE_GOOD = 0       # Used in F4-07 messages to the panel
 IMAGE_BAD = 1        # Used in F4-07 messages to the panel
-
-FAILED="failed"
-DEGRADED="degraded"
-SUCCESS="success"
-DELAYED="delayed"
-ABORTED="aborted"
 
 def _is_wav(buffer) -> bool:
     """Does this buffer look like a RIFF/WAVE clip rather than a JPEG frame."""

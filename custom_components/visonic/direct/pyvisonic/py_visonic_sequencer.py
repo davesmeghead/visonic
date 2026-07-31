@@ -15,6 +15,7 @@ from .py_const import (
     DOWNLOAD_RETRY_DELAY,
     DOWNLOAD_TIMEOUT,
     EPROM_DOWNLOAD_ALL,
+    FAILED,
     LAST_RECEIVE_DATA_TIMEOUT,
     MAX_TIME_BETWEEN_POWERLINK_ALIVE,
     NO_RECEIVE_DATA_TIMEOUT,
@@ -1442,7 +1443,7 @@ class Sequencer(Despatcher):
                             # without it the user waits for a capture that is never coming.
                             _zone, _image_id = dropped
                             self.send_panel_update(AlCondition.IMAGE_UPDATE,
-                                                   {"finished": True, "state": "failed", "zone": _zone,
+                                                   {"finished": True, "state": FAILED, "zone": _zone,
                                                     "message": f"no image data for {IMAGE_TRANSFER_TIMEOUT} seconds, abandoned during image {_image_id}"})
 
                     # log.debug(f"[_sequencer] is {self._watchdog_counter}")

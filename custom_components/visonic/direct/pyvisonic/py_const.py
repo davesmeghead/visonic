@@ -141,3 +141,10 @@ notknown = ":NotKnown:"
 
 #from .pyhelper import vloggerclass
 #log = vloggerclass(mylog, 0, False)
+
+# Part or the F4 Image Transfer panel event dictionary
+FAILED="failed"
+DEGRADED="degraded"
+SUCCESS="success"
+DELAYED="delayed"
+ABORTED="aborted"
