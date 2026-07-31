@@ -77,6 +77,7 @@ from .visonic_types import (
     AlarmCommandStatus,
     AvailableNotifications,
     EmulationMode,
+    ImageQueueState,
     PanelCondition,
     VisonicConfigEntry,
 )
@@ -1020,15 +1021,15 @@ class PlatformManager:
         """Zone of the camera currently downloading, or None when idle."""
         return self._image_active_sensor if self.image_download_active() else None
 
-    def enqueue_image_request(self, sensor_id: int, eid: str | None, duration: int) -> str:
+    def enqueue_image_request(self, sensor_id: int, eid: str | None, duration: int) -> ImageQueueState:
         """Return 'send' (dispatch now), 'queued', or 'full' for an image-request press."""
         if not self.image_download_active() and not self._image_queue:
-            return "send"
+            return ImageQueueState.SEND
         max_depth = int(self.entry.options.get(CONF_IMAGE_QUEUE_MAX, DEFAULT_IMAGE_QUEUE_MAX))
         if max_depth <= 0 or len(self._image_queue) >= max_depth:
-            return "full"
+            return ImageQueueState.FULL
         self._image_queue.append((sensor_id, eid, duration))
-        return "queued"
+        return ImageQueueState.QUEUED
 
     def pop_image_request(self) -> tuple[int, str | None, int] | None:
         """Return the next queued image request, or None if the queue is empty."""

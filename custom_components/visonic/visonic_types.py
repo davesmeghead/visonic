@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, fields
 from datetime import date, datetime
-from enum import Enum, IntEnum, StrEnum
+from enum import Enum, IntEnum, StrEnum, auto
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Self, TypedDict, cast
 
@@ -331,6 +331,12 @@ class AlarmSensorType(IntEnum):
     TOKEN = 102
     SIREN = 103
     SWITCH = 200
+
+class ImageQueueState(Enum):
+    """Image queue state."""
+    SEND = auto()
+    FULL = auto()
+    QUEUED = auto()
 
 class EnumType(IntEnum):
     """Common implementation of class methods."""

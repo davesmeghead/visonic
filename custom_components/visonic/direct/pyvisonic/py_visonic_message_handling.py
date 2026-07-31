@@ -46,7 +46,7 @@ FAILED="failed"
 DEGRADED="degraded"
 SUCCESS="success"
 DELAYED="delayed"
-UNEXPECTED="unexpected"
+ABORTED="aborted"
 
 def _is_wav(buffer) -> bool:
     """Does this buffer look like a RIFF/WAVE clip rather than a JPEG frame."""
@@ -1000,11 +1000,17 @@ class MessageHandling(MessageHandlingB0Data):
 
         if self.PanelMode not in [AlPanelMode.STANDARD, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]:
             log.debug(f"[handle_msgtypeF4] PanelMode is {self.PanelMode} so not processing F4 data")
-            self.ignoreF4DataMessages = True   # Ignore 0x05 data packets
-            self.image_manager.stop()          # Stop all image processing
-            if msgtype == 0x03:
-                zone = (10 * int(data[5] // 16)) + (data[5] % 16)         # the // does integer floor division so always rounds down
-                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": None, "state": UNEXPECTED, "zone": zone, "message": "invalid panel mode"})
+            if not self.ignoreF4DataMessages:
+                _izc, ir = self.image_manager.getCurrentImageRecord()
+                if ir is not None:
+                    zone = ir.zone
+                elif msgtype == 0x03:
+                    zone = (10 * int(data[5] // 16)) + (data[5] % 16)
+                else:
+                    zone = 0
+                self.send_panel_update(AlCondition.IMAGE_UPDATE, {"finished": True, "state": ABORTED, "zone": zone, "message": "invalid panel mode"})
+            self.image_manager.stop()
+            self.ignoreF4DataMessages = True
 
         elif msgtype == 0x03:     # JPG Header
             log.debug(f"[handle_msgtypeF4]  data {toString(data)}")
