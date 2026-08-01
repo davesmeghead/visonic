@@ -19,8 +19,7 @@ from homeassistant.util import slugify
 from .const import DOMAIN
 from .coordinator_base import VisonicCoordinator
 from .sensor_base_logic import VisonicBaseEntity
-from .utils import getAlarmPanelUniqueIdent
-from .utils import kill_asyncio_task
+from .utils import getAlarmPanelUniqueIdent, kill_asyncio_task
 from .visonic_entity_types import (
     BINARY_SENSOR_DEFINITIONS,
     STYPE_TO_HA_SENSOR_MAP,
@@ -175,7 +174,7 @@ class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
         # If not bool then use a change of value
         if data is None:
 #            self._reset_state()
-            self.current_value = False
+            self.current_value = None
         elif isinstance(data, bool):
             # Used for "state" to set the current_value from a bool
             self.current_value = data

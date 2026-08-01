@@ -38,7 +38,7 @@ _LOGGER = logging.getLogger(__name__)
 class VisonicBaseEntity(CoordinatorEntity[VisonicCoordinator]):
     """Generic base entity to support binary and float entities."""
 
-    def __init__(self, entry: ConfigEntry, sensor_id: int, identifier:str, initial_state: bool | float, definition: VisonicSensorDefinition) -> None:
+    def __init__(self, entry: ConfigEntry, sensor_id: int, identifier:str, initial_state: bool | float | None, definition: VisonicSensorDefinition) -> None:
         """Initialize the sensor."""
         #_LOGGER.debug("[VisonicBaseSensor]   In base sensor VisonicSensor initialisation")
         vce: VisonicConfigData = entry.runtime_data
