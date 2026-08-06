@@ -70,7 +70,7 @@ class AlSensorDevice(CallbackHandler, ABC):
         self.problem: str = "none"
         self.zone_name: str = ""
         self.zone_panel_name: str = ""
-        self.zone_type: int = 0
+        self.zone_type: int | None = None
 
     # ---- Required API ----
 

@@ -4,7 +4,7 @@ from datetime import timedelta
 from enum import IntEnum
 import os
 
-LIBRARY_VERSION = "2.0.0.3"
+LIBRARY_VERSION = "2.0.0.4"
 
 NOBYPASSSTR = "No Bypass"
 DISABLE_TEXT = "Disable"
