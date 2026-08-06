@@ -16,7 +16,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .alarm_base_logic import AlarmBaseLogic
 from .const import DOMAIN, TEXT_CLIENT_VERSION, TEXT_DISCONNECTION_COUNT
 from .visonic_entity_types import AlarmPanelData
-from .visonic_types import AlarmPanelCommand, VisonicConfigData, VisonicCoordinatorData
+from .visonic_types import (
+    AlarmPanelCommand,
+    AlarmPanelStatus,
+    VisonicConfigData,
+    VisonicCoordinatorData,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -143,7 +148,8 @@ class VisonicAlarm(
         # Update HA attributes from PanelStateData
         self._attr_extra_state_attributes = self.panel_state_data.attributes
         self._attr_alarm_state = self.panel_state_data.alarm_state
-        self._attr_available = self.panel_state_data.connected
+        self._attr_available = self.panel_state_data.connected and self.panel_state_data.panel_state not in [AlarmPanelStatus.UNKNOWN, AlarmPanelStatus.USER_TEST, AlarmPanelStatus.DOWNLOADING]
+        #_LOGGER.info(f"[alarm control panel update]  _attr_available {self._attr_available}    _attr_alarm_state {self._attr_alarm_state}")  # noqa: G004
 
         if self.panel_state_data.connected and not self.disable_all_panel_commands:
             self._attr_code_arm_required = self.panel_state_data.code_arm_required

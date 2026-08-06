@@ -27,7 +27,7 @@ from .visonic_entity_types import (
     FloatSensorDefinition,
     VisonicFloatSensorKey,
 )
-from .visonic_types import VisonicConfigData
+from .visonic_types import AlarmPanelStatus, VisonicConfigData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,7 +88,8 @@ class VisonicAlarmSensor(AlarmBaseLogic, SensorEntity):
     # Implement the abstract class
     def update_local(self, entry: ConfigEntry):
         """Update the sensor's state from coordinator data."""
-        self._attr_available = self.panel_state_data.connected
+        #self._attr_available = self.panel_state_data.connected
+        self._attr_available = self.panel_state_data.connected and self.panel_state_data.panel_state not in [AlarmPanelStatus.UNKNOWN, AlarmPanelStatus.USER_TEST, AlarmPanelStatus.DOWNLOADING]
         self._attr_state = self.panel_state_data.alarm_state
         if self.panel_state_data.connected:
             self._attr_extra_state_attributes = self.panel_state_data.attributes

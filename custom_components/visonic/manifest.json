@@ -11,7 +11,7 @@
   "loggers": ["visonic"],
   "requirements": ["Pillow", "serialx"],
   "single_config_entry": false,
-  "version": "0.13.0.5",
+  "version": "0.13.0.6",
   "zeroconf": [
     {
        "type": "_visonic._tcp.local.",
