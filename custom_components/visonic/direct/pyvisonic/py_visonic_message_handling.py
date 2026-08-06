@@ -441,8 +441,13 @@ class MessageHandling(MessageHandlingB0Data):
                 #    This one is wrong (I had a door open and this status had 0, the one above had 1)
                 #       According to domotica forum, this represents "active" but what does that actually mean?
                 log.debug("[handle_msgtypeA5] Zone Status: Inactive and Tamper")
-                val = b2i(data[2:6])
-                log.debug(f"[handle_msgtypeA5]      Trigger (Inactive) Status Zones 32-01: {val:032b} Not Used")
+                if self.is_power_master():
+                    # For PowerMaster only use the B0 message data
+                    val = b2i(data[2:6])
+                    log.debug(f"[handle_msgtypeA5]      Trigger (Inactive) Status Zones 32-01: {val:032b} Not Used")
+                else:
+                    # Use this information for PowerMax panels
+                    self._do_sensor_update(data[2:6],  ZoneFunctions.DO_INACTIVE, "[handle_msgtypeA5]      Zone Inactive 32-01")
                 self._do_sensor_update(data[6:10], ZoneFunctions.DO_TAMPER, "[handle_msgtypeA5]      Tamper Zones 32-01")
 
             case 4:

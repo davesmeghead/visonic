@@ -68,6 +68,7 @@ pmZoneMax: Final[dict[int, ZoneSensorDetails]] = {
     0x75 : ZoneSensorDetails("MCT-302"     , AlarmSensorType.MAGNET,  ALL_ENTITIES + BATTERY_AND_STATUS_TIMEOUT),
     0x76 : ZoneSensorDetails("MCT-302"     , AlarmSensorType.MAGNET,  ALL_ENTITIES + BATTERY_AND_STATUS_TIMEOUT),
     0x7A : ZoneSensorDetails("MCT-550"     , AlarmSensorType.FLOOD,   ALL_ENTITIES + BATTERY_AND_TRIGGER_OTHER),
+    0x85 : ZoneSensorDetails("MCT-302"     , AlarmSensorType.MAGNET,  ALL_ENTITIES + BATTERY_AND_STATUS_TIMEOUT),
     0x86 : ZoneSensorDetails("MCT-302"     , AlarmSensorType.MAGNET,  ALL_ENTITIES + BATTERY_AND_STATUS_TIMEOUT),
     0x87 : ZoneSensorDetails("MCT-302"     , AlarmSensorType.MAGNET,  ALL_ENTITIES + BATTERY_AND_STATUS_TIMEOUT),
     0x8A : ZoneSensorDetails("MCT-550"     , AlarmSensorType.FLOOD,   ALL_ENTITIES + BATTERY_AND_TRIGGER_OTHER),
