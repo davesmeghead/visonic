@@ -386,7 +386,7 @@ class PanelStateData:
     code_arm_required: bool = True
     is_power_master: bool = False
     trigger_device: tuple[int, TriggerAlarmType] = (0, TriggerAlarmType.NONE)
-    alarm_state: AlarmControlPanelState = AlarmControlPanelState.DISARMED
+    alarm_state: AlarmControlPanelState = None
     panel_state: AlarmPanelStatus = AlarmPanelStatus.UNKNOWN
     attributes: dict[str, Any] = field(default_factory=dict)
     last_event_name: str | None = None
@@ -450,7 +450,7 @@ class CommandResult:
 
 # Map the alarm panel states across to the Home Assistant states
 PANEL_TO_HA_STATUS_MAP: dict[AlarmPanelStatus, AlarmControlPanelState] = {
-    AlarmPanelStatus.UNKNOWN: AlarmControlPanelState.DISARMED,
+    AlarmPanelStatus.UNKNOWN: None,
     AlarmPanelStatus.DISARMED: AlarmControlPanelState.DISARMED,
     AlarmPanelStatus.ARMING_HOME: AlarmControlPanelState.ARMING,
     AlarmPanelStatus.ARMING_AWAY: AlarmControlPanelState.ARMING,
@@ -462,8 +462,8 @@ PANEL_TO_HA_STATUS_MAP: dict[AlarmPanelStatus, AlarmControlPanelState] = {
     AlarmPanelStatus.ARMED_AWAY_BYPASS: AlarmControlPanelState.ARMED_AWAY,
     AlarmPanelStatus.ARMED_HOME_INSTANT: AlarmControlPanelState.ARMED_HOME,
     AlarmPanelStatus.ARMED_AWAY_INSTANT: AlarmControlPanelState.ARMED_AWAY,
-    AlarmPanelStatus.USER_TEST: AlarmControlPanelState.DISARMED,
-    AlarmPanelStatus.DOWNLOADING: AlarmControlPanelState.DISARMED,
-    AlarmPanelStatus.INSTALLER: AlarmControlPanelState.DISARMED,
+    AlarmPanelStatus.USER_TEST: None,
+    AlarmPanelStatus.DOWNLOADING: None,
+    AlarmPanelStatus.INSTALLER: None,
 }
 

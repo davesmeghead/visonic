@@ -16,12 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .alarm_base_logic import AlarmBaseLogic
 from .const import DOMAIN, TEXT_CLIENT_VERSION, TEXT_DISCONNECTION_COUNT
 from .visonic_entity_types import AlarmPanelData
-from .visonic_types import (
-    AlarmPanelCommand,
-    AlarmPanelStatus,
-    VisonicConfigData,
-    VisonicCoordinatorData,
-)
+from .visonic_types import AlarmPanelCommand, VisonicConfigData, VisonicCoordinatorData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -148,8 +143,8 @@ class VisonicAlarm(
         # Update HA attributes from PanelStateData
         self._attr_extra_state_attributes = self.panel_state_data.attributes
         self._attr_alarm_state = self.panel_state_data.alarm_state
-        self._attr_available = self.panel_state_data.connected and self.panel_state_data.panel_state not in [AlarmPanelStatus.UNKNOWN, AlarmPanelStatus.USER_TEST, AlarmPanelStatus.DOWNLOADING]
-        #_LOGGER.info(f"[alarm control panel update]  _attr_available {self._attr_available}    _attr_alarm_state {self._attr_alarm_state}")  # noqa: G004
+        self._attr_available = self.panel_state_data.connected #  and self.panel_state_data.panel_state not in [AlarmPanelStatus.UNKNOWN, AlarmPanelStatus.USER_TEST, AlarmPanelStatus.DOWNLOADING]
+        #_LOGGER.info(f"[alarm control panel update]  _attr_available {self._attr_available}    _attr_alarm_state {self._attr_alarm_state}")
 
         if self.panel_state_data.connected and not self.disable_all_panel_commands:
             self._attr_code_arm_required = self.panel_state_data.code_arm_required
@@ -168,8 +163,8 @@ class VisonicAlarm(
             ):
                 self._attr_changed_by = self.panel_state_data.last_event_name
 
-            #_LOGGER.info(f"[alarm control panel update]  code format {self._attr_code_format}")  # noqa: G004
-            #_LOGGER.info(f"[alarm control panel update]  code arm reqd {self._attr_code_arm_required}")  # noqa: G004
+            #_LOGGER.info(f"[alarm control panel update]  code format {self._attr_code_format}")
+            #_LOGGER.info(f"[alarm control panel update]  code arm reqd {self._attr_code_arm_required}")
 
         else:
             self._attr_supported_features = AlarmControlPanelEntityFeature(0)
@@ -180,7 +175,7 @@ class VisonicAlarm(
     @property
     def code_format(self) -> CodeFormat | None:
         """Code format or None if no code is required."""
-        #_LOGGER.info(f"[alarm control panel func]  code format {self._attr_code_format}")  # noqa: G004
+        #_LOGGER.info(f"[alarm control panel func]  code format {self._attr_code_format}")
         return self._attr_code_format
 
     @property
@@ -191,7 +186,7 @@ class VisonicAlarm(
     @property
     def code_arm_required(self) -> bool:
         """Whether the code is required for arm actions."""
-        #_LOGGER.info(f"[alarm control panel func]  code arm reqd {self._attr_code_arm_required}")  # noqa: G004
+        #_LOGGER.info(f"[alarm control panel func]  code arm reqd {self._attr_code_arm_required}")
         return self._attr_code_arm_required
 
     @property

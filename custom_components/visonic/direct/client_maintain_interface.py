@@ -3,7 +3,6 @@
 # This child/parent class build up incorporates the interaction/interface to the low level pyvisonic library
 
 from collections.abc import Callable
-from copy import deepcopy
 import logging
 
 from homeassistant.components.alarm_control_panel import AlarmControlPanelState
@@ -125,7 +124,7 @@ class MaintainInterface:
         )
         self.panel_ident: int = panelident
         self._panel_event_coordinator: (
-            None | PanelEventCoordinator | dict[int, PanelEventCoordinator]
+            PanelEventCoordinator | dict[int, PanelEventCoordinator] | None
         ) = None
         self.logger.logstate_debug(
             "Reset client panel variables, ESPHome Select Entity set to: %s",
@@ -138,7 +137,7 @@ class MaintainInterface:
         """Initialise local variables to this class."""
         # For a panel with no partitions and a panel with partitions
         self._panel_event_coordinator: (
-            None | PanelEventCoordinator | dict[int, PanelEventCoordinator]
+            PanelEventCoordinator | dict[int, PanelEventCoordinator] | None
         ) = None
 
         self._serial_baud_rate = int(self.entry.data.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD))
@@ -284,7 +283,7 @@ class MaintainInterface:
         alarm_state = (
             PANEL_TO_HA_STATUS_MAP[psc]
             if psc is not None and psc in PANEL_TO_HA_STATUS_MAP
-            else AlarmControlPanelState.DISARMED
+            else None
         )
         panelmode = self.get_panel_mode()
         forced_keypad = to_bool(self.entry.options.get(CONF_FORCE_KEYPAD, False))

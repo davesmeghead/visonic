@@ -243,6 +243,8 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             _mystate = AlarmControlPanelState.TRIGGERED
         elif _armcode in PANEL_TO_HA_STATUS_MAP:
             _mystate = PANEL_TO_HA_STATUS_MAP[_armcode]
+        else:
+            _mystate = None
 
         statusdict: dict[str, Any] = (
             dict(vcd.statusdict) if partition in (None, PARTITION_ID_WHEN_BASE) else {}
