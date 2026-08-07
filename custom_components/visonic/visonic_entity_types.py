@@ -235,6 +235,10 @@ class FloatSensorData(BaseData):
     initial_state: float
 
 @dataclass(slots=True)
+class BinaryImageDownloadData(BaseData):
+    """Binary Sensor to indicate image download state."""
+
+@dataclass(slots=True)
 class BinarySensorData(BaseData):
     """Binary (boolean) Sensor Data."""
     device_id: int

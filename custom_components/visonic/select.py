@@ -111,7 +111,7 @@ class VisonicSelect(CoordinatorEntity[VisonicCoordinator], SelectEntity):
         if sensor is None:
             return
 
-        self._attr_available = sensor.enrolled
+        self._attr_available = self.coordinator.is_connected()
         self._is_armed = not sensor.bypass
 
         if (
@@ -152,7 +152,7 @@ class VisonicSelect(CoordinatorEntity[VisonicCoordinator], SelectEntity):
         sensor: SensorState = self._get_sensor()
         if sensor:
             self._is_armed = not sensor.bypass
-            self._attr_available = sensor.enrolled
+            self._attr_available = self.coordinator.is_connected()
         self.async_write_ha_state()
 
     async def _clear_pending_state(self, now: datetime | None = None) -> None:

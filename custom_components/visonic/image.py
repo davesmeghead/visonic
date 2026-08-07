@@ -97,7 +97,7 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         if (sensor := self._get_sensor()) is None:
             return
 
-        self._attr_available = sensor.enrolled
+        self._attr_available = self.coordinator.is_connected()
         self._has_image = sensor.has_image
 
         if self._has_image:

@@ -16,13 +16,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
-from .const import DOMAIN
+from .const import DOMAIN, MANUFACTURER, VISONIC_TRANSLATION_KEY
 from .coordinator_base import VisonicCoordinator
 from .sensor_base_logic import VisonicBaseEntity
 from .utils import getAlarmPanelUniqueIdent, kill_asyncio_task
 from .visonic_entity_types import (
     BINARY_SENSOR_DEFINITIONS,
     STYPE_TO_HA_SENSOR_MAP,
+    BinaryImageDownloadData,
     BinarySensorData,
     BinarySensorDefinition,
     DeviceState,
@@ -30,13 +31,12 @@ from .visonic_entity_types import (
     SensorOnTimeout,
     SensorState,
     VisonicBinarySensorKey,
-    ZoneSensorData,
 )
 from .visonic_types import VisonicConfigData
 
 _LOGGER = logging.getLogger(__name__)
 
-SensorData = ZoneSensorData | BinarySensorData
+SensorData = BinaryImageDownloadData | BinarySensorData
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -53,11 +53,14 @@ async def async_setup_entry(
         if isinstance(sensor_data, SensorData):
             sensor_data = [sensor_data] # make it a list of 1
 
-        entities: list[VisonicBinaryEntity] = []
+        entities: list[VisonicBinaryEntity | VisonicImageDownloadBinarySensor] = []
 
         for sensor in sensor_data:
             if isinstance(sensor, BinarySensorData):
                 vbs = VisonicBinaryEntity(entry, sensor.device_id, sensor.identifier, sensor.initial_state, sensor.sensor_definition, sensor.timeout_type)
+                entities.append(vbs)
+            elif isinstance(sensor, BinaryImageDownloadData):
+                vbs = VisonicImageDownloadBinarySensor(entry, sensor.identifier)
                 entities.append(vbs)
 
         if len(entities) > 0:
@@ -65,12 +68,6 @@ async def async_setup_entry(
 
     vce: VisonicConfigData = entry.runtime_data
     vce.dispatchers[Platform.BINARY_SENSOR] = async_dispatcher_connect( hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.BINARY_SENSOR}", async_add_binary_sensor )
-
-    # Panel-level indicator that an image download is in progress (drives request queuing).
-    pm = getattr(vce.coordinator, "platform_manager", None)
-    if pm is not None and hasattr(pm, "image_download_active"):
-        async_add_entities([VisonicImageDownloadBinarySensor(vce.coordinator, pm.panel_ident)])
-    #_LOGGER.debug("[async_setup_entry] exit")
 
 
 class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], BinarySensorEntity):
@@ -84,31 +81,29 @@ class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], Bi
     _attr_name = "Image download active"
     _attr_icon = "mdi:camera-timer"
 
-    def __init__(self, coordinator: VisonicCoordinator, panel_ident: int) -> None:
+    def __init__(self, entry: ConfigEntry, identifier: str) -> None:
         """Initialize the panel image-download indicator."""
-        super().__init__(coordinator)
-        puid = getAlarmPanelUniqueIdent(panel_ident)
-        self._attr_unique_id = slugify(puid + "_image_download_active")
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, puid)})
+        vce: VisonicConfigData = entry.runtime_data
+        super().__init__(vce.coordinator)
+        self._attr_available = True
+        self._attr_translation_key = VISONIC_TRANSLATION_KEY
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            manufacturer=MANUFACTURER,
+        )
+        self._attr_unique_id = slugify(f"{identifier}_image_download_active")
 
     @property
     def is_on(self) -> bool:
         """Return True while a panel image download/retransmit is in progress."""
-        pm = getattr(self.coordinator, "platform_manager", None)
-        return bool(pm and pm.image_download_active())
+        #self._attr_available = self.coordinator.is_power_master()
+        return self.coordinator.image_download_active()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Which camera the panel is sending, and how many requests are waiting behind it."""
-        pm = getattr(self.coordinator, "platform_manager", None)
-        if pm is None:
-            return {}
-        zone = pm.image_download_sensor()
-        return {
-            "zone": zone,
-            "camera": pm.camera_name(zone) if zone is not None else None,
-            "queued": pm.image_queue_depth(),
-        }
+        #self._attr_available = self.coordinator.is_power_master()
+        return self.coordinator.image_download_data()
 
 
 class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
@@ -144,10 +139,11 @@ class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
         """Initialize the sensor."""
         self.entity_description = BINARY_SENSOR_DEFINITIONS[definition]
         super().__init__(entry, sensor_id, identifier, initial_state, self.entity_description)
+        self._attr_available = False
         self.initial_state = initial_state
         self.timeout_type = timeout_type
-        self.save_state = initial_state
         self.timerTask = None
+        self._reset_state()
 
     # Called when an entity is about to be removed from Home Assistant. Example use: disconnect from the server or unsubscribe from updates.
     async def async_will_remove_from_hass(self):
@@ -173,8 +169,8 @@ class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
         # If bool then use directly
         # If not bool then use a change of value
         if data is None:
-#            self._reset_state()
-            self.current_value = None
+            self._reset_state()
+#            self.current_value = None
         elif isinstance(data, bool):
             # Used for "state" to set the current_value from a bool
             self.current_value = data
@@ -225,7 +221,7 @@ class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
             # Trigger based, then force to False, waiting for next trigger
             self._set_current_data(state=state, force_non_bool_to_false=True)
             _LOGGER.debug(f"[binary sensor] out  id = {self.unique_id}   timeout = {timeout}    current = {self.current_value}")  # noqa: G004
-        self._attr_available = self.current_value is not None
+        self._attr_available = self.coordinator.is_connected()
         self.timerTask = None
         self.async_schedule_update_ha_state(True)
 

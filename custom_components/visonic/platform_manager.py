@@ -63,6 +63,7 @@ from .utils import (
 from .visonic_entity_types import (
     AlarmPanelData,
     AlarmSensorType,
+    BinaryImageDownloadData,
     BinarySensorData,
     DeviceState,
     FloatSensorData,
@@ -191,6 +192,7 @@ class PlatformManager:
         self._image_queue: deque[tuple[int, str | None, int]] = deque()
         # Cameras whose current capture was asked for as a single still (duration 0)
         self._sensor_stills_only: dict[int, bool] = {}
+        self.created_download_active_sensor = False
 
         self._createdAlarmPanel = False
 
@@ -542,6 +544,11 @@ class PlatformManager:
                 ):
                     zsd = ZoneSensorData(identifier=identifier, device_id=sensor.id)
                     self.create_image_entity(zsd)
+                    if not self.created_download_active_sensor:
+                        self.created_download_active_sensor = True
+                        puid = getAlarmPanelUniqueIdent(self.panel_ident)
+                        self.setupVisonicEntity(Platform.BINARY_SENSOR, BinaryImageDownloadData(identifier=puid))
+
             return True
         self.logger.logstate_debug("Sensor %s in exclusion list or None", sensor.id)
         return False

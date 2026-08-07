@@ -191,6 +191,35 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
     async def send_get_sensor_image(self, devid: int | None, eid: str | None, duration: int):
         """Send the command to the panel to get a camera image."""
 
+    def image_download_active(self) -> bool:
+        """Check if the image download process is active."""
+        return self.platform_manager.image_download_active()
+
+    def image_download_data(self) -> dict[str, Any]:
+        """Return the image download data."""
+        if self.image_download_active():
+            zone = self.platform_manager.image_download_sensor()
+            return {
+                "zone": zone,
+                "camera": self.platform_manager.camera_name(zone) if zone is not None else None,
+                "queued": self.platform_manager.image_queue_depth(),
+            }
+        return {
+            "zone": None,
+            "camera": None,
+            "queued": None,
+        }
+
+    def is_connected(self) -> bool:
+        """Do we have a connection to a panel."""
+        vcd: VisonicCoordinatorData = self.data
+        return vcd is not None and vcd.connected
+
+    def is_power_master(self) -> bool:
+        """Do we have a connection to a panel."""
+        vcd: VisonicCoordinatorData = self.data
+        return vcd is not None and vcd.ispowermaster
+
     def get_panel_and_partition_state(self, partition: int | None) -> PanelStateData:
         """Update the state of the entity based on device data. This is common to Alarm and Sensor Entity."""
 

@@ -143,7 +143,7 @@ class VisonicAlarm(
         # Update HA attributes from PanelStateData
         self._attr_extra_state_attributes = self.panel_state_data.attributes
         self._attr_alarm_state = self.panel_state_data.alarm_state
-        self._attr_available = self.panel_state_data.connected #  and self.panel_state_data.panel_state not in [AlarmPanelStatus.UNKNOWN, AlarmPanelStatus.USER_TEST, AlarmPanelStatus.DOWNLOADING]
+        self._attr_available = self.panel_state_data.connected
         #_LOGGER.info(f"[alarm control panel update]  _attr_available {self._attr_available}    _attr_alarm_state {self._attr_alarm_state}")
 
         if self.panel_state_data.connected and not self.disable_all_panel_commands:

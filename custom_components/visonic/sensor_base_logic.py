@@ -128,7 +128,8 @@ class VisonicBaseEntity(CoordinatorEntity[VisonicCoordinator]):
         self.esa = self.definition.attributes_fn(state)
         self.esa[PANEL_ATTRIBUTE_NAME] = self._panel_id
 
-        self._attr_available = self.current_value is not None
+        self._attr_available = self.coordinator.is_connected()
+
         return True
 
     @property
