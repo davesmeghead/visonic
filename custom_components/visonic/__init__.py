@@ -6,13 +6,13 @@ import logging
 from types import MappingProxyType
 from typing import Any
 
-import voluptuous
+from voluptuous.schema_builder import UNDEFINED as VOL_UNDEFINED
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
 from homeassistant.const import CONF_NAME, CONF_SOURCE, CONF_TYPE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers.typing import UNDEFINED
+from homeassistant.helpers.typing import UNDEFINED as TYPE_UNDEFINED
 
 from .cloud.coordinator_cloud import VisonicCloudCoordinator
 from .connection_test import ConnectionTest
@@ -415,19 +415,19 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
 
         for key in key_data_list:
             default = config_items[key].default
-            if default is not UNDEFINED and not isinstance(default, voluptuous.schema_builder.Undefined):
-                data_out[key] = deepcopy(default)
-            else:
+            if default in [TYPE_UNDEFINED, VOL_UNDEFINED]:
                 _LOGGER.warning("Missing config data key: %s", key)
                 data_out[key] = None
+            else:
+                data_out[key] = deepcopy(default)
 
         for key in key_option_list:
             default = config_items[key].default
-            if default is not UNDEFINED and not isinstance(default, voluptuous.schema_builder.Undefined):
-                options_out[key] = deepcopy(default)
-            else:
+            if default in [TYPE_UNDEFINED, VOL_UNDEFINED]:
                 _LOGGER.warning("Missing config options key: %s", key)
                 options_out[key] = None
+            else:
+                options_out[key] = deepcopy(default)
 
         # add title and name in to the set (not user settings but saved by the integration)
         key_data_list.add(TEXT_TITLE)

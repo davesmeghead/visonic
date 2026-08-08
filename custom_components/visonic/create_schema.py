@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Final, Protocol
 
 import voluptuous as vol
-from voluptuous.schema_builder import UNDEFINED
+from voluptuous.schema_builder import UNDEFINED as VOL_UNDEFINED
 
 from homeassistant.const import (
     CONF_CODE,
@@ -140,13 +140,13 @@ class ConfigItem:
 # ---- Helper functions ----
 def req(key: str, *, default: Any):
     """Required."""
-    if default is UNDEFINED:
+    if default is VOL_UNDEFINED:
         return vol.Required(key)
     return vol.Required(key, default=default)
 
 def opt(key: str, *, default: Any):
     """Optional."""
-    if default is UNDEFINED:
+    if default is VOL_UNDEFINED:
         return vol.Optional(key)
     return vol.Optional(key, default=default)
 
@@ -187,7 +187,7 @@ def build_config_items() -> dict[str, ConfigItem]:
         CONF_PATH: ConfigItem(
             marker=req,
             validator=SerialPortSelector(),
-            default=UNDEFINED,
+            default=VOL_UNDEFINED,
         ),
         CONF_HOST: ConfigItem(
             marker=req,
@@ -204,7 +204,7 @@ def build_config_items() -> dict[str, ConfigItem]:
             validator=EntitySelector(
                 EntitySelectorConfig(domain=["select"], multiple=False)
             ),
-            default=UNDEFINED,
+            default=VOL_UNDEFINED,
         ),
         CONF_EXTERNAL_URL: ConfigItem(
             marker=req,
@@ -259,7 +259,7 @@ def build_config_items() -> dict[str, ConfigItem]:
         CONF_DOWNLOAD_CODE: ConfigItem(
             marker=opt,
             validator=str,
-            default=UNDEFINED,
+            default=VOL_UNDEFINED,
         ),
         CONF_USER_CODE_SLOT: ConfigItem(
             marker=req,
@@ -459,7 +459,7 @@ class VisonicSchema:
         self._options = {
             key: deepcopy(config_item.default)
             for key, config_item in self._config_items.items()
-            if config_item.default is not UNDEFINED
+            if config_item.default is not VOL_UNDEFINED
         }
 
     def _merge_options(self, overrides: dict[str, Any] | None) -> dict[str, Any]:
