@@ -136,6 +136,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         self.partition_list : set[int] = set()
         self.siren_arm = False
         self.siren_disarm = False
+        self.testing = False
 
         self.first_time = True
         self.login_success = False
@@ -292,16 +293,16 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         """Get the cached image."""
         return None
 
-    async def wait_for_process_status(self, process_token) -> AlarmCommandStatus:
+    async def wait_for_process_status(self, process_token, attempts = 5) -> AlarmCommandStatus:
         """Check the process status for up to 5 seconds."""
         if process_token:
-            attempts = 5
             while attempts > 0:
-                attempts = attempts - 1
+                attempts -= 1
                 await asyncio.sleep(1.0)
                 processes = await self.cloud_alarm.get_process_status(process_token)
                 self._event_logger.logstate_info("          status %s", processes)
                 for process in processes:
+                    self._event_logger.logstate_info(f"          process {process}")
                     if process.status == "handled":
                         return AlarmCommandStatus.SUCCESS
                     if process.status == "failed":
@@ -548,6 +549,14 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             }
 
         try:
+
+            if self.cloud_alarm is None:
+                return VisonicCoordinatorData(
+                    connected=False,
+                    mode="unknown",
+                    #ident=getAlarmPanelUniqueIdent(self.panel_id)
+                )
+
             # Notes:
             ### alerts: Empty list when I tried
             ###         alerts = await self.cloud_alarm.get_alerts()
@@ -555,7 +564,20 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             ###         alarms = await self.cloud_alarm.get_alarms()
             ### cameras: More detail than Devices get_devices()
             ###         Will probably need it to get images
-            ###         cameras = await self.cloud_alarm.get_cameras()
+
+#            if not self.testing:
+#                self.saved_cameras = await self.cloud_alarm.get_cameras()
+#                self.testing = True
+#                process_token = await self.cloud_alarm.make_video(1)
+#                acs = None
+#                if process_token:
+#                    acs = await self.wait_for_process_status(process_token, 40)
+#            else:
+#                cameras = await self.cloud_alarm.get_cameras()
+#                if cameras != self.saved_cameras:
+#                    self._event_logger.logstate_info(f"Diffed {cameras}")
+
+
             ### feature_set: a bit more data than PanelInfo features but not worth it
             ###         feature_set = await self.cloud_alarm.get_feature_set()
             ### locations: A list of 30 locations, Hall, Kitchen etc and whether they are editable
@@ -567,13 +589,6 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
             # Call this and save to xml and csv files.
             #events = await self.cloud_alarm.get_events(timestamp_hour_offset=1)
-
-            if self.cloud_alarm is None:
-                return VisonicCoordinatorData(
-                    connected=False,
-                    mode="unknown",
-                    #ident=getAlarmPanelUniqueIdent(self.panel_id)
-                )
 
             # Attempt to get status using current session
             status = await self.cloud_alarm.get_status()

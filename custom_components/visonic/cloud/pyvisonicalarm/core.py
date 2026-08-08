@@ -555,6 +555,18 @@ class API:
             request_type=RequestType.POST,
         )
 
+    async def make_video(self, device: int) -> dict[str, Any] | list[Any]:
+        """Make a video."""
+        data = {
+            "camera_id": 1,
+        }
+
+        return await self.__send_request(
+            VisonicURL.MAKE_VIDEO,
+            data=data,
+            request_type=RequestType.POST,
+        )
+
     async def set_name(self, object_class: str, device_id: int, name: str) -> dict[str, Any] | list[Any]:
         """Set the name of any type of object in the alarm system."""
         name_data: dict[str, Any] = {"class": object_class, "id": device_id, "name": name}

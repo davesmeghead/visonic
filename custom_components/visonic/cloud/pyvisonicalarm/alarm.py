@@ -110,6 +110,11 @@ class AlarmSystem:
         cameras = await self.__api.get_cameras()
         return [Camera(camera) for camera in cameras]
 
+    async def make_video(self, device: int) -> dict[str, Any] | list[Any]:
+        """Make a video."""
+        cmd = await self.__api.make_video(device)
+        return cmd.get("process_token")
+
     def _get_data_from_warnings(self, warnings: list[dict[str,str]] | None) -> tuple[bool, str | None , bool , bool , bool]:
         # set default values
         low_battery = False

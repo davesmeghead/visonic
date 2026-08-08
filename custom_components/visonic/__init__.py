@@ -416,7 +416,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
         for key in key_data_list:
             default = config_items[key].default
             if default in [TYPE_UNDEFINED, VOL_UNDEFINED]:
-                _LOGGER.warning("Missing config data key: %s", key)
+                _LOGGER.info("Missing config data key: %s", key)
                 data_out[key] = None
             else:
                 data_out[key] = deepcopy(default)
@@ -424,7 +424,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
         for key in key_option_list:
             default = config_items[key].default
             if default in [TYPE_UNDEFINED, VOL_UNDEFINED]:
-                _LOGGER.warning("Missing config options key: %s", key)
+                _LOGGER.info("Missing config options key: %s", key)
                 options_out[key] = None
             else:
                 options_out[key] = deepcopy(default)
