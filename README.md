@@ -12,7 +12,6 @@ This is a *custom integration* for [Home Assistant](https://www.home-assistant.i
 
 Please know that this develepment/beta release is a change that is likely to have trouble going back to the main "master" release as it changes/updates the configuration to align itself with Home Assistant guidelines. The current master release of this integration does not follow these guidelines. If you start using this development release then the only way to go back to the master is to delete the hubs for all panels, replace the visonic directory software with the current master release and recreate the hubs.
 
-The only way to install this development/beta release (0.13.x.y) is to download the code zip file, delete (or backup) the current "master" release *custom_components/visonic* directory and replace it with the one from the downloaded zip file. You may want to keep a backup of the existing master release directory instead of deleting it.
 
 ## Introduction (Development Release)
 
@@ -140,6 +139,5 @@ Each Home Assistant Device has a number of Entities depending on the Visonic Sen
 The only way to setup this integration is by using the Integration page within Home Assistant. However, this integration also supports auto discovery through zeroconf and mDNS
 
 The master release of this integration is supported by HACS, first install HACS and then find this integration in the HACS list.
-However, this development integration must be manually installed.
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=visonic)
