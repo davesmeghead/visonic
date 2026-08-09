@@ -150,7 +150,7 @@ class DataType(IntEnum):
         return i in DataType._value2member_map_
 
 @unique
-class EVENT_TYPE(IntEnum):
+class EventType(IntEnum):
     """Event Types from the panel."""
     # A single value is in the A7 message that denotes the alarm / trouble status.  There could be up to 4 messages in A7.
     NOT_DEFINED = -1
@@ -246,7 +246,7 @@ class Packet(IntEnum):
 
 # The list of text strings that appear in the getPanelStatusDict extended status attributes
 @unique
-class PANEL_STATUS(StrEnum):
+class PanelStatusNames(StrEnum):
     """Panel status attribute names."""
     SIRENS = "Sirens"
     REPEATERS = "Repeaters"
@@ -256,10 +256,10 @@ class PANEL_STATUS(StrEnum):
     PROXTAGS = "Proxtags"
     DEVICES = "Devices"
     #PANEL_NAME = "Panel Name"
-    DOOR_ZONES = "Door Zones"
-    MOTION_ZONES = "Motion Zones"
-    SMOKE_ZONES = "Smoke Zones"
-    OTHER_ZONES = "Other Zones"
+    #DOOR_ZONES = "Door Zones"
+    #MOTION_ZONES = "Motion Zones"
+    #SMOKE_ZONES = "Smoke Zones"
+    #OTHER_ZONES = "Other Zones"
 
 # Messages that we send to the panel
 class Send(Enum):

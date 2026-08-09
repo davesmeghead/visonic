@@ -16,11 +16,11 @@ from .py_const import (
 from .py_enum import (
     CFG,
     EPROM,
-    PANEL_STATUS,
     AlPanelMode,
     AlSensorCondition,
     IndexName,
     PanelSetting,
+    PanelStatusNames,
 )
 from .py_eprom import EPROMManager
 from .py_generic_device import AlGenericDeviceHelper
@@ -56,7 +56,7 @@ class ManageDevices(ProtocolBase):
         super()._reset_full()
         self.PanelCapabilities : dict[IndexName, int]= {}
         self.epromManager : EPROMManager = EPROMManager()
-        self.PanelStatus : dict[PANEL_STATUS, Any] = {}                # This is the set of EPROM settings shown
+        self.PanelStatus : dict[PanelStatusNames, Any] = {}                # This is the set of EPROM settings shown
         self.PanelType : int = 17                                # We do not yet know the paneltype so set default settings
         self.AutoEnrol : bool = True
         self.AutoSyncTime : bool = False
@@ -550,7 +550,7 @@ class ManageDevices(ProtocolBase):
         #log.debug(f"[Process Settings]   Processing settings - panel code index {idx}")
 
         #  INTERFACE : Add this param to the status panel first
-        #self.PanelStatus[PANEL_STATUS.PANEL_NAME] = pmPanelName
+        #self.PanelStatus[PanelStatusNames.PANEL_NAME] = pmPanelName
 
         #log.warning(f"[Process Settings]    Installer Code {toString(self.epromManager.lookupEpromSingle(EPROM.INSTALLERCODE))}")
         #log.warning(f"[Process Settings]    Master DL Code {toString(self.epromManager.lookupEpromSingle(EPROM.MASTERDLCODE))}")
@@ -687,22 +687,22 @@ class ManageDevices(ProtocolBase):
 
         return retval # return True if any of the sensor data has been changed because of this function
 
-    def _process_zone_event(self, eventDevice, eventType):
-        log.debug(f"[_process_zone_event]      Zone Event      Zone: {eventDevice}    Type: {eventType}")
-        key = eventDevice - 1  # get the key from the zone - 1
+    def _process_zone_event(self, event_device, event_type):
+        log.debug(f"[_process_zone_event]      Zone Event      Zone: {event_device}    Type: {event_type}")
+        key = event_device - 1  # get the key from the zone - 1
 
-        if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.MINIMAL_ONLY, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK] and key not in self.SensorList and eventType > 0:
+        if self.PanelMode in [AlPanelMode.STANDARD, AlPanelMode.MINIMAL_ONLY, AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK] and key not in self.SensorList and event_type > 0:
             log.debug("[_process_zone_event]          Got a Zone Sensor that I did not know about so creating it")
             self._update_sensor(sensor_identifier = key)
 
-        if key in self.SensorList and eventType in pmZoneEventAction:
-            sf = getattr(self.SensorList[key], pmZoneEventAction[eventType].func if eventType in pmZoneEventAction else "")
+        if key in self.SensorList and event_type in pmZoneEventAction:
+            sf = getattr(self.SensorList[key], pmZoneEventAction[event_type].func if event_type in pmZoneEventAction else "")
             if sf is not None:
-                log.debug(f"[_process_zone_event]               Processing event {eventType}  calling {pmZoneEventAction[eventType].func}({pmZoneEventAction[eventType].parameter})")
-                sf(pmZoneEventAction[eventType].parameter)
-            self.SensorList[key].problem = pmZoneEventAction[eventType].problem
+                log.debug(f"[_process_zone_event]               Processing event {event_type}  calling {pmZoneEventAction[event_type].func}({pmZoneEventAction[event_type].parameter})")
+                sf(pmZoneEventAction[event_type].parameter)
+            self.SensorList[key].problem = pmZoneEventAction[event_type].problem
         else:
-            log.debug(f"[_process_zone_event]               Not processing device/zone {eventDevice}   event {eventType}")
+            log.debug(f"[_process_zone_event]               Not processing device/zone {event_device}   event {event_type}")
 
     def sensors_to_string_list(self) -> list[str]:
         """Dump the sensor list to a string list."""

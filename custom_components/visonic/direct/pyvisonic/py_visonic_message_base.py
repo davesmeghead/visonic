@@ -188,7 +188,7 @@ class MessageHandlingBase(Sequencer):
                 log.debug(f"[_updatePartitionStatus]                 It also claims to have a zone event with data (hex) {hex(sys_status_2)} possibly with this data {hex(unknown4)}")
             if sysFlags & 0x40 != 0:
                 log.debug(f"[_updatePartitionStatus]                 It also claims to have a status changed event with data (hex) {hex(sys_status_2)} possibly with this data {hex(unknown4)}")
-                #self._process_zone_event(eventDevice=eventDevice, eventType=eventType)
+                #self._process_zone_event(eventDevice=eventDevice, event_type=event_type)
         elif piu is not None and partition in piu:
             log.debug(f"[_updatePartitionStatus]        Partition={partition}  Not Enabled but it is in the current Partition set {piu}, that's a problem")
         else:

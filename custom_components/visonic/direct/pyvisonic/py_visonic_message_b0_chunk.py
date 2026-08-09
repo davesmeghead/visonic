@@ -9,16 +9,16 @@ from textwrap import wrap
 from .py_const import OBFUS, notknown
 from .py_enum import (
     CFG,
-    EVENT_TYPE,
-    PANEL_STATUS,
     RAW,
     SEQUENCE,
     AlPanelMode,
     B0SubType,
     DataType,
+    EventType,
     IndexName,
     MessagePriority,
     PanelSetting,
+    PanelStatusNames,
 )
 from .py_generic_device import AlGenericDeviceHelper, GenericDeviceType
 from .py_panel_settings import pmMapZoneType, pmPanelSettingCodes
@@ -477,7 +477,7 @@ class MessageHandlingB0Data(MessageHandlingBase):
 
             case (B0SubType.PANEL_STATE_3, RAW.FIVE_BYTE,  IndexName.MIXED, 6 ):
                 # e.g. 0c 00 00 03 10 14    ==>   stype.name='PANIC_PANEL'  partition=3  zone=1
-                stype = EVENT_TYPE(ch.data[0]) if ch.data[0] in EVENT_TYPE else EVENT_TYPE.NOT_DEFINED
+                stype = EventType(ch.data[0]) if ch.data[0] in EventType else EventType.NOT_DEFINED
                 sensor = ch.data[1]
                 #zone = sensor + 1
                 #partition = ch.data[3]
@@ -490,12 +490,12 @@ class MessageHandlingB0Data(MessageHandlingBase):
 
                 # When Data[0] is 0x0C i.e. PANIC_PANEL and sensor is 0, then when Data[4] is
                 panicmap = {
-                    0x06 : EVENT_TYPE.PANIC_PANEL,
-                    0x0F : EVENT_TYPE.FIRE,
-                    0x10 : EVENT_TYPE.EMERGENCY
+                    0x06 : EventType.PANIC_PANEL,
+                    0x0F : EventType.FIRE,
+                    0x10 : EventType.EMERGENCY
                 }
 
-                if stype == EVENT_TYPE.PANIC_PANEL: # and sensor == 0:
+                if stype == EventType.PANIC_PANEL: # and sensor == 0:
                     ptu = self.get_partitions_in_use() # returns a set()
                     #if ptu is not None:
                     #    for p in partition:    # already in 0 to X range
@@ -562,7 +562,7 @@ class MessageHandlingB0Data(MessageHandlingBase):
                     for dev in device_triggers:
                         # go through list of sensors that triggered
                         if dev in self.SensorList:
-                            ev = EVENT_TYPE.NONE
+                            ev = EventType.NONE
                             if (zt := self.SensorList[dev].zone_type) in pmMapZoneType:
                                 ev = pmMapZoneType[zt]
                             if ptu is not None:
@@ -625,22 +625,22 @@ class MessageHandlingB0Data(MessageHandlingBase):
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.SIRENS, _ ):
                 count = pmPanelConfig[CFG.SIRENS][self.PanelType]
                 self.PanelSettings[PanelSetting.SirenEnrolled] = [(ch.data[0] >> i) & 0x01 == 1 for i in range(min(ch.length * 8, count))]
-                self.PanelStatus[PANEL_STATUS.SIRENS] = self._string_from_raw_bits(ch.data[0], min(ch.length * 8, count), "[_process_chunk] Found an Enrolled PowerMaster siren")
+                self.PanelStatus[PanelStatusNames.SIRENS] = self._string_from_raw_bits(ch.data[0], min(ch.length * 8, count), "[_process_chunk] Found an Enrolled PowerMaster siren")
                 self._update_all_sirens()
 
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.REPEATERS, _ ):
                 count = pmPanelConfig[CFG.REPEATERS][self.PanelType]
-                self.PanelStatus[PANEL_STATUS.PANIC_BUTTONS] = self._string_from_raw_bits(ch.data[0], min(ch.length * 8, count), "[_process_chunk] Found an Enrolled PowerMaster repeater")
+                self.PanelStatus[PanelStatusNames.REPEATERS] = self._string_from_raw_bits(ch.data[0], min(ch.length * 8, count), "[_process_chunk] Found an Enrolled PowerMaster repeater")
 
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.PANIC_BUTTONS, _ ):
                 #count = pmPanelConfig[CFG.PANIC_BUTTONS][self.PanelType]
-                self.PanelStatus[PANEL_STATUS.PANIC_BUTTONS] = self._string_from_raw_bits(b2i(ch.data), ch.length * 8, "[_process_chunk] Found an Enrolled PowerMaster panic-button")
+                self.PanelStatus[PanelStatusNames.PANIC_BUTTONS] = self._string_from_raw_bits(b2i(ch.data), ch.length * 8, "[_process_chunk] Found an Enrolled PowerMaster panic-button")
 
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.KEYPADS_TWO_WAY, _ ):
                 count = pmPanelConfig[CFG.TWO_WKEYPADS][self.PanelType]
                 enrolled_keypads = b2i(ch.data)
                 count = min(ch.length * 8, count)
-                self.PanelStatus[PANEL_STATUS.KEYPADS] = self._string_from_raw_bits(enrolled_keypads, count, "[_process_chunk] Found an Enrolled PowerMaster keypad")
+                self.PanelStatus[PanelStatusNames.KEYPADS] = self._string_from_raw_bits(enrolled_keypads, count, "[_process_chunk] Found an Enrolled PowerMaster keypad")
                 for i in range(count):
                     f = enrolled_keypads & (1 << i)
                     device_id = AlGenericDeviceHelper.make_key(GenericDeviceType.KEYPAD2, i)
@@ -654,7 +654,7 @@ class MessageHandlingB0Data(MessageHandlingBase):
                 count = pmPanelConfig[CFG.KEYFOBS][self.PanelType]
                 enrolled_keyfobs = b2i(ch.data)
                 count = min(ch.length * 8, count)
-                self.PanelStatus[PANEL_STATUS.KEYFOBS] = self._string_from_raw_bits(enrolled_keyfobs, count, "[_process_chunk] Found an Enrolled PowerMaster keyfob")
+                self.PanelStatus[PanelStatusNames.KEYFOBS] = self._string_from_raw_bits(enrolled_keyfobs, count, "[_process_chunk] Found an Enrolled PowerMaster keyfob")
                 # CREATE KEYFOB
                 for i in range(count):
                     f = enrolled_keyfobs & (1 << i)
@@ -667,7 +667,7 @@ class MessageHandlingB0Data(MessageHandlingBase):
 
             case (B0SubType.SENSOR_ENROL,   RAW.BITS,  IndexName.PROXTAGS, _ ):
                 count = pmPanelConfig[CFG.PROXTAGS][self.PanelType]
-                self.PanelStatus[PANEL_STATUS.PROXTAGS] = self._string_from_raw_bits(b2i(ch.data), min(ch.length * 8, count), "[_process_chunk] Found an Enrolled PowerMaster proxtag")
+                self.PanelStatus[PanelStatusNames.PROXTAGS] = self._string_from_raw_bits(b2i(ch.data), min(ch.length * 8, count), "[_process_chunk] Found an Enrolled PowerMaster proxtag")
 
             case (B0SubType.DEVICE_TYPES,   RAW.BYTE, IndexName.SIRENS,  _ ):
                 # I'm 1% sure this is correct ie. it might be wrong

@@ -24,7 +24,7 @@ from .py_const import (
     notknown,
 )
 from .py_enum import (
-    EVENT_TYPE,
+    EventType,
     RAW,
     AlCondition,
     AlPanelMode,
@@ -491,7 +491,7 @@ class MessageHandling(MessageHandlingB0Data):
 
                 if sys_flags & 0x20 != 0:  # Zone Event
                     if event_type > 0 and event_device != 0xff: # I think that 0xFF refers to the panel itself as a zone. Currently not processed
-                        self._process_zone_event(eventDevice=event_device, eventType=event_type)
+                        self._process_zone_event(event_device=event_device, event_type=event_type)
 
                 switch_stat1 = data[8]
                 switch_stat2 = data[9]
@@ -546,23 +546,23 @@ class MessageHandling(MessageHandlingB0Data):
         # 01 00 27 51 02 ff 00 02 00 00
         # ff 5d 00 2d 00 00 11 0c 00 00
 
-        def getType(event) -> EVENT_TYPE:
-            return EVENT_TYPE(event) if event in EVENT_TYPE else EVENT_TYPE.NOT_DEFINED
+        def getType(event) -> EventType:
+            return EventType(event) if event in EventType else EventType.NOT_DEFINED
 
         def getTypeStr(event) -> str:
             return self.logEventList[event] if 0 <= event <= 151 and len(self.logEventList[event]) > 0 else "Unknown"
 
         def displayEvent(m, zone, event):
-            et : EVENT_TYPE = getType(event)
+            et : EventType = getType(event)
             event_str = getTypeStr(event)
             if self.is_power_master():
                 log.debug(f"[handle_msgtypeA7]           {m}  {zone}/{event}   {et.name}     {event_str=}")
             else:
                 log.debug(f"[handle_msgtypeA7]           {m}  {zone}/{event}   {et.name}     {event_str=}")
 
-        def processEvent(partition, zone, event) -> EVENT_TYPE:
+        def processEvent(partition, zone, event) -> EventType:
 
-            et : EVENT_TYPE = getType(event)
+            et : EventType = getType(event)
             self.add_panel_event_data(AlPanelEventData(name=zone, action=int(event))) # assume partition -1 means a panel event not tied to a partition
 
             part: PartitionStateClass = self.PartitionState[partition]
@@ -571,8 +571,8 @@ class MessageHandling(MessageHandlingB0Data):
             else:
                 part.UpdatePanelState(et)
 
-            if et == EVENT_TYPE.FORCE_ARM or (self.pmForceArmSetInPanel and et == EVENT_TYPE.DISARM): # Force Arm OR (ForceArm has been set and Disarm)
-                self.pmForceArmSetInPanel = et == EVENT_TYPE.FORCE_ARM                                # When the panel uses ForceArm then sensors may be automatically armed and bypassed by the panel
+            if et == EventType.FORCE_ARM or (self.pmForceArmSetInPanel and et == EventType.DISARM): # Force Arm OR (ForceArm has been set and Disarm)
+                self.pmForceArmSetInPanel = et == EventType.FORCE_ARM                                # When the panel uses ForceArm then sensors may be automatically armed and bypassed by the panel
                 log.debug("[handle_msgtypeA7]              Panel has been Armed using Force Arm, sensors may have been bypassed by the panel, asking panel for an update on bypassed sensors")
                 if self.is_power_master():
                     self.B0_Wanted.add(B0SubType.ZONE_BYPASS)
@@ -581,7 +581,7 @@ class MessageHandling(MessageHandlingB0Data):
 
             return et
 
-        def device_battery_check(device_reference: int, event_type: EVENT_TYPE, index_name: IndexName, dt: str, good: EVENT_TYPE, bad: EVENT_TYPE, dev_type: GenericDeviceType):
+        def device_battery_check(device_reference: int, event_type: EventType, index_name: IndexName, dt: str, good: EventType, bad: EventType, dev_type: GenericDeviceType):
             if self.PowerMaster:
                 start = powermaster_devices.get(dt)
             else:
@@ -699,9 +699,9 @@ class MessageHandling(MessageHandlingB0Data):
                 event = int(data[3 + (2 * i)])
                 displayEvent("Event", device_reference, event)
                 event_type = processEvent(0, device_reference, event)        # Assume all panel state goes through partition 0
-                device_battery_check(device_reference, event_type, IndexName.KEYFOBS, "Fob", EVENT_TYPE.KEYFOB_LOW_BATTERY_RESTORE, EVENT_TYPE.KEYFOB_LOW_BATTERY, GenericDeviceType.KEYFOB)
-                device_battery_check(device_reference, event_type, IndexName.KEYPADS_ONE_WAY, "1Pad", EVENT_TYPE.KEYPAD_LOW_BATTERY_RESTORE, EVENT_TYPE.KEYPAD_LOW_BATTERY, GenericDeviceType.KEYPAD1)
-                device_battery_check(device_reference, event_type, IndexName.KEYPADS_TWO_WAY, "2Pad", EVENT_TYPE.KEYPAD_LOW_BATTERY_RESTORE, EVENT_TYPE.KEYPAD_LOW_BATTERY, GenericDeviceType.KEYPAD2)
+                device_battery_check(device_reference, event_type, IndexName.KEYFOBS, "Fob", EventType.KEYFOB_LOW_BATTERY_RESTORE, EventType.KEYFOB_LOW_BATTERY, GenericDeviceType.KEYFOB)
+                device_battery_check(device_reference, event_type, IndexName.KEYPADS_ONE_WAY, "1Pad", EventType.KEYPAD_LOW_BATTERY_RESTORE, EventType.KEYPAD_LOW_BATTERY, GenericDeviceType.KEYPAD1)
+                device_battery_check(device_reference, event_type, IndexName.KEYPADS_TWO_WAY, "2Pad", EventType.KEYPAD_LOW_BATTERY_RESTORE, EventType.KEYPAD_LOW_BATTERY, GenericDeviceType.KEYPAD2)
 
         else:
             log.warning(f"[handle_msgtypeA7]      DATA NOT PROCESSED AND NEVER SEEN THIS BEFORE. Partitions in use = {self.get_partitions_in_use()} and received a msg_cnt in range 0 to 4, data={toString(data)}")

@@ -34,7 +34,7 @@ from .py_const import (
     TEXT_WATCHDOG_TIMEOUT_TOTAL,
 )
 from .py_enum import (
-    EVENT_TYPE,
+    EventType,
     AlAlarmType,
     AlCommandStatus,
     AlCondition,
@@ -82,7 +82,7 @@ pmArmMode = {
 # Data to embed in the MSG_PM_SIREN_MODE message
 # PowerMaster to command the siren mode
 pmSirenMode = {
-    AlPanelCommand.EMERGENCY : EVENT_TYPE.EMERGENCY, AlPanelCommand.FIRE : EVENT_TYPE.FIRE, AlPanelCommand.PANIC : EVENT_TYPE.PANIC_PANEL
+    AlPanelCommand.EMERGENCY : EventType.EMERGENCY, AlPanelCommand.FIRE : EventType.FIRE, AlPanelCommand.PANIC : EventType.PANIC_PANEL
 }
 
 # Data to embed in the MSG_SWITCH message

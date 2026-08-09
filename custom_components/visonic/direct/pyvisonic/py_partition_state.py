@@ -8,7 +8,7 @@ from enum import StrEnum
 import logging
 from typing import Any, NamedTuple
 
-from .py_enum import EVENT_TYPE, AlAlarmType, AlPanelMode, AlPanelStatus, AlTroubleType
+from .py_enum import EventType, AlAlarmType, AlPanelMode, AlPanelStatus, AlTroubleType
 from .py_sensor import AlSensorDeviceHelper
 from .py_types import AlPanelEventData
 from .py_utils import hexify
@@ -16,102 +16,102 @@ from .py_utils import hexify
 log = logging.getLogger(__name__)
 
 
-# These dictionaries are subsets of EVENT_TYPE
-pmPanelAlarmType_t: dict[EVENT_TYPE, AlAlarmType] = {      # Alarm Triggers (except Intruder which is separate)
-   EVENT_TYPE.NONE        : AlAlarmType.NONE,
-   EVENT_TYPE.PANIC_KEYFOB: AlAlarmType.PANIC,
-   EVENT_TYPE.PANIC_PANEL : AlAlarmType.PANIC,
-   EVENT_TYPE.DURESS      : AlAlarmType.PANIC,
-   EVENT_TYPE.FIRE        : AlAlarmType.FIRE,
-   EVENT_TYPE.EMERGENCY   : AlAlarmType.EMERGENCY,
-   EVENT_TYPE.GAS_ALERT   : AlAlarmType.GAS,
-   EVENT_TYPE.FLOOD_ALERT : AlAlarmType.FLOOD,
+# These dictionaries are subsets of EventType
+pmPanelAlarmType_t: dict[EventType, AlAlarmType] = {      # Alarm Triggers (except Intruder which is separate)
+   EventType.NONE        : AlAlarmType.NONE,
+   EventType.PANIC_KEYFOB: AlAlarmType.PANIC,
+   EventType.PANIC_PANEL : AlAlarmType.PANIC,
+   EventType.DURESS      : AlAlarmType.PANIC,
+   EventType.FIRE        : AlAlarmType.FIRE,
+   EventType.EMERGENCY   : AlAlarmType.EMERGENCY,
+   EventType.GAS_ALERT   : AlAlarmType.GAS,
+   EventType.FLOOD_ALERT : AlAlarmType.FLOOD,
 }
 
-pmPanelAlarmType_r: frozenset[EVENT_TYPE] = {       # Alarm Restore (except Intruder which is separate)
-   EVENT_TYPE.GENERAL_RESTORE,
-   EVENT_TYPE.FIRE_RESTORE,
-   EVENT_TYPE.EMERGENCY_RESTORE,
-   EVENT_TYPE.GAS_ALERT_RESTORE,
-   EVENT_TYPE.FLOOD_ALERT_RESTORE,
-   EVENT_TYPE.ALARM_CANCEL
+pmPanelAlarmType_r: frozenset[EventType] = {       # Alarm Restore (except Intruder which is separate)
+   EventType.GENERAL_RESTORE,
+   EventType.FIRE_RESTORE,
+   EventType.EMERGENCY_RESTORE,
+   EventType.GAS_ALERT_RESTORE,
+   EventType.FLOOD_ALERT_RESTORE,
+   EventType.ALARM_CANCEL
    # PANIC_KEYFOB and PANIC_PANEL from pmPanelAlarmType_t are not covered, are they covered by the more general ALARM_CANCEL
 }
 
-pmPanelIntruderType_t: frozenset[EVENT_TYPE] = {     # Intruder Alarm State Triggers
-   EVENT_TYPE.ALARM_INTERIOR,
-   EVENT_TYPE.ALARM_PERIMETER,
-   EVENT_TYPE.ALARM_DELAY,
-   EVENT_TYPE.ALARM_SILENT_24H,
-   EVENT_TYPE.ALARM_AUDIBLE_24H
+pmPanelIntruderType_t: frozenset[EventType] = {     # Intruder Alarm State Triggers
+   EventType.ALARM_INTERIOR,
+   EventType.ALARM_PERIMETER,
+   EventType.ALARM_DELAY,
+   EventType.ALARM_SILENT_24H,
+   EventType.ALARM_AUDIBLE_24H
 }
 
-pmPanelIntruderType_r: frozenset[EVENT_TYPE] = {     # Intruder Alarm State Restore
-   EVENT_TYPE.GENERAL_RESTORE,
-   EVENT_TYPE.DISARM,
-   EVENT_TYPE.ALARM_CANCEL,
-   EVENT_TYPE.ALARM_INTERIOR_RESTORE,
-   EVENT_TYPE.ALARM_PERIMETER_RESTORE,
-   EVENT_TYPE.ALARM_DELAY_RESTORE,
-   EVENT_TYPE.ALARM_SILENT_24H_RESTORE,
-   EVENT_TYPE.ALARM_AUDIBLE_24H_RESTORE
+pmPanelIntruderType_r: frozenset[EventType] = {     # Intruder Alarm State Restore
+   EventType.GENERAL_RESTORE,
+   EventType.DISARM,
+   EventType.ALARM_CANCEL,
+   EventType.ALARM_INTERIOR_RESTORE,
+   EventType.ALARM_PERIMETER_RESTORE,
+   EventType.ALARM_DELAY_RESTORE,
+   EventType.ALARM_SILENT_24H_RESTORE,
+   EventType.ALARM_AUDIBLE_24H_RESTORE
 }
 
-pmPanelTroubleType_t: dict[EVENT_TYPE, AlTroubleType] = {    # Trouble Indications
-   EVENT_TYPE.NONE                  : AlTroubleType.NONE,
-   EVENT_TYPE.SWITCH_TROUBLE        : AlTroubleType.GENERAL,         # Should we add SWITCH to AlTroubleType, and add it to the language translations
-   EVENT_TYPE.GAS_TROUBLE           : AlTroubleType.GENERAL,         # Should we add GAS to AlTroubleType, and add it to the language translations
-   EVENT_TYPE.COMMUNICATION_LOSS    : AlTroubleType.COMMUNICATION,
-   EVENT_TYPE.GENERAL_TROUBLE       : AlTroubleType.GENERAL,
-   EVENT_TYPE.LOW_BATTERY           : AlTroubleType.BATTERY,
-   EVENT_TYPE.AC_FAIL               : AlTroubleType.POWER,
-   EVENT_TYPE.RF_JAMMING            : AlTroubleType.JAMMING,
-   EVENT_TYPE.COMMUNICATION_FAILURE : AlTroubleType.COMMUNICATION,
-   EVENT_TYPE.TELEPHONE_LINE_FAILURE: AlTroubleType.TELEPHONE,
-   EVENT_TYPE.FUSE_FAILURE          : AlTroubleType.POWER,
-   EVENT_TYPE.KEYFOB_LOW_BATTERY    : AlTroubleType.BATTERY,
-   EVENT_TYPE.KEYPAD_LOW_BATTERY    : AlTroubleType.BATTERY,
+pmPanelTroubleType_t: dict[EventType, AlTroubleType] = {    # Trouble Indications
+   EventType.NONE                  : AlTroubleType.NONE,
+   EventType.SWITCH_TROUBLE        : AlTroubleType.GENERAL,         # Should we add SWITCH to AlTroubleType, and add it to the language translations
+   EventType.GAS_TROUBLE           : AlTroubleType.GENERAL,         # Should we add GAS to AlTroubleType, and add it to the language translations
+   EventType.COMMUNICATION_LOSS    : AlTroubleType.COMMUNICATION,
+   EventType.GENERAL_TROUBLE       : AlTroubleType.GENERAL,
+   EventType.LOW_BATTERY           : AlTroubleType.BATTERY,
+   EventType.AC_FAIL               : AlTroubleType.POWER,
+   EventType.RF_JAMMING            : AlTroubleType.JAMMING,
+   EventType.COMMUNICATION_FAILURE : AlTroubleType.COMMUNICATION,
+   EventType.TELEPHONE_LINE_FAILURE: AlTroubleType.TELEPHONE,
+   EventType.FUSE_FAILURE          : AlTroubleType.POWER,
+   EventType.KEYFOB_LOW_BATTERY    : AlTroubleType.BATTERY,
+   EventType.KEYPAD_LOW_BATTERY    : AlTroubleType.BATTERY,
 }
 
-pmPanelTroubleType_r: frozenset[EVENT_TYPE] = {    # Trouble Restore
-   EVENT_TYPE.GAS_TROUBLE_RESTORE,
-   EVENT_TYPE.SWITCH_TROUBLE_RESTORE,
-   EVENT_TYPE.GENERAL_RESTORE,
-   EVENT_TYPE.COMMUNICATION_LOSS_RESTORE,
-   EVENT_TYPE.GENERAL_TROUBLE_RESTORE,
-   EVENT_TYPE.LOW_BATTERY_RESTORE,
-   EVENT_TYPE.AC_FAIL_RESTORE,
-   EVENT_TYPE.RF_JAMMING_RESTORE,
-   EVENT_TYPE.COMMUNICATION_FAILURE_RESTORE,
-   EVENT_TYPE.TELEPHONE_LINE_FAILURE_RESTORE,
-   EVENT_TYPE.FUSE_FAILURE_RESTORE,
-   EVENT_TYPE.KEYFOB_LOW_BATTERY_RESTORE,
-   EVENT_TYPE.KEYPAD_LOW_BATTERY_RESTORE,
+pmPanelTroubleType_r: frozenset[EventType] = {    # Trouble Restore
+   EventType.GAS_TROUBLE_RESTORE,
+   EventType.SWITCH_TROUBLE_RESTORE,
+   EventType.GENERAL_RESTORE,
+   EventType.COMMUNICATION_LOSS_RESTORE,
+   EventType.GENERAL_TROUBLE_RESTORE,
+   EventType.LOW_BATTERY_RESTORE,
+   EventType.AC_FAIL_RESTORE,
+   EventType.RF_JAMMING_RESTORE,
+   EventType.COMMUNICATION_FAILURE_RESTORE,
+   EventType.TELEPHONE_LINE_FAILURE_RESTORE,
+   EventType.FUSE_FAILURE_RESTORE,
+   EventType.KEYFOB_LOW_BATTERY_RESTORE,
+   EventType.KEYPAD_LOW_BATTERY_RESTORE,
 }
 
-pmPanelTamperType_t: frozenset[EVENT_TYPE] = {                       # Panel Tamper
-   EVENT_TYPE.NONE,
-   EVENT_TYPE.TAMPER_SENSOR,
-   EVENT_TYPE.TAMPER_ALARM_A,
-   EVENT_TYPE.TAMPER_ALARM_B,
-   EVENT_TYPE.TAMPER_PANEL
+pmPanelTamperType_t: frozenset[EventType] = {                       # Panel Tamper
+   EventType.NONE,
+   EventType.TAMPER_SENSOR,
+   EventType.TAMPER_ALARM_A,
+   EventType.TAMPER_ALARM_B,
+   EventType.TAMPER_PANEL
 }
 
-pmPanelTamperType_r: frozenset[EVENT_TYPE] = {                       # Panel Tamper Restore
-   EVENT_TYPE.GENERAL_RESTORE,
-   EVENT_TYPE.TAMPER_SENSOR_RESTORE,
-   EVENT_TYPE.TAMPER_ALARM_A_RESTORE,
-   EVENT_TYPE.TAMPER_ALARM_B_RESTORE,
-   EVENT_TYPE.TAMPER_PANEL_RESTORE
+pmPanelTamperType_r: frozenset[EventType] = {                       # Panel Tamper Restore
+   EventType.GENERAL_RESTORE,
+   EventType.TAMPER_SENSOR_RESTORE,
+   EventType.TAMPER_ALARM_A_RESTORE,
+   EventType.TAMPER_ALARM_B_RESTORE,
+   EventType.TAMPER_PANEL_RESTORE
 }
 
-pmPanelBatteryType_t: frozenset[EVENT_TYPE] = {                      # Panel Low Battery
-   EVENT_TYPE.PANEL_LOW_BATTERY
+pmPanelBatteryType_t: frozenset[EventType] = {                      # Panel Low Battery
+   EventType.PANEL_LOW_BATTERY
 }
 
-pmPanelBatteryType_r: frozenset[EVENT_TYPE] = {                      # Panel Low Battery Restore
-   EVENT_TYPE.GENERAL_RESTORE,
-   EVENT_TYPE.PANEL_LOW_BATTERY_RESTORE
+pmPanelBatteryType_r: frozenset[EventType] = {                      # Panel Low Battery Restore
+   EventType.GENERAL_RESTORE,
+   EventType.PANEL_LOW_BATTERY_RESTORE
 }
 
 
@@ -121,36 +121,36 @@ class PanelArmedStatusCollection(NamedTuple):
     armed: bool | None
     entry: bool
     state: AlPanelStatus
-    eventmapping: EVENT_TYPE
+    eventmapping: EventType
 
 # fmt: off
 
 pmPanelArmedStatus: dict[int, PanelArmedStatusCollection] = {
                                      # disarmed armed entry         state
-   0x00: PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , EVENT_TYPE.DISARM),                 # Disarmed
-   0x01: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , EVENT_TYPE.NOT_DEFINED),            # Arming Home
-   0x02: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , EVENT_TYPE.NOT_DEFINED),            # Arming Away
-   0x03: PanelArmedStatusCollection( False,  True,  True, AlPanelStatus.ENTRY_DELAY        , EVENT_TYPE.NOT_DEFINED),            # Entry Delay
-   0x04: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME         , EVENT_TYPE.ARMED_HOME),             # Armed Home
-   0x05: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY         , EVENT_TYPE.ARMED_AWAY),             # Armed Away
-   0x06: PanelArmedStatusCollection(  True, False, False, AlPanelStatus.USER_TEST          , EVENT_TYPE.NOT_DEFINED),            # User Test  (assume can only be done when panel is disarmed)
+   0x00: PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , EventType.DISARM),                 # Disarmed
+   0x01: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , EventType.NOT_DEFINED),            # Arming Home
+   0x02: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , EventType.NOT_DEFINED),            # Arming Away
+   0x03: PanelArmedStatusCollection( False,  True,  True, AlPanelStatus.ENTRY_DELAY        , EventType.NOT_DEFINED),            # Entry Delay
+   0x04: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME         , EventType.ARMED_HOME),             # Armed Home
+   0x05: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY         , EventType.ARMED_AWAY),             # Armed Away
+   0x06: PanelArmedStatusCollection(  True, False, False, AlPanelStatus.USER_TEST          , EventType.NOT_DEFINED),            # User Test  (assume can only be done when panel is disarmed)
 
-   0x07: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DOWNLOADING        , EVENT_TYPE.NOT_DEFINED),            # Downloading
-   0x08: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.INSTALLER          , EVENT_TYPE.INSTALLER_PROGRAMMING),  # Programming
-   0x09: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.INSTALLER          , EVENT_TYPE.INSTALLER_PROGRAMMING),  # Installer
-   0x0A: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME         , EVENT_TYPE.ARMED_HOME),             # Armed Home Bypass   AlPanelStatus.ARMED_HOME_BYPASS
-   0x0B: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY         , EVENT_TYPE.ARMED_AWAY),             # Armed Away Bypass   AlPanelStatus.ARMED_AWAY_BYPASS
-   0x0C: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DISARMED           , EVENT_TYPE.DISARM),                 # Ready
-   0x0D: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DISARMED           , EVENT_TYPE.DISARM),                 # Not Ready  (assume can only be done when panel is disarmed)
-   0x0E: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.UNKNOWN            , EVENT_TYPE.DISARM),                 # ?
-   0x0F: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.UNKNOWN            , EVENT_TYPE.DISARM),                 # ?
+   0x07: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DOWNLOADING        , EventType.NOT_DEFINED),            # Downloading
+   0x08: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.INSTALLER          , EventType.INSTALLER_PROGRAMMING),  # Programming
+   0x09: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.INSTALLER          , EventType.INSTALLER_PROGRAMMING),  # Installer
+   0x0A: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME         , EventType.ARMED_HOME),             # Armed Home Bypass   AlPanelStatus.ARMED_HOME_BYPASS
+   0x0B: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY         , EventType.ARMED_AWAY),             # Armed Away Bypass   AlPanelStatus.ARMED_AWAY_BYPASS
+   0x0C: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DISARMED           , EventType.DISARM),                 # Ready
+   0x0D: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.DISARMED           , EventType.DISARM),                 # Not Ready  (assume can only be done when panel is disarmed)
+   0x0E: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.UNKNOWN            , EventType.DISARM),                 # ?
+   0x0F: PanelArmedStatusCollection(  None,  None, False, AlPanelStatus.UNKNOWN            , EventType.DISARM),                 # ?
    # I don't think that the B0 message can command higher than 15
-   0x10: PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , EVENT_TYPE.DISARM),                 # Disarmed Instant
-   0x11: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , EVENT_TYPE.NOT_DEFINED),            # Arming Home Last 10 Seconds             ####### armed was False
-   0x12: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , EVENT_TYPE.NOT_DEFINED),            # Arming Away Last 10 Seconds             ####### armed was False
-   0x13: PanelArmedStatusCollection( False,  True,  True, AlPanelStatus.ENTRY_DELAY_INSTANT, EVENT_TYPE.NOT_DEFINED),            # Entry Delay Instant
-   0x14: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME_INSTANT , EVENT_TYPE.ARMED_HOME),             # Armed Home Instant
-   0x15: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY_INSTANT , EVENT_TYPE.ARMED_AWAY)              # Armed Away Instant
+   0x10: PanelArmedStatusCollection(  True, False, False, AlPanelStatus.DISARMED           , EventType.DISARM),                 # Disarmed Instant
+   0x11: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_HOME        , EventType.NOT_DEFINED),            # Arming Home Last 10 Seconds             ####### armed was False
+   0x12: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMING_AWAY        , EventType.NOT_DEFINED),            # Arming Away Last 10 Seconds             ####### armed was False
+   0x13: PanelArmedStatusCollection( False,  True,  True, AlPanelStatus.ENTRY_DELAY_INSTANT, EventType.NOT_DEFINED),            # Entry Delay Instant
+   0x14: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_HOME_INSTANT , EventType.ARMED_HOME),             # Armed Home Instant
+   0x15: PanelArmedStatusCollection( False,  True, False, AlPanelStatus.ARMED_AWAY_INSTANT , EventType.ARMED_AWAY)              # Armed Away Instant
 }
 # fmt: on
 
@@ -303,7 +303,7 @@ class PartitionStateClass:
         datadict["battery_level"] = 0 if self.PanelBatteryTrouble else 100
         return datadict
 
-    def UpdatePanelState(self, et: EVENT_TYPE, sensor: AlSensorDeviceHelper | None = None):
+    def UpdatePanelState(self, et: EventType, sensor: AlSensorDeviceHelper | None = None):
         """Update the panel state based on an event type."""
         old_alarm_status = self.PanelAlarmStatus
         # I have split the known EventTypes in to those that affect Tamper, Intruder, Panel Alarm, Panel Battery and Panel Trouble
@@ -312,7 +312,7 @@ class PartitionStateClass:
         #     Each has a dict of Events to set it "_t" and a list of Events to reset it "_r"
 
         # Update tamper status
-        #self.PanelTamper = (et == EVENT_TYPE.TAMPER_PANEL)
+        #self.PanelTamper = (et == EventType.TAMPER_PANEL)
         if et in pmPanelTamperType_t:
             self.PanelTamper = True      # event in trigger set
         if et in pmPanelTamperType_r:
@@ -388,7 +388,7 @@ class PartitionStateClass:
 #            self.stopAlarmTimer()
 
         log.debug(
-            "[UpdatePanelState] eventType=%s %s %s %s %s %s %s",
+            "[UpdatePanelState] event_type=%s %s %s %s %s %s %s",
             et,
             self.PanelTamper,
             self.PanelAlarmStatus,
@@ -409,7 +409,7 @@ class PartitionStateClass:
             armed    = pmPanelArmedStatus[self.PanelStateSourceData].armed
             entry    = pmPanelArmedStatus[self.PanelStateSourceData].entry
             self.PanelStateData = pmPanelArmedStatus[self.PanelStateSourceData].state
-            if pmPanelArmedStatus[self.PanelStateSourceData].eventmapping != EVENT_TYPE.NOT_DEFINED:
+            if pmPanelArmedStatus[self.PanelStateSourceData].eventmapping != EventType.NOT_DEFINED:
                 #log.debug(f"[UpdatePartition]             self.PanelStateData is {self.PanelStateData}      using event mapping {pmPanelArmedStatus[sysStatus].eventmapping} for event data")
                 retval = AlPanelEventData(name = 0, action = pmPanelArmedStatus[self.PanelStateSourceData].eventmapping.value) # use partiton set to -1 as a dummy
         else:

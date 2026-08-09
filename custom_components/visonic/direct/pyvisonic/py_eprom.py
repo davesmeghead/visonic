@@ -615,9 +615,9 @@ class EPROMManager:
     def processEPROMData(self, is_power_master : bool) -> dict[str,Any]:
         """Process the EPROM data into a dictionary of panel status."""
         # If val.show is True but add_to_log is False then:
-        #      Add the "True" values to the self.Panelstatus
+        #      Add the "True" values to the self.PanelStatus
         # If val.show is True and add_to_log is True then:
-        #      Add all (either PowerMax / PowerMaster) values to the self.Panelstatus and the log file
+        #      Add all (either PowerMax / PowerMaster) values to the self.PanelStatus and the log file
         panel_status : dict[str,Any] = {}
         add_to_log = False
         for key, val in pmDecodePanelSettings.items():

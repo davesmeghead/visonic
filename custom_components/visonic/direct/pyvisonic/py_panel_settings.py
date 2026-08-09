@@ -4,7 +4,7 @@ import logging
 from typing import Any, Final, NamedTuple
 
 from .py_const import NOBYPASSSTR
-from .py_enum import EPROM, EVENT_TYPE, B0SubType, IndexName, PanelSetting
+from .py_enum import EPROM, EventType, B0SubType, IndexName, PanelSetting
 from .py_utils import toString
 
 log = logging.getLogger(__name__)
@@ -106,23 +106,23 @@ pmZoneTypeKey = ( "non-alarm", "emergency", "flood", "gas", "delay_1", "delay_2"
 
 # Map them to Events. When a sensor is triggered, we can use the sensor/zone type to decide what Event to trigger. This is used for B0 B0SubType.PANEL_STATE_3 messages.
 pmMapZoneType = {
-    pmZoneTypeKey[0]  : EVENT_TYPE.NONE,
-    pmZoneTypeKey[1]  : EVENT_TYPE.EMERGENCY,
-    pmZoneTypeKey[2]  : EVENT_TYPE.FLOOD_ALERT,
-    pmZoneTypeKey[3]  : EVENT_TYPE.GAS_ALERT,
-    pmZoneTypeKey[4]  : EVENT_TYPE.ALARM_PERIMETER,
-    pmZoneTypeKey[5]  : EVENT_TYPE.ALARM_PERIMETER,
-    pmZoneTypeKey[6]  : EVENT_TYPE.ALARM_INTERIOR,
-    pmZoneTypeKey[7]  : EVENT_TYPE.ALARM_PERIMETER,
-    pmZoneTypeKey[8]  : EVENT_TYPE.ALARM_PERIMETER,
-    pmZoneTypeKey[9]  : EVENT_TYPE.NONE,
-    pmZoneTypeKey[10] : EVENT_TYPE.NONE,
-    pmZoneTypeKey[11] : EVENT_TYPE.FIRE,
-    pmZoneTypeKey[12] : EVENT_TYPE.ALARM_INTERIOR,
-    pmZoneTypeKey[13] : EVENT_TYPE.NONE,
-    pmZoneTypeKey[14] : EVENT_TYPE.NONE,
-    pmZoneTypeKey[15] : EVENT_TYPE.NONE,
-    pmZoneTypeKey[16] : EVENT_TYPE.NONE
+    pmZoneTypeKey[0]  : EventType.NONE,
+    pmZoneTypeKey[1]  : EventType.EMERGENCY,
+    pmZoneTypeKey[2]  : EventType.FLOOD_ALERT,
+    pmZoneTypeKey[3]  : EventType.GAS_ALERT,
+    pmZoneTypeKey[4]  : EventType.ALARM_PERIMETER,
+    pmZoneTypeKey[5]  : EventType.ALARM_PERIMETER,
+    pmZoneTypeKey[6]  : EventType.ALARM_INTERIOR,
+    pmZoneTypeKey[7]  : EventType.ALARM_PERIMETER,
+    pmZoneTypeKey[8]  : EventType.ALARM_PERIMETER,
+    pmZoneTypeKey[9]  : EventType.NONE,
+    pmZoneTypeKey[10] : EventType.NONE,
+    pmZoneTypeKey[11] : EventType.FIRE,
+    pmZoneTypeKey[12] : EventType.ALARM_INTERIOR,
+    pmZoneTypeKey[13] : EventType.NONE,
+    pmZoneTypeKey[14] : EventType.NONE,
+    pmZoneTypeKey[15] : EventType.NONE,
+    pmZoneTypeKey[16] : EventType.NONE
 }
 
 # Default Sensor Chime

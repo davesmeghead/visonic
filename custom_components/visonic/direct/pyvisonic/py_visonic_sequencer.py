@@ -16,12 +16,12 @@ from .py_const import (
     DOWNLOAD_TIMEOUT,
     EPROM_DOWNLOAD_ALL,
     FAILED,
+    IMAGE_TRANSFER_TIMEOUT,
     LAST_RECEIVE_DATA_TIMEOUT,
     MAX_TIME_BETWEEN_POWERLINK_ALIVE,
     NO_RECEIVE_DATA_TIMEOUT,
     OBFUS,
     POWERLINK_IMALIVE_RETRY_DELAY,
-    IMAGE_TRANSFER_TIMEOUT,
     POWERMASTER_CHECK_TIME_INTERVAL,
     POWERMAX_CHECK_TIME_INTERVAL,
     STANDARD_STATUS_RETRY_DELAY,
@@ -32,7 +32,6 @@ from .py_const import (
 from .py_enum import (
     CFG,
     EPROM,
-    PANEL_STATUS,
     AlCondition,
     AlPanelMode,
     AlPanelStatus,
@@ -43,6 +42,7 @@ from .py_enum import (
     Packet,
     PanelErrorStates,
     PanelSetting,
+    PanelStatusNames,
     Receive,
     Send,
 )
@@ -707,7 +707,7 @@ class Sequencer(Despatcher):
                 log.debug("[_sequencer] Process Settings from EPROM")
                 if self.pmDownloadComplete:
                     self._process_EPROM_settings()
-                    self.PanelStatus[PANEL_STATUS.DEVICES] = self._process_EPROM_keypads_sirens()
+                    self.PanelStatus[PanelStatusNames.DEVICES] = self._process_EPROM_keypads_sirens()
                     self._update_all_sirens()
                     self._process_switch_settings()
                     log.debug("[_sequencer] EPROM Processing Complete")
