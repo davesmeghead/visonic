@@ -277,7 +277,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if device_type == "usb":
         device_type = "serial"
         data = deepcopy(dict(MappingProxyType(entry.data)))
-        data[CONF_TYPE] = DeviceType.SERIAL
+        data[CONF_TYPE] = "serial"
         hass.config_entries.async_update_entry(entry, data=data)
 
     device_type_enum = DeviceType(device_type)

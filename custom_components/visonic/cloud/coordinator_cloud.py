@@ -173,6 +173,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         """Override the parent function."""
         _state_snapshot = None
         try:
+            self._service_image_queue()
             _state_snapshot = await self.create_state_snapshot()
             if self.state_changed_callback:
                 self.state_changed_callback()
@@ -289,10 +290,6 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         """Has the system started?"""
         return True
 
-    async def get_cached_image(self, sensor_id: int) -> bytearray | None:
-        """Get the cached image."""
-        return None
-
     async def wait_for_process_status(self, process_token, attempts = 5) -> AlarmCommandStatus:
         """Check the process status for up to 5 seconds."""
         if process_token:
@@ -307,8 +304,9 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                         return AlarmCommandStatus.SUCCESS
                     if process.status == "failed":
                         return AlarmCommandStatus.FAIL_INVALID_STATE
-                    self._event_logger.logstate_info("             process return status not failed or handles, it is %s   message %s   error %s", process.status, process.message, process.error)
-        return AlarmCommandStatus.FAIL_INVALID_RETURN
+                    self._event_logger.logstate_info("             process return status not failed or handled, it is %s   message %s   error %s", process.status, process.message, process.error)
+                    return AlarmCommandStatus.FAIL_INVALID_RETURN
+        return AlarmCommandStatus.FAIL_INVALID_PROCESS_TOKEN
 
     # the return value indicates whether any sensors needed to be bypassed
     async def send_command(
@@ -492,8 +490,13 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             "Send get event log"
         )
 
-    async def send_get_sensor_image(self, devid: int | None, eid: str | None, duration: int):
-        """Send the command to the panel to get a camera image. NOT IMPLEMENTED."""
+    async def send_command_sensor_image(self, devid: int | None, eid: str | None, duration: int) -> AlarmCommandStatus:
+        """Send the command to the panel to get a camera image."""
+        acs = AlarmCommandStatus.FAIL_INVALID_RETURN
+        #if self.cloud_alarm:
+        #    process_token = await self.cloud_alarm.make_video(devid)
+        #    acs = await self.wait_for_process_status(process_token)
+        return acs
 
     def set_partition_name(
         self, partition: int | None = None, panel_entity_name: str | None = None
@@ -571,7 +574,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 #                process_token = await self.cloud_alarm.make_video(1)
 #                acs = None
 #                if process_token:
-#                    acs = await self.wait_for_process_status(process_token, 40)
+#                    acs = await self.wait_for_process_status(process_token)
 #            else:
 #                cameras = await self.cloud_alarm.get_cameras()
 #                if cameras != self.saved_cameras:

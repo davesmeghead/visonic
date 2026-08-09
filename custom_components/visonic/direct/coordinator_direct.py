@@ -88,7 +88,6 @@ class VisonicDirectCoordinator(VisonicCoordinator):
             state_callback = self.state_changed_callback,
         )
         self._event_logger = event_logger
-        self._prev_panel_connected = False
 
     def ive_been_created(self):
         """Called when certain entities are first initialised to make sure they get the latest data."""
@@ -114,18 +113,6 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         except Exception as err:
             raise UpdateFailed(str(err)) from err
 
-    def _service_image_queue(self) -> None:
-        """On (re)connect drop stale image state; while idle and connected, dispatch the next queued request."""
-        connected = bool(self._client and self._client.is_panel_connected())
-        if connected and not self._prev_panel_connected:
-            self.platform_manager.reset_image_state()
-        self._prev_panel_connected = connected
-        if connected and not self.platform_manager.image_download_active():
-            nxt = self.platform_manager.pop_image_request()
-            if nxt is not None:
-                # mark active now so a re-poll before the send task runs can't dispatch a second request
-                self.platform_manager.mark_image_request(nxt[0], nxt[2])
-                self.hass.async_create_task(self.send_get_sensor_image(nxt[0], nxt[1], nxt[2]))
 
 #    @callback
 #    def async_handle_client_update(self, data: VisonicCoordinatorData) -> None:
@@ -140,18 +127,6 @@ class VisonicDirectCoordinator(VisonicCoordinator):
     ):
         """Shortcut to set the partition name (used in HA events)."""
         self._client.set_partition_name(partition, panel_entity_name)
-
-    async def get_cached_image(self, sensor_id: int) -> bytearray | None:
-        """Get the cached image."""
-        if self.platform_manager and hasattr(self.platform_manager, "async_get_jpg_image"):
-            return await self.platform_manager.async_get_jpg_image(sensor_id)
-        if self.platform_manager and hasattr(self.platform_manager, "get_jpg_image"):
-            # run blocking sync code in executor
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(
-                None, self.platform_manager.get_jpg_image, sensor_id
-            )
-        return None
 
     def get_diagnostic_data(self) -> dict[str, Any]:
         """Build and return the diagnostics data for this panel."""
@@ -333,11 +308,9 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         """Send get event log."""
         await self._client.send_get_event_log(isValidPL, code)
 
-    async def send_get_sensor_image(self, devid: int | None, eid: str | None, duration: int):
+    async def send_command_sensor_image(self, devid: int | None, eid: str | None, duration: int) -> AlarmCommandStatus:
         """Send the command to the panel to get a camera image."""
-        self.platform_manager.mark_image_request(devid, duration)
-        await self._client.send_get_sensor_image(devid, eid, duration)
-        self.async_update_listeners()
+        return await self._client.send_client_get_sensor_image(devid, eid, duration)
 
     def get_state_snapshot(self) -> VisonicCoordinatorData:
         """Return complete snapshot of current state."""

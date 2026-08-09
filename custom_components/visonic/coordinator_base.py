@@ -4,6 +4,7 @@ This class contains abstract methods that the coordinator in "cloud" and "direct
 """
 
 from abc import abstractmethod
+import asyncio
 from collections.abc import Callable
 import copy
 from copy import deepcopy
@@ -83,6 +84,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         # do not use self.logger as it is defined in parent coordinator class
         self._event_logger = lo
         self.disable_all_panel_commands = False
+        self._prev_panel_connected = False
 
         # Declare platform_manager using the base class so it can be used in this base class
         # Callback needed as this is a panel driven system
@@ -113,9 +115,17 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
     def hasStarted(self) -> bool:
         """Has the system started?"""
 
-    @abstractmethod
     async def get_cached_image(self, sensor_id: int) -> bytearray | None:
         """Get the cached image."""
+        if self.platform_manager and hasattr(self.platform_manager, "async_get_jpg_image"):
+            return await self.platform_manager.async_get_jpg_image(sensor_id)
+        if self.platform_manager and hasattr(self.platform_manager, "get_jpg_image"):
+            # run blocking sync code in executor
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(
+                None, self.platform_manager.get_jpg_image, sensor_id
+            )
+        return None
 
     @abstractmethod
     def ive_been_created(self):
@@ -188,8 +198,58 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         """Send get event log."""
 
     @abstractmethod
+    async def send_command_sensor_image(self, devid: int | None, eid: str | None, duration: int) -> AlarmCommandStatus:
+        """Abstract to implement send the command to the panel to get a camera image/video."""
+
     async def send_get_sensor_image(self, devid: int | None, eid: str | None, duration: int):
-        """Send the command to the panel to get a camera image."""
+        """Send the command to the panel to get a camera image/video, after a few basic checks."""
+        if eid is None:
+            self._event_logger.create_ha_notification(
+                AvailableNotifications.IMAGE,
+                f"Attempt to retrieve sensor image/video for panel {self.panel_id}, entity {eid} not found",
+            )
+            return
+        if devid is None or devid < 0 or devid > 64:
+            self._event_logger.create_ha_notification(
+                AvailableNotifications.IMAGE,
+                f"Attempt to retrieve sensor image/video for panel {self.panel_id}, entity not found",
+            )
+            return
+
+        self.platform_manager.mark_image_request(devid, duration)
+        status: AlarmCommandStatus = await self.send_command_sensor_image(devid, eid, duration)
+        self.async_update_listeners()
+
+        if status != AlarmCommandStatus.SUCCESS:
+            message = ""
+            match (status):
+                case AlarmCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
+                    message = "eeprom download in progress."
+                case AlarmCommandStatus.FAIL_INVALID_STATE:
+                    message = "invalid panel state."
+                case AlarmCommandStatus.FAIL_INVALID_RETURN:
+                    message = "invalid return."
+                case AlarmCommandStatus.FAIL_ENTITY_INCORRECT:
+                    message = "invalid or unknown sensor."
+                case AlarmCommandStatus.FAIL_INVALID_PROCESS_TOKEN:
+                    message = "cloud connection problem."
+            self._event_logger.create_ha_notification(
+                AvailableNotifications.IMAGE,
+                f"Attempt to retrieve sensor image for panel {self.panel_id}, entity {eid} failed, {message}",
+            )
+
+    def _service_image_queue(self) -> None:
+        """On (re)connect drop stale image state; while idle and connected, dispatch the next queued request."""
+        connected = self.is_connected()
+        if connected and not self._prev_panel_connected:
+            self.platform_manager.reset_image_state()
+        self._prev_panel_connected = connected
+        if connected and not self.platform_manager.image_download_active():
+            nxt = self.platform_manager.pop_image_request()
+            if nxt is not None:
+                # mark active now so a re-poll before the send task runs can't dispatch a second request
+                self.platform_manager.mark_image_request(nxt[0], nxt[2])
+                self.hass.async_create_task(self.send_get_sensor_image(nxt[0], nxt[1], nxt[2]))
 
     def image_download_active(self) -> bool:
         """Check if the image download process is active."""
