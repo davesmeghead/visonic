@@ -42,6 +42,7 @@ from .const import (
     FORM_PARAM12,
     FORM_PARAM13,
     FORM_PARAM14,
+    FORM_PARAM15,
     FORM_POWERLINK,
     FORM_SERIAL,
     FORM_TCP_DISCOVERED,
@@ -273,6 +274,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     device_type: str = entry.data.get(CONF_TYPE)
     if device_type is None:
         return False
+    if device_type == "usb":
+        device_type = "serial"
+        data = deepcopy(dict(MappingProxyType(entry.data)))
+        data[CONF_TYPE] = DeviceType.SERIAL
+        hass.config_entries.async_update_entry(entry, data=data)
+
     device_type_enum = DeviceType(device_type)
 
     # Check for the id being unique
@@ -385,6 +392,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
         if CONF_ESPHOME_ENTITY_SELECT not in options and CONF_ESPHOME_ENTITY_SELECT not in data:
             data[CONF_ESPHOME_ENTITY_SELECT] = ""
 
+        if data.get(CONF_TYPE, "") == "usb":
+            data[CONF_TYPE] = "serial"
+
         # Split the data and options correctly:
         #     data is defined by the user on first creation and then only by reconfigure
         #     options can be edited easily and are pushed in to the integration without reload
@@ -395,7 +405,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
 
         # These contain all data and options settings
         data_items = [FORM_DEVICE, FORM_ETHERNET, FORM_SERIAL, FORM_CLOUD, FORM_TCP_SERVER, FORM_TCP_DISCOVERED, FORM_POWERLINK]
-        option_items = [FORM_PARAM10, FORM_PARAM11, FORM_PARAM12, FORM_PARAM13, FORM_PARAM14]
+        option_items = [FORM_PARAM10, FORM_PARAM11, FORM_PARAM12, FORM_PARAM13, FORM_PARAM14, FORM_PARAM15]
 
         # Build a set with all the "data" keys. Using a set removes duplication.
         key_data_list: set[str] = set()

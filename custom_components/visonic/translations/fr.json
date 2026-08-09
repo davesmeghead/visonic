@@ -154,6 +154,14 @@
                     "siren_sounding": "Liste des d\u00e9clencheurs de la sir\u00e8ne",
                     "panel_state_notifications": "Liste des d\u00e9clencheurs pour les notifications Home Assistant"
                 }
+            },
+            "parameters15": {
+                "description": "If PIR Camera Sensors are available, these settings influence how the retrieved images are processed",
+                "title": "Sensor Camera Video/Image Settings",
+                "data": {
+                    "image_media_path": "Media path to store videos, audio and images (a relative path is put into <config>/media)",
+                    "image_single_frame": "Do not create mp4 videos, keep all images separate"
+                }
             }
         }
     },
@@ -227,6 +235,14 @@
                 "data": {
                     "siren_sounding": "Liste des d\u00e9clencheurs de la sir\u00e8ne",
                     "panel_state_notifications": "Liste des d\u00e9clencheurs pour les notifications Home Assistant"
+                }
+            },
+            "parameters15": {
+                "description": "If PIR Camera Sensors are available, these settings influence how the retrieved images are processed",
+                "title": "Sensor Camera Video/Image Settings",
+                "data": {
+                    "image_media_path": "Media path to store videos, audio and images (a relative path is put into <config>/media)",
+                    "image_single_frame": "Do not create mp4 videos, keep all images separate"
                 }
             }
         }

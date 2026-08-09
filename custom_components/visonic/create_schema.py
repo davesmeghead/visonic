@@ -78,6 +78,7 @@ from .const import (
     FORM_PARAM12,
     FORM_PARAM13,
     FORM_PARAM14,
+    FORM_PARAM15,
     FORM_POWERLINK,
     FORM_SERIAL,
     FORM_TCP_DISCOVERED,
@@ -96,7 +97,7 @@ from .visonic_types import (
 #    Each form lists the items on the form, in order.
 #    The same item may be on multiple forms to support the different configuration methods
 # These forms include those needed for discovery and zeroconf
-FormItems: Final[dict[str, list[str]]] = {
+FormItems: dict[str, list[str]] = {
     # Main connection type
     #     parameters in entry.data
     FORM_DEVICE: [CONF_TYPE, CONF_PANEL_NUMBER],
@@ -116,8 +117,9 @@ FormItems: Final[dict[str, list[str]]] = {
     FORM_PARAM11: [CONF_MOTION_OFF_DELAY, CONF_MAGNET_CLOSED_DELAY, CONF_EMER_OFF_DELAY],
     FORM_PARAM12: [CONF_ARM_CODE_AUTO, CONF_FORCE_KEYPAD, CONF_ARM_HOME_ENABLED, CONF_ARM_NIGHT_ENABLED, CONF_INSTANT_ARM_AWAY,
                    CONF_INSTANT_ARM_HOME, CONF_ENABLE_REMOTE_ARM, CONF_ENABLE_REMOTE_DISARM, CONF_ENABLE_SENSOR_BYPASS],
-    FORM_PARAM13: [CONF_LOG_EVENT, CONF_LOG_DONE, CONF_LOG_REVERSE, CONF_LOG_CSV_TITLE, CONF_LOG_XML_FN, CONF_LOG_CSV_FN, CONF_LOG_MAX_ENTRIES, CONF_IMAGE_MEDIA_PATH, CONF_IMAGE_SINGLE_FRAME],
+    FORM_PARAM13: [CONF_LOG_EVENT, CONF_LOG_DONE, CONF_LOG_REVERSE, CONF_LOG_CSV_TITLE, CONF_LOG_XML_FN, CONF_LOG_CSV_FN, CONF_LOG_MAX_ENTRIES],
     FORM_PARAM14: [CONF_SIREN_SOUNDING, CONF_ALARM_NOTIFICATIONS],
+    FORM_PARAM15: [CONF_IMAGE_MEDIA_PATH, CONF_IMAGE_SINGLE_FRAME],
 }
 
 # fmt: on

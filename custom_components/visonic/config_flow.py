@@ -65,6 +65,7 @@ from .const import (
     FORM_PARAM12,
     FORM_PARAM13,
     FORM_PARAM14,
+    FORM_PARAM15,
     FORM_POWERLINK,
     FORM_SERIAL,
     FORM_TCP_DISCOVERED,
@@ -290,10 +291,10 @@ class VisonicHandler:
                     match(s):
                         case EmulationMode.POWERLINK:
                             if exclude_powerlink:
-                                return [FORM_PARAM10, FORM_PARAM11, FORM_PARAM12, FORM_PARAM13]
-                            return [FORM_POWERLINK, FORM_PARAM10, FORM_PARAM11, FORM_PARAM12, FORM_PARAM13]
+                                return [FORM_PARAM10, FORM_PARAM11, FORM_PARAM12, FORM_PARAM13, FORM_PARAM15]
+                            return [FORM_POWERLINK, FORM_PARAM10, FORM_PARAM11, FORM_PARAM12, FORM_PARAM13, FORM_PARAM15]
                         case EmulationMode.STANDARD:
-                            return [FORM_PARAM10, FORM_PARAM11, FORM_PARAM12, FORM_PARAM13]
+                            return [FORM_PARAM10, FORM_PARAM11, FORM_PARAM12, FORM_PARAM13, FORM_PARAM15]
                         case EmulationMode.MINIMAL:
                             return [FORM_PARAM10, FORM_PARAM11]
                 case DeviceType.CLOUD:
@@ -347,6 +348,10 @@ class VisonicHandler:
 
     async def async_step_parameters14(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Parameters step 14."""
+        return self._goto_next_step(user_input)
+
+    async def async_step_parameters15(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Parameters step 15."""
         return self._goto_next_step(user_input)
 
 
