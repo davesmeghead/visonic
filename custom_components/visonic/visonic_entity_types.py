@@ -3,7 +3,7 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, fields
 from datetime import datetime
-from enum import Enum, IntFlag, StrEnum, auto
+from enum import Enum, IntFlag, auto
 from functools import partial
 import logging
 from types import MappingProxyType
@@ -25,7 +25,7 @@ from homeassistant.const import (
 
 from .const import DEVICE_ATTRIBUTE_NAME, VISONIC_TRANSLATION_KEY
 from .utils import create_sensor_label, print_partition
-from .visonic_types import AlarmSensorType
+from .visonic_types import AlarmSensorType, VisonicStrEnum
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ STYPE_TO_HA_SENSOR_MAP: dict[AlarmSensorType, BinarySensorDeviceClass | None] = 
     AlarmSensorType.SWITCH: BinarySensorDeviceClass.OPENING,
 }
 
-class VisonicBinarySensorKey(StrEnum):
+class VisonicBinarySensorKey(VisonicStrEnum):
     """Keys for the BINARY_SENSOR_DEFINITIONS."""
     # I could have separated them for float and binary but ... I didn't
     ZONE_TRIGGER = "zone_trigger"
@@ -75,7 +75,7 @@ class VisonicBinarySensorKey(StrEnum):
     ZONE_ONEWAY = "zone_oneway"
     ZONE_INACTIVE = "zone_inactive"
 
-class VisonicFloatSensorKey(StrEnum):
+class VisonicFloatSensorKey(VisonicStrEnum):
     """Keys for the FLOAT_SENSOR_DEFINITIONS."""
     ZONE_TEMP = "zone_temp"
     ZONE_LUX = "zone_lux"
@@ -252,7 +252,7 @@ class BinarySensorData(BaseData):
 #    sensor_definition: VisonicBinarySensorKey
 #    initial_state: str
 
-class EntityDataType(StrEnum):
+class EntityDataType(VisonicStrEnum):
     """Source data type."""
     PANEL = "panel"     # use the "panelstate" from coordinator data
     ZONE = "zones"      # use the "zones" coordinator data
@@ -269,7 +269,7 @@ class ValueFn(Protocol):
     def __call__(self, sensor_data: bool | float | str) -> bool | float | str | None: ...  # noqa: D102
     """Value Function Protocol."""
 
-class StateField(StrEnum):
+class StateField(VisonicStrEnum):
     """Attribute names used to obtain state from coordinator data."""
     # Zone
     TRIGGERED = "triggered"

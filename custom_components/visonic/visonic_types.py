@@ -23,6 +23,19 @@ if TYPE_CHECKING:
     from .server import ServerProtocol, TCPServerConnection
     from .visonic_entity_types import DeviceState, PanelState, SensorState, SwitchState
 
+class VisonicStrEnum(StrEnum):
+    """Base class for string enumerations for common functions."""
+
+    def title(self) -> str:
+        """Make a title case with no underscores."""
+        return self.value.replace("_", " ").title()
+
+    @classmethod
+    def from_title(cls, text: str) -> VisonicStrEnum:
+        """String to main class. Do the opposite of title above."""
+        normalized = text.strip().lower().replace(" ", "_")
+        return cls(normalized)
+
 ########################################################################################################################################
 # These 2 classes define the connection to the panel:  DeviceType, EmulationMode
 #
@@ -46,7 +59,7 @@ if TYPE_CHECKING:
 #
 #  EmulationMode is only applicable to ETHERNET, SERIAL
 ########################################################################################################################################
-class DeviceType(StrEnum):
+class DeviceType(VisonicStrEnum):
     """Device Type."""
     ETHERNET = "ethernet"
     SERIAL = "serial"
@@ -54,17 +67,8 @@ class DeviceType(StrEnum):
     TCP_DISCOVERED = "server_discovered"  # Not currently supported, in development
     TCP_SERVER = "local_powerlink_server"  # Not currently supported, in development
 
-    def title(self) -> str:
-        """Make a title case with no underscores."""
-        return self.value.replace("_", " ").title()
 
-    @classmethod
-    def from_title(cls, text: str) -> DeviceType:
-        """String to DeviceType. Do the opposite of title above."""
-        normalized = text.strip().lower().replace(" ", "_")
-        return cls(normalized)
-
-class EmulationMode(StrEnum):
+class EmulationMode(VisonicStrEnum):
     """Main emulation mode for direct connections."""
     # These are only relevant when DeviceType is ETHERNET, SERIAL
     MINIMAL = "Minimal Interaction (data only sent to obtain panel state)"
@@ -210,7 +214,29 @@ class VisonicCoordinatorData:
             for f in fields(self)
         }
 
-class CVP_Status(IntEnum):
+class VisonicIntEnum(IntEnum):
+    """Int enum for Visonic devices."""
+
+    @classmethod
+    def as_set(cls):
+        """Return a set of all members."""
+        return set(cls)
+
+    @classmethod
+    def members(cls) -> list[str]:
+        """Return enum members as lowercase names."""
+        return [m.name.lower() for m in cls]
+
+    @classmethod
+    def from_name(cls, name: str) -> Self | None:
+        """Get enum member from string name."""
+        try:
+            return cls[name.upper()]
+        except KeyError:
+            return None
+
+
+class CVP_Status(VisonicIntEnum):
     """Status of the comms_visonic_protocol i.e. CVP connection."""
     # Used in _connection_status callback
     DISCONNECTED = 1
@@ -219,7 +245,7 @@ class CVP_Status(IntEnum):
     CONNECTION_PENDING = 4
     EXCEPTION = 5
 
-class Connection_Status(IntEnum):
+class Connection_Status(VisonicIntEnum):
     """Track state in the client."""
     DISCONNECTED = 1
     CONNECTED = 2
@@ -237,13 +263,8 @@ class Connection_Status(IntEnum):
     STOP = 108
     RESTART = 109
 
-    @classmethod
-    def as_set(cls):
-        """Return a set of all members."""
-        return set(cls)
-
 # The set of commands that can be used to arm and disarm the panel
-class AlarmPanelCommand(IntEnum):
+class AlarmPanelCommand(VisonicIntEnum):
     """Enumeration of commands to arm and disarm the panel."""
     # Include all case variations for the panel_command HA service
     #   The values used in the code have to be first
@@ -260,21 +281,8 @@ class AlarmPanelCommand(IntEnum):
     ARM_HOME_BYPASS = 11
     ARM_AWAY_BYPASS = 12
 
-    @classmethod
-    def members(cls) -> list[str]:
-        """Return enum members as lowercase names."""
-        return [m.name.lower() for m in cls]
-
-    @classmethod
-    def from_name(cls, name: str) -> Self | None:
-        """Get enum member from string name."""
-        try:
-            return cls[name.upper()]
-        except KeyError:
-            return None
-
 # The result of using the set of commands
-class AlarmCommandStatus(IntEnum):
+class AlarmCommandStatus(VisonicIntEnum):
     """Enumeration of command execution results."""
     SUCCESS = 1
     FAIL_DOWNLOAD_IN_PROGRESS = 2
@@ -288,8 +296,11 @@ class AlarmCommandStatus(IntEnum):
     FAIL_ENTITY_INCORRECT = 10
     FAIL_INVALID_RETURN = 11
 
+    # Make values not in the libraries high values
+    FAIL_INVALID_PROCESS_TOKEN = 200
+
 # The set of panel states, in order of importance for multiple partitions
-class AlarmPanelStatus(IntEnum):
+class AlarmPanelStatus(VisonicIntEnum):
     """Enumeration of panel status states, ordered by importance for multiple partitions."""
     UNKNOWN = 1
     DISARMED = 2
@@ -309,7 +320,7 @@ class AlarmPanelStatus(IntEnum):
     TRIGGERED = 20                     # The panel does not report this directly, it is derived in the code
 
 # List of sensor types
-class AlarmSensorType(IntEnum):
+class AlarmSensorType(VisonicIntEnum):
     """Enumeration of sensor types."""
     IGNORED = 1
     UNKNOWN = 2
@@ -338,24 +349,8 @@ class ImageQueueState(Enum):
     FULL = auto()
     QUEUED = auto()
 
-class EnumType(IntEnum):
-    """Common implementation of class methods."""
-
-    @classmethod
-    def members(cls) -> list[str]:
-        """Return enum members as lowercase names."""
-        return [m.name.lower() for m in cls]
-
-    @classmethod
-    def from_name(cls, name: str) -> Self | None:
-        """Get enum member from string name."""
-        try:
-            return cls[name.upper()]
-        except KeyError:
-            return None
-
 # The set of switch commands
-class AlarmSwitchCommand(EnumType):
+class AlarmSwitchCommand(VisonicIntEnum):
     """Enumeration of switch commands."""
     OFF = 1
     ON = 2
@@ -365,7 +360,7 @@ class AlarmSwitchCommand(EnumType):
 # This class represents the reasons that could trigger an alarm
 #     These could be set even if the siren is not sounding, depending on the panel settings
 ######### These need to match the "siren_sounding" selector in the language json file ##################
-class TriggerAlarmType(EnumType):
+class TriggerAlarmType(VisonicIntEnum):
     """Enumeration of alarm types that can trigger an alarm condition."""
     UNKNOWN = 1
     NONE = 2
@@ -395,7 +390,7 @@ class PanelStateData:
 ##########################  Panel Event coordinator to manage A5, B0.24 and A7 panel state and event data ####################################################################################################################################
 ##############################################################################################################################################################################################################################################
 
-class PanelCondition(IntEnum):
+class PanelCondition(VisonicIntEnum):
     """Panel condition codes for event handling."""
     # These match AlCondition (pyvisonic library) for easy cast.
     PUSH_CHANGE = 1               # This causes the client to update the frontend etc but it does not send out an HA Event
@@ -421,7 +416,7 @@ class PanelCondition(IntEnum):
     PANEL_LOG_COMPLETE = 105
     PANEL_LOG_ENTRY = 106
 
-class AvailableNotifications(StrEnum):
+class AvailableNotifications(VisonicStrEnum):
     """Available Notifications for Home Assistant front end."""
 
     # Enums changed but text remains to keep the same schema
