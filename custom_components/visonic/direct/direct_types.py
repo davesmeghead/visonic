@@ -1,9 +1,4 @@
 """Direct connection common types."""
-
-
-
-# fmt: off
-
 # What entities to create for each specific sensor
 import dataclasses
 import logging
@@ -24,6 +19,8 @@ _LOGGER = logging.getLogger(__name__)
 ###################################################################################
 ######## These define what entities to create for each sensor type ################
 ###################################################################################
+
+# fmt: off
 
 # These are used to create the lists below
 TAMPER_NO_TIMEOUT   = (VisonicBinarySensorKey.ZONE_TAMPER,  SensorOnTimeout.NO_TIMEOUT)

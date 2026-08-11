@@ -72,7 +72,7 @@ class LanguageDecoder:
         pmas_start: int
         pmas_stop: int
 
-    # fmt: off
+# fmt: off
 
     # List all device types for the 2 main panel types. The values represent whether that panel supports that device and how many
     device_types = [ #                      PowerMax Settings           PowerMaster Settings     powermax   powermaster
@@ -145,7 +145,7 @@ class LanguageDecoder:
         "Gas Soak test fail"
     ]
 
-    # fmt: on
+# fmt: on
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Init."""

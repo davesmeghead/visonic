@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Final, Protocol
+from typing import Any, Protocol
 
 import voluptuous as vol
 from voluptuous.schema_builder import UNDEFINED as VOL_UNDEFINED
@@ -21,7 +21,7 @@ from homeassistant.const import (
 )
 from homeassistant.helpers import config_validation as cv, selector
 from homeassistant.helpers.selector import (
-    EntitySelector,  # pyright: ignore[reportUnknownVariableType]
+    EntitySelector,
     EntitySelectorConfig,
     SerialPortSelector,
 )

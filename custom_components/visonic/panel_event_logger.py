@@ -303,4 +303,3 @@ class PanelEventLogger:
         self.xmldata = []
         self.save_task = None
         self.logger.logstate_debug("Panel Event Log - Complete")
-

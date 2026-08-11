@@ -19,7 +19,7 @@ from homeassistant.util import slugify
 from .const import DOMAIN, MANUFACTURER, VISONIC_TRANSLATION_KEY
 from .coordinator_base import VisonicCoordinator
 from .sensor_base_logic import VisonicBaseEntity
-from .utils import getAlarmPanelUniqueIdent, kill_asyncio_task
+from .utils import kill_asyncio_task
 from .visonic_entity_types import (
     BINARY_SENSOR_DEFINITIONS,
     STYPE_TO_HA_SENSOR_MAP,

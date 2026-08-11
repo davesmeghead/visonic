@@ -297,7 +297,6 @@ class VisonicSensorDefinition:
     unique_extension: str = ""
     friendly_name: str | None = None
     value_fn: ValueFn
-    #attributes_fn: Callable[[Mapping[str, Any] | SensorState | DeviceState | PanelState], dict[str, Any]]
     attributes_fn: AttributesFn
 
 @dataclass(frozen=True, kw_only=True)
