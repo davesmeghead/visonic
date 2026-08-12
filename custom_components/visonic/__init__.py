@@ -12,6 +12,7 @@ from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEnt
 from homeassistant.const import CONF_NAME, CONF_SOURCE, CONF_TYPE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import UNDEFINED as TYPE_UNDEFINED
 
 from .cloud.coordinator_cloud import VisonicCloudCoordinator
@@ -78,6 +79,8 @@ from .visonic_utils import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, _base_config: dict[str, Any]) -> bool:
     """Set up the visonic component."""
