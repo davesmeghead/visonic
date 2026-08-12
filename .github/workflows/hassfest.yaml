@@ -13,6 +13,6 @@ jobs:
     name: hassfest
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Test hassfest
         uses: home-assistant/actions/hassfest@master
