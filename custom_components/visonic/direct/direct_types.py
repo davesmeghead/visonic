@@ -23,18 +23,18 @@ _LOGGER = logging.getLogger(__name__)
 # fmt: off
 
 # These are used to create the lists below
-TAMPER_NO_TIMEOUT   = (VisonicBinarySensorKey.ZONE_TAMPER,  SensorOnTimeout.NO_TIMEOUT)
-PROBLEM_NO_TIMEOUT  = (VisonicBinarySensorKey.ZONE_PROBLEM, SensorOnTimeout.NO_TIMEOUT)
+TAMPER_NO_TIMEOUT   = (VisonicBinarySensorKey.ZONE_TAMPER,   SensorOnTimeout.NO_TIMEOUT)
+PROBLEM_NO_TIMEOUT  = (VisonicBinarySensorKey.ZONE_PROBLEM,  SensorOnTimeout.NO_TIMEOUT)
 MISSING_NO_TIMEOUT  = (VisonicBinarySensorKey.ZONE_MISSING,  SensorOnTimeout.NO_TIMEOUT)
 ONEWAY_NO_TIMEOUT   = (VisonicBinarySensorKey.ZONE_ONEWAY,   SensorOnTimeout.NO_TIMEOUT)
 INACTIVE_NO_TIMEOUT = (VisonicBinarySensorKey.ZONE_INACTIVE, SensorOnTimeout.NO_TIMEOUT)
-BATTERY_NO_TIMEOUT  = (VisonicBinarySensorKey.ZONE_BATTERY, SensorOnTimeout.NO_TIMEOUT)
-STATUS_TIMEOUT      = (VisonicBinarySensorKey.ZONE_STATUS,  SensorOnTimeout.STATE)
-CONTACT_TIMEOUT     = (VisonicBinarySensorKey.ZONE_CONTACT, SensorOnTimeout.STATE)
-TRIGGER_MOTION      = (VisonicBinarySensorKey.ZONE_TRIGGER, SensorOnTimeout.MOTION)
-TRIGGER_OTHER       = (VisonicBinarySensorKey.ZONE_TRIGGER, SensorOnTimeout.OTHER)
-TEMP_NO_TIMEOUT     = (VisonicFloatSensorKey.ZONE_TEMP,     SensorOnTimeout.NO_TIMEOUT)
-LUX_NO_TIMEOUT      = (VisonicFloatSensorKey.ZONE_LUX,      SensorOnTimeout.NO_TIMEOUT)
+BATTERY_NO_TIMEOUT  = (VisonicBinarySensorKey.ZONE_BATTERY,  SensorOnTimeout.NO_TIMEOUT)
+STATUS_TIMEOUT      = (VisonicBinarySensorKey.ZONE_STATUS,   SensorOnTimeout.STATE)
+CONTACT_TIMEOUT     = (VisonicBinarySensorKey.ZONE_CONTACT,  SensorOnTimeout.STATE)
+TRIGGER_MOTION      = (VisonicBinarySensorKey.ZONE_TRIGGER,  SensorOnTimeout.MOTION)
+TRIGGER_OTHER       = (VisonicBinarySensorKey.ZONE_TRIGGER,  SensorOnTimeout.OTHER)
+TEMP_NO_TIMEOUT     = (VisonicFloatSensorKey.ZONE_TEMP,      SensorOnTimeout.NO_TIMEOUT)
+LUX_NO_TIMEOUT      = (VisonicFloatSensorKey.ZONE_LUX,       SensorOnTimeout.NO_TIMEOUT)
 
 # Create the lists of entities used for each sensor type.  This gives flexibility as sensors are added to define the HA entities.
 #   All sensors have TAMPER and PROBLEM entities (so these are not in the variable names)
@@ -44,7 +44,7 @@ BASIC_STATUS               = []
 BATTERY_AND_STATUS_TIMEOUT = [BATTERY_NO_TIMEOUT, STATUS_TIMEOUT]
 BATTERY_AND_TRIGGER_MOTION = [BATTERY_NO_TIMEOUT, TRIGGER_MOTION]
 BATTERY_AND_TRIGGER_OTHER  = [BATTERY_NO_TIMEOUT, TRIGGER_OTHER]
-BATTERY_TEMP_LUX           = [BATTERY_NO_TIMEOUT, TRIGGER_MOTION, TEMP_NO_TIMEOUT, LUX_NO_TIMEOUT]  # Used for camera entities
+#BATTERY_TEMP_LUX           = [BATTERY_NO_TIMEOUT, TRIGGER_MOTION, TEMP_NO_TIMEOUT, LUX_NO_TIMEOUT]  # Used for camera entities
 BATTERY_TRIGGER_STATUS     = [BATTERY_NO_TIMEOUT, TRIGGER_OTHER, CONTACT_TIMEOUT]                   # Shock and Contact for SHOCK sensors
 STATUS_ONLY_TIMEOUT        = [STATUS_TIMEOUT]
 BATTERY_AND_TEMP           = [BATTERY_NO_TIMEOUT, TEMP_NO_TIMEOUT]
@@ -104,14 +104,15 @@ pmZoneMaster: Final[dict[int, ZoneSensorDetails]] = {
     0x08 : ZoneSensorDetails("TOWER-20AM PG2", AlarmSensorType.MOTION, POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_MOTION),
     0x0A : ZoneSensorDetails("TOWER CAM PG2" , AlarmSensorType.CAMERA, POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_MOTION),
     0x0B : ZoneSensorDetails("GB-502 PG2"    , AlarmSensorType.GLASS,  POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_OTHER),
-    0x0C : ZoneSensorDetails("MP-802 PG2"    , AlarmSensorType.MOTION, POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_MOTION),
+    0x0C : ZoneSensorDetails("MP-802 PG2"    , AlarmSensorType.MOTION, POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_MOTION + [TEMP_NO_TIMEOUT]),
     0x0F : ZoneSensorDetails("MP-902 PG2"    , AlarmSensorType.MOTION, POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_MOTION),
     0x15 : ZoneSensorDetails("SMD-426 PG2"   , AlarmSensorType.SMOKE,  POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_OTHER),
     0x16 : ZoneSensorDetails("SMD-429 PG2"   , AlarmSensorType.SMOKE,  POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_OTHER),
     0x18 : ZoneSensorDetails("GSD-442 PG2"   , AlarmSensorType.SMOKE,  POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_OTHER),
     0x19 : ZoneSensorDetails("FLD-550 PG2"   , AlarmSensorType.FLOOD,  POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_OTHER),
     0x1A : ZoneSensorDetails("TMD-560 PG2"   , AlarmSensorType.TEMP,   POWERMASTER_WIRELESS + BATTERY_AND_TEMP),
-    0x1E : ZoneSensorDetails("SMD-429 PG2"   , AlarmSensorType.SMOKE,  POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_OTHER),
+    0x1C : ZoneSensorDetails("FLD-550 PG2"   , AlarmSensorType.FLOOD,  POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_OTHER),
+    0x1E : ZoneSensorDetails("SMD-429 PG2"   , AlarmSensorType.SMOKE,  POWERMASTER_WIRELESS + BATTERY_AND_TRIGGER_OTHER + [TEMP_NO_TIMEOUT]),
     0x29 : ZoneSensorDetails("MC-302V PG2"   , AlarmSensorType.MAGNET, POWERMASTER_WIRELESS + BATTERY_AND_STATUS_TIMEOUT),
     0x2A : ZoneSensorDetails("MC-302 PG2"    , AlarmSensorType.MAGNET, POWERMASTER_WIRELESS + BATTERY_AND_STATUS_TIMEOUT),
     0x2C : ZoneSensorDetails("MC-303V PG2"   , AlarmSensorType.MAGNET, POWERMASTER_WIRELESS + BATTERY_AND_STATUS_TIMEOUT),
