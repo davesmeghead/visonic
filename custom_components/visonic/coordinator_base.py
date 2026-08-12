@@ -244,7 +244,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         if connected and not self._prev_panel_connected:
             self.platform_manager.reset_image_state()
         self._prev_panel_connected = connected
-        if connected and not self.platform_manager.image_download_active():
+        if connected and not self.image_download_active():
             nxt = self.platform_manager.pop_image_request()
             if nxt is not None:
                 # mark active now so a re-poll before the send task runs can't dispatch a second request

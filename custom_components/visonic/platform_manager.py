@@ -84,7 +84,7 @@ from .visonic_types import (
 )
 
 CLIP_URL_VALID = timedelta(days=1)  # how long the signed clip/poster URLs stay usable
-_FRAME_RE = re.compile(r"_frame\d+\.jpg$", re.I)  # a saved still from a capture, not a finished clip
+_FRAME_RE = re.compile(r"_frame\d+\.jpg$", re.IGNORECASE)  # a saved still from a capture, not a finished clip
 
 MESSAGE_REASON_DICT = {
     AlarmCommandStatus.SUCCESS: "Success, sent Command to Panel",
@@ -334,7 +334,7 @@ class PlatformManager:
         ):
             self.panel_entity_name[partition] = panel_entity_name
 
-    def setupVisonicEntity(
+    def setup_visonic_entity(
         self, specific_domain: str, data: Any
     ):  # param is the parameter passed to the creating function
         """Setup a platform and add an entity using the dispatcher."""
@@ -343,7 +343,7 @@ class PlatformManager:
             self.hass, f"{DOMAIN}_{entry_id}_add_{specific_domain}", data
         )
 
-    def setAlarmDeviceInformation(self, model: str | None = UNDEFINED):
+    def set_alarm_device_information(self, model: str | None = UNDEFINED):
         """Set the alarm panel device information in Home Assistant."""
         device_registry = dr.async_get(self.hass)
         device_registry.async_get_or_create(
@@ -354,7 +354,7 @@ class PlatformManager:
             model=model,
         )
 
-    def async_create_alarm_panel(self, piu: set[int] | None = None) -> AlarmPanelData:
+    def create_alarm_panel(self, piu: set[int] | None = None) -> AlarmPanelData:
         """On startup we create a sensor to report progress and status."""
         panel_unique_id = getAlarmPanelUniqueIdent(self.panel_ident)
         siren_id = 1  # Siren number 1
@@ -363,13 +363,13 @@ class PlatformManager:
 
         if self.disable_all_panel_commands:
             self.logger.logstate_debug("Creating Sensor for Alarm indications: %s", str(apd))
-            self.setupVisonicEntity(Platform.SENSOR, apd)
+            self.setup_visonic_entity(Platform.SENSOR, apd)
         else:
             self.logger.logstate_debug("Creating Alarm Panel Entities: %s", str(apd))
-            self.setupVisonicEntity(Platform.ALARM_CONTROL_PANEL, apd)
+            self.setup_visonic_entity(Platform.ALARM_CONTROL_PANEL, apd)
         return apd
 
-    async def async_setupAlarmPanel(self, piu: set[int] | None):
+    async def async_setup_alarm_panel(self, piu: set[int] | None):
         """Setup the alarm panel (async)."""
         # This sets up the Alarm Panel, or the Sensor to represent a panel state
         #   It is called from multiple places, the first one wins
@@ -377,11 +377,11 @@ class PlatformManager:
             if not self._createdAlarmPanel:
                 self._createdAlarmPanel = True
                 #model = self.visonicProtocol.getPanelModel()
-                apd: AlarmPanelData = self.async_create_alarm_panel(piu)
+                apd: AlarmPanelData = self.create_alarm_panel(piu)
                 if not self.disable_all_panel_commands:
-                    self.setupVisonicEntity(Platform.SIREN, apd)
+                    self.setup_visonic_entity(Platform.SIREN, apd)
                     puid = apd.identifier
-                    self.setupVisonicEntity(
+                    self.setup_visonic_entity(
                         Platform.BINARY_SENSOR,
                         [
                             # device_id not used for panel sensors
@@ -472,8 +472,8 @@ class PlatformManager:
         if zsd.device_id not in self._image_created_set:
             self._image_created_set.add(zsd.device_id)
             # The connection to the panel allows interaction with the sensor, including asking to get the image from a camera
-            self.setupVisonicEntity(Platform.IMAGE, zsd)
-            self.setupVisonicEntity(Platform.BUTTON, zsd)
+            self.setup_visonic_entity(Platform.IMAGE, zsd)
+            self.setup_visonic_entity(Platform.BUTTON, zsd)
 
     def sensor_create_entities(self, sensor: SensorState, identifier: str):
         """Create sensor entities."""
@@ -488,16 +488,16 @@ class PlatformManager:
             elif isinstance(ent, VisonicBinarySensorKey):
                 binary_entities.append(BinarySensorData(identifier=identifier, device_id=sensor.id, sensor_definition=ent, initial_state=None, timeout_type=timeout))
 
-        self.setupVisonicEntity(Platform.BINARY_SENSOR, binary_entities)
+        self.setup_visonic_entity(Platform.BINARY_SENSOR, binary_entities)
         if len(float_entities) > 0:
-            self.setupVisonicEntity(Platform.SENSOR, float_entities)
+            self.setup_visonic_entity(Platform.SENSOR, float_entities)
 
         # If master_include_bypass and the user has allowed sensors to be bypassed, then create select entities
         esb = to_bool(self.entry.options.get(CONF_ENABLE_SENSOR_BYPASS, False))
         if esb and not self.force_standard_mode:
             # The connection to the panel allows interaction with the sensor, including the arming/bypass of the sensors
             zsd = ZoneSensorData(identifier=identifier, device_id=sensor.id)
-            self.setupVisonicEntity(Platform.SELECT, zsd)
+            self.setup_visonic_entity(Platform.SELECT, zsd)
 
     def sensor_update_or_create(
         self,
@@ -547,7 +547,7 @@ class PlatformManager:
                     if not self.created_download_active_sensor:
                         self.created_download_active_sensor = True
                         puid = getAlarmPanelUniqueIdent(self.panel_ident)
-                        self.setupVisonicEntity(Platform.BINARY_SENSOR, BinaryImageDownloadData(identifier=puid))
+                        self.setup_visonic_entity(Platform.BINARY_SENSOR, BinaryImageDownloadData(identifier=puid))
 
             return True
         self.logger.logstate_debug("Sensor %s in exclusion list or None", sensor.id)
@@ -601,7 +601,7 @@ class PlatformManager:
                 self._switch_dict[switch.id] = switch
                 if switch.id not in self._switch_created_set:
                     self._switch_created_set.add(switch.id)
-                    self.setupVisonicEntity(
+                    self.setup_visonic_entity(
                         Platform.SWITCH,
                         ZoneSensorData(identifier=identifier, device_id=switch.id)
                     )
@@ -676,7 +676,7 @@ class PlatformManager:
             self._device_dict[device.id] = device
             if device.id not in self._device_created_set:
                 self._device_created_set.add(device.id)
-                self.setupVisonicEntity(
+                self.setup_visonic_entity(
                     Platform.BINARY_SENSOR,
                     BinarySensorData(identifier=identifier, device_id=device.id, sensor_definition=VisonicBinarySensorKey.DEVICE_BATTERY, initial_state=None, timeout_type=SensorOnTimeout.NO_TIMEOUT),
                 )
@@ -1174,4 +1174,3 @@ class PlatformManager:
     def device_state(self) -> dict[int, DeviceState]:
         """Return a dict of all the sensors as_dict."""
         return self._device_dict
-

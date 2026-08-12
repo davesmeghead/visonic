@@ -459,7 +459,7 @@ class MaintainInterface:
                 title = title,
             )
             # This will update the alarm device information with the model number (if available)
-            self.platform_manager.setAlarmDeviceInformation(pm)
+            self.platform_manager.set_alarm_device_information(pm)
 
         if event_id == PanelCondition.STARTUP_SUCCESS:  # Startup Success
             # set baud list back to default ready if there's a disconection
@@ -517,7 +517,7 @@ class MaintainInterface:
 
     def setupAlarmPanel(self, piu: set[int] | None):
         """Setup the alarm panel.  This has to be done only when all partitions are known."""
-        self.entry.async_create_task(self.hass, self.platform_manager.async_setupAlarmPanel(piu), name=f"Setup alarm panel {self.panel_ident} entity")
+        self.entry.async_create_task(self.hass, self.platform_manager.async_setup_alarm_panel(piu), name=f"Setup alarm panel {self.panel_ident} entity")
 
     def save_working_baud(self, baud: int) -> None:
         """Persist the detected working baud rate."""

@@ -122,8 +122,8 @@ pmZoneMaster: Final[dict[int, ZoneSensorDetails]] = {
     0xFE : ZoneSensorDetails("Wired"         , AlarmSensorType.WIRED,  ALL_ENTITIES + STATUS_ONLY_TIMEOUT),
 }
 
-# Default Sensor Types if not found in the dictionaries above
-pmZoneMaxGeneric = {
+# Default Sensor Types if not found in the dictionaries above, this works for powermax but not sure about powermaster
+pmZoneGeneric: Final[dict[int, ZoneSensorDetails]] = {
     0x0 : ZoneSensorDetails("Unknown", AlarmSensorType.VIB,    ALL_ENTITIES + BATTERY_AND_TRIGGER_OTHER),
     0x2 : ZoneSensorDetails("Unknown", AlarmSensorType.SHOCK,  ALL_ENTITIES + BATTERY_TRIGGER_STATUS),
     0x3 : ZoneSensorDetails("Unknown", AlarmSensorType.MOTION, ALL_ENTITIES + BATTERY_AND_TRIGGER_MOTION),
@@ -150,32 +150,32 @@ class SensorStateExt(SensorState):
         state = super().from_dict(data)   # dict
         return dataclasses.replace(
             state,
-            sensor_type=cls.get_sensor_details(
+            sensor_type=cls._get_sensor_details(
                 state.sensor_type_id,
                 is_power_master,
             ),
         )
-        #state.sensor_type = cls.get_sensor_details(state.sensor_type_id, is_power_master=is_power_master)
-        #return state
 
     @classmethod
-    def get_sensor_details(cls, sensor_id: int, is_power_master: bool) -> ZoneSensorDetails:
+    def _get_sensor_details(cls, sensor_id: int, is_power_master: bool) -> ZoneSensorDetails:
         """Convert the raw sensor type id to a ZoneSensorDetails."""
 
-        sensor_type = ZoneSensorDetails()
+        #sensor_type = ZoneSensorDetails()
+        tmpid = sensor_id & 0x0F
 
         if is_power_master: # PowerMaster models
             if sensor_id in pmZoneMaster:
-                sensor_type = pmZoneMaster[sensor_id]
-            else:
-                _LOGGER.debug("[get_sensor_details] Found unknown sensor type %s, defaulting to a simple state based sensor.", hexify(sensor_id))
-        else:  #  PowerMax models
-            tmpid = sensor_id & 0x0F
-            if sensor_id in pmZoneMax:
-                sensor_type = pmZoneMax[sensor_id]
-            elif tmpid in pmZoneMaxGeneric:
-                sensor_type = pmZoneMaxGeneric.get(tmpid)
-            else:
-                _LOGGER.debug("[get_sensor_details] Found unknown sensor type %s, defaulting to a simple state based sensor.", sensor_id)
-
-        return sensor_type
+                return pmZoneMaster[sensor_id]
+            if tmpid in pmZoneGeneric:                 # Try this although it might just be for PowerMax panels
+                _LOGGER.debug("[get_sensor_details] Found unknown powermaster sensor type %s, using pmZoneGeneric.", hexify(sensor_id))
+                return pmZoneGeneric.get(tmpid)
+            _LOGGER.debug("[get_sensor_details] Found unknown powermaster sensor type %s, defaulting to a simple state based sensor.", hexify(sensor_id))
+            return ZoneSensorDetails("Unknown" , AlarmSensorType.UNKNOWN, POWERMASTER_WIRELESS + BATTERY_AND_STATUS_TIMEOUT)
+        # PowerMax models
+        if sensor_id in pmZoneMax:
+            return pmZoneMax[sensor_id]
+        if tmpid in pmZoneGeneric:
+            _LOGGER.debug("[get_sensor_details] Found unknown powermax sensor type %s, using pmZoneGeneric.", hexify(sensor_id))
+            return pmZoneGeneric.get(tmpid)
+        _LOGGER.debug("[get_sensor_details] Found unknown powermax sensor type %s, defaulting to a simple state based sensor.", sensor_id)
+        return ZoneSensorDetails("Unknown" , AlarmSensorType.UNKNOWN, ALL_ENTITIES + BATTERY_AND_STATUS_TIMEOUT)

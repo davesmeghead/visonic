@@ -591,9 +591,9 @@ class ManageConnection(MaintainInterface):
                 self._visonic_protocol.set_log_events(
                     self.language_decoder.getLogEventList()
                 )
-                self.platform_manager.setAlarmDeviceInformation(self.get_panel_model())
+                self.platform_manager.set_alarm_device_information(self.get_panel_model())
 
-                await self.platform_manager.setupVisonicEntity(
+                await self.platform_manager.setup_visonic_entity(
                     Platform.ALARM_CONTROL_PANEL, AlarmPanelData(
                         getAlarmPanelUniqueIdent(self.panel_ident),
                         self.get_partitions_in_use()
@@ -631,19 +631,22 @@ class ManageConnection(MaintainInterface):
     # Manage the devices: Sensors, Switches and Devices
 
     def on_new_sensor(self, create: bool, py_sensor: AlSensorDeviceHelper):
-        """Redirect onsensor to add additional parameters."""
+        """Redirect onsensor to add additional parameters. If create is False then delete."""
         if py_sensor is None:
             self.logger.logstate_warning("Sensor callback but Sensor Device is None")
             return
+        # Use SensorStateExt instead of SensorState as it adds sensor_type.
         sensor = SensorStateExt.from_dict(self._visonic_protocol.is_power_master(), py_sensor.as_dict())
         if sensor is None or sensor.sensor_type.type == AlarmSensorType.IGNORED:
             return
         if create and not sensor.enrolled:
             return
         if create:
+            # create
             if self.platform_manager.sensor_update_or_create(sensor):
                 py_sensor.add_callback(self.onSensorChange)
         else:
+            # delete
             py_sensor.clear_callbacks() # Prevent all callback handlers
             self.platform_manager.delete_sensor(sensor.id)
             if self._visonic_protocol.get_panel_mode() not in [
@@ -655,11 +658,13 @@ class ManageConnection(MaintainInterface):
         if self.state_changed_callback:
             self.state_changed_callback()
 
+
     def onSensorChange(self, py_sensor: AlSensorDeviceHelper, c: AlSensorCondition):
         """Sensor change callback."""
         if py_sensor is None:
             self.logger.logstate_warning("Sensor callback but Sensor Device is None")
             return
+        # Use SensorStateExt instead of SensorState as it adds sensor_type.
         sensor = SensorStateExt.from_dict(self._visonic_protocol.is_power_master(), py_sensor.as_dict())
         if py_sensor.has_jpg and py_sensor.jpg_data is not None:
             self.platform_manager.set_sensor_jpeg(sensor.id, py_sensor.jpg_data, py_sensor.jpg_is_audio)

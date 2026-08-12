@@ -170,9 +170,9 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         """Make the client connection to the panel."""
         # Refresh the data for the first pass
         await self.async_config_entry_first_refresh()
-        self.platform_manager.setAlarmDeviceInformation()
+        self.platform_manager.set_alarm_device_information()
         await asyncio.sleep(0.0)
-        self.platform_manager.async_create_alarm_panel()
+        self.platform_manager.create_alarm_panel()
         return self._client.connect()
 
     async def async_service_panel_reconnect(self, call: ServiceCall | None):

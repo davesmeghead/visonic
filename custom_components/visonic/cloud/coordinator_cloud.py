@@ -693,8 +693,8 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 self._event_logger.logstate_info("Visonic setting up alarm panels")
                 self.first_time = False
                 self.async_set_updated_data(new_data)
-                self.platform_manager.setAlarmDeviceInformation(self.config_entry.title)  # (self.panel_model)
-                await self.platform_manager.async_setupAlarmPanel(partition_list)
+                self.platform_manager.set_alarm_device_information(self.config_entry.title)  # (self.panel_model)
+                await self.platform_manager.async_setup_alarm_panel(partition_list)
             else:
                 self.platform_manager.rationalise_ha_devices(False)
             return new_data  # noqa: TRY300
