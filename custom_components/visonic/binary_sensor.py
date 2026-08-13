@@ -149,13 +149,14 @@ class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
     async def async_will_remove_from_hass(self):
         """Remove from hass."""
         if self.timerTask is not None:
-            kill_asyncio_task(self.timerTask)
+            await kill_asyncio_task(self.timerTask)
         await super().async_will_remove_from_hass()
 
     def _reset_state(self):
         # reset
         if self.timerTask is not None:
-            kill_asyncio_task(self.timerTask)
+            # Just cancel it, no need to wait
+            self.timerTask.cancel()
         self.timerTask = None
         self.current_value = self.initial_state
         self.save_state = self.initial_state

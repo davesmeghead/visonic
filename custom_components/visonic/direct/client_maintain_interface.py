@@ -6,6 +6,7 @@ from collections.abc import Callable
 import logging
 
 from homeassistant.components.alarm_control_panel import AlarmControlPanelState
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, valid_entity_id
 from homeassistant.util import Any
 
@@ -42,8 +43,7 @@ from ..visonic_types import (  # noqa: TID252
     PANEL_TO_HA_STATUS_MAP,
     AvailableNotifications,
     PanelCondition,
-    TriggerAlarmType,  # AlAlarmType
-    VisonicConfigEntry,
+    TriggerAlarmType,  # AlAlarmType,
 )
 from .language_decoder import LanguageDecoder
 from .panel_event_coordinator import PanelEventCoordinator
@@ -105,7 +105,7 @@ class MaintainInterface:
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: VisonicConfigEntry,
+        entry: ConfigEntry,
         diagnostics: logEvents | None,
         platform_manager : PlatformManager,
         panelident: int,

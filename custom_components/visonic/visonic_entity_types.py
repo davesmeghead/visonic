@@ -172,7 +172,9 @@ class SensorState(BaseStateClass):
     isoneway: bool | None = None
     isinactive: bool | None = None
     has_image: bool = False
+    image_is_audio: bool = False
     image_time: datetime | None = None
+    image_data: bytearray | None = None
     time: datetime | None = None
     sensor_type: ZoneSensorDetails = field(default_factory=ZoneSensorDetails)
 

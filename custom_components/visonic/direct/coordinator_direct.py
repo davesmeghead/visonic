@@ -212,14 +212,14 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         name: str,
         command: AlarmPanelCommand,
         code: str | None,
-        partition_set: set[int] | None,
+        partition_set: set[int] | None,  # needs to already be 0 based
     ) -> CommandResult:
         """Common send command function."""
         did_bypass = False
+
         if self._client.is_power_master() and command in POWERMASTER_COMMANDS:
-            return await self._client.send_command(
-                command, code, partition_set
-            )
+            return await self._client.send_command(command, code, None)
+
         if command in ARM_DISARM_COMMANDS:
             if not (
                 (
@@ -239,9 +239,9 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                     "Request Arm/Disarm",
                 )
 
-            pl = self._client.get_partitions_in_use()
-            part = PARTITION_ID_WHEN_BASE if partition_set is None or len(partition_set) == 3 or partition_set == pl else list(partition_set)[0] + 1
             if command in {AlarmPanelCommand.ARM_HOME_BYPASS, AlarmPanelCommand.ARM_AWAY_BYPASS}:
+                pl = self._client.get_partitions_in_use()
+                part = PARTITION_ID_WHEN_BASE if partition_set is None or len(partition_set) == 3 or partition_set == pl else list(partition_set)[0] + 1
                 result = await self.bypass_open_zones(part)
                 if result.status != AlarmCommandStatus.SUCCESS:
                     return result
@@ -264,7 +264,12 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                 )
             else:
                 result.did_bypass = did_bypass
-        return result
+            return result
+        return CommandResult(
+            AlarmCommandStatus.FAIL_PANEL_CONFIG_PREVENTED,
+            AvailableNotifications.COMMAND,
+            "Invalid Command for Panel",
+        )
 
     async def send_bypass(
         self,

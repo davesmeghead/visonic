@@ -63,13 +63,13 @@ class VisonicImageRequestButton(CoordinatorEntity[VisonicCoordinator], ButtonEnt
 
     async def async_press(self) -> None:
         """Send the image request, or queue it behind an in-progress download (drop if the queue is full)."""
-        pm = self.coordinator.platform_manager
-        action: ImageQueueState = pm.enqueue_image_request(self._sensor_id, self.entity_id, BUTTON_IMAGE_DURATION)
+        im = self.coordinator.image_manager
+        action: ImageQueueState = im.enqueue_image_request(self._sensor_id, self.entity_id, BUTTON_IMAGE_DURATION)
         match(action):
             case ImageQueueState.SEND:
                 _LOGGER.info("Image requested for %s", self.entity_id)
                 await self.coordinator.send_get_sensor_image(self._sensor_id, self.entity_id, BUTTON_IMAGE_DURATION)
             case ImageQueueState.QUEUED:
-                _LOGGER.info("Image request for %s queued (%d waiting)", self.entity_id, pm.image_queue_depth())
+                _LOGGER.info("Image request for %s queued (%d waiting)", self.entity_id, im.image_queue_depth())
             case ImageQueueState.FULL:
                 _LOGGER.info("Image request for %s ignored: queue full", self.entity_id)

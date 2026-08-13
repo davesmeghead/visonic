@@ -78,6 +78,8 @@ class AlSensorDeviceHelper(AlSensorDevice):
              "isinactive": self.is_inactive,
              #"offtime": self.motion_delay_time,
              "has_image": self.has_jpg,
+             "image_is_audio": self.jpg_is_audio,
+             "image_data": self.jpg_data,
              "image_time": self.jpg_timestamp,
              "time": self.last_trigger_time     # When triggered
         }

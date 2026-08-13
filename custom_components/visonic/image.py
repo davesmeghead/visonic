@@ -117,7 +117,7 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         attr[DEVICE_ATTRIBUTE_NAME] = self._sensor_id
         # Where this camera's captures are filed. The frontend would otherwise have to guess it
         # from the device name, so a dashboard can link straight to the right media folder.
-        if (folder := self.coordinator.platform_manager.camera_folder(self._sensor_id)):
+        if (folder := self.coordinator.image_manager.camera_folder(self._sensor_id)):
             attr["media_folder"] = folder
         return attr
 

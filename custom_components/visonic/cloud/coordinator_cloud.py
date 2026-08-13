@@ -314,7 +314,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         name: str,
         command: AlarmPanelCommand,
         code: str | None,
-        partition_set: set[int] | None,
+        partition_set: set[int] | None,   # needs to already be 0 based
     ) -> CommandResult:
         """Common send command function."""
         acs = AlarmCommandStatus.FAIL_INVALID_RETURN

@@ -33,12 +33,14 @@ from .const import (
     PIN_REGEX,
     TEXT_LAST_EVENT_NAME,
 )
+from .image_manager import ImageManager
 from .log_events import logEvents
 from .platform_manager import PlatformManager
 from .utils import (
     capitalize,
     decode_code_from_dict_or_str,
     getAlarmPanelUniqueIdent,
+    parse_int_list,
     print_partition,
     to_bool,
 )
@@ -86,6 +88,12 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         self.disable_all_panel_commands = False
         self._prev_panel_connected = False
 
+        self.image_manager: ImageManager = ImageManager(
+            hass=self.hass,
+            panelident=panel_id,
+            entry=entry,
+            logger=lo,
+        )
         # Declare platform_manager using the base class so it can be used in this base class
         # Callback needed as this is a panel driven system
         #    All changes come bottom up
@@ -94,6 +102,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             panelident=panel_id,
             entry=entry,
             logger=lo,
+            image_manager=self.image_manager,
             state_changed_callback=state_changed_callback,
         )
 
@@ -117,13 +126,13 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
 
     async def get_cached_image(self, sensor_id: int) -> bytearray | None:
         """Get the cached image."""
-        if self.platform_manager and hasattr(self.platform_manager, "async_get_jpg_image"):
-            return await self.platform_manager.async_get_jpg_image(sensor_id)
-        if self.platform_manager and hasattr(self.platform_manager, "get_jpg_image"):
+        if self.image_manager and hasattr(self.image_manager, "async_get_jpg_image"):
+            return await self.image_manager.async_get_jpg_image(sensor_id)
+        if self.image_manager and hasattr(self.image_manager, "get_jpg_image"):
             # run blocking sync code in executor
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(
-                None, self.platform_manager.get_jpg_image, sensor_id
+                None, self.image_manager.get_jpg_image, sensor_id
             )
         return None
 
@@ -216,7 +225,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             )
             return
 
-        self.platform_manager.mark_image_request(devid, duration)
+        self.image_manager.mark_image_request(devid, duration)
         status: AlarmCommandStatus = await self.send_command_sensor_image(devid, eid, duration)
         self.async_update_listeners()
 
@@ -242,27 +251,27 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         """On (re)connect drop stale image state; while idle and connected, dispatch the next queued request."""
         connected = self.is_connected()
         if connected and not self._prev_panel_connected:
-            self.platform_manager.reset_image_state()
+            self.image_manager.reset_image_state()
         self._prev_panel_connected = connected
         if connected and not self.image_download_active():
-            nxt = self.platform_manager.pop_image_request()
+            nxt = self.image_manager.pop_image_request()
             if nxt is not None:
                 # mark active now so a re-poll before the send task runs can't dispatch a second request
-                self.platform_manager.mark_image_request(nxt[0], nxt[2])
+                self.image_manager.mark_image_request(nxt[0], nxt[2])
                 self.hass.async_create_task(self.send_get_sensor_image(nxt[0], nxt[1], nxt[2]))
 
     def image_download_active(self) -> bool:
         """Check if the image download process is active."""
-        return self.platform_manager.image_download_active()
+        return self.image_manager.image_download_active()
 
     def image_download_data(self) -> dict[str, Any]:
         """Return the image download data."""
         if self.image_download_active():
-            zone = self.platform_manager.image_download_sensor()
+            zone = self.image_manager.image_download_sensor()
             return {
                 "zone": zone,
-                "camera": self.platform_manager.camera_name(zone) if zone is not None else None,
-                "queued": self.platform_manager.image_queue_depth(),
+                "camera": self.image_manager.camera_name(zone) if zone is not None else None,
+                "queued": self.image_manager.image_queue_depth(),
             }
         return {
             "zone": None,
@@ -610,10 +619,13 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
 
         state = self.hass.states.get(eid)
         attributes: dict[str, Any] = state.attributes if state else {}
-        partition = attributes.get("partition")
 
-        # Determine which partitions to send the command to, or the panel (all partitions)
-        partition_set = {partition - 1} if partition is not None else set(self.data.partition_dict) # {0, 1, 2}
+        partition = attributes.get("partition")
+        partition_set = None   # all partitions
+        if isinstance(partition, str) and len(partition) > 0:
+            partition_list = parse_int_list(partition)
+            partition_set = {a-1 for a in partition_list if a >= 1}
+
         result: CommandResult = await self.send_command(
             "Alarm Service Call",
             command,

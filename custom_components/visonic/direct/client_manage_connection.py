@@ -85,7 +85,7 @@ class ManageConnection(MaintainInterface):
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: VisonicConfigEntry,
+        entry: ConfigEntry,
         diagnostics: logEvents | None,
         force_standard_mode,
         disable_all_panel_commands,
@@ -658,7 +658,6 @@ class ManageConnection(MaintainInterface):
         if self.state_changed_callback:
             self.state_changed_callback()
 
-
     def onSensorChange(self, py_sensor: AlSensorDeviceHelper, c: AlSensorCondition):
         """Sensor change callback."""
         if py_sensor is None:
@@ -666,8 +665,6 @@ class ManageConnection(MaintainInterface):
             return
         # Use SensorStateExt instead of SensorState as it adds sensor_type.
         sensor = SensorStateExt.from_dict(self._visonic_protocol.is_power_master(), py_sensor.as_dict())
-        if py_sensor.has_jpg and py_sensor.jpg_data is not None:
-            self.platform_manager.set_sensor_jpeg(sensor.id, py_sensor.jpg_data, py_sensor.jpg_is_audio)
         self.platform_manager.sensor_update_or_create(sensor)
         self.logger.logstate_debug(f"onSensorChange {c.name} {sensor.id}")
         if self.state_changed_callback:
