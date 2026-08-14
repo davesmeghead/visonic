@@ -1,7 +1,7 @@
 """Sensor imagery."""
+from __future__ import annotations
 
 # ruff: noqa: G004
-
 from datetime import datetime, timedelta
 import logging
 

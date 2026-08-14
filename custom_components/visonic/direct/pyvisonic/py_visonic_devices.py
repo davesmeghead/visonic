@@ -207,9 +207,8 @@ class ManageDevices(ProtocolBase):
                 return self._get_panel_setting(PanelSetting.ZoneCustNameStr, zone_name_ref)
             if len(zone_name) == 21 and len(cust_name) == 10 and 0 <= zone_name_ref <= 30:
                 return self._get_panel_setting(PanelSetting.ZoneNameString, zone_name_ref) if zone_name_ref <= 20 else self._get_panel_setting(PanelSetting.ZoneCustNameStr, zone_name_ref - 21)
-            log.debug(f"[_update_sensor]    getPanelStringName  NOT OK, got missing data       {zone_name_ref=}    {len(zone_name)=}    {len(cust_name)=}")
-            log.debug(f"[_update_sensor]               {zone_name}")
-            log.debug(f"[_update_sensor]               {cust_name}")
+            if self.PanelMode in [AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.POWERLINK]:
+                log.debug(f"[_update_sensor]    getPanelStringName  NOT OK, got missing data       {zone_name_ref=}    {len(zone_name)=} : {zone_name=}      {len(cust_name)=} : {cust_name=}")
             return None
 
         (mandatory, _optional) = self._check_panel_data_present(forceall = False, output_to_log = False)

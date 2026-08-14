@@ -34,7 +34,6 @@ from .py_const import (
     TEXT_WATCHDOG_TIMEOUT_TOTAL,
 )
 from .py_enum import (
-    EventType,
     AlAlarmType,
     AlCommandStatus,
     AlCondition,
@@ -43,6 +42,7 @@ from .py_enum import (
     AlPanelStatus,
     AlSwitchCommand,
     B0SubType,
+    EventType,
     MessagePriority,
     Packet,
     PanelSetting,

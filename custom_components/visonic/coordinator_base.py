@@ -58,8 +58,14 @@ from .visonic_types import (
     VisonicCoordinatorData,
 )
 
-_LOGGER = logging.getLogger(__name__)
-#_LOGGER.setLevel(logging.DEBUG)   # setting this enables the timing debug output from the HA coordinator
+# Using this and uncommenting the __init__ entry gets coordinator to put debug info in the log file
+#_COORDINATOR_LOGGER = logging.getLogger(f"{__package__}.coordinator")
+#_COORDINATOR_LOGGER.setLevel(logging.DEBUG)   # setting this enables the timing debug output from the HA coordinator
+# then we can set it explicitly
+#logger:
+#  logs:
+#    custom_components.visonic: debug
+#    custom_components.visonic.coordinator: info
 
 ###################################################################################
 ##############  Common coordinator for direct and cloud connections ###############
@@ -75,7 +81,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         """Initialize the base coordinator."""
         super().__init__(
             hass,
-            logger=_LOGGER,
+            #logger=_COORDINATOR_LOGGER,
             name=f"{capitalize(DOMAIN)} {entry.title}",
             config_entry=entry,
             update_interval=timedelta(seconds=update_interval),

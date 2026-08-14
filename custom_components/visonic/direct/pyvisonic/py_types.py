@@ -1,6 +1,7 @@
 """Pyvisonic type definitions and classes."""
 
 from dataclasses import dataclass, field
+from enum import IntEnum
 import logging
 from typing import Any
 
@@ -36,3 +37,8 @@ class AlPanelEventData:
             data["partition"] = self.partition
         return data
 
+class AlCommandedModeType(IntEnum):
+    """Data class representing a commanded mode type."""
+    POWERLINK = 1
+    FORCE_STANDARD_BY_USER = 2
+    FORCE_STANDARD_BY_PANEL = 3

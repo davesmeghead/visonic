@@ -801,7 +801,7 @@ class MessageHandling(MessageHandlingB0Data):
         # Only Powermasters send this message
         # Format: <Type> <SubType> <Length of Data and Counter> <Data> <Counter> <0x43>
 
-        def chunkme(data: bytearray) -> list[Chunky]:
+        def chunkme(data: bytearray, debug: bool = True) -> list[Chunky]:
             data_len = len(data)
             msg_type = data[0]
             sub_type = data[1]
@@ -838,18 +838,19 @@ class MessageHandling(MessageHandlingB0Data):
 
             if current-2 == overall_length:
                 return retval
-            ctrl = hexify(sequence) if sequence is not None else "N/A"
-            log.debug(f"[handle_msgtypeB0] *******************"
-                    f"Message not fully processed for {msg_type}   "
-                    f"{overall_length - (current-2)} bytes not processed     "
-                    f"control byte = {ctrl}    "
-                    f"data is {toString(data[current:])} "
-                    f"********************************************************")
+            if debug:
+                ctrl = hexify(sequence) if sequence is not None else "N/A"
+                log.debug(f"[handle_msgtypeB0] *******************"
+                        f"Message not fully processed for {msg_type}/{sub_type}  "
+                        f"{overall_length - (current-2)} bytes not processed     "
+                        f"control byte = {ctrl}    "
+                        f"data is {toString(data[current:])} "
+                        f"********************************************************")
             return []
 
         def isitchunky(data: bytearray) -> bool:
             """Return True if data contains one or more chunks."""
-            return bool(chunkme(data))
+            return bool(chunkme(data=data, debug=False)) # do not output debug when checking for chunky
 
         # A powermaster mainly interacts with B0 messages so reset watchdog on receipt
         self._reset_watchdog_timeout()
@@ -875,10 +876,11 @@ class MessageHandling(MessageHandlingB0Data):
         if sub_type in self.B0_Waiting:
             self.B0_Waiting.remove(sub_type)
 
+        pm = "" if self.PanelModel is None or self.PanelModel == "Unknown" else self.PanelModel + " "
         if OBFUS:
-            log.debug(f"[handle_msgtypeB0] Received {self.PanelModel or "UNKNOWN_PANEL_MODEL"} message {hexify(msg_type):>02}/{hexify(sub_type):>02} (len = {msg_length})    data = <OBFUSCATED>")
+            log.debug(f"[handle_msgtypeB0] Received {pm}message {hexify(msg_type):>02}/{hexify(sub_type):>02} (len = {msg_length})    data = <OBFUSCATED>")
         else:
-            log.debug(f"[handle_msgtypeB0] Received {self.PanelModel or "UNKNOWN_PANEL_MODEL"} message {hexify(msg_type):>02}/{hexify(sub_type):>02} (len = {msg_length})    data = {toString(data)}")
+            log.debug(f"[handle_msgtypeB0] Received {pm}message {hexify(msg_type):>02}/{hexify(sub_type):>02} (len = {msg_length})    data = {toString(data)}")
 
         msg_info = pmSendMsgB0_reverseLookup.get(sub_type)
 
@@ -937,7 +939,6 @@ class MessageHandling(MessageHandlingB0Data):
             # Panel State (without zone data and not chunky)
             log.debug(f"[handle_msgtypeB0]             Panel State short (11) has been provided data={toString(data)}")
             # Check to make sure its not chunky
-            #isitchunky(data[:-2])
             if not isitchunky(data[:-2]):                      # Check to make sure its not chunky
                 # process the data, assume 1 partition
                 self._updatePartitionStatus(0, data[11], data[12], 0, 0)
