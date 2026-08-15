@@ -82,6 +82,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         super().__init__(
             hass,
             #logger=_COORDINATOR_LOGGER,
+            logging.getLogger(__name__),
             name=f"{capitalize(DOMAIN)} {entry.title}",
             config_entry=entry,
             update_interval=timedelta(seconds=update_interval),
