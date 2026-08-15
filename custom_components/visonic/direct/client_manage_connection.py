@@ -48,7 +48,6 @@ from ..visonic_types import (  # noqa: TID252  # noqa: TID252
     CVP_Status,
     DeviceType,
     PanelCondition,
-    VisonicConfigEntry,
 )
 from .client_maintain_interface import MaintainInterface
 from .cvp import CVP_Direct, async_create_serial_client, async_create_tcp_client

@@ -1,5 +1,5 @@
 """Sensor."""
-from __future__ import annotations
+from __future__ import annotations  # noqa: TID251
 
 from datetime import datetime
 import logging

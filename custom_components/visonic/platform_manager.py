@@ -8,9 +8,13 @@ from typing import Any, NamedTuple
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    area_registry as ar,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.entity import UNDEFINED
+from homeassistant.helpers.entity import UNDEFINED, UndefinedType
 from homeassistant.util import slugify
 
 from .const import (
@@ -487,14 +491,33 @@ class PlatformManager:
                     if self.panel_ident == 0
                     else f"Visonic P{self.panel_ident} {d}"
                 )
+
+                # Look up the area and assign the area to the sensor
+                area_reg = ar.async_get(self.hass)
+                area_map = {
+                    area.id: area.name
+                    for area in area_reg.async_list_areas()
+                }
+                suggested_area: str | UndefinedType | None = UNDEFINED # set to default for async_get_or_create
+                loc0 = sensor.location[0].casefold() if sensor.location is not None else "area_undefined_so_do_not_match_the_area"
+                loc1 = sensor.location[1].casefold() if sensor.location is not None else "area_undefined_so_do_not_match_the_area"
+                for areavalue in area_map.values():
+                    # casefold is similar to lower but can be used with different languages
+                    if loc0 == areavalue.casefold() or loc1 == areavalue.casefold():
+                        suggested_area = areavalue
+                        break
+
+                # get/create the device registry entry for the sensor
                 _dev = device_registry.async_get_or_create(
                     config_entry_id=self.entry.entry_id,
                     identifiers=identifiers,
                     name=n,
                     manufacturer=MANUFACTURER,
                     model=s.title().replace("_", " "),
+                    suggested_area=suggested_area,
                     model_id=sensor.sensor_type.name,
                 )
+
                 self.logger.logstate_debug("Adding Sensor identifier %s with name %s", identifier, n)
                 self._sensor_dict[sensor.id] = sensor
                 if sensor.id not in self._sensor_created_set:
