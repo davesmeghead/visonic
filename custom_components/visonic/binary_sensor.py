@@ -158,9 +158,10 @@ class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
             # Just cancel it, no need to wait
             self.timerTask.cancel()
         self.timerTask = None
+        if self.current_value != self.initial_state:
+            _LOGGER.debug("[binary sensor] reset data to %s", self.initial_state)
         self.current_value = self.initial_state
         self.save_state = self.initial_state
-        _LOGGER.debug("[binary sensor] reset data to %s", self.current_value)
 
     def _set_current_data(self, state: SensorState | DeviceState | PanelState | None, force_non_bool_to_false: bool = False):
         # Create the current_value, with optional timer
@@ -187,7 +188,8 @@ class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
             changed : bool = False if self.save_state is None else self.save_state != data
             self.current_value = changed
             self.save_state = data
-        _LOGGER.debug("[binary sensor] set data from %s to %s", from_value, self.current_value)
+        if from_value != self.current_value:
+            _LOGGER.debug("[binary sensor] %s set data from %s to %s", self.unique_id, from_value, self.current_value)
 
     def update_local(self, state: SensorState | DeviceState | PanelState | None):
         """Set settings for this class i.e. binary entity."""
