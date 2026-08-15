@@ -143,7 +143,6 @@ class ManageDevices(ProtocolBase):
         """Get a panel capability."""
         if i is not None and i in self.PanelCapabilities:
             return self.PanelCapabilities[i]    # always an integer
-#        if self.Panel
         return 0
 
     def _check_panel_data_present(self, forceall, output_to_log) -> tuple[set[PanelSetting], set[PanelSetting]]:
