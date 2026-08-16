@@ -215,8 +215,7 @@ class MessageHandling(MessageHandlingB0Data):
         if process_ab and len(data) > 0 and data[0] == Packet.POWERLINK_TERMINAL:
             self.receivedPowerlinkAcknowledge = True
             if self.allowAckToTriggerRestore:
-                log.debug(f"[handle_msgtype02]        Received a powerlink acknowledge, I am in {self.PanelMode.name} mode and sending Message {'RESTORE' if self.ABMessageSupported else 'STATUS'}") #  and not self.PowerLinkBridgeConnected
-                #self.add_message_to_send_queue(Send.RESTORE if self.ABMessageSupported else Send.STATUS)   # and not self.PowerLinkBridgeConnected
+                log.debug(f"[handle_msgtype02]        Received a powerlink acknowledge, I am in {self.PanelMode.name} mode and sending Message RESTORE") #  and not self.PowerLinkBridgeConnected
                 self._trigger_restore_status()     # Clear message buffers and send a Restore (if in Powerlink or standard plus) or Status (not in Powerlink) to the Panel
                 self.allowAckToTriggerRestore = False
 
@@ -737,7 +736,7 @@ class MessageHandling(MessageHandlingB0Data):
             if self.PanelMode in [AlPanelMode.POWERLINK, AlPanelMode.STANDARD_PLUS]:
                 self._reset_keep_alive_messages()
                 # A panel connected via the bridge should not be sending AB keep alive messages, but process it just in case!
-                self.add_message_to_send_queue(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE) # and not self.PowerLinkBridgeConnected
+                self.add_message_to_send_queue(Send.ALIVE) # and not self.PowerLinkBridgeConnected
                 #self.add_message_to_send_queue (Send.ALIVE)       # The Powerlink module sends this when it gets an i'm alive from the panel.
 
             if self.PanelMode == AlPanelMode.STANDARD_PLUS:

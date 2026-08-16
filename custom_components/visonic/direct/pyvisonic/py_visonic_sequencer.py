@@ -479,7 +479,7 @@ class Sequencer(Despatcher):
             # Only attempt to auto enrol powerlink for newer panels but not the 360 or 360R.
             #       Older panels need the user to manually enrol
             #       360 and 360R can get to Standard Plus but not Powerlink as (I assume that) they already have this hardware and panel will not support 2 powerlink connections
-            if self.ABMessageSupported and not self.PowerLinkBridgeConnected:
+            if not self.PowerLinkBridgeConnected:
                 if force or (self.PanelMode == AlPanelMode.STANDARD_PLUS):
                     if force or (self.PanelType is not None and self.AutoEnrol):
                         # Only attempt to auto enrol powerlink for newer panels. Older panels need the user to manually enrol, we should be in Standard Plus by now.
@@ -1057,7 +1057,7 @@ class Sequencer(Despatcher):
                         elif self._is_send_queue_empty() and not self.pmDownloadMode and self.keep_alive_counter >= 15:
                             self._reset_keep_alive_messages()
                             self.add_message_to_send_queue (Send.EXIT)
-                            self.add_message_to_send_queue(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE)  # and not self.PowerLinkBridgeConnected
+                            self.add_message_to_send_queue(Send.ALIVE)  # and not self.PowerLinkBridgeConnected
                             #self.add_message_to_send_queue (Send.ALIVE)
 
                         continue   # just do the while loop
@@ -1124,7 +1124,7 @@ class Sequencer(Despatcher):
                         self.keep_alive_counter += 1
                         if self._is_send_queue_empty() and not self.pmDownloadMode and self.keep_alive_counter >= self.KeepAlivePeriod:
                             self._reset_keep_alive_messages()
-                            self.add_message_to_send_queue(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE) # and not self.PowerLinkBridgeConnected
+                            self.add_message_to_send_queue(Send.ALIVE) # and not self.PowerLinkBridgeConnected
                             #self.add_message_to_send_queue (Send.ALIVE)
                             #if self.PanelType is not None and not self.AutoEnrol:
                             #    self.PanelMode = AlPanelMode.STANDARD_PLUS             # should already be but just to make sure
@@ -1168,7 +1168,7 @@ class Sequencer(Despatcher):
                             # Every self.KeepAlivePeriod seconds, unless watchdog has been reset
                             self._reset_keep_alive_messages()
                             # Send I'm Alive to the panel so it knows we're still here
-                            self.add_message_to_send_queue(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE) # and not self.PowerLinkBridgeConnected
+                            self.add_message_to_send_queue(Send.ALIVE) # and not self.PowerLinkBridgeConnected
                             #self.add_message_to_send_queue (Send.ALIVE)
 
                     elif _sequencer_state == SequencerType.DoingPowerlinkBridge:     ################################################################ DoingPowerlinkBridge    ###################################################
@@ -1180,7 +1180,7 @@ class Sequencer(Despatcher):
                                 # Every self.KeepAlivePeriod seconds, unless watchdog has been reset
                                 self._reset_keep_alive_messages()
                                 # Send I'm Alive to the panel so it knows we're still here
-                                self.add_message_to_send_queue(Send.ALIVE if self.ABMessageSupported else Send.PM_KEEPALIVE) # and not self.PowerLinkBridgeConnected
+                                self.add_message_to_send_queue(Send.ALIVE) # and not self.PowerLinkBridgeConnected
                                 #self.add_message_to_send_queue (Send.ALIVE)
 
                             if self.PowerLinkBridgeStealth:

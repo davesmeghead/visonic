@@ -46,7 +46,7 @@ pmPanelType = {
     13 : "PowerMaster 360",
     15 : "PowerMaster 33",
     16 : "PowerMaster 360R",
-    17 : "Default"                     # This is the default panel settings i.e. the most basic panel
+    17 : "Default"                     # This is the default panel settings i.e. the most basic panel, also if visonic add this panel type then it will basically work, maybe!
 }
 
 # Config for each panel type (0-16).
@@ -80,9 +80,7 @@ pmPanelConfig = {       #     0       1       2       3       4       5       6 
     CFG.AUTO_ENROL     : (  None,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False,  False ), # 360 and 360R cannot autoenrol to Powerlink
     CFG.AUTO_SYNCTIME  : (  None,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False ), # Assume 360 and 360R can auto sync time
     CFG.POWERMASTER    : (  None,  False,  False,  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False ), # Panels that use and respond to the additional PowerMaster Messages
-    CFG.EPROM_DOWNLOAD : (  None,   True,   True,   True,   True,   True,   True,   True,  False,  False,  False,  False,  False,  False,  False,  False,  False,   True ), # Panel does EPROM Download (True) or can do B0 Message Download (False)
-    CFG.AB_SUPPORTED   : ( False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False,  False ), # Are AB command messages supported (without a bridge)
+    CFG.EPROM_DOWNLOAD : (  None,   True,   True,   True,   True,   True,   True,   True,  False,  False,  False,  False,  False,  False,  False,  False,  False,   True ), # Panel does EPROM Download (True) or can also do B0 Message Download (False)
+    CFG.AB_CRC_TYPE_ALT: ( False,  False,  False,  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False,  False ), # Which CRC for 0xAB command messages. False=Normal, True=Alternate
     CFG.INIT_SUPPORT   : (  None,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False,  False )  # Panels that support the INIT command
 }
-
-

@@ -148,7 +148,7 @@ class Despatcher(ManageDevices):
                 self.B0_Wanted.add(B0SubType.PANEL_STATE_1)        # 24
             else:
                 self.add_message_to_send_queue(Send.STATUS)
-        elif self.ABMessageSupported and self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]:
+        elif self.PanelMode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK]:
             # Send RESTORE to the panel
             self.add_message_to_send_queue(Send.RESTORE)  # also gives status.  This is an AB message which we can't send to POWERLINK_BRIDGED
         else:
@@ -218,7 +218,7 @@ class Despatcher(ManageDevices):
                 # First add header (Packet.HEADER), then the packet, then crc and footer (Packet.FOOTER)
                 data_out = bytearray([Packet.HEADER])
                 data_out += data
-                if self.is_power_master() and (data[0] == 0xAB):
+                if self.AB_CRC_Type_Alternate and (data[0] == 0xAB):
                     data_out += self._calculateCRCAlt(data)
                 else:
                     data_out += self._calculateCRC(data)

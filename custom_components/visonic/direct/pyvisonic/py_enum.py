@@ -12,7 +12,7 @@ class CFG(Enum):
     """Configuration options for the panel."""
     SUPPORTED = auto()
     KEEPALIVE = auto()
-    AB_SUPPORTED = auto()
+    AB_CRC_TYPE_ALT = auto()
     DLCODE_1 = auto()
     DLCODE_2 = auto()
     DLCODE_3 = auto()

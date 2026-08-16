@@ -63,7 +63,7 @@ class ManageDevices(ProtocolBase):
         # These are populated when we know the panel type from the 3C message
         self.KeepAlivePeriod : int = KEEP_ALIVE_PERIOD
         self.pmInitSupportedByPanel : bool = False
-        self.ABMessageSupported : bool = True
+        self.AB_CRC_Type_Alternate : bool = False
         self.pmDownloadByEPROM : bool = False
         self.PanelSettings : dict[PanelSetting, PanelSettingCodesType] = {}              # This is the record of settings for the integration to work
         for key, value in pmPanelSettingCodes.items():
@@ -457,7 +457,7 @@ class ManageDevices(ProtocolBase):
                     self.AutoSyncTime = pmPanelConfig[CFG.AUTO_SYNCTIME][self.PanelType]
                     self.KeepAlivePeriod = pmPanelConfig[CFG.KEEPALIVE][self.PanelType]
                     self.pmInitSupportedByPanel = pmPanelConfig[CFG.INIT_SUPPORT][self.PanelType]
-                    self.ABMessageSupported = pmPanelConfig[CFG.AB_SUPPORTED][self.PanelType]
+                    self.AB_CRC_Type_Alternate = pmPanelConfig[CFG.AB_CRC_TYPE_ALT][self.PanelType]
                     self.pmDownloadByEPROM = FORCE_DOWNLOAD_TO_USE_EPROM or pmForceDownloadByEPROM or pmPanelConfig[CFG.EPROM_DOWNLOAD][self.PanelType]
 
                     self.PanelCapabilities[IndexName.REPEATERS] = pmPanelConfig[CFG.REPEATERS][self.PanelType]
