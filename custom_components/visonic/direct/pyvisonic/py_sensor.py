@@ -1,7 +1,7 @@
 """Sensor."""
 from __future__ import annotations  # noqa: TID251
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from typing import Any
 
@@ -135,7 +135,7 @@ class AlSensorDeviceHelper(AlSensorDevice):
         if trig:
             timenow = get_local_time()
             log.debug("[do_trigger]   Sensor %s   trigger True, checking debounce", self._sensor_id)
-            if self.last_trigger_time is None or timenow - self.last_trigger_time >= 3.0:  # minimum 3 seconds for debounce
+            if self.last_trigger_time is None or timenow - self.last_trigger_time >= timedelta(seconds=1.0):  # minimum 1 second for debounce
                 # If trigger is set then the caller is confident that it is a motion or camera sensor
                 self.triggered = (self.triggered + 1) % 100
                 self.last_trigger_time = timenow
