@@ -125,17 +125,22 @@ class AlSensorDeviceHelper(AlSensorDevice):
         """Do status update."""
         if stat is not None and self.is_open != stat:
             # The current setting is different
-            log.debug("[UpdateContactSensor]   Sensor %s   status from %s to %s", self._sensor_id, self.is_open, stat)
+            log.debug("[do_status]   Sensor %s   status from %s to %s", self._sensor_id, self.is_open, stat)
             self.is_open = stat
             self.notify(AlSensorCondition.STATE)
 
-    def do_trigger(self, notused):
+    def do_trigger(self, trig: bool):
         """Do trigger update."""
-        # If trigger is set then the caller is confident that it is a motion or camera sensor
-        self.triggered = (self.triggered + 1) % 100
-        self.last_trigger_time = get_local_time()
-        log.debug("[UpdateContactSensor]   Sensor %s   triggered = %s    at time=%s", self._sensor_id, self.triggered, self.last_trigger_time )
-        self.notify(AlSensorCondition.TRIGGER)
+        # PROBLEM: We need a debounce, what if the function is called with multiple True in quick succession, is this a problem?
+        if trig:
+            timenow = get_local_time()
+            log.debug("[do_trigger]   Sensor %s   trigger True, checking debounce", self._sensor_id)
+            if self.last_trigger_time is None or timenow - self.last_trigger_time >= 3.0:  # minimum 3 seconds for debounce
+                # If trigger is set then the caller is confident that it is a motion or camera sensor
+                self.triggered = (self.triggered + 1) % 100
+                self.last_trigger_time = timenow
+                log.debug("[do_trigger]        debounced trigger = %s    at time=%s", self.triggered, self.last_trigger_time )
+                self.notify(AlSensorCondition.TRIGGER)
 
     def do_bypass(self, val: bool) -> bool:
         """Do bypass update."""

@@ -605,7 +605,7 @@ class ManageDevices(ProtocolBase):
 
             for i in range(zone_count):
                 if self.is_power_master():  # PowerMaster models    adding and then deleting leaves this: 00 00 00 00 00 1e 00 00 00 00
-                    self.PanelSettings[PanelSetting.ZoneEnrolled][i] = pmaster_zone_ext_data[i][6:9] != bytearray.fromhex("00 00 00") and pmaster_zone_ext_data[i][4:6] != bytearray.fromhex("FF FF")
+                    self.PanelSettings[PanelSetting.ZoneEnrolled][i] = pmaster_zone_ext_data[i][2:6] != bytearray.fromhex("FF FF FF FF") and pmaster_zone_ext_data[i][6:10] != bytearray.fromhex("00 00 00 00")
                     self.PanelSettings[PanelSetting.ZoneTypes][i] = int(zone_data[i])
                     self.PanelSettings[PanelSetting.ZoneChime][i] = int(zone_data[i])
                     self.PanelSettings[PanelSetting.DeviceTypesZones][i] = int(pmaster_zone_ext_data[i][5])  # 5 = Sensor Type
