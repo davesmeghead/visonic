@@ -18,7 +18,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .alarm_base_logic import AlarmBaseLogic
-from .const import DOMAIN
+from .const import DOMAIN, VISONIC_TRANSLATION_KEY
 from .sensor_base_logic import VisonicBaseEntity
 from .visonic_entity_types import (
     FLOAT_SENSOR_DEFINITIONS,
@@ -103,6 +103,8 @@ class VisonicFloatEntity(VisonicBaseEntity, SensorEntity):
     def __init__(self, entry: ConfigEntry, sensor_id: int, identifier:str, initial_state: bool, definition: VisonicFloatSensorKey) -> None:
         """Initialize the sensor."""
         self.entity_description = FLOAT_SENSOR_DEFINITIONS[definition]
+        if self.entity_description.translation_key is None:
+            self._attr_translation_key = VISONIC_TRANSLATION_KEY
         super().__init__(entry, sensor_id, identifier, initial_state, self.entity_description)
 
     @property

@@ -17,7 +17,6 @@ from .const import (
     DOMAIN,
     MANUFACTURER,
     PANEL_ATTRIBUTE_NAME,
-    VISONIC_TRANSLATION_KEY,
 )
 from .coordinator_base import VisonicCoordinator
 from .visonic_entity_types import (
@@ -47,7 +46,6 @@ class VisonicBaseEntity(CoordinatorEntity[VisonicCoordinator]):
         self._entry = entry
         self._attr_available = False
         self._attr_should_poll = False
-        self._attr_translation_key = VISONIC_TRANSLATION_KEY
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, identifier)},
             manufacturer=MANUFACTURER,

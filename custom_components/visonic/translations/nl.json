@@ -395,7 +395,7 @@
 						}
 					},
 					"visonic_device": {
-						"name": "Zone Apparaat ID"
+						"name": "Zone apparaat ID"
 					},
 					"location": {
 						"name": "Location",
@@ -448,7 +448,7 @@
 						"name": "Paneel ID"
 					},
 					"visonic_device": {
-						"name": "Zone Apparaat ID"
+						"name": "Zone apparaat ID"
 					}
 				}
 			}
@@ -460,7 +460,7 @@
 						"name": "Paneel ID"
 					},
 					"visonic_device": {
-						"name": "Zone Apparaat ID"
+						"name": "Zone apparaat ID"
 					}
 				}
 			}
@@ -488,7 +488,7 @@
 						}
 					},
 					"state": {
-						"name": "Panel Status",
+						"name": "Panel status",
 						"state": {
 							"unknown": "Onbekend",
 							"disarmed": "Uitgeschakeld",
@@ -509,28 +509,28 @@
 						}
 					},
 					"ready": {
-						"name": "Paneel Gereed",
+						"name": "Paneel gereed",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
 						}
 					},
 					"tamper": {
-						"name": "Paneel Sabotage alarm",
+						"name": "Paneel sabotage alarm",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
 						}
 					},
 					"memory": {
-						"name": "Paneel Alarm in geheugen",
+						"name": "Paneel alarm in geheugen",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
 						}
 					},
 					"bypass": {
-						"name": "Paneel Omzeilen",
+						"name": "Paneel omzeilen",
 						"state": {
 							"false": "Nee",
 							"true": "Ja"
@@ -562,25 +562,141 @@
 						}
 					},
 					"lasteventname": {
-						"name": "Naam Laatste Gebeurtenis"
+						"name": "Naam laatste gebeurtenis"
 					},
 					"lasteventaction": {
-						"name": "Actie Laatste Gebeurtenis"
+						"name": "Actie laatste gebeurtenis"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event Partition"
 					},
 					"lasteventtime": {
-						"name": "Tijd Laatste Gebeurtenis"
+						"name": "Tijd laatste gebeurtenis"
 					}
 				}
 			}
 		},
 		"binary_sensor": {
+	        "alarm_panel_key_panel_trouble": {
+				"state_attributes": {
+					"panel": {
+						"name": "Paneel ID"
+					},
+					"trouble": {
+						"name": "Probleem",
+						"state": {
+							"none": "Geen Problemen",
+							"general": "Algemeen",
+							"communication": "Communicatie probleem",
+							"battery": "Batterij",
+							"power": "Stroom",
+							"jamming": "Verstoring",
+							"telephone": "Telefoonlijn fout"
+						}
+					},
+					"lasteventname": {
+						"name": "Naam laatste gebeurtenis"
+					},
+					"lasteventaction": {
+						"name": "Actie laatste gebeurtenis"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last event Partition"
+					},
+					"lasteventtime": {
+						"name": "Tijd laatste gebeurtenis"
+					}
+				}				
+			},
+	        "alarm_panel_key_panel_tamper": {
+				"state_attributes": {
+					"panel": {
+						"name": "Paneel ID"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_tamper": {
+				"state_attributes": {
+					"panel": {
+						"name": "Paneel ID"
+					},
+					"visonic_device": {
+						"name": "Zone apparaat ID"
+					},
+					"device_name": {
+						"name": "Apparaat naam"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_trouble": {
+				"state_attributes": {
+					"panel": {
+						"name": "Paneel ID"
+					},
+					"visonic_device": {
+						"name": "Zone apparaat ID"
+					},
+					"device_name": {
+						"name": "Apparaat naam"
+					},
+					"zone_trouble": {
+						"name": "Zone Problem",
+						"state": {
+							"none": "Geen",
+							"tamper": "Sabotage",
+							"jamming": "RF Verstoring",
+							"comm_failure": "Communicatie probleem",
+							"line_failure": "Lijnfout",
+							"fuse": "Zekering",
+							"not_active": "Niet actief",
+							"ac_failure": "AC Probleem"
+						}
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_missing": {
+				"state_attributes": {
+					"panel": {
+						"name": "Paneel ID"
+					},
+					"visonic_device": {
+						"name": "Zone apparaat ID"
+					},
+					"device_name": {
+						"name": "Apparaat naam"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_inactive": {
+				"state_attributes": {
+					"panel": {
+						"name": "Paneel ID"
+					},
+					"visonic_device": {
+						"name": "Zone apparaat ID"
+					},
+					"device_name": {
+						"name": "Apparaat naam"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_oneway": {
+				"state_attributes": {
+					"panel": {
+						"name": "Paneel ID"
+					},
+					"visonic_device": {
+						"name": "Zone apparaat ID"
+					},
+					"device_name": {
+						"name": "Apparaat naam"
+					}
+				}				
+			},
 			"alarm_panel_key": {
 				"state_attributes": {
 					"device_name": {
-						"name": "Apparaat Naam"
+						"name": "Apparaat naam"
 					},
 					"zone_name_panel": {
 						"name": "Zone Naam (Paneel)"
@@ -623,7 +739,7 @@
 						}
 					},
 					"zone_type": {
-						"name": "Zone Type",
+						"name": "Zone type",
 						"state": {
 							"non-alarm": "Geen Alarm",
 							"emergency": "Noodtoestand",
@@ -765,16 +881,16 @@
 						}
 					},
 					"lasteventname": {
-						"name": "Naam Laatste Gebeurtenis"
+						"name": "Naam laatste gebeurtenis"
 					},
 					"lasteventaction": {
-						"name": "Actie Laatste Gebeurtenis"
+						"name": "Actie laatste gebeurtenis"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event Partition"
 					},
 					"lasteventtime": {
-						"name": "Tijd Laatste Gebeurtenis"
+						"name": "Tijd laatste gebeurtenis"
 					}
 				}
 			}
@@ -913,16 +1029,16 @@
 						}
 					},
 					"lasteventname": {
-						"name": "Naam Laatste Gebeurtenis"
+						"name": "Naam laatste gebeurtenis"
 					},
 					"lasteventaction": {
-						"name": "Actie Laatste Gebeurtenis"
+						"name": "Actie laatste gebeurtenis"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event Partition"
 					},
 					"lasteventtime": {
-						"name": "Tijd Laatste Gebeurtenis"
+						"name": "Tijd laatste gebeurtenis"
 					}
 				}
 			}

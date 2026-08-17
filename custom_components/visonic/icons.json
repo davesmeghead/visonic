@@ -1,0 +1,70 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "alarm_panel_key_image_download_active": {
+        "state": {
+          "unknown": "mdi:help-box-outline",
+          "unavailable": "mdi:help-circle-outline",
+          "off": "mdi:camera-off",
+          "on": "mdi:camera-timer"
+        }
+      },
+      "alarm_panel_key_zone_tamper": {
+        "state": {
+          "unknown": "mdi:help-box-outline",
+          "unavailable": "mdi:help-circle-outline",
+          "off": "mdi:shield-alert-outline",
+          "on": "mdi:shield-alert"
+        }
+      },
+      "alarm_panel_key_panel_tamper": {
+        "state": {
+          "unknown": "mdi:help-box-outline",
+          "unavailable": "mdi:help-circle-outline",
+          "off": "mdi:shield-alert-outline",
+          "on": "mdi:shield-alert"
+        }
+      },
+      "alarm_panel_key_zone_trouble": {
+        "state": {
+          "unknown": "mdi:help-box-outline",
+          "unavailable": "mdi:help-circle-outline",
+          "off": "mdi:alert-circle-outline",
+          "on": "mdi:alert-circle"
+        }
+      },
+      "alarm_panel_key_panel_trouble": {
+        "state": {
+          "unknown": "mdi:help-box-outline",
+          "unavailable": "mdi:help-circle-outline",
+          "off": "mdi:alert-circle-outline",
+          "on": "mdi:alert-circle"
+        }
+      },
+      "alarm_panel_key_zone_inactive": {
+        "state": {
+          "unknown": "mdi:help-box-outline",
+          "unavailable": "mdi:help-circle-outline",
+          "off": "mdi:access-point",
+          "on": "mdi:access-point-off"
+        }
+      },
+      "alarm_panel_key_zone_missing": {
+        "state": {
+          "unknown": "mdi:help-box-outline",
+          "unavailable": "mdi:help-circle-outline",
+          "off": "mdi:link",
+          "on": "mdi:link-off"
+        }
+      },
+      "alarm_panel_key_zone_oneway": {
+        "state": {
+          "unknown": "mdi:help-box-outline",
+          "unavailable": "mdi:help-circle-outline",
+          "off": "mdi:arrow-left-right",
+          "on": "mdi:arrow-right"
+        }
+      }
+    }
+  }
+}

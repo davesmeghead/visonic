@@ -395,7 +395,7 @@
 						}
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone device ID"
 					},
 					"location": {
 						"name": "Location",
@@ -448,7 +448,7 @@
 						"name": "Panel ID"
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone device ID"
 					}
    			    }
 			}
@@ -460,7 +460,7 @@
 						"name": "Panel ID"
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone device ID"
 					}
    			    }
 			}
@@ -488,7 +488,7 @@
 						}
 					},
 					"state": {
-						"name": "Panel State",
+						"name": "Panel state",
 						"state": {
 							"unknown": "Unknown",
 							"disarmed": "Disarmed",
@@ -562,25 +562,141 @@
 						}
 					},
 					"lasteventname": {
-					    "name" : "Last Event Name"
+					    "name" : "Last event name"
 					},
 					"lasteventaction": { 
-					    "name" : "Last Event Action"
+					    "name" : "Last event action"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event partition"
 					},
 					"lasteventtime": { 
-					    "name" : "Last Event Time"
+					    "name" : "Last event time"
 					}
    			    }
 			}
 		},
   	    "binary_sensor": {
+	        "alarm_panel_key_panel_trouble": {
+				"state_attributes": {
+					"panel": {
+						"name": "Panel ID"
+					},
+					"trouble": {
+					    "name" : "Trouble",
+						"state" : {
+							"none"         : "No Trouble",
+							"general"      : "General",
+							"communication": "Communication Loss",
+							"battery"      : "Battery",
+							"power"        : "Power",
+							"jamming"      : "Jamming",
+							"telephone"    : "Telephone Line Failure"
+						}
+					},
+					"lasteventname": {
+					    "name" : "Last event name"
+					},
+					"lasteventaction": { 
+					    "name" : "Last event action"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last event partition"
+					},
+					"lasteventtime": { 
+					    "name" : "Last event time"
+					}
+				}				
+			},
+	        "alarm_panel_key_panel_tamper": {
+				"state_attributes": {
+					"panel": {
+						"name": "Panel ID"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_tamper": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "Zone device ID"
+					},
+					"device_name": {
+						"name": "Device name"
+					},
+					"panel": {
+						"name": "Panel ID"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_trouble": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "Zone device ID"
+					},
+					"device_name": {
+						"name": "Device name"
+					},
+					"panel": {
+						"name": "Panel ID"
+					},
+					"zone_trouble": {
+						"name": "Zone Problem",
+						"state": {
+							"none"         : "No",
+							"tamper"       : "Tamper",
+							"jamming"      : "RF Jamming",
+							"comm_failure" : "Communication Failure",
+							"line_failure" : "Line Failure",
+							"fuse"         : "Fuse Problem",
+							"not_active"   : "Sensor Inactive",
+							"ac_failure"   : "Mains Supply Failure"
+						}
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_missing": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "Zone device ID"
+					},
+					"device_name": {
+						"name": "Device name"
+					},
+					"panel": {
+						"name": "Panel ID"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_inactive": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "Zone device ID"
+					},
+					"device_name": {
+						"name": "Device name"
+					},
+					"panel": {
+						"name": "Panel ID"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_oneway": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "Zone device ID"
+					},
+					"device_name": {
+						"name": "Device name"
+					},
+					"panel": {
+						"name": "Panel ID"
+					}
+				}				
+			},
 	        "alarm_panel_key": {
 				"state_attributes": {
 					"device_name": {
-						"name": "Device Name"
+						"name": "Device name"
 					},
 					"zone_name_panel": {
 						"name": "Zone Name (Panel)"
@@ -623,7 +739,7 @@
 						}
 					},
 					"zone_type": {
-						"name": "Zone Type",
+						"name": "Zone type",
 						"state": {
 							"non-alarm"        : "Non Alarm",
 							"emergency"        : "Emergency",
@@ -696,7 +812,7 @@
 						"name": "Zone Luminance"
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone device ID"
 					},
 					"battery_level": {
 						"name": "Battery Level"
@@ -765,16 +881,16 @@
 						}
 					},
 					"lasteventname": {
-					    "name" : "Last Event Name"
+					    "name" : "Last event name"
 					},
 					"lasteventaction": { 
-					    "name" : "Last Event Action"
+					    "name" : "Last event action"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event partition"
 					},
 					"lasteventtime": { 
-					    "name" : "Last Event Time"
+					    "name" : "Last event time"
 					}
 				}				
 			}
@@ -836,7 +952,7 @@
 						}
 					},
 					"state": {
-						"name": "Panel State",
+						"name": "Panel state",
 						"state": {
 							"unknown": "Unknown",
 							"disarmed": "Disarmed",
@@ -913,16 +1029,16 @@
 						}
 					},
 					"lasteventname": {
-					    "name" : "Last Event Name"
+					    "name" : "Last event name"
 					},
 					"lasteventaction": { 
-					    "name" : "Last Event Action"
+					    "name" : "Last event action"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event partition"
 					},
 					"lasteventtime": { 
-					    "name" : "Last Event Time"
+					    "name" : "Last event time"
 					}
 				}
 	        }

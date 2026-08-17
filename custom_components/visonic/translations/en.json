@@ -395,7 +395,7 @@
 						}
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone device ID"
 					},
 					"location": {
 						"name": "Location",
@@ -448,7 +448,7 @@
 						"name": "Panel ID"
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone device ID"
 					}
    			    }
 			}
@@ -460,7 +460,7 @@
 						"name": "Panel ID"
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone device ID"
 					}
    			    }
 			}
@@ -472,7 +472,7 @@
 						"name": "Panel ID"
 					},
 					"emulationmode": {
-						"name": "Emulation Mode",
+						"name": "Emulation mode",
 						"state": {
 							"unknown": "Unknown",
 							"cloud": "Visonic Cloud Server",
@@ -488,7 +488,7 @@
 						}
 					},
 					"state": {
-						"name": "Panel State",
+						"name": "Panel state",
 						"state": {
 							"unknown": "Unknown",
 							"disarmed": "Disarmed",
@@ -509,28 +509,28 @@
 						}
 					},
 					"ready": {
-						"name": "Panel Ready",
+						"name": "Panel ready",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"tamper": {
-						"name": "Panel Tamper Alarm",
+						"name": "Panel tamper alarm",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"memory": {
-						"name": "Panel Alert in Memory",
+						"name": "Panel alert in memory",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"bypass": {
-						"name": "Panel Bypass",
+						"name": "Panel bypass",
 						"state": {
 							"false": "No",
 							"true": "Yes"
@@ -562,31 +562,147 @@
 						}
 					},
 					"lasteventname": {
-					    "name" : "Last Event Name"
+					    "name" : "Last event name"
 					},
 					"lasteventaction": { 
-					    "name" : "Last Event Action"
+					    "name" : "Last event action"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event partition"
 					},
 					"lasteventtime": { 
-					    "name" : "Last Event Time"
+					    "name" : "Last event time"
 					}
    			    }
 			}
 		},
   	    "binary_sensor": {
+	        "alarm_panel_key_panel_trouble": {
+				"state_attributes": {
+					"panel": {
+						"name": "Panel ID"
+					},
+					"trouble": {
+					    "name" : "Trouble",
+						"state" : {
+							"none"         : "No Trouble",
+							"general"      : "General",
+							"communication": "Communication Loss",
+							"battery"      : "Battery",
+							"power"        : "Power",
+							"jamming"      : "Jamming",
+							"telephone"    : "Telephone Line Failure"
+						}
+					},
+					"lasteventname": {
+					    "name" : "Last event name"
+					},
+					"lasteventaction": { 
+					    "name" : "Last event action"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last event partition"
+					},
+					"lasteventtime": { 
+					    "name" : "Last event time"
+					}
+				}				
+			},
+	        "alarm_panel_key_panel_tamper": {
+				"state_attributes": {
+					"panel": {
+						"name": "Panel ID"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_tamper": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "Zone device ID"
+					},
+					"device_name": {
+						"name": "Device name"
+					},
+					"panel": {
+						"name": "Panel ID"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_trouble": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "Zone device ID"
+					},
+					"device_name": {
+						"name": "Device name"
+					},
+					"panel": {
+						"name": "Panel ID"
+					},
+					"zone_trouble": {
+						"name": "Zone Problem",
+						"state": {
+							"none"         : "No",
+							"tamper"       : "Tamper",
+							"jamming"      : "RF Jamming",
+							"comm_failure" : "Communication Failure",
+							"line_failure" : "Line Failure",
+							"fuse"         : "Fuse Problem",
+							"not_active"   : "Sensor Inactive",
+							"ac_failure"   : "Mains Supply Failure"
+						}
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_missing": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "Zone device ID"
+					},
+					"device_name": {
+						"name": "Device name"
+					},
+					"panel": {
+						"name": "Panel ID"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_inactive": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "Zone device ID"
+					},
+					"device_name": {
+						"name": "Device name"
+					},
+					"panel": {
+						"name": "Panel ID"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_oneway": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "Zone device ID"
+					},
+					"device_name": {
+						"name": "Device name"
+					},
+					"panel": {
+						"name": "Panel ID"
+					}
+				}				
+			},
 	        "alarm_panel_key": {
 				"state_attributes": {
 					"device_name": {
-						"name": "Device Name"
+						"name": "Device name"
 					},
 					"zone_name_panel": {
-						"name": "Zone Name (Panel)"
+						"name": "Zone name (panel)"
 					},
 					"zone_name": {
-						"name": "Zone Name",
+						"name": "Zone name",
 						"state": {
 							"attic"           : "Loft",
 							"back_door"       : "Back Doorway",
@@ -623,7 +739,7 @@
 						}
 					},
 					"zone_type": {
-						"name": "Zone Type",
+						"name": "Zone type",
 						"state": {
 							"non-alarm"        : "Non Alarm",
 							"emergency"        : "Emergency",
@@ -645,28 +761,28 @@
 						}
 					},
 					"zone_missing": {
-						"name": "Zone Missing (Radio)",
+						"name": "Zone missing (Radio)",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"zone_oneway": {
-						"name": "Zone One-Way (Radio)",
+						"name": "Zone one-Way (Radio)",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"zone_inactive": {
-						"name": "Zone Inactive (Radio)",
+						"name": "Zone inactive (Radio)",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"zone_trouble": {
-						"name": "Zone Problem",
+						"name": "Zone problem",
 						"state": {
 							"none"         : "No",
 							"tamper"       : "Tamper",
@@ -679,7 +795,7 @@
 						}
 					},
 					"zone_chime": {
-						"name": "Zone Chime",
+						"name": "Zone chime",
 						"state": {
 							"chime_off"       : "Chime Off",
 							"melody_chime"    : "Melody Chime",
@@ -687,22 +803,22 @@
 						}
 					},
 					"zone_motion_off_time": {
-						"name": "Zone Motion Off Time"
+						"name": "Zone motion off time"
 					},
 					"zone_temperature": {
-						"name": "Zone Temperature"
+						"name": "Zone temperature"
 					},
 					"zone_lux": {
-						"name": "Zone Luminance"
+						"name": "Zone luminance"
 					},
 					"visonic_device": {
-						"name": "Zone Device ID"
+						"name": "Zone device ID"
 					},
 					"battery_level": {
-						"name": "Battery Level"
+						"name": "Battery level"
 					},
 					"last_tripped_time": {
-						"name": "Zone Tripped Time",
+						"name": "Zone tripped time",
 						"state": {
 							"unknown": "Not Yet Tripped"
 						}
@@ -711,7 +827,7 @@
 						"name": "Panel ID"
 					},
 					"device_tamper": {
-						"name": "Device Tamper",
+						"name": "Device tamper",
 						"state": {
 							"false": "Good",
 							"true": "Alert",
@@ -719,21 +835,21 @@
 						}
 					},
 					"device_tripped": {
-						"name": "Device Tripped",
+						"name": "Device tripped",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"device_armed": {
-						"name": "Device Armed",
+						"name": "Device armed",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"sensor_type": {
-						"name": "Sensor Type",
+						"name": "Sensor type",
 						"state": {
 							"magnet"     : "Magnet",
 							"motion"     : "Motion PIR",
@@ -750,14 +866,14 @@
 						}
 					},
 					"zone_open": {
-						"name": "Zone Open",
+						"name": "Zone open",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"zone_tamper": {
-						"name": "Zone Tamper",
+						"name": "Zone tamper",
 						"state": {
 							"false": "Good",
 							"true": "Alert",
@@ -765,16 +881,16 @@
 						}
 					},
 					"lasteventname": {
-					    "name" : "Last Event Name"
+					    "name" : "Last event name"
 					},
 					"lasteventaction": { 
-					    "name" : "Last Event Action"
+					    "name" : "Last event action"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event partition"
 					},
 					"lasteventtime": { 
-					    "name" : "Last Event Time"
+					    "name" : "Last event time"
 					}
 				}				
 			}
@@ -820,7 +936,7 @@
 						}
 					},
 					"emulationmode": {
-						"name": "Emulation Mode",
+						"name": "Emulation mode",
 						"state": {
 							"unknown": "Unknown",
 							"cloud": "Visonic Cloud Server",
@@ -836,7 +952,7 @@
 						}
 					},
 					"state": {
-						"name": "Panel State",
+						"name": "Panel state",
 						"state": {
 							"unknown": "Unknown",
 							"disarmed": "Disarmed",
@@ -857,31 +973,31 @@
 						}
 					},
 					"ready": {
-						"name": "Panel Ready",
+						"name": "Panel ready",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"tamper": {
-						"name": "Panel Tamper Alarm",
+						"name": "Panel tamper alarm",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"battery_level": {
-						"name": "Battery Level"
+						"name": "Battery level"
 					},
 					"memory": {
-						"name": "Panel Alert in Memory",
+						"name": "Panel alert in memory",
 						"state": {
 							"false": "No",
 							"true": "Yes"
 						}
 					},
 					"bypass": {
-						"name": "Panel Bypass",
+						"name": "Panel bypass",
 						"state": {
 							"false": "No",
 							"true": "Yes"
@@ -913,16 +1029,16 @@
 						}
 					},
 					"lasteventname": {
-					    "name" : "Last Event Name"
+					    "name" : "Last event name"
 					},
 					"lasteventaction": { 
-					    "name" : "Last Event Action"
+					    "name" : "Last event action"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event partition"
 					},
 					"lasteventtime": { 
-					    "name" : "Last Event Time"
+					    "name" : "Last event time"
 					}
 				}
 	        }

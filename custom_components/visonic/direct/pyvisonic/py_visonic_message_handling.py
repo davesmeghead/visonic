@@ -24,13 +24,13 @@ from .py_const import (
     notknown,
 )
 from .py_enum import (
-    EventType,
     RAW,
     AlCondition,
     AlPanelMode,
     AlPanelStatus,
     AlSensorCondition,
     B0SubType,
+    EventType,
     IndexName,
     Packet,
     PanelSetting,

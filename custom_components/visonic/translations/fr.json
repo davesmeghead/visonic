@@ -381,6 +381,9 @@
   	    "switch": {
 	        "alarm_panel_key": {
 				"state_attributes": {
+					"visonic_device": {
+						"name": "ID de l'appareil de zone"
+					},
 					"panel": {
 						"name": "Centrale ID"
 					},
@@ -393,9 +396,6 @@
 							"dimmer" : "Dimmer Switch",
 							"onoff"  : "OnOff Switch"
 						}
-					},
-					"visonic_device": {
-						"name": "ID de l'appareil de zone"
 					},
 					"location": {
 						"name": "Location",
@@ -488,7 +488,7 @@
 						}
 					},
 					"state": {
-						"name": "Panel State",
+						"name": "Panel state",
 						"state": {
 							"unknown": "Inconnu",
 							"disarmed": "D\u00e9sarm\u00e9",
@@ -568,7 +568,7 @@
 					    "name" : "Action du dernier \u00e9v\u00e8nement"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event partition"
 					},
 					"lasteventtime": { 
 					    "name" : "Heure du dernier \u00e9v\u00e9nement"
@@ -577,10 +577,126 @@
 			}
 		},
   	    "binary_sensor": {
+	        "alarm_panel_key_panel_trouble": {
+				"state_attributes": {
+					"panel": {
+						"name": "Centrale ID"
+					},
+					"trouble": {
+					    "name" : "D\u00e9faut",
+						"state" : {
+							"none"         : "Aucun",
+							"general"      : "G\u00e9n\u00e9rale",
+							"communication": "Echec de Communication",
+							"battery"      : "Batterie Faible",
+							"power"        : "Echec Alimentation Secteur",
+							"jamming"      : "D\u00e9tection Brouillage Radio",
+							"telephone"    : "Echec Ligne T\u00e9l\u00e9phonique"
+						}
+					},
+					"lasteventname": {
+					    "name" : "Nom du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventaction": { 
+					    "name" : "Action du dernier \u00e9v\u00e8nement"
+					},
+					"lasteventpartition": { 
+					    "name" : "Last event partition"
+					},
+					"lasteventtime": { 
+					    "name" : "Heure du dernier \u00e9v\u00e9nement"
+					}
+				}				
+			},
+	        "alarm_panel_key_panel_tamper": {
+				"state_attributes": {
+					"panel": {
+						"name": "Centrale ID"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_tamper": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "ID de l'appareil de zone"
+					},
+					"panel": {
+						"name": "Centrale ID"
+					},
+					"device_name": {
+						"name": "Nom appareil"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_trouble": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "ID de l'appareil de zone"
+					},
+					"panel": {
+						"name": "Centrale ID"
+					},
+					"device_name": {
+						"name": "Nom appareil"
+					},
+					"zone_trouble": {
+						"name": "Probl\u00e8me Zone",
+						"state": {
+							"none"         : "Aucun",
+							"tamper"       : "Alarme Autoprotection",
+							"jamming"      : "D\u00e9tection Brouillage Radio",
+							"comm_failure" : "Echec de Communication",
+							"line_failure" : "Echec Ligne T\u00e9l\u00e9phonique",
+							"fuse"         : "Fusible",
+							"not_active"   : "Pas Active",
+							"ac_failure"   : "Echec Alimentation Secteur"
+						}
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_missing": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "ID de l'appareil de zone"
+					},
+					"panel": {
+						"name": "Centrale ID"
+					},
+					"device_name": {
+						"name": "Nom appareil"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_inactive": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "ID de l'appareil de zone"
+					},
+					"panel": {
+						"name": "Centrale ID"
+					},
+					"device_name": {
+						"name": "Nom appareil"
+					}
+				}				
+			},
+	        "alarm_panel_key_zone_oneway": {
+				"state_attributes": {
+					"visonic_device": {
+						"name": "ID de l'appareil de zone"
+					},
+					"panel": {
+						"name": "Centrale ID"
+					},
+					"device_name": {
+						"name": "Nom appareil"
+					}
+				}				
+			},
 	        "alarm_panel_key": {
 				"state_attributes": {
 					"device_name": {
-						"name": "Nom Appareil"
+						"name": "Nom appareil"
 					},
 					"zone_name_panel": {
 						"name": "Nom Zone (Panel)"
@@ -623,7 +739,7 @@
 						}
 					},
 					"zone_type": {
-						"name": "Type Zone",
+						"name": "Type zone",
 						"state": {
 							"non-alarm"        : "Non Alarme",
 							"emergency"        : "Urgence",
@@ -771,7 +887,7 @@
 					    "name" : "Action du dernier \u00e9v\u00e8nement"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event partition"
 					},
 					"lasteventtime": { 
 					    "name" : "Heure du dernier \u00e9v\u00e9nement"
@@ -836,7 +952,7 @@
 						}
 					},
 					"state": {
-						"name": "Panel State",
+						"name": "Panel state",
 						"state": {
 							"unknown": "Inconnu",
 							"disarmed": "D\u00e9sarm\u00e9",
@@ -919,7 +1035,7 @@
 					    "name" : "Action du dernier \u00e9v\u00e8nement"
 					},
 					"lasteventpartition": { 
-					    "name" : "Last Event Partition"
+					    "name" : "Last event partition"
 					},
 					"lasteventtime": { 
 					    "name" : "Heure du dernier \u00e9v\u00e9nement"

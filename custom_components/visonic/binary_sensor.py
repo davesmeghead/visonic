@@ -78,15 +78,14 @@ class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], Bi
     """
 
     _attr_has_entity_name = True
-    _attr_name = "Image download active"
-    _attr_icon = "mdi:camera-timer"
+    _attr_name = "Image Download Active"
 
     def __init__(self, entry: ConfigEntry, identifier: str) -> None:
         """Initialize the panel image-download indicator."""
         vce: VisonicConfigData = entry.runtime_data
         super().__init__(vce.coordinator)
         self._attr_available = True
-        self._attr_translation_key = VISONIC_TRANSLATION_KEY
+        self._attr_translation_key = VISONIC_TRANSLATION_KEY + "_image_download_active"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, identifier)},
             manufacturer=MANUFACTURER,
@@ -108,8 +107,6 @@ class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], Bi
 
 class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
     """Binary sensor entity."""
-
-    entity_description: BinarySensorDefinition
 
     # Explain the algorithm, there are 3 ways to use this class:
     #  State based sensors - Simple sensors such as Battery, Tamper, Trouble:
@@ -135,9 +132,13 @@ class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
     #      At the end of the timeout period, the output state is set to False, waiting for the next input change in value
     #          At the end of the timeout period the current input value is saved, waiting again for a change in value.
 
+    entity_description: BinarySensorDefinition
+
     def __init__(self, entry: ConfigEntry, sensor_id: int, identifier:str, initial_state: bool, definition: VisonicBinarySensorKey, timeout_type: SensorOnTimeout) -> None:
         """Initialize the sensor."""
         self.entity_description = BINARY_SENSOR_DEFINITIONS[definition]
+        if self.entity_description.translation_key is None:
+            self._attr_translation_key = VISONIC_TRANSLATION_KEY
         super().__init__(entry, sensor_id, identifier, initial_state, self.entity_description)
         self._attr_available = False
         self.initial_state = initial_state

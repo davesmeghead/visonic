@@ -518,7 +518,7 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
     ),
     VisonicBinarySensorKey.ZONE_CONTACT: BinarySensorDefinition(   # Much the same as previous but names have changed to live at the same time as Trigger
         key="zone_contact",
-        device_class=BinarySensorDeviceClass.WINDOW,
+        device_class=BinarySensorDeviceClass.WINDOW,               # Default contact sensors to Window, user must change to door, garage door etc if needed
         source=EntityDataType.ZONE, # use the "zones"
         data_key=StateField.STATUS,
         unique_extension="_contact",
@@ -569,7 +569,7 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         source=EntityDataType.ZONE,
         data_key=StateField.ZONETAMPER,
         unique_extension="_tamper",
-        translation_key=VISONIC_TRANSLATION_KEY,
+        translation_key=VISONIC_TRANSLATION_KEY + "_zone_tamper",
         value_fn=evaluate_binary_state_normal,
         attributes_fn=partial(sensor_subset_attributes, lst=[]),
         friendly_name="Tamper"
@@ -580,7 +580,7 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         source=EntityDataType.PANEL,
         data_key=StateField.TAMPER,
         unique_extension="_tamper",
-        translation_key=VISONIC_TRANSLATION_KEY,
+        translation_key=VISONIC_TRANSLATION_KEY + "_panel_tamper",
         value_fn=evaluate_binary_state_normal,
         attributes_fn=empty_attributes,
         friendly_name="Tamper"
@@ -592,7 +592,7 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         source=EntityDataType.ZONE,
         data_key=StateField.PROBLEM,
         unique_extension="_problem",
-        translation_key=VISONIC_TRANSLATION_KEY,
+        translation_key=VISONIC_TRANSLATION_KEY + "_zone_trouble",
         value_fn=lambda value: evaluate_trouble(value),
         attributes_fn=partial(sensor_subset_attributes, lst=["zone_trouble"]),
         friendly_name="Trouble",
@@ -604,9 +604,9 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         source=EntityDataType.ZONE,
         data_key=StateField.ISMISSING,
         unique_extension="_missing",
-        translation_key=VISONIC_TRANSLATION_KEY,
+        translation_key=VISONIC_TRANSLATION_KEY + "_zone_missing",
         value_fn=evaluate_binary_state_normal,
-        attributes_fn=partial(sensor_subset_attributes, lst=["zone_missing"]),
+        attributes_fn=partial(sensor_subset_attributes, lst=[]),  # "zone_missing"
         friendly_name="Missing",
     ),
     VisonicBinarySensorKey.ZONE_ONEWAY: BinarySensorDefinition(
@@ -616,9 +616,9 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         source=EntityDataType.ZONE,
         data_key=StateField.ISONEWAY,
         unique_extension="_oneway",
-        translation_key=VISONIC_TRANSLATION_KEY,
+        translation_key=VISONIC_TRANSLATION_KEY + "_zone_oneway",
         value_fn=evaluate_binary_state_normal,
-        attributes_fn=partial(sensor_subset_attributes, lst=["zone_oneway"]),
+        attributes_fn=partial(sensor_subset_attributes, lst=[]),  # "zone_oneway"
         friendly_name="One-Way",
     ),
     VisonicBinarySensorKey.ZONE_INACTIVE: BinarySensorDefinition(
@@ -628,9 +628,9 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         source=EntityDataType.ZONE,
         data_key=StateField.ISINACTIVE,
         unique_extension="_inactive",
-        translation_key=VISONIC_TRANSLATION_KEY,
+        translation_key=VISONIC_TRANSLATION_KEY + "_zone_inactive",
         value_fn=evaluate_binary_state_normal,
-        attributes_fn=partial(sensor_subset_attributes, lst=["zone_inactive"]),
+        attributes_fn=partial(sensor_subset_attributes, lst=[]),  # "zone_inactive"
         friendly_name="Inactive",
     ),
     VisonicBinarySensorKey.PANEL_PROBLEM : BinarySensorDefinition(
@@ -640,7 +640,7 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         source=EntityDataType.PANEL,
         data_key=StateField.TROUBLE,
         unique_extension="_problem",
-        translation_key=VISONIC_TRANSLATION_KEY,
+        translation_key=VISONIC_TRANSLATION_KEY + "_panel_trouble",
         value_fn=lambda value: evaluate_trouble(value),
         attributes_fn=panel_trouble_attributes,
         friendly_name="Trouble",
