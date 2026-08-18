@@ -188,6 +188,8 @@ class PartitionStateClass:
         self.PanelTroubleStatus: AlTroubleType = AlTroubleType.NONE
         self.PartitionGeneralTrouble: bool = False
         self.PanelBatteryTrouble: bool = False
+        self.WasEntryDelay: bool = False           # real entry-delay countdown seen this arm cycle
+        self.PanelIntruderConfirmed: bool = False  # PanelIntruderStatus set by a real zone breach, not just ALARM_DELAY
 
     def shutdownOperation(self):
         """Shutdown operation."""
@@ -322,8 +324,11 @@ class PartitionStateClass:
         #self.PanelIntruderStatus = bool(et in pmPanelIntruderType_t)
         if et in pmPanelIntruderType_t:
             self.PanelIntruderStatus = True      # event in trigger set
+            if et != EventType.ALARM_DELAY:
+                self.PanelIntruderConfirmed = True   # unambiguous zone breach
         if et in pmPanelIntruderType_r:
             self.PanelIntruderStatus = False     # event in restore set
+            self.PanelIntruderConfirmed = False
 
         # Update alarm status
         #self.PanelAlarmStatus = pmPanelAlarmType_t[et] if et in pmPanelAlarmType_t else AlAlarmType.NONE
@@ -364,7 +369,8 @@ class PartitionStateClass:
         elif self.PanelStateSourceData is not None and self.PanelIntruderStatus:
             armed = pmPanelArmedStatus[self.PanelStateSourceData].armed
             entry = pmPanelArmedStatus[self.PanelStateSourceData].entry
-            if armed is not None and armed and not entry:
+            # ALARM_DELAY alone also fires harmlessly when exit delay ends, so require confirmation for it
+            if armed is not None and armed and not entry and (self.PanelIntruderConfirmed or self.WasEntryDelay):
                 self.SirenActive = True
                 self.SirenActiveDeviceTrigger = None if sensor is None else sensor
                 self.startIntruderTimer()
@@ -420,6 +426,9 @@ class PartitionStateClass:
             self.PanelStateData = AlPanelStatus.UNKNOWN  # UNKNOWN
             self.PanelStateSourceData = None
 
+        if entry:
+            self.WasEntryDelay = True
+
         if PanelMode == AlPanelMode.DOWNLOAD:
             self.PanelStateData = AlPanelStatus.DOWNLOADING  # Downloading
             self.PanelStateSourceData = None
@@ -472,6 +481,8 @@ class PartitionStateClass:
                 log.debug("[UpdatePartition] ******************** Alarm Not Sounding (Disarmed) ****************")
                 self.SirenActive = False
                 self.SirenActiveDeviceTrigger = None
-                self.PanelIntruderStatus = False
+            self.PanelIntruderStatus = False
+            self.WasEntryDelay = False
+            self.PanelIntruderConfirmed = False
 
         return retval
