@@ -177,7 +177,7 @@ class Sequencer(Despatcher):
                 self._sequencer_task.cancel()
             except Exception as ex:
                 tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
-                log.error("[_stop_sequencer] Visonic Executor loop has caused an exception\n%s", tb_str)
+                log.error("[_stop_sequencer] Visonic Sequencer Termination has caused an exception\n%s", tb_str)
             self._sequencer_task = None
 
     def _start_sequencer(self):
@@ -1037,7 +1037,7 @@ class Sequencer(Despatcher):
 
                         if self.PanelType is not None and not self.AutoEnrol:
                             self.PanelMode = AlPanelMode.STANDARD_PLUS                    # Cannot AutoEnrol this panel so go straight to Std+ operation
-                            log.debug("[_sequencer]     WaitingForEnrolSuccess        Panel does not support Auto Enrol, going to Standard Plus and waiting for manual enrol")
+                            log.debug("[_sequencer]     WaitingForEnrolSuccess        Panel does not support Auto Enrol, going to Standard Plus")
                             _sequencer_state = SequencerType.DoingStandardPlus
                         elif (s := processPanelErrorMessages()) == PanelErrorStates.DespatcherException:
                             # start again, restart the despatcher task
@@ -1157,7 +1157,7 @@ class Sequencer(Despatcher):
 
                         if self.powerlink_counter > POWERLINK_IMALIVE_RETRY_DELAY:
                             # Go back to Std+ and re-enrol
-                            log.debug(f"[_sequencer] ****************************** Not Received I'm Alive From Panel for {POWERLINK_IMALIVE_RETRY_DELAY} Seconds, going to Std+ **************")
+                            log.debug(f"[_sequencer] ****************************** Not Received I'm Alive From Panel for {POWERLINK_IMALIVE_RETRY_DELAY} Seconds **************")
                             self.receivedPowerlinkAcknowledge = False
                             self.PanelMode = AlPanelMode.STANDARD_PLUS
                             _sequencer_state = SequencerType.EnrollingPowerlink
@@ -1241,6 +1241,7 @@ class Sequencer(Despatcher):
                             _resetPanelInterface()
                             self._clearPanelErrorMessages()
                         continue   # just do the while loop
+
                     if not (self.PowerLinkBridgeConnected and self.PowerLinkBridgeProxy) and \
                         (self.PartitionState[0].PanelStateData == AlPanelStatus.DOWNLOADING or self.PanelMode == AlPanelMode.DOWNLOAD):
                         # We may still be in the downloading state or the panel is in the downloading state
@@ -1410,13 +1411,14 @@ class Sequencer(Despatcher):
                                 self._empty_send_queue(priority = MessagePriority.ACK)
                                 dotrigger = True
                             else:
-                                log.debug("[_sequencer]               **************** Too many Timeouts in 24 hours, giving up and going to Standard Mode *******************")
-                                _gotoStandardModeStopDownload()
+                                log.debug("[_sequencer]               **************** Too many Timeouts in 24 hours, giving up and going to Standard/StandardPlus Mode *******************")
+                                #_gotoStandardModeStopDownload()
                                 # Match _sequencer_state to the new self.PanelMode (that is set in _gotoStandardModeStopDownload)
-                                if self.PanelMode == AlPanelMode.STANDARD_PLUS:
-                                    _sequencer_state = SequencerType.DoingStandardPlus
-                                else:
-                                    _sequencer_state = SequencerType.DoingStandard
+                                #if self.PanelMode == AlPanelMode.STANDARD_PLUS:
+                                #    _sequencer_state = SequencerType.DoingStandardPlus
+                                #else:
+                                #    _sequencer_state = SequencerType.DoingStandard
+                                _sequencer_state = SequencerType.AimingForStandard
                                 self.send_panel_update(AlCondition.WATCHDOG_TIMEOUT_GIVINGUP)   # watchdog timer expired, going to standard (plus) mode
                         else:
                             log.debug("[_sequencer]               **************** Trigger Restore Status *******************")
@@ -1479,7 +1481,7 @@ class Sequencer(Despatcher):
 
             except Exception as ex:
                 tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
-                log.error(f"[_sequencer] Visonic Executor loop has caused an exception \n\n{tb_str}")
+                log.error(f"[_sequencer] Visonic Sequencer loop has caused an exception \n\n{tb_str}")
                 reset_local()
                 self._start_despatcher()
 

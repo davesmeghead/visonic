@@ -4,6 +4,7 @@ Home Assistant config and options flow handling for Visonic PowerMax/PowerMaster
 """
 import logging
 import re
+import traceback
 from typing import Any
 import uuid
 
@@ -829,8 +830,9 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
             return self.show_form(step=step, values=ce.data)
         except AbortFlow:
             raise
-        except Exception:
-            _LOGGER.exception("Unexpected exception")
+        except Exception as ex:
+            tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+            _LOGGER.exception("[ConfigFlow] Unexpected exception\n%s", tb_str)
         return self.async_abort(reason=TRANSLATE_ABORT_UNKNOWN)
 
 class VisonicOptionsFlowHandler(VisonicHandler, OptionsFlow):

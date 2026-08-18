@@ -21,7 +21,7 @@ from .py_enum import (
     PanelStatusNames,
 )
 from .py_generic_device import AlGenericDeviceHelper, GenericDeviceType
-from .py_panel_settings import pmMapZoneType, pmPanelSettingCodes
+from .py_panel_settings import ZoneEventCodesType, pmMapZoneType, pmPanelSettingCodes
 from .py_panel_type_data import pmPanelConfig, pmPanelType
 from .py_sensor_types import ZoneFunctions
 from .py_types_receiving import Chunky, pmPanelSettingsB0_35, pmPanelSettingsB0_42
@@ -562,9 +562,7 @@ class MessageHandlingB0Data(MessageHandlingBase):
                     for dev in device_triggers:
                         # go through list of sensors that triggered
                         if dev in self.SensorList:
-                            ev = EventType.NONE
-                            if (zt := self.SensorList[dev].zone_type) in pmMapZoneType:
-                                ev = pmMapZoneType[zt]
+                            _name, ev = pmMapZoneType.get(self.SensorList[dev].zone_type, ZoneEventCodesType(f"undefined {self.SensorList[dev].zone_type}", EventType.NONE))
                             if ptu is not None:
                                 # partitions in use
                                     # Get the partitions that this sensor belongs to

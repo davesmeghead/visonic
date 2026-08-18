@@ -7,6 +7,7 @@ from collections.abc import Callable
 import contextlib
 from datetime import datetime
 import logging
+import traceback
 
 from requests import ConnectTimeout, HTTPError
 
@@ -45,12 +46,16 @@ from ..visonic_entity_types import (  # noqa: TID252  # noqa: TID252
 from ..visonic_types import (  # noqa: TID252  # noqa: TID252
     AvailableNotifications,
     Connection_Status,
-    CVP_Status,
     DeviceType,
     PanelCondition,
 )
 from .client_maintain_interface import MaintainInterface
-from .cvp import CVP_Direct, async_create_serial_client, async_create_tcp_client
+from .cvp import (
+    CVP_Direct,
+    CVP_Status,
+    async_create_serial_client,
+    async_create_tcp_client,
+)
 from .direct_types import AlarmSensorType, SensorStateExt
 from .pyvisonic.py_abstract_classes import (
     AlGenericDevice,
@@ -546,7 +551,8 @@ class ManageConnection(MaintainInterface):
             except (ConnectionResetError, ConnectionAbortedError, ConnectionRefusedError) as ex:
                 self.logger.logstate_warning(".. connection_manager, caused connection exception %s", ex)
             except Exception as ex:  # noqa: BLE001
-                self.logger.logstate_debug(f"General Exception: {ex}")
+                tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+                self.logger.logstate_error(f"General Exception: \n\n{tb_str}")
 
     def update_t_p(self, transport: asyncio.Transport, protocol: ServerProtocol):
         """Update the transport and protocol. Tie everything back together with the new transport and protocol."""

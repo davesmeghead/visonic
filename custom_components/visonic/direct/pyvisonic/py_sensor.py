@@ -30,7 +30,7 @@ class AlSensorDeviceHelper(AlSensorDevice):
             pt = pt + str(i) + " "
 
 # fmt: off
-
+        
         strn = ""
         strn = strn + ("id=None" if self.id is None else f"id={self.id:<2}")
         strn = strn + (" partition=None   "    if self.partition is None      else f" partition={pt:<7}")
@@ -43,8 +43,8 @@ class AlSensorDeviceHelper(AlSensorDevice):
         strn = strn + (" ztamp=- "             if self.zone_tamper is None    else f" ztamp={self.zone_tamper:<2}")
         strn = strn + (" ztrip=- "             if self.zone_trip is None      else f" ztrip={self.zone_trip:<2}")
         strn = strn + (" sid=None"             if self.raw_sensor_id is None  else f" sid={self.raw_sensor_id:<3}")
-        strn = strn + (" ztype=None"           if self.zone_type is None      else f" ztype={self.zone_type:<2}")
         strn = strn + (" loc=None          "   if self.zone_name is None      else f" loc={self.zone_name[:14]:<14}")
+        strn = strn + (" ztype=None"           if self.zone_type is None      else f" ztype={self.zone_type:<2}")
         strn = strn + (" zname=None          " if self.zone_type_name is None else f" zname={self.zone_type_name[:10]:<10}")
         strn = strn + (" zchime=None         " if self.zone_chime is None     else f" zchime={self.zone_chime:<13}")
         strn = strn + (""                      if self.temperature is None    else f" temperature={self.temperature:<3}")
@@ -106,7 +106,7 @@ class AlSensorDeviceHelper(AlSensorDevice):
             and self.is_missing == other.is_missing
             and self.is_one_way == other.is_one_way
             and self.is_inactive == other.is_inactive
-            and self.zone_type_name == other.zone_type_name
+            #and self.zone_type_name == other.zone_type_name
             and self.zone_tamper == other.zone_tamper
             and self.zone_trip == other.zone_trip                       # Needs a setter getter
             and self.enrolled == other.enrolled

@@ -9,7 +9,7 @@ package_dir = Path(__file__).resolve().parent.parent
 project_dir = package_dir.parent
 sys.path.insert(0, str(project_dir))
 #print(sys.path[0])
-from pyvisonic.py_visonic import VisonicProtocol
+from pyvisonic.py_visonic import VisonicProtocol  # noqa: E402
 
 d = "0d 60 03 24 1a ff 08 ff 15 0e 00 00 00 00 00 00 00 39 33 11 0f 08 1a 14 07 01 00 83 00 00 17 43 3a 0a"
 

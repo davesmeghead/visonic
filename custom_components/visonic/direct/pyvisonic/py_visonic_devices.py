@@ -18,6 +18,7 @@ from .py_enum import (
     EPROM,
     AlPanelMode,
     AlSensorCondition,
+    EventType,
     IndexName,
     PanelSetting,
     PanelStatusNames,
@@ -26,10 +27,11 @@ from .py_eprom import EPROMManager
 from .py_generic_device import AlGenericDeviceHelper
 from .py_panel_settings import (
     PanelSettingCodesType,
+    ZoneEventCodesType,
+    pmMapZoneType,
     pmPanelSettingCodes,
     pmZoneChimeKey,
     pmZoneName,
-    pmZoneTypeKey,
 )
 from .py_panel_type_data import pmPanelConfig, pmPanelType
 from .py_sensor import AlSensorDeviceHelper
@@ -293,11 +295,7 @@ class ManageDevices(ProtocolBase):
         if isinstance(zone_type, int) and sensor.zone_type != zone_type:
             updated = True
             sensor.zone_type = zone_type
-            if zone_type < len(pmZoneTypeKey):
-                sensor.zone_type_name = pmZoneTypeKey[zone_type]
-            else:
-                sensor.zone_type_name = "undefined " + str(zone_type)   # undefined
-                log.debug(f"[_update_sensor] {notknown} Found unknown zonetype type {zone_type}")
+            sensor.zone_type_name, _evt = pmMapZoneType.get(zone_type, ZoneEventCodesType(f"undefined {zone_type}", EventType.NONE))
 
         #if motiondelaytime is not None and motiondelaytime != 0xFFFF:
         #    if sensor.motion_delay_time != motiondelaytime:

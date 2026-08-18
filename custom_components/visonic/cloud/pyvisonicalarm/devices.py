@@ -89,7 +89,7 @@ class Device(BaseClass):
         return self._data.get("warnings", {})
 
     @property
-    def zone_type(self) -> str:
+    def zone_type_name(self) -> str:
         """Get device zone type."""
         return self._data.get("zone_type", TEXT_UNKNOWN)
 

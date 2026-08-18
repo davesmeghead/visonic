@@ -128,7 +128,7 @@ class Despatcher(ManageDevices):
                 #         ERROR (MainThread) [homeassistant] Error doing job: Task was destroyed but it is pending! (<Task pending name='Task-202' coro=<ProtocolBase._despatcher()
                 #             running at /config/custom_components/visonic/pyvisonic.py:1754> wait_for=<Future pending cb=[Task.task_wakeup()]>>)
                 tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
-                log.error("[_stop_despatcher] Visonic Executor loop has caused an exception\n%s", tb_str)
+                log.error("[_stop_despatcher] Visonic Despatcher Termination has caused an exception\n%s", tb_str)
             self._despatcher_task = None
 
     # This function needs to be called within the timeout to reset the timer period
@@ -339,5 +339,5 @@ class Despatcher(ManageDevices):
 
             except Exception as ex:
                 tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
-                log.error("[_despatcher] Visonic Executor loop has caused an exception\n%s", tb_str)
+                log.error("[_despatcher] Visonic Despatcher loop has caused an exception\n%s", tb_str)
                 self._despatcher_exception = True

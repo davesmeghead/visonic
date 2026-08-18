@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Callable
+from enum import IntEnum
 from functools import partial
 import logging
 import socket
@@ -19,10 +20,18 @@ from homeassistant.core import HomeAssistant
 
 from ..exceptions import VisonicException  # noqa: TID252
 from ..log_events import logEvents  # noqa: TID252
-from ..visonic_types import CVP_Status  # noqa: TID252
 from .pyvisonic.py_abstract_classes import AlPanelInterface
 
 _LOGGER = logging.getLogger(__name__)
+
+class CVP_Status(IntEnum):
+    """Status of the comms_visonic_protocol i.e. CVP connection."""
+    # Used in _connection_status callback
+    DISCONNECTED = 1
+    CONNECTED = 2
+    NO_CONNECTION_MADE = 3
+    CONNECTION_PENDING = 4
+    EXCEPTION = 5
 
 class CVP_Direct(asyncio.Protocol):
     """Visonic Protocol Client."""
@@ -64,11 +73,12 @@ class CVP_Direct(asyncio.Protocol):
 
     def connection_lost(self, exc):
         """Connection lost."""
-        if self in self.connections and self._connection_status is not None:
+        if self in self.connections:
             _LOGGER.debug("[ClientVisonicProtocol] connection_lost Booooo: shutdown vp and calling client handler")
             self.vp.shutdown()
             self.connections.discard(self)
-            self._connection_status(CVP_Status.DISCONNECTED)
+            if self._connection_status is not None:
+                self._connection_status(CVP_Status.DISCONNECTED)
         self._connection_status = None
         self._transport = None
 

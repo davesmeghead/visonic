@@ -715,7 +715,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
     def _as_sensor_state(self, device: Device) -> SensorState:
         loc = device.location.lower() if device.location else "undefined"
-        zonetype = device.zone_type.lower() if device.zone_type else "undefined"
+        zonetype = device.zone_type_name.lower() if device.zone_type_name else "undefined"
 
         triggered = False
         temperature = None

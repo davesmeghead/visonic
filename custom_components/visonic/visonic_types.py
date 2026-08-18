@@ -236,15 +236,6 @@ class VisonicIntEnum(IntEnum):
             return None
 
 
-class CVP_Status(VisonicIntEnum):
-    """Status of the comms_visonic_protocol i.e. CVP connection."""
-    # Used in _connection_status callback
-    DISCONNECTED = 1
-    CONNECTED = 2
-    NO_CONNECTION_MADE = 3
-    CONNECTION_PENDING = 4
-    EXCEPTION = 5
-
 class Connection_Status(VisonicIntEnum):
     """Track state in the client."""
     DISCONNECTED = 1

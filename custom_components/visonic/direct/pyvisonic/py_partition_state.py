@@ -8,7 +8,7 @@ from enum import StrEnum
 import logging
 from typing import Any, NamedTuple
 
-from .py_enum import EventType, AlAlarmType, AlPanelMode, AlPanelStatus, AlTroubleType
+from .py_enum import AlAlarmType, AlPanelMode, AlPanelStatus, AlTroubleType, EventType
 from .py_sensor import AlSensorDeviceHelper
 from .py_types import AlPanelEventData
 from .py_utils import hexify

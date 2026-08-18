@@ -4,7 +4,7 @@ import logging
 from typing import Any, Final, NamedTuple
 
 from .py_const import NOBYPASSSTR
-from .py_enum import EPROM, EventType, B0SubType, IndexName, PanelSetting
+from .py_enum import EPROM, B0SubType, EventType, IndexName, PanelSetting
 from .py_utils import toString
 
 log = logging.getLogger(__name__)
@@ -57,6 +57,8 @@ class PanelSettingCodesType(NamedTuple):
     tostring: Callable[[Any], Any]
     default: Any
 
+# fmt: off
+
 # PanelSettingCodesType = collections.namedtuple('PanelSettingCodesType', 'item mandatory PMaxEPROM PMasterEPROM PMasterB035Panel PMasterB042Panel PMasterB0Mess PMasterB0Index tostring default')
 # For PMasterB0Mess there is an assumption that the message type is 0x03, and this is the subtype
 #       PMasterB0Index index 3 is Sensor data, I should have an enum for this
@@ -100,30 +102,33 @@ pmPanelSettingCodes : Final[dict[PanelSetting, PanelSettingCodesType]] = {
 ##########################  Known Sensor Types ####################################
 ###################################################################################
 
-# Default Sensor Zone Types
-pmZoneTypeKey = ( "non-alarm", "emergency", "flood", "gas", "delay_1", "delay_2", "interior_follow", "perimeter", "perimeter_follow",
-                "24_hours_silent", "24_hours_audible", "fire", "interior", "home_delay", "temperature", "outdoor", "undefined" )
+# Map zone type codes to Events. When a sensor is triggered, we can use the sensor/zone type to decide what Event to trigger. This is used for B0 B0SubType.PANEL_STATE_3 messages.
+class ZoneEventCodesType(NamedTuple):
+    """Visonic Zone Event Settings Mapping Definition."""
+    name: str
+    event: EventType
 
-# Map them to Events. When a sensor is triggered, we can use the sensor/zone type to decide what Event to trigger. This is used for B0 B0SubType.PANEL_STATE_3 messages.
-pmMapZoneType = {
-    pmZoneTypeKey[0]  : EventType.NONE,
-    pmZoneTypeKey[1]  : EventType.EMERGENCY,
-    pmZoneTypeKey[2]  : EventType.FLOOD_ALERT,
-    pmZoneTypeKey[3]  : EventType.GAS_ALERT,
-    pmZoneTypeKey[4]  : EventType.ALARM_PERIMETER,
-    pmZoneTypeKey[5]  : EventType.ALARM_PERIMETER,
-    pmZoneTypeKey[6]  : EventType.ALARM_INTERIOR,
-    pmZoneTypeKey[7]  : EventType.ALARM_PERIMETER,
-    pmZoneTypeKey[8]  : EventType.ALARM_PERIMETER,
-    pmZoneTypeKey[9]  : EventType.NONE,
-    pmZoneTypeKey[10] : EventType.NONE,
-    pmZoneTypeKey[11] : EventType.FIRE,
-    pmZoneTypeKey[12] : EventType.ALARM_INTERIOR,
-    pmZoneTypeKey[13] : EventType.NONE,
-    pmZoneTypeKey[14] : EventType.NONE,
-    pmZoneTypeKey[15] : EventType.NONE,
-    pmZoneTypeKey[16] : EventType.NONE
+pmMapZoneType : Final[dict[int, ZoneEventCodesType]] = {
+    0  : ZoneEventCodesType("non-alarm",        EventType.NONE),
+    1  : ZoneEventCodesType("emergency",        EventType.EMERGENCY),
+    2  : ZoneEventCodesType("flood",            EventType.FLOOD_ALERT),
+    3  : ZoneEventCodesType("gas",              EventType.GAS_ALERT),
+    4  : ZoneEventCodesType("delay_1",          EventType.ALARM_PERIMETER),
+    5  : ZoneEventCodesType("delay_2",          EventType.ALARM_PERIMETER),
+    6  : ZoneEventCodesType("interior_follow",  EventType.ALARM_INTERIOR),
+    7  : ZoneEventCodesType("perimeter",        EventType.ALARM_PERIMETER),
+    8  : ZoneEventCodesType("perimeter_follow", EventType.ALARM_PERIMETER),
+    9  : ZoneEventCodesType("24_hours_silent",  EventType.NONE),
+    10 : ZoneEventCodesType("24_hours_audible", EventType.NONE),
+    11 : ZoneEventCodesType("fire",             EventType.FIRE),
+    12 : ZoneEventCodesType("interior",         EventType.ALARM_INTERIOR),
+    13 : ZoneEventCodesType("home_delay",       EventType.NONE),
+    14 : ZoneEventCodesType("temperature",      EventType.NONE),
+    15 : ZoneEventCodesType("outdoor",          EventType.NONE),
+    16 : ZoneEventCodesType("undefined",        EventType.NONE)
 }
+
+# fmt: on
 
 # Default Sensor Chime
 pmZoneChimeKey = ("chime_off", "melody_chime", "zone_name_chime")

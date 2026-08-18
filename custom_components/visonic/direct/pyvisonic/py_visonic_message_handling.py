@@ -38,7 +38,7 @@ from .py_enum import (
     Send,
 )
 from .py_generic_device import AlGenericDeviceHelper, GenericDeviceType
-from .py_panel_settings import pmPanelSettingCodes, pmZoneTypeKey
+from .py_panel_settings import pmMapZoneType, pmPanelSettingCodes
 from .py_partition_state import PartitionStateClass
 from .py_sensor_types import ZoneFunctions
 from .py_types import AlPanelEventData
@@ -535,7 +535,7 @@ class MessageHandling(MessageHandlingB0Data):
         for i in range(8):
             # Save the Zone Type
             self.PanelSettings[PanelSetting.ZoneTypes][offset+i] = ((int(data[2+i])) - 0x1E) & 0x0F
-            log.debug(f"                        Zone type for sensor {offset+i+1} is {hexify((int(data[2+i])) - 0x1E)} : {pmZoneTypeKey[self.PanelSettings[PanelSetting.ZoneTypes][offset+i]]}")
+            log.debug(f"                        Zone type for sensor {offset+i+1} is {hexify((int(data[2+i])) - 0x1E)} : {pmMapZoneType[self.PanelSettings[PanelSetting.ZoneTypes][offset+i]]}")
             if self.PanelMode not in (AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED) and (offset+i) in self.SensorList:
                 self._update_sensor(sensor_identifier = offset+i)
 

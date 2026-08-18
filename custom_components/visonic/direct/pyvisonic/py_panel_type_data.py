@@ -77,10 +77,10 @@ pmPanelConfig = {       #     0       1       2       3       4       5       6 
     CFG.WIRED          : (     0,      2,      2,      2,      2,      2,      1,      1,      2,      2,      2,      2,      2,      0,      2,      2,      0,      2 ),
     CFG.SWITCH         : (     0,     15,     15,     15,     15,     15,     15,     15,     15,     15,     15,     15,     15,     15,     15,     15,     15,     15 ), # Supported switch devices
     CFG.PGM            : (     0,      1,      1,      1,      1,      1,      1,      1,      1,      1,      1,      1,      1,      1,      1,      1,      1,      1 ), # PGM
-    CFG.AUTO_ENROL     : (  None,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False,  False ), # 360 and 360R cannot autoenrol to Powerlink
-    CFG.AUTO_SYNCTIME  : (  None,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False ), # Assume 360 and 360R can auto sync time
+    CFG.AUTO_ENROL     : (  None,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False,  False ), # Early PowerMax panels cannot autoenrol to Powerlink. Also, 360(R) Panels already have the hardware so do not enrol
+    CFG.AUTO_SYNCTIME  : (  None,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False ),
     CFG.POWERMASTER    : (  None,  False,  False,  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False ), # Panels that use and respond to the additional PowerMaster Messages
     CFG.EPROM_DOWNLOAD : (  None,   True,   True,   True,   True,   True,   True,   True,  False,  False,  False,  False,  False,  False,  False,  False,  False,   True ), # Panel does EPROM Download (True) or can also do B0 Message Download (False)
     CFG.AB_CRC_TYPE_ALT: ( False,  False,  False,  False,  False,  False,  False,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False,  False ), # Which CRC for 0xAB command messages. False=Normal, True=Alternate
-    CFG.INIT_SUPPORT   : (  None,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False,   True,   True,  False,  False )  # Panels that support the INIT command
+    CFG.INIT_SUPPORT   : (  None,  False,  False,  False,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,   True,  False )  # Panels that support the INIT command
 }
