@@ -442,7 +442,7 @@ class VisonicProtocol(MessageHandling):
 
     # Get the Event Log
     #       optional pin, if not provided then try to use the EPROM downloaded pin if in powerlink
-    def get_event_log(self, code : None | str = "") -> AlCommandStatus:
+    def get_event_log(self, code : str | None = "") -> AlCommandStatus:
         """Get Panel Event Log."""
         if self.pmDownloadMode:
             return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS

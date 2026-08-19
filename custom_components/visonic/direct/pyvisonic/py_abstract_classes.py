@@ -329,7 +329,7 @@ class AlPanelInterface(AlPanelDataStream):
     #    "1234" a 4 digit code for any panel mode to use that code
     #    anything else to use code "0000" (this may work depending on the panel type for arming, but not for disarming)
     @abstractmethod
-    def panel_command(self, state : AlPanelCommand, code : None | str = "", partitions : None | set[int] = None) -> AlCommandStatus:
+    def panel_command(self, state : AlPanelCommand, code : str | None = "", partitions : set[int] | None = None) -> AlCommandStatus:
         """Send a request to the panel to Arm/Disarm."""
 
     # device in range 0 to 15 (inclusive), 0=PGM, 1 to 15 are switch devices
@@ -366,7 +366,7 @@ class AlPanelInterface(AlPanelDataStream):
     #    "1234" a 4 digit code for any panel mode to use that code
     #    anything else to use code "0000" (this is unlikely to work on any panel)
     @abstractmethod
-    def bypass_command(self, sensor : int | set[int], bypassValue : bool, code : None | str = "") -> AlCommandStatus:
+    def bypass_command(self, sensor : int | set[int], bypassValue : bool, code : str | None = "") -> AlCommandStatus:
         """Set or Clear Sensor Bypass."""
 
     # Get the panels event log
@@ -375,7 +375,7 @@ class AlPanelInterface(AlPanelDataStream):
     #    "1234" a 4 digit code for any panel mode to use that code
     #    anything else to use code "0000" (this is unlikely to work on any panel)
     @abstractmethod
-    def get_event_log(self, code : None | str = "") -> AlCommandStatus:
+    def get_event_log(self, code : str | None = "") -> AlCommandStatus:
         """Get Panel Event Log."""
 
     # Set the on_panel_change callback handlers

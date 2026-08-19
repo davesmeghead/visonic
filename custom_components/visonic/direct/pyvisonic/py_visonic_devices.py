@@ -536,7 +536,7 @@ class ManageDevices(ProtocolBase):
                     else:
                         self.PanelSettings[key] = self.epromManager.lookupEprom(value.PMaxEPROM)
 
-        log.info("[Process Settings]     UpdatePanelSettings")
+        log.info("[Process Settings] UpdatePanelSettings")
 
         # ------------------------------------------------------------------------------------------------------------------------------------------------
         # Process panel type and serial
@@ -562,10 +562,10 @@ class ManageDevices(ProtocolBase):
             log.warning("A GSM Module is installed in the panel. You may see disconnections and/or seemingly random changes in alarm entity states.")
             self.send_panel_update(AlCondition.GSM_MODULE_INSTALLED)
         else:
-            log.info("[Process Settings]    GSM Module Not Installed")
+            log.info("[Process Settings]     GSM Module Not Installed")
 
-        bell = self.epromManager.lookupEpromSingle("bellTime")
-        log.info(f"[Process Settings] Bell Time {type(bell)=}   {bell=}")
+        bell = self.epromManager.lookupEpromSingle(EPROM.BELL_TIME)
+        log.info(f"[Process Settings]     Bell Time {type(bell)=}   {bell=}")
         # Set all partitions regardless of which are actually used for panel status
         if isinstance(bell, int):
             self.PartitionState[0].setBellTime(bell * 60)

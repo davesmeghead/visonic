@@ -276,7 +276,7 @@ class PartitionStateClass:
 
     def setBellTime(self, bt):
         """Set the bell time."""
-        log.debug("[setBellTime]   Setting bell time to %s", bt)
+        log.debug("[setBellTime] Setting bell time to %s", bt)
         self.bellTime = bt
 
     def getPartitionData(self) -> dict[str, Any]:

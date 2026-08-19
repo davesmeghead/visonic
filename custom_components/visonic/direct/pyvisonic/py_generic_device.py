@@ -1,5 +1,5 @@
 """Generic Device."""
-from __future__ import annotations
+from __future__ import annotations  # noqa: TID251
 
 import logging
 from typing import Any

@@ -3,24 +3,30 @@
 # Make sure Ruff ignores f-strings
 # ruff: noqa: T201, BLE001
 
+# python3 simple_example.py -usb /dev/ttyUSB0 -baud 38400 -print info
+
 # set the parent directory on the import path
 import argparse
 import asyncio
 from datetime import timedelta
-from enum import Enum
-from functools import partial
 import logging
-import socket
+from pathlib import Path
 import sys
 import time
 
-from serialx import create_serial_connection
+package_dir = Path(__file__).resolve().parent.parent
+project_dir = package_dir.parent
+sys.path.insert(0, str(project_dir))
 
-from ..py_abstract_classes import AlTransport  # noqa: TID252
-from ..py_visonic import VisonicProtocol  # noqa: TID252
+from example_common import BasicConnection, ClientVisonicProtocol  # noqa: E402
+from pyvisonic.py_abstract_classes import AlPanelInterface  # noqa: E402
+from pyvisonic.py_visonic import VisonicProtocol  # noqa: E402
+
+_LOGGER = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(description="Connect to Visonic Alarm Panel")
 parser.add_argument("-usb", help="visonic alarm usb device", default="")
+parser.add_argument("-baud", help="visonic alarm baud", type=int, default="9600")
 parser.add_argument("-address", help="visonic alarm ip address", default="")
 parser.add_argument("-port", help="visonic alarm ip port", type=int)
 parser.add_argument("-panel", help="visonic panel number", default="0")
@@ -29,54 +35,16 @@ parser.add_argument("-logfile", help="log file name to output to", default="")
 parser.add_argument("-print", help="print mode: error, warning, info, debug", default="error")
 args = parser.parse_args()
 conn_type = "ethernet" if len(args.address) > 0 else "usb"
+logger_level = None
 
-# config parameters for myconfig, just to make the defaults easier
-CONF_DOWNLOAD_CODE = "download_code"
-CONF_EMULATION_MODE = "emulation_mode"
-
-class ConnectionMode(Enum):
-    """Emulation Mode."""
-    POWERLINK = 1
-    STANDARD = 2
-    DATAONLY = 3
-
-myconfig = {
-    CONF_DOWNLOAD_CODE: "",
-    CONF_EMULATION_MODE: ConnectionMode.POWERLINK
-}
-
-def toBool(val) -> bool:
-    """To bool."""
-    if isinstance(val, bool):
-        return val
-    if isinstance(val, int):
-        return val != 0
-    if isinstance(val, str):
-        v = val.lower()
-        return v not in {"no", "false", "0"}
-    print(f"Visonic unable to decode boolean value {val}    type is {type(val)}")
-    return False
-
-def setConnectionMode(connect_mode):
-    """Set connection mode."""
-    global connection_mode
-
-    if connect_mode[0] == "p":
-        myconfig[CONF_EMULATION_MODE] = ConnectionMode.POWERLINK
-        connection_mode = "Powerlink (full capability)"
-    elif connect_mode[0] == "s":
-        myconfig[CONF_EMULATION_MODE] = ConnectionMode.STANDARD
-        connection_mode = "Standard (not in powerlink but includes ability to set alarm state)"
-    elif connect_mode[0] == "d":
-        myconfig[CONF_EMULATION_MODE] = ConnectionMode.DATAONLY
-        connection_mode = "Data Only (exchange of simple data with alarm panel, no ability to set alarm state)"
-
-string_type="string"
-int_type = "int"
-bool_type = "bool"
-list_type = "list"
-myconfigtypes = [string_type, string_type, int_type, string_type, int_type, string_type, bool_type, bool_type, bool_type, string_type, bool_type, list_type, bool_type, int_type, string_type, bool_type, bool_type, list_type, bool_type, int_type, int_type]
-
+# Create new protocol
+connect = args.connect
+if len(args.connect) == 0:
+    connect = "powerlink"
+force_standard_mode = connect.lower() == "standard"
+disable_all_panel_commands = connect.lower() == "dataonly"
+if disable_all_panel_commands:
+    force_standard_mode = True
 
 def setupLocalLoggerBasic():
     """Local logging handler."""
@@ -142,223 +110,58 @@ def ConfigureLogger(mode, console = None):
     elif console is not None:
         console.print(f"Not Setting output mode, unknown mode {mode}")
 
-
-class TransportWrapper(AlTransport):
-    """Transport wrapper."""
-
-    def __init__(self, t):
-        """Initialise."""
-        self.transport = t
-
-    def write(self, b : bytearray) -> bool:
-        """Write bytes."""
-        self.transport.write(b)
-
-    def close(self):
-        """Close the transport."""
-        self.transport.close()
-
-# This class joins the Protocol data stream to the visonic protocol handler.
-#    transport needs to have 2 functions:   write(bytearray)  and  close()
-class ClientVisonicProtocol(asyncio.Protocol):
-    """Protocol handler."""
-
-    def __init__(self, vp : VisonicProtocol, client):
-        """Initialise."""
-        #super().__init__(*args, **kwargs)
-        #print(f"CVP Init")
-        self._transport = None
-        self.vp = vp
-        self.client = client
-        if client is not None:
-            client.tellemaboutme(self)
-
-    def data_received(self, data):
-        """Receive data and pass on to the visonic protocol."""
-        #print(f"Received Data {data}")
-        self.vp.data_received(data)
-
-    def connection_made(self, transport):
-        """Connection has been made callback."""
-        print("connection_made Whooooo")
-        self._transport = TransportWrapper(transport)
-        self._transport.update_transport(self._transport)
-
-    def _stop(self):
-        """General function to stop everything."""
-        print("stop called")
-        self.client = None
-        self.vp = None
-        if self._transport is not None:
-            print("stop called on protocol => closed")
-            self._transport.close()
-        self._transport = None
-        print("stop finished")
-
-    def connection_lost(self, exc):
-        """Connection lost callback."""
-        print("connection_lost Booooo")
-        #if self.client is not None:
-        #    print(f"connection_lost    setup to reconnect")
-        if self._transport is not None:
-            self._stop()
-        print("connection_lost finished")
-
-    def close(self):
-        """Close the connection."""
-        #print(f"Connection Closed")
-        print("close called on protocol")
-        if self._transport is not None:
-            self._stop()
-            self._transport = None
-        print("close finished")
-
-    # This is needed so we can create the class instance before giving it to the protocol handlers
-    def __call__(self):
-        """Caller."""
-        return self
-
-class VisonicClient:
+class VisonicClient(BasicConnection):
     """Client."""
 
-    # Create a connection using asyncio using an ip and port
-    async def async_create_tcp_visonic_connection(self, vp : VisonicProtocol, address, port):
-        """Create Visonic manager class, returns tcp transport coroutine."""
+    def __init__(self, loop: asyncio.BaseEventLoop):
+        """Initialize the Visonic Client."""
+        # Get the user defined config
+        #self.config = config
+        self.loop: asyncio.BaseEventLoop = loop
+        self.cvp: ClientVisonicProtocol = None
+        self.my_transport: asyncio.Transport = None
+        self.visonic_protocol : AlPanelInterface = None
 
-        def createSocketConnection(address, port):
-            """Create the Socket Connection to the Device in the Panel."""
-            try:
-                print(f"Setting TCP socket Options {address} {port}")
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-                sock.setblocking(1)  # Set blocking to on, this is the default but just make sure
-                sock.settimeout(1.0)  # set timeout to 1 second to flush the receive buffer
-                sock.connect((address, port))
-
-                # Flush the buffer, receive any data and dump it
-                try:
-                    _dummy = sock.recv(10000)  # try to receive 10000 bytes
-                    print("Buffer Flushed and Received some data!")
-                except TimeoutError:  # fail after 1 second of no activity
-                    print("Buffer Flushed and Didn't receive data! [Timeout]")
-
-                # set the timeout to infinite
-                sock.settimeout(None)
-                # return the socket
-                return sock  # noqa: TRY300
-
-            except OSError as err:
-                # Do not cause a full Home Assistant Exception, keep it local here
-                print(f"Setting TCP socket Options Exception {err}")
-                if sock is not None:
-                    sock.close()
-
-            return None
-
-        try:
-            sock = createSocketConnection(address, int(port))
-            if sock is not None:
-                # Create the Protocol Handler for the Panel, also handle Powerlink connection inside this protocol handler
-                cvp = ClientVisonicProtocol(vp=vp, client=self)
-                # create the connection to the panel as an asyncio protocol handler and then set it up in a task
-                coro = self.loop.create_connection(cvp, sock=sock)
-                #print("The coro type is " + str(type(coro)) + "   with value " + str(coro))
-                # Wrap the coroutine in a task to add it to the asyncio loop
-                vTask = self.loop.create_task(coro)
-                # Return the task and protocol
-                return vTask, cvp
-
-        except Exception:
-            # Do not cause a full Home Assistant Exception, keep it local here
-            pass
-
-        return None, None
-
-    def tellemaboutme(self, thisisme):
-        """This function is here so that the coroutine can tell us the protocol handler."""
-        self.tell_em = thisisme
-
-    # Create a connection using asyncio through a linux port (usb or rs232)
-    async def async_create_usb_visonic_connection(self, vp : VisonicProtocol, path, baud="9600"):
-        """Create Visonic manager class, returns rs232 transport coroutine."""
-
-        print("Setting USB Options")
-
-        # use default protocol if not specified
-        protocol = partial(
-            ClientVisonicProtocol,
-            vp=vp,
-            client=self,
-        )
-
-        # setup serial connection
-        baud = int(baud)
-        try:
-            self.tell_em = None
-            # create the connection to the panel as an asyncio protocol handler and then set it up in a task
-            conn = create_serial_connection(self.loop, protocol, path, baud)
-            #print("The coro type is " + str(type(conn)) + "   with value " + str(conn))
-            vTask = self.loop.create_task(conn)
-            if vTask is not None:
-                ctr = 0
-                while self.tell_em is None and ctr < 40:     # 40 with a sleep of 0.05 is approx 2 seconds. Wait up to 2 seconds for this to start.
-                    await asyncio.sleep(0.05)                # This should only happen once while the Protocol Handler starts up and calls tellemaboutme to set self.tell_em
-                    ctr += 1
-                if self.tell_em is not None:
-                    # Return the task and protocol
-                    return vTask, self.tell_em
-        except Exception as ex:
-            # Do not cause a full Home Assistant Exception, keep it local here
-            print(f"Setting USB Options Exception {ex}")
-        return None, None
+    def connection_status_callback(self):
+        """Connection status callback."""
 
     async def startitall(self, testloop):
         """Start it going."""
 
+        async def connect_comms() -> bool:
+            """Create the comms connection to the alarm panel."""
+            # Connect in the way defined by the user in the config file, ethernet or usb
+            if self.visonic_protocol is not None:
+                #self.visonicProtocol.resetMessageData()
+                # Get Visonic specific configuration.
+                #print(f"Reconnection Device Type is {conn_type}")
+                if conn_type == "ethernet":
+                    host = args.address
+                    port = args.port
+                    (self.my_transport, self.cvp) = await self.async_create_tcp_visonic_connection(loop=self.loop, vp=self.visonic_protocol, connection_status_callback=self.connection_status_callback, address=host, port=port)
+                elif conn_type == "usb":
+                    path = args.usb
+                    baud = args.baud
+                    (self.my_transport, self.cvp) = await self.async_create_usb_visonic_connection(loop=self.loop, vp=self.visonic_protocol, connection_status_callback=self.connection_status_callback, path=path, baud=baud)
+                return self.cvp is not None and self.my_transport is not None
+            return False
+
         print("Client Creating VP")
-        visonicProtocol = VisonicProtocol(panelConfig=myconfig, panel_id=args.panel, loop=testloop)
-
-        if visonicProtocol is not None:
-
-            visonicProtocol.resetMessageData()
-
-            # Get Visonic specific configuration.
-            print(f"Reconnection Device Type is {conn_type}")
-            if conn_type == "ethernet":
-                host = args.address
-                port = args.port
-                (_visonicCommsTask, _cvp) = await self.async_create_tcp_visonic_connection(vp=visonicProtocol, address=host, port=port)
-            elif conn_type == "usb":
-                path = args.usb
-                (_visonicCommsTask, _cvp) = await self.async_create_usb_visonic_connection(vp=visonicProtocol, path=path, baud=self.baud_rate)
-            #return cvp is not None and visonicCommsTask is not None
-        #return False
-
-def handle_exception(loop, context):
-    """Handle exception."""
-    # context["message"] will always be there; but context["exception"] may not
-    _msg = context.get("exception", context["message"])
-    print(f"Caught exception: {_msg}")
-    #print(f"                  {context}")
+        self.visonic_protocol = VisonicProtocol(loop=testloop, force_standard_mode=force_standard_mode, disable_all_commands=disable_all_panel_commands, download_code=None, user_code_slot=1, logger=None)
+        if self.visonic_protocol is not None:
+            return await connect_comms()
+        return False
 
 if __name__ == '__main__':
-    #setupLocalLogger("DEBUG", False)   # one of "WARNING"  "INFO"  "ERROR"   "DEBUG"
-    #logging.basicConfig(level=logging.DEBUG)
-    #_LOGGER = logging.getLogger(__name__)
-
     log = setupLocalLoggerBasic()
     setupLocalLogger("ERROR", empty = True)   # one of "WARNING"  "INFO"  "ERROR"   "DEBUG"
     ConfigureLogger(str(args.print).lower(), None)
-    setConnectionMode(str(args.connect).lower())
 
     testloop = asyncio.new_event_loop()
     asyncio.set_event_loop(testloop)
-    #testloop.set_exception_handler(handle_exception)
 
-    client = VisonicClient()
-
-    _task = testloop.create_task(client.startitall(testloop))
+    client = VisonicClient(testloop)
+    testloop.create_task(client.startitall(testloop))
     try:
         #print("Calling run_forever")
         testloop.run_forever()

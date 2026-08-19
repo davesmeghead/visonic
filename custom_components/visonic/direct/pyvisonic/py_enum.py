@@ -355,6 +355,7 @@ class EPROM(Enum):
     ZONE_STR_EXT = auto()
     PANEL_SERIAL = auto()
     GSM_INSTALLED = auto()
+    BELL_TIME = auto()
     # Installer and Master
     MASTERCODE = auto()
     INSTALLERCODE = auto()
