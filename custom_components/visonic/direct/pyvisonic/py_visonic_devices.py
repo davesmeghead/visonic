@@ -16,6 +16,7 @@ from .py_const import (
 from .py_enum import (
     CFG,
     EPROM,
+    AlCondition,
     AlPanelMode,
     AlSensorCondition,
     EventType,
@@ -551,11 +552,18 @@ class ManageDevices(ProtocolBase):
         #log.warning(f"[Process Settings]    Installer Code {toString(self.epromManager.lookupEpromSingle(EPROM.INSTALLERCODE))}")
         #log.warning(f"[Process Settings]    Master DL Code {toString(self.epromManager.lookupEpromSingle(EPROM.MASTERDLCODE))}")
         #if self.is_power_master():
-        #    log.debug(f"[Process Settings]    Master Code {toString(self.epromManager.lookupEpromSingle(EPROM.MASTERCODE))}")
-        #    log.debug(f"[Process Settings]    Installer DL Code {toString(self.epromManager.lookupEpromSingle(EPROM.INSTALDLCODE))}")
+        #    log.warning(f"[Process Settings]    Master Code {toString(self.epromManager.lookupEpromSingle(EPROM.MASTERCODE))}")
+        #    log.warning(f"[Process Settings]    Installer DL Code {toString(self.epromManager.lookupEpromSingle(EPROM.INSTALDLCODE))}")
 
-        #log.warning(f"[Process Settings]    AlarmLED10 {self.epromManager.lookupEprom("AlarmLED10")}")
-        #log.warning(f"[Process Settings]    AlarmLED30 {self.epromManager.lookupEprom("AlarmLED30")}")
+        #log.warning(f"[Process Settings]    AlarmLED10 {self.epromManager.lookupEprom("AlarmLED10")}") # Only works if full eprom is retrieved
+        #log.warning(f"[Process Settings]    AlarmLED30 {self.epromManager.lookupEprom("AlarmLED30")}") # Only works if full eprom is retrieved
+        gsm_installed: bool = self.epromManager.lookupEpromSingle(EPROM.GSM_INSTALLED) == 1
+        if gsm_installed:
+            log.warning("A GSM Module is installed in the panel. You may see disconnections and/or seemingly random changes in alarm entity states.")
+            self.send_panel_update(AlCondition.GSM_MODULE_INSTALLED)
+        else:
+            log.info("[Process Settings]    GSM Module Not Installed")
+
         bell = self.epromManager.lookupEpromSingle("bellTime")
         log.info(f"[Process Settings] Bell Time {type(bell)=}   {bell=}")
         # Set all partitions regardless of which are actually used for panel status

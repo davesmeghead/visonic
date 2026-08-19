@@ -354,6 +354,7 @@ class EPROM(Enum):
     ZONE_STR_NAM = auto()
     ZONE_STR_EXT = auto()
     PANEL_SERIAL = auto()
+    GSM_INSTALLED = auto()
     # Installer and Master
     MASTERCODE = auto()
     INSTALLERCODE = auto()
@@ -484,6 +485,7 @@ class AlCondition(IntEnum):
     COMMAND_REJECTED = 11
     STARTUP_SUCCESS = 12        # In the client this triggers the setting of the string name in the Config settings to the panel type
     IMAGE_UPDATE = 13
+    GSM_MODULE_INSTALLED = 14
 
 # This class represents the panels trouble state
 class AlTroubleType(IntEnum):
