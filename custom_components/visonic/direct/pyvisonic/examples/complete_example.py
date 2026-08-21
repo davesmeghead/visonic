@@ -4,14 +4,17 @@
 # Make sure Ruff ignores f-strings
 # ruff: noqa: T201, BLE001
 
-# python3 complete_example.py -usb /dev/ttyUSB0 -baud 38400 -print debug
+# pip install -r requirements.txt
+# Examples:
+#    python3 complete_example.py -usb /dev/ttyUSB0 -baud 38400 -output info
+#    python3 complete_example.py -address 192.168.0.5 -port 10077 -connect standard -output info
 
 from __future__ import annotations  # noqa: TID251
 
 import argparse
 import asyncio
 from datetime import timedelta
-from enum import Enum, IntEnum
+from enum import IntEnum
 import logging
 from pathlib import Path
 import sys
@@ -43,24 +46,18 @@ from pyvisonic.py_visonic import VisonicProtocol  # noqa: E402  # noqa: E402
 
 terminating_clean = "terminating_clean"
 
-class PrintMode(Enum):
-    """Print mode."""
-    NONE = 0
-    ERROR = 1
-    WARNING = 2
-    INFO = 3
-    DEBUG = 4
-
+usage = "\n   python3 complete_example.py -usb <dev> [-baud <baud>] [-logfile <file>] [-connect <mode>] [-output out]\n   python3 complete_example.py -address <address> -port <port> [-logfile <file>] [-connect <mode>] [-output out]"
+description = "Connect to Visonic Alarm Panel"
+epilog = "Good luck"
 # Setup the command line parser
-parser = argparse.ArgumentParser(description="Connect to Visonic Alarm Panel")
-parser.add_argument("-panel", help="visonic panel number", default="0")
+parser = argparse.ArgumentParser(description=description, usage=usage, epilog=epilog)
 parser.add_argument("-usb", help="visonic alarm usb device", default="")
-parser.add_argument("-baud", help="visonic alarm baud", type=int, default="9600")
+parser.add_argument("-baud", help="visonic alarm baud  (default=9600)", type=int, default="9600")
 parser.add_argument("-address", help="visonic alarm ip address", default="")
 parser.add_argument("-port", help="visonic alarm ip port", type=int)
 parser.add_argument("-logfile", help="log file name to output to", default="")
-parser.add_argument("-connect", help="connection mode: powerlink, standard, dataonly", default="powerlink")
-parser.add_argument("-print", help="print mode: error, warning, info, debug", default="error")
+parser.add_argument("-connect", help="connection mode: powerlink, standard, dataonly  (default=powerlink)", default="powerlink")
+parser.add_argument("-output", help="output mode (top window): error, warning, info, debug  (default=debug)", default="debug")
 args = parser.parse_args()
 
 conn_type = "ethernet" if len(args.address) > 0 else "usb"
@@ -169,6 +166,39 @@ class TextualLogHandler(logging.Handler):
             # Don't allow logging failures to crash the application.
             self.handleError(record)
 
+class CommandInput(Input):
+    """Input for commands. Implement cursor up/down."""
+
+    def __init__(self, *args, **kwargs):
+        """Init."""
+        super().__init__(*args, **kwargs)
+        self.history: list[str] = []
+        self.history_index = 0
+
+    def add_history(self, command: str) -> None:
+        """Add to the history."""
+        if command:
+            self.history.append(command)
+        self.history_index = len(self.history)
+
+    def key_up(self) -> None:
+        """Cursor key up."""
+        if self.history:
+            self.history_index = max(0, self.history_index - 1)
+            self.value = self.history[self.history_index]
+
+    def key_down(self) -> None:
+        """Cursor key down."""
+        if self.history:
+            self.history_index = min(
+                len(self.history),
+                self.history_index + 1,
+            )
+            if self.history_index == len(self.history):
+                self.value = ""
+            else:
+                self.value = self.history[self.history_index]
+
 class MyAsyncConsole(App):
     """Textual based asynchronous console."""
 
@@ -182,7 +212,7 @@ class MyAsyncConsole(App):
     }
 
     #debug_log {
-        height: 15;
+        height: 55%;
         border: solid $primary;
     }
 
@@ -242,7 +272,7 @@ class MyAsyncConsole(App):
             wrap=True,
         )
         yield Static("", id="prompt")
-        yield Input(id="input")
+        yield CommandInput(id="input")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -332,6 +362,11 @@ class MyAsyncConsole(App):
         event: Input.Submitted,
     ) -> None:
         """Handle a command entered by the user."""
+        command = event.value
+        # Add command to the input history.
+        if command:
+            ei: CommandInput = event.input
+            ei.add_history(command)
         await self._input_queue.put(event.value)
         # Clear input ready for the next command.
         event.input.value = ""
@@ -429,10 +464,11 @@ class VisonicClient(BasicConnection):
         #self.config = config
         self.loop: asyncio.BaseEventLoop = loop
         self.log = logger
+        self._initialise()
 
+    def _initialise(self):
         self.panel_exception_counter = 0
         self.visonicTask = None
-        self.SystemStarted = False
 
         self.process_event = None
         self.process_log = None
@@ -445,9 +481,6 @@ class VisonicClient(BasicConnection):
         self.SystemStarted = False
         self._createdAlarmPanel = False
         self.doingReconnect = None
-
-    def _initialise(self):
-        pass
 
     def create_ha_notification(self, message: str):
         """Create a message in the log file and a notification on the HA Frontend."""
@@ -533,10 +566,10 @@ class VisonicClient(BasicConnection):
         # This is callable from frontend and checks user permission
         try:
             if self.SystemStarted:
-                self.log.debug(f"Reconnecting Comms to Visonic Panel {self.getPanelID()}")  # noqa: G004
+                self.log.debug("Reconnecting Comms to Visonic Panel")  # noqa: G004
                 self.setup_panel_connect_comms(force)
             else:
-                self.log.debug(f"Sorry, a simple Reconnection is not possible to Visonic Panel {self.getPanelID()} as system has stopped and lost all context, so please Reload")  # noqa: G004
+                self.log.debug("Sorry, a simple Reconnection is not possible to Visonic Panel as system has stopped and lost all context, so please Reload")  # noqa: G004
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
             self.log.debug(f"........... async_service_panel_reconnect, caused exception {ex}")  # noqa: G004
@@ -607,7 +640,7 @@ class VisonicClient(BasicConnection):
             # Set all variables to their defaults, this means that no connection has been made
             self._initialise()
 
-            self.create_ha_notification(f"Failed to connect into Visonic Alarm Panel {self.getPanelID()}. Check Your Network and the Configuration Settings.")
+            self.create_ha_notification("Failed to connect into Visonic Alarm Panel. Check Your Network and the Configuration Settings.")
             self.log.debug("Giving up on trying to connect, sorry")
         except Exception as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
@@ -615,10 +648,6 @@ class VisonicClient(BasicConnection):
 
         self.doingReconnect = None
         return False
-
-    def getPanelID(self):
-        """Get the panel id."""
-        return args.panel
 
     async def async_connect(self, force=True) -> bool:
         """Connect to the alarm panel using the pyvisonic library."""
@@ -880,7 +909,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):  # noqa:
         console.print("")
 
     #print("Installing Handlers")
-    client.installHandlers(process_event=process_event, process_log=process_log, process_sensor=process_sensor, process_x10=process_x10)
+    #client.installHandlers(process_event=process_event, process_log=process_log, process_sensor=process_sensor, process_x10=process_x10)
 
     console.clear_output()
     sensors = []
@@ -904,7 +933,7 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):  # noqa:
                 if client.isSystemStarted():
                     # There must be a panel connection to do the following commands
                     if command == 'c':
-                        ("Closing connection")
+                        console.print("Closing connection")
                         console.clear_output()
                         await client.async_panel_stop()
                         sensors = []
@@ -980,6 +1009,9 @@ async def controller(client : VisonicClient, console : MyAsyncConsole):  # noqa:
                     elif not client.isSystemStarted() and command == 'c':
                         if len(ar) > 1:
                             mode=str(ar[1].strip()).lower()
+                        client.installHandlers(process_event=process_event, process_log=process_log, process_sensor=process_sensor, process_x10=process_x10)
+                        sensors = []
+                        devices = []
                         console.clear_output()
                         #print(f"Hello {connection_mode}")
                         console.print("Attempting connection, demanded mode is " + str(connection_mode))
@@ -1044,8 +1076,20 @@ def handle_exception(loop, context):
 async def main() -> None:
     """Run the Visonic example application."""
 
+    ll = "DEBUG"
+    if len(args.output) > 0:
+        match args.output[0].lower():
+            case "d":
+                ll = "DEBUG"
+            case "i":
+                ll = "INFO"
+            case "w":
+                ll = "WARNING"
+            case "e":
+                ll = "ERROR"
+
     setupLocalLogger(
-        "DEBUG",
+        ll,
         empty=True,
     )
 

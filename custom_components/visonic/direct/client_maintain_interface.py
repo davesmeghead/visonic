@@ -3,6 +3,7 @@
 # This child/parent class build up incorporates the interaction/interface to the low level pyvisonic library
 
 from collections.abc import Callable
+from datetime import timedelta
 import logging
 
 from homeassistant.components.alarm_control_panel import AlarmControlPanelState
@@ -34,6 +35,7 @@ from ..panel_event_logger import PanelEventLogger  # noqa: TID252
 from ..platform_manager import PlatformManager  # noqa: TID252
 from ..utils import (  # noqa: TID252
     get_local_time,
+    get_utc_time,
     print_partition,
     to_bool,
     update_config_entry_threadsafe,
@@ -132,6 +134,7 @@ class MaintainInterface:
         )
         self.language_decoder: LanguageDecoder = LanguageDecoder(hass)
         self.state_changed_callback: Callable[..., None] = state_callback
+        self.saved_startup_success_time = None
 
     def _initialise(self):
         """Initialise local variables to this class."""
@@ -482,8 +485,13 @@ class MaintainInterface:
             # This will only succeed if in powerlink mode and the panel is a powermaster
             #   This also works for ethernet as self._serial_baud_rate should not have been changed
             if self._serial_baud_rate == 9600 and self.is_power_master() and self.get_panel_mode() == AlPanelMode.POWERLINK:
-                self._serial_baud_rate = 38400
-                self.update_baud()
+                timenow = get_utc_time()
+                if self.saved_startup_success_time is not None and timenow - self.saved_startup_success_time <= timedelta(minutes=6):
+                    self.logger.logstate_debug("Panel Startup Time is repeating at less than 6 minutes, cancelling baud rate change and staying at 9600")
+                else:
+                    self._serial_baud_rate = 38400
+                    self.update_baud()
+                self.saved_startup_success_time = timenow
 
         self.save_working_baud(self._serial_baud_rate)
 
