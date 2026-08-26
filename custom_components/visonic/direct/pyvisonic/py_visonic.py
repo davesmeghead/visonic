@@ -306,6 +306,8 @@ class VisonicProtocol(MessageHandling):
         if self.pmDownloadMode:
             return AlCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS
         if self.is_power_master() and self.PanelMode in [AlPanelMode.POWERLINK]:                  # Only do this for powermaster panels and in powerlink mode
+            # Just to make sure that an invalid command is because of the baud change
+            self.beeZeroInvalidCommand = None
 
             bpin = self._createPin(None)                       # bytearray pin
 
@@ -317,6 +319,13 @@ class VisonicProtocol(MessageHandling):
             while not self._is_send_queue_empty(priority = MessagePriority.VITAL):
                 log.debug("    Waiting for baud to be sent")
                 await asyncio.sleep(0.1)
+
+            await asyncio.sleep(0.6)  # Wait to see if the panel has responded with an invalid command
+
+            if self.beeZeroInvalidCommand is not None and self.beeZeroInvalidCommand == 4:
+                self.beeZeroInvalidCommand = None
+                log.debug("    Panel responded with invalid command, assume panel config prevented baud change")
+                return AlCommandStatus.FAIL_PANEL_CONFIG_PREVENTED
 
             return AlCommandStatus.SUCCESS
         return AlCommandStatus.FAIL_INVALID_STATE

@@ -132,6 +132,11 @@ class MaintainInterface:
             "Reset client panel variables, ESPHome Select Entity set to: %s",
             self._select_entity_id if len(self._select_entity_id) > 0 else "Not Defined",
         )
+        if len(self._select_entity_id) > 0:
+            _LOGGER.warning("Deprecation Warning: The use of the baud select entity is deprecated. Please update your configuration to use serial_proxy instead. This will be removed in a future release.",
+        )
+        self._serial_baud_rate = int(self.entry.data.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD))
+
         self.language_decoder: LanguageDecoder = LanguageDecoder(hass)
         self.state_changed_callback: Callable[..., None] = state_callback
         self.saved_startup_success_time = None
@@ -149,6 +154,7 @@ class MaintainInterface:
         else:
             self._connection_baud_list = [ 9600, 38400, 9600, 38400 ]   # Try these bauds in sequence, as each is tried then delete it, once the list is empty then give up
         self._baud_index = 0
+        self._last_baud_rate_change_success: bool = True
 
         self._system_started = False
         self.panel_last_event_name = self.language_decoder.getPowerMaxEntry(0)
@@ -486,7 +492,7 @@ class MaintainInterface:
             #   This also works for ethernet as self._serial_baud_rate should not have been changed
             if self._serial_baud_rate == 9600 and self.is_power_master() and self.get_panel_mode() == AlPanelMode.POWERLINK:
                 timenow = get_utc_time()
-                if self.saved_startup_success_time is not None and timenow - self.saved_startup_success_time <= timedelta(minutes=6):
+                if not self._last_baud_rate_change_success and self.saved_startup_success_time is not None and timenow - self.saved_startup_success_time <= timedelta(minutes=6):
                     self.logger.logstate_debug("Panel Startup Time is repeating at less than 6 minutes, cancelling baud rate change and staying at 9600")
                 else:
                     self._serial_baud_rate = 38400

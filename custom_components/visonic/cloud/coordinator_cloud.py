@@ -35,7 +35,7 @@ from ..const import (  # noqa: TID252
     VISONIC_CLOUD_SERVER,
 )
 from ..coordinator_base import VisonicCoordinator  # noqa: TID252
-from ..exceptions import VisonicException  # noqa: TID252
+from ..exceptions import VisonicAuthException, VisonicException  # noqa: TID252
 from ..log_events import logEvents  # noqa: TID252
 from ..utils import to_bool, update_config_entry_threadsafe  # noqa: TID252
 from ..visonic_entity_types import (  # noqa: TID252  # noqa: TID252
@@ -73,7 +73,7 @@ from .pyvisonicalarm.devices import (
     ShockDevice,
     SmokeDevice,
 )
-from .pyvisonicalarm.exceptions import UnauthorizedError
+from .pyvisonicalarm.exceptions import UnauthorizedError, WrongUsernameOrPasswordError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -456,8 +456,10 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                     return True
             # If authentication fails then fail to load this hub
             self._event_logger.logstate_info("panel connection failure")
+        except WrongUsernameOrPasswordError as ex:
+            raise VisonicAuthException("Cloud Authentication Error - panel connection failure") from ex
         except Exception as ex:
-            raise VisonicException("Authentication Error - panel connection failure") from ex
+            raise VisonicException("Cloud Connection Error - panel connection failure") from ex
         return False
 
     async def async_service_panel_reconnect(self, call: ServiceCall | None):

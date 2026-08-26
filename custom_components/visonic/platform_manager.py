@@ -423,16 +423,22 @@ class PlatformManager:
                                 self.logger.logstate_debug("Deleting empty device from HA %s", device_id)
                                 device_reg.async_remove_device(device_id)
 
-    def _delete_from_device_registry(self, identifiers) -> bool:
+    def _delete_from_device_registry(self, identifier) -> bool:
         device_registry = dr.async_get(self.hass)
         # delete
         retval = False
-        dev = device_registry.async_get_device(identifiers=identifiers)
+
+        dev = device_registry.async_get_device_by_identifier(
+            identifier=identifier,
+            config_entry_id=self.entry.entry_id
+        )
+        #dev = device_registry.async_get_device(identifiers=identifiers)
+
         if dev:
             device_registry.async_remove_device(dev.id)
             retval = True
         else:
-            self.logger.logstate_debug("Sensor %s not deleted", identifiers)
+            self.logger.logstate_debug("Sensor %s not deleted", identifier)
         self.rationalise_ha_devices(True)
         return retval
 
@@ -554,9 +560,8 @@ class PlatformManager:
     ) -> bool:
         """Delete Sensor."""
         if sid is not None and sid in self._sensor_dict:
-            identifier = create_sensor_unique_id(self.panel_ident, sid)
-            identifiers = {(DOMAIN, identifier)}
-            self._delete_from_device_registry(identifiers=identifiers)
+            unique_id = create_sensor_unique_id(self.panel_ident, sid)
+            self._delete_from_device_registry(identifier=(DOMAIN, unique_id))
             self._sensor_dict.pop(sid, None)
             self.image_manager.delete_all_sensor_jpeg(sid)
             self.logger.logstate_debug("Sensor %s to be deleted, also need to delete the select entity if it was created", sid)
@@ -614,9 +619,8 @@ class PlatformManager:
     ) -> bool:
         """Delete Sensor."""
         if sid is not None and sid in self._switch_dict:
-            identifier = create_switch_unique_id(self.panel_ident, sid)
-            identifiers = {(DOMAIN, identifier)}
-            self._delete_from_device_registry(identifiers=identifiers)
+            unique_id = create_switch_unique_id(self.panel_ident, sid)
+            self._delete_from_device_registry(identifier=(DOMAIN, unique_id))
             self._switch_dict.pop(sid, None)
             self.logger.logstate_debug("Switch %s deleted", sid)
             return True
@@ -688,9 +692,8 @@ class PlatformManager:
         """Delete Sensor."""
         if sid is not None and sid in self._device_dict:
             device = self._device_dict[sid]
-            identifier = create_device_unique_id(self.panel_ident, self.create_device_type(device), device)
-            identifiers = {(DOMAIN, identifier)}
-            self._delete_from_device_registry(identifiers=identifiers)
+            unique_id = create_device_unique_id(self.panel_ident, self.create_device_type(device), device)
+            self._delete_from_device_registry(identifier=(DOMAIN, unique_id))
             self._device_dict.pop(sid, None)
             self.logger.logstate_debug("Device %s deleted", sid)
             return True

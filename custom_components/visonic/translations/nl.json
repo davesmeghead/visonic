@@ -38,6 +38,13 @@
 					"panel_number": "Paneelnummer (als u maar 1 paneel heeft, laat u deze op 0 staan)"
 				}
 			},
+            "device_no_panel": {
+				"description": "Voer uw apparaattype en paneelnummer in",
+				"title": "Verbinding",
+				"data": {
+					"type": "Ethernet, Server of Serial"
+                }
+            },
             "form_tcp_server": {
                 "description": "Enter your TCP Server Settings",
                 "title": "TCP Server Configuration",

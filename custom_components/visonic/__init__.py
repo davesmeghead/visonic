@@ -11,7 +11,7 @@ from voluptuous.schema_builder import UNDEFINED as VOL_UNDEFINED
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
 from homeassistant.const import CONF_NAME, CONF_SOURCE, CONF_TYPE
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import UNDEFINED as TYPE_UNDEFINED
 
@@ -37,6 +37,7 @@ from .const import (
     DOMAIN,
     FORM_CLOUD,
     FORM_DEVICE,
+    FORM_DEVICE_NO_PANEL,
     FORM_ETHERNET,
     FORM_PARAM10,
     FORM_PARAM11,
@@ -56,7 +57,7 @@ from .const import (
 )
 from .create_schema import FormItems, build_config_items
 from .direct.coordinator_direct import VisonicDirectCoordinator
-from .exceptions import VisonicException
+from .exceptions import VisonicAuthException, VisonicException
 from .log_events import logEvents
 from .server import ServerProtocol, TCPServerConnection
 from .services import async_register_services
@@ -254,12 +255,21 @@ async def async_setup_client(hass: HomeAssistant, entry: ConfigEntry, device_typ
         vcd = VisonicConfigData(coordinator, panel_id, None, {})
         entry.runtime_data = vcd
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-        # Set the runtime data defaults
-        data: VisonicDomainData = hass.data[VisonicEntryKey]
-        data.setdefault(PANELS, {})[entry.entry_id] = vcd
         if await coordinator.async_panel_connect():
+            # Set the runtime data defaults
+            data: VisonicDomainData = hass.data[VisonicEntryKey]
+            data.setdefault(PANELS, {})[entry.entry_id] = vcd
             return True
     # Catch any exception and report it as a config error, connection failure
+    except VisonicAuthException as error:
+        unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+        data: VisonicDomainData = hass.data[VisonicEntryKey]
+        _tmp = data[PANELS].pop(entry.entry_id, None)
+        raise ConfigEntryAuthFailed(
+            translation_domain=DOMAIN,
+            translation_key=TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE,
+            translation_placeholders={"panel_id": panel_id},
+        ) from error
     except (VisonicException, TimeoutError, ConnectionError, OSError) as error:
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,
@@ -267,8 +277,7 @@ async def async_setup_client(hass: HomeAssistant, entry: ConfigEntry, device_typ
             translation_placeholders={"panel_id": panel_id},
         ) from error
     return False
-#    except Exception as ex:
-#        _LOGGER.info(f"**************** exception {ex}  *************")
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up visonic from a config entry. This is the main entry point."""
@@ -407,7 +416,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
         options_out : dict[str, Any] = {}
 
         # These contain all data and options settings
-        data_items = [FORM_DEVICE, FORM_ETHERNET, FORM_SERIAL, FORM_CLOUD, FORM_TCP_SERVER, FORM_TCP_DISCOVERED, FORM_POWERLINK]
+        data_items = [FORM_DEVICE, FORM_DEVICE_NO_PANEL, FORM_ETHERNET, FORM_SERIAL, FORM_CLOUD, FORM_TCP_SERVER, FORM_TCP_DISCOVERED, FORM_POWERLINK]
         option_items = [FORM_PARAM10, FORM_PARAM11, FORM_PARAM12, FORM_PARAM13, FORM_PARAM14, FORM_PARAM15]
 
         # Build a set with all the "data" keys. Using a set removes duplication.

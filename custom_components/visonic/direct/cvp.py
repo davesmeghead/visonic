@@ -57,15 +57,15 @@ class CVP_Direct(asyncio.Protocol):
         if self.vp is not None and self._transport is not None and not self.paused:
             self.vp.data_received(bytearray(data))
 
-    def connection_made(self, transport: asyncio.Transport):
+    def connection_made(self, trans: asyncio.Transport):
         """Connection made."""
-        p = transport.get_protocol()
+        p = trans.get_protocol()
         if self._connection_status is None or p is not self:
             _LOGGER.debug("[ClientVisonicProtocol] connection_made for an orphaned protocol, closing transport")
-            transport.close()
+            trans.close()
             return
         _LOGGER.debug("[ClientVisonicProtocol] connection_made Whooooo")
-        self._transport = transport
+        self._transport = trans
         self.connections.add(self)
         self.vp.set_transport(self._transport)
         self.vp.start()

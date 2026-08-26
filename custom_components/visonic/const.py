@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 
 # The client version and domain information for the integration
 DOMAIN: Final = "visonic"
-CLIENT_VERSION: Final = "0.13.0.34"
+CLIENT_VERSION: Final = "0.13.0.35"
 MANUFACTURER: Final = "Visonic"
 VISONIC_UNIQUE_NAME: Final = "Visonic Alarm"
 VISONIC_TRANSLATION_KEY: Final = "alarm_panel_key"
@@ -190,6 +190,7 @@ DISCOVERIES: Final = "DISCOVERIES"
 # The main configuration forms
 #   These need to be in the language translation file
 FORM_DEVICE: Final = "device"
+FORM_DEVICE_NO_PANEL: Final = "device_no_panel"
 FORM_ETHERNET: Final = "form_ethernet"
 FORM_SERIAL: Final = "form_serial"
 FORM_CLOUD: Final = "form_cloud"

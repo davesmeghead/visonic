@@ -60,6 +60,7 @@ from .const import (
     DOMAIN,
     FORM_CLOUD,
     FORM_DEVICE,
+    FORM_DEVICE_NO_PANEL,
     FORM_ETHERNET,
     FORM_PARAM10,
     FORM_PARAM11,
@@ -78,6 +79,7 @@ from .const import (
     TRANSLATE_ABORT_EMULATION_MODE,
     TRANSLATE_ABORT_INVALID_DEVICE_TYPE,
     TRANSLATE_ABORT_UNKNOWN,
+    TRANSLATE_ERROR_CONNECTION_REFUSED,
     TRANSLATE_ERROR_DL_CODE_INVALID,
     TRANSLATE_ERROR_EMAIL_INVALID,
     TRANSLATE_ERROR_ETHERNET_SERVER_OR_SERIAL,
@@ -91,7 +93,7 @@ from .const import (
 )
 from .create_schema import FormItems, VisonicSchema
 from .exceptions import VisonicException
-from .utils import parse_int_list
+from .utils import parse_int_list, slugify
 from .visonic_types import DeviceType, EmulationMode
 
 _LOGGER = logging.getLogger(__name__)
@@ -112,6 +114,13 @@ MAP_DEVICE_TO_CONFIG_STEP: dict[DeviceType, str] = {
     DeviceType.SERIAL: FORM_SERIAL,
     DeviceType.TCP_SERVER: FORM_TCP_SERVER,
     DeviceType.CLOUD: FORM_CLOUD,
+}
+MAP_DEVICE_TO_POWERLINK_OPTION: dict[DeviceType, bool] = {
+    DeviceType.ETHERNET: True,
+    DeviceType.TCP_DISCOVERED: True,
+    DeviceType.SERIAL: True,
+    DeviceType.TCP_SERVER: False,
+    DeviceType.CLOUD: False,
 }
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -385,6 +394,14 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason=err)
         title = self.config_data.get(TEXT_TITLE, DEFAULT_TITLE)
         return self.async_create_entry(title=title, data=self.config_data, options=self.config_options)
+
+    async def async_step_device_no_panel(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle the input processing of the config flow."""
+        uicopy = user_input.copy()
+        uicopy[CONF_PANEL_NUMBER] = self.config_data[CONF_PANEL_NUMBER]
+        uicopy[CONF_TYPE] = slugify(user_input[CONF_TYPE])
+        # Push it back to the reconfigure function to process
+        return await self.async_step_reconfigure(user_input=uicopy)
 
     # ask the user: ethernet, server, cloud or serial, and for the unique panel/server number
     async def async_step_device(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:  # TESTED
@@ -778,18 +795,57 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
 
         return await self.async_step_user(data)
 
+    def is_same_connection(self, data1: dict[str, Any], data2: dict[str, Any]) -> bool:
+        """Test to determine if data1 and data2 are the same connection."""
+        device_type1 = data1.get(CONF_TYPE)
+        device_type2 = data2.get(CONF_TYPE)
+        if device_type1 != device_type2:
+            return False
+        match device_type1:
+            case DeviceType.TCP_SERVER:
+                host1 = data1.get(CONF_SERVER_HOST, "")
+                port1 = data1.get(CONF_SERVER_PORT, "0")
+                host2 = data2.get(CONF_SERVER_HOST, "")
+                port2 = data2.get(CONF_SERVER_PORT, "0")
+                if host1 != host2 or port1 != port2:
+                    return False
+            case DeviceType.ETHERNET | DeviceType.TCP_DISCOVERED:
+                host1 = data1.get(CONF_HOST, "")
+                port1 = data1.get(CONF_PORT, "0")
+                host2 = data2.get(CONF_HOST, "")
+                port2 = data2.get(CONF_PORT, "0")
+                if host1 != host2 or port1 != port2:
+                    return False
+            case DeviceType.CLOUD:
+                host1 = data1.get(CONF_EXTERNAL_URL, "")
+                host2 = data2.get(CONF_EXTERNAL_URL, "")
+                if host1 != host2:
+                    return False
+            case DeviceType.SERIAL:
+                path1 = data1.get(CONF_PATH, "")
+                path2 = data2.get(CONF_PATH, "")
+                if path1 != path2:
+                    return False
+            case _:
+                return False
+        return True
+
     async def _finalise_reconfigure(self, step: str, data: dict[str, Any] | None = None) -> ConfigFlowResult:
         #   e.g. host, port, esphome_entity_select, download_code
         # Check the content of the data dict
-        ce: ConfigEntry = self._get_reconfigure_entry()
-        device_type = ce.data.get(CONF_TYPE)
+        device_type = data.get(CONF_TYPE)
         if device_type in [DeviceType.ETHERNET, DeviceType.TCP_DISCOVERED, DeviceType.SERIAL, DeviceType.CLOUD]:
             if (error_key := self.validate_input(self.hass, data)) is not None:  # This should pick up hass from the parent
                 return self.show_form(step=step, values = data, errors={"base": error_key})
-        # Test the connection
-        error = await self.connection_tester.test_connection(device_type=device_type, user_input=data)
-        if error is not None:
-            return self.show_form(step=step, errors={"base": error}, values=data)
+        # Test the connection --> Do not test the connection as the existing connection has not been closed
+        ce: ConfigEntry = self._get_reconfigure_entry()
+        if not self.is_same_connection(data, dict(ce.data)):
+            error = await self.connection_tester.test_connection(device_type=device_type, user_input=data)
+            if error is not None:
+                if step == FORM_POWERLINK:
+                    # If showing the powerlink form then the user cannot correct any config errors
+                    return self.async_abort(reason=TRANSLATE_ERROR_CONNECTION_REFUSED)
+                return self.show_form(step=step, errors={"base": error}, values=data)
         return self.async_update_reload_and_abort(
             entry = ce,
             data = data,
@@ -806,18 +862,30 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
             # Do some basic checks on ce.data
             if CONF_TYPE not in ce.data:
                 return self.async_abort(reason=TRANSLATE_ABORT_UNKNOWN)
-            device_type = ce.data.get(CONF_TYPE)
-            if device_type == DeviceType.TCP_DISCOVERED:
-                return self.async_abort(reason=TRANSLATE_ABORT_CANNOT_CONFIG_DISCOVERED)
+            if user_input is None:
+                self.config_data = dict(ce.data)
+                return self.show_form(step=FORM_DEVICE_NO_PANEL, values=self.config_data)
+            if len(user_input) == 2:  # device type and panel number
+                device_type = user_input.get(CONF_TYPE)
+                if device_type == DeviceType.TCP_DISCOVERED:
+                    return self.async_abort(reason=TRANSLATE_ABORT_CANNOT_CONFIG_DISCOVERED)
+                step = MAP_DEVICE_TO_CONFIG_STEP.get(device_type)
+                if step is None:
+                    return self.async_abort(reason=TRANSLATE_ABORT_UNKNOWN)
+                # Set the config data (but not options)
+                if device_type == ce.data.get(CONF_TYPE):
+                    # the user has retained the same device type connection so use existing data in the forms
+                    self.config_data = dict(ce.data)
+                else:
+                    # the user has chosen a different device type connection to leave it to populate with defaults
+                    self.config_data = dict(user_input)
+                # This shows the next form after the device type form
+                return self.show_form(step=step, values=self.config_data)
+            data: dict[str, Any] = self.config_data | user_input
+            device_type = data.get(CONF_TYPE)
             step = MAP_DEVICE_TO_CONFIG_STEP.get(device_type)
-            if step is None:
-                return self.async_abort(reason=TRANSLATE_ABORT_UNKNOWN)
-            if user_input is not None:
-                # If a CONF parameter is missing from user_input then set it to an empty string
-                for conf in FormItems.get(step):
-                    if conf not in user_input:
-                        user_input.setdefault(conf, "")
-                data = self.config_data | user_input
+            powerlink_option_supported = MAP_DEVICE_TO_POWERLINK_OPTION.get(device_type)
+            if powerlink_option_supported:
                 cem = data.get(CONF_EMULATION_MODE)
                 if cem is not None:
                     cem = EmulationMode(cem)
@@ -825,9 +893,7 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
                         # Ask user for download code and show eprom data
                         self.config_data = data
                         return self.show_form(step=FORM_POWERLINK, values=data)
-                return await self._finalise_reconfigure(step=step, data=data)
-            self.config_data = ce.data.copy()
-            return self.show_form(step=step, values=ce.data)
+            return await self._finalise_reconfigure(step=step, data=data)
         except AbortFlow:
             raise
         except Exception as ex:
@@ -846,8 +912,8 @@ class VisonicOptionsFlowHandler(VisonicHandler, OptionsFlow):
         if user_input is not None:
             return self.async_abort(reason=TRANSLATE_ABORT_UNKNOWN)
 
-        self.config_data = self.config_entry.data.copy()
-        self.config_options = self.config_entry.options.copy()
+        self.config_data = dict(self.config_entry.data.copy())
+        self.config_options = dict(self.config_entry.options.copy())
 
         # Before we start, check that all existing data is valid
         err = self.validate_input(self.hass, self.config_data)

@@ -156,7 +156,7 @@ class Sequencer(Despatcher):
         self.DownloadRetryReceived : bool = False
         self.AccessDeniedReceived : bool = False
         self.AccessDeniedMessage: VisonicListEntry | None = None
-        self.gotBeeZeroInvalidCommand : bool = False
+        self.beeZeroInvalidCommand : int | None = None
         # Current F4 jpg image
         #    Leave these here for the time being as they might be needed in the sequencer
         self.image_manager: AlImageManager = AlImageManager()
@@ -217,7 +217,7 @@ class Sequencer(Despatcher):
         self.ExitReceived = False
         self.DownloadRetryReceived = False
         self.TimeoutReceived = False
-        self.gotBeeZeroInvalidCommand = False
+        self.beeZeroInvalidCommand = None
 
     # This function needs to be called within the timeout to reset the timer period
     def _reset_powerlink_counter(self):
@@ -397,8 +397,8 @@ class Sequencer(Despatcher):
                     log.debug("[_sequencer] TimeoutReceived")
                     return PanelErrorStates.TimeoutReceived
 
-            if self.gotBeeZeroInvalidCommand:
-                self.gotBeeZeroInvalidCommand = False
+            if self.beeZeroInvalidCommand is not None and self.beeZeroInvalidCommand == 2:
+                self.beeZeroInvalidCommand = None
                 return PanelErrorStates.BeeZeroInvalidCommand
 
             return PanelErrorStates.AllGood

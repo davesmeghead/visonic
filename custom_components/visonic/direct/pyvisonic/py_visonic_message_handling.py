@@ -906,7 +906,7 @@ class MessageHandling(MessageHandlingB0Data):
 
         elif sub_type == pmSendMsgB0[B0SubType.INVALID_COMMAND].data: # msg_info.data == "INVALID_COMMAND":
             log.debug(f"[handle_msgtypeB0]             The Panel Indicates a B0 INVALID_COMMAND sent to the panel:   data={toString(data)}")
-            if msg_length % 2 == 0: # msg_length is an even number
+            if msg_length % 2 == 0: # msg_length is an even number, the response is in pairs
                 for i in range(0, msg_length, 2):
                     command = data[3+i]
                     message = data[4+i]
@@ -916,8 +916,8 @@ class MessageHandling(MessageHandlingB0Data):
                             self.B0_Wanted.add(message)
                         else:
                             log.debug(f"[handle_msgtypeB0]                            Unknown Message type for 'retry later' {hexify(message):0>2} so not asking for it")
-                    elif command == 0x02:
-                        self.gotBeeZeroInvalidCommand = True
+                    elif command in {2, 4}:
+                        self.beeZeroInvalidCommand = command
 
         elif sub_type == pmSendMsgB0[B0SubType.PANEL_STATE_2].data and msg_length == 15: #  I've only seen a message length of 15 with all 3 partitions populated
             # Panel State (without zone data and not chunky)

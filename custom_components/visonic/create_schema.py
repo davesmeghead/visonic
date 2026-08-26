@@ -72,6 +72,7 @@ from .const import (
     DEFAULT_PANEL_USER_CODE,
     FORM_CLOUD,
     FORM_DEVICE,
+    FORM_DEVICE_NO_PANEL,
     FORM_ETHERNET,
     FORM_PARAM10,
     FORM_PARAM11,
@@ -101,6 +102,7 @@ FormItems: dict[str, list[str]] = {
     # Main connection type
     #     parameters in entry.data
     FORM_DEVICE: [CONF_TYPE, CONF_PANEL_NUMBER],
+    FORM_DEVICE_NO_PANEL: [CONF_TYPE],
     # The connection choices
     #     parameters in entry.data
     #     FORM_TCP_DISCOVERED is only used for reconnection, host and port cannot be edited

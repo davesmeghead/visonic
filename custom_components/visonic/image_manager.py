@@ -155,9 +155,14 @@ class ImageManager:
     def _camera_device_name(self, sensor_id: int) -> str | None:
         """Name the user gave this camera's device, or None if it has no device yet."""
         try:
-            dev = dr.async_get(self.hass).async_get_device(
-                identifiers={(DOMAIN, create_sensor_unique_id(self.panel_ident, sensor_id))}
+            unique_id = create_sensor_unique_id(self.panel_ident, sensor_id)
+            dev = dr.async_get(self.hass).async_get_device_by_identifier(
+                identifier=(DOMAIN, unique_id),
+                config_entry_id=self.entry.entry_id
             )
+            #dev = dr.async_get(self.hass).async_get_device(
+            #    identifiers={(DOMAIN, unique_id)}
+            #)
         except Exception:  # noqa: BLE001
             return None
         return (dev.name_by_user or dev.name) if dev is not None else None

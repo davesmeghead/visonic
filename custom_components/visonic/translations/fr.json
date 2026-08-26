@@ -38,6 +38,13 @@
                     "panel_number": "Num\u00e9ro de la Centrale (si vous n'avez qu'un seul panneau, laissez ce paramètre sur 0)"
                 }
             },
+            "device_no_panel": {
+                "description": "Entrez le type d'appareil et le num\u00e9ro de la Centrale",
+                "title": "Connexion",
+                "data": {
+                    "type": "Ethernet, Server ou Serial"
+                }
+            },
             "form_tcp_server": {
                 "description": "Enter your TCP Server Settings",
                 "title": "TCP Server Configuration",

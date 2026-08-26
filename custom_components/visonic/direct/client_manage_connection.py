@@ -81,7 +81,7 @@ class ManageConnection(MaintainInterface):
     # =======================================================================================================
     # =======================================================================================================
     # =======================================================================================================
-    # ======== Functions below this make the connection to the panel and manage restarts etc ================
+    # ======== Functions to make the connection to the panel and manage restarts etc ========================
     # =======================================================================================================
     # =======================================================================================================
     # =======================================================================================================
@@ -98,7 +98,33 @@ class ManageConnection(MaintainInterface):
         state_callback: Callable[..., None],
     ) -> None:
         """Initialize."""
+        super().__init__(hass, entry, diagnostics, platform_manager, panelident, state_callback)
+        # These are variables used throughout this class and all child classes
+        self._listeners_registered = False
+        self.force_standard_mode = force_standard_mode
+        self.disable_all_panel_commands = disable_all_panel_commands
+        self.panel_disconnection_counter = 0
+        self.download_code = str(entry.data.get(CONF_DOWNLOAD_CODE, ""))
+        self.user_code_slot = int(entry.data.get(CONF_USER_CODE_SLOT, 1))
+        self._management_task: asyncio.Task[None] = None
+        self._initialise()
+        # add update listener to unload.  The update listener is used when the user edits an existing configuration.
+        self.language_decoder.update()
+        self._management_task: asyncio.Task[None] = self.entry.async_create_background_task(self.hass, self.connection_manager(), "Connection Manager")
 
+    def _initialise(self):
+        """Initialise local variables to this class."""
+        super()._initialise()
+        self._reevaluate_connection = asyncio.Event()
+        self._requested_state: Connection_Status = Connection_Status.READY_TO_START
+        self._client_vis_protocol : CVP_Direct | None = None
+        self._visonic_protocol: AlPanelInterface | None = None
+        self._max_connection_attempts = int(
+            self.entry.options.get(CONF_RETRY_CONNECTION_COUNT, 1)
+        )
+
+    def _register_event_listeners(self):
+        """Register listeners."""
         # This function is called when there have been changes made to the parameters in the control flow
         async def async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
             """Changes made to the visonic config entry, user has updated the config."""
@@ -121,34 +147,22 @@ class ManageConnection(MaintainInterface):
                     self.language_decoder.getLogEventList()
                 )
 
-        super().__init__(hass, entry, diagnostics, platform_manager, panelident, state_callback)
-        # These are variables used throughout this class and all child classes
-        self.force_standard_mode = force_standard_mode
-        self.disable_all_panel_commands = disable_all_panel_commands
-        self.panel_disconnection_counter = 0
-        self.download_code = str(entry.data.get(CONF_DOWNLOAD_CODE, ""))
-        self.user_code_slot = int(entry.data.get(CONF_USER_CODE_SLOT, 1))
-        self._management_task: asyncio.Task[None] = None
-        self._initialise()
-        # add update listener to unload.  The update listener is used when the user edits an existing configuration.
-        entry.async_on_unload(entry.add_update_listener(async_update_listener))
-        self.language_decoder.update()
+        if self._listeners_registered:
+            return
+        self._listeners_registered = True
+        self.entry.async_on_unload(self.entry.add_update_listener(async_update_listener))
         # Listen for when EVENT_CORE_CONFIG_UPDATE is fired
-        entry.async_on_unload(
-            hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, handle_core_config_updated)
+        self.entry.async_on_unload(
+            self.hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, handle_core_config_updated)
         )
-        self._management_task: asyncio.Task[None] = self.entry.async_create_background_task(self.hass, self.connection_manager(), "Connection Manager")
 
-    def _initialise(self):
-        """Initialise local variables to this class."""
-        super()._initialise()
-        self._reevaluate_connection = asyncio.Event()
-        self._requested_state: Connection_Status = Connection_Status.READY_TO_START
-        self._client_vis_protocol : CVP_Direct | None = None
-        self._visonic_protocol: AlPanelInterface | None = None
-        self._max_connection_attempts = int(
-            self.entry.options.get(CONF_RETRY_CONNECTION_COUNT, 1)
-        )
+    async def _send_baud_change_to_panel(self, baud) -> bool:
+        """Send the commend to the panel to set the baud rate."""
+        if self._visonic_protocol is not None:
+            retval = await self._visonic_protocol.set_panel_baud(baud)
+            self.logger.logstate_debug("    Baud set in panel" if retval == AlCommandStatus.SUCCESS else "    Baud change failed in panel: %s", retval.name)
+            return retval == AlCommandStatus.SUCCESS
+        return False
 
     def _create_protocol(self):
         # Terminate any existing connection
@@ -229,7 +243,7 @@ class ManageConnection(MaintainInterface):
         self._client_vis_protocol = None
         await self._stop_panel_change_handler()
 
-    def kick_off_next_step(self, command: Connection_Status):
+    def _kick_off_next_step(self, command: Connection_Status):
         """Create a step for the manager."""
         self._requested_state = command
         self._reevaluate_connection.set()
@@ -238,7 +252,12 @@ class ManageConnection(MaintainInterface):
         """Callback from protocol CVP to handle connections and disconnections."""
         # cvp is only valid then CONNECTED, anything else invalidates any existing connection.
         self._client_vis_protocol = cvp if state == CVP_Status.CONNECTED and cvp is not None else None
-        self.kick_off_next_step(Connection_Status(state))
+        self._kick_off_next_step(Connection_Status(state))
+
+    def connect(self) -> bool:
+        """Connect to the alarm panel using the pyvisonic library."""
+        self._kick_off_next_step(Connection_Status.INITIAL_CREATE_PROTOCOL)
+        return True
 
     async def async_stop(self):
         """Stop the connection."""
@@ -246,36 +265,20 @@ class ManageConnection(MaintainInterface):
         await self._async_stop_transport()
         await self._async_stop_protocol()
 
-    def connect(self) -> bool:
-        """Connect to the alarm panel using the pyvisonic library."""
-        self.kick_off_next_step(Connection_Status.INITIAL_CREATE_PROTOCOL)
-        return True
-
-    async def send_baud_change_to_panel(self, baud) -> bool:
-        """Send the commend to the panel to set the baud rate."""
-        if self._visonic_protocol is not None:
-            retval = await self._visonic_protocol.set_panel_baud(baud)
-            if retval == AlCommandStatus.SUCCESS:
-                self.logger.logstate_debug("    Baud set in panel")
-            else:
-                self.logger.logstate_debug("    Baud not set in panel: %s", retval.name)
-            return retval == AlCommandStatus.SUCCESS
-        return False
-
-    async def async_reconnect_comms(self, force: bool = False):
-        """Reconnect comms."""
-        # ---- Reconnection not allowed by the user by setting config setting self._max_connection_attempts to 0 ----
-        if not force and self._max_connection_attempts <= 0:
-            self.logger.logstate_debug("Reconnect disabled by user for panel %s (0 attempts), stopping", self.panel_ident)
-            return
-        # ---- Try simple reconnect of comms ----
-        # Leave the visonic protocol in place, reconnect the comms
-        #  The protocol will pick up if the comms is established
-        self.kick_off_next_step(Connection_Status.INITIAL_CREATE_TRANSPORT)
+    #async def async_reconnect_comms(self, force: bool = False):
+    #    """Reconnect comms."""
+    #    # ---- Reconnection not allowed by the user by setting config setting self._max_connection_attempts to 0 ----
+    #    if not force and self._max_connection_attempts <= 0:
+    #        self.logger.logstate_debug("Reconnect disabled by user for panel %s (0 attempts), stopping", self.panel_ident)
+    #        return
+    #    # ---- Try simple reconnect of comms ----
+    #    # Leave the visonic protocol in place, reconnect the comms
+    #    #  The protocol will pick up if the comms is established
+    #    self._kick_off_next_step(Connection_Status.INITIAL_CREATE_TRANSPORT)
 
     def update_baud(self):
         """Set the baud rate."""
-        self.kick_off_next_step(Connection_Status.BAUD_CHANGE)
+        self._kick_off_next_step(Connection_Status.BAUD_CHANGE)
 
     async def async_restart(self, force: bool = False):
         """Full Restart, stop the connection and start it again."""
@@ -284,7 +287,7 @@ class ManageConnection(MaintainInterface):
             self.logger.logstate_debug("Restart disabled by user for panel %s (0 attempts), stopping", self.panel_ident)
             return
         # Stop and start again, recreate visonic protocol
-        self.kick_off_next_step(Connection_Status.RESTART)
+        self._kick_off_next_step(Connection_Status.RESTART)
 
     async def async_panel_stop(self):
         """Redirector to stop and unload the hub."""
@@ -294,7 +297,9 @@ class ManageConnection(MaintainInterface):
                 await self._management_task
             self._management_task = None
         await self.async_stop()
-        #self.kick_off_next_step(Connection_Status.STOP)
+        #self._kick_off_next_step(Connection_Status.STOP)
+
+    # Connection manager is set up as a HA background task to start and maintain the transport (and protocol)
 
     async def connection_manager(self):  # noqa: C901
         """Connection manager task."""
@@ -303,7 +308,7 @@ class ManageConnection(MaintainInterface):
 
         def create_timer():
             async def timer_delay(now: datetime | None = None):
-                self.kick_off_next_step(Connection_Status.RETRY_CREATE_TRANSPORT)
+                self._kick_off_next_step(Connection_Status.RETRY_CREATE_TRANSPORT)
 
             delay_between_attempts = int(self.entry.options.get(CONF_RETRY_CONNECTION_DELAY, 60.0))  # seconds
             self.logger.logstate_debug(
@@ -376,12 +381,13 @@ class ManageConnection(MaintainInterface):
                 if self._requested_state not in allow_allways and (current_state in (Connection_Status.STOP, self._requested_state) or self._requested_state not in dest_set):
                     self.logger.logstate_info(f"   Disallowed, current state is {current_state.name}")
                     continue
-                #previous_state = current_state
+
                 current_state = self._requested_state
                 self.logger.logstate_info(f"Doing {current_state.name}")
                 if self._wait_task is not None:
                     self._wait_task()
                     self._wait_task = None
+
                 match (current_state):
                     case Connection_Status.READY_TO_START | Connection_Status.NO_OPERATION:
                         pass
@@ -393,8 +399,8 @@ class ManageConnection(MaintainInterface):
                         # Stop protocol and transport
                         await self.async_stop()
                         await asyncio.sleep(1.0)
-                        # Create protocol and goto INITIAL_CREATE_PROTOCOL
-                        self.kick_off_next_step(Connection_Status.INITIAL_CREATE_PROTOCOL)
+                        # Goto INITIAL_CREATE_PROTOCOL
+                        self._kick_off_next_step(Connection_Status.INITIAL_CREATE_PROTOCOL)
 
                     case Connection_Status.DISCONNECTED:
                         # Assume that the transport has stopped and the protocol is OK
@@ -402,7 +408,7 @@ class ManageConnection(MaintainInterface):
                         await self._async_stop_transport()
                         await asyncio.sleep(1.0)
                         # goto INITIAL_CREATE_TRANSPORT
-                        self.kick_off_next_step(Connection_Status.INITIAL_CREATE_TRANSPORT)
+                        self._kick_off_next_step(Connection_Status.INITIAL_CREATE_TRANSPORT)
 
                     case Connection_Status.NO_CONNECTION_MADE:
                         # The comms connection has been attempted but has failed, there are no lower level retries
@@ -430,6 +436,8 @@ class ManageConnection(MaintainInterface):
                                 "attempt": attempt_counter + 1,
                             },
                         )
+                        # Register the update listeners
+                        self._register_event_listeners()
                         # Resume the protocol if it was paused (this has no action if not paused)
                         self._visonic_protocol.resume()
 
@@ -438,7 +446,7 @@ class ManageConnection(MaintainInterface):
                         self._create_protocol()
                         # Pause it straight away, waiting for the connection to resume it
                         self._visonic_protocol.pause()
-                        self.kick_off_next_step(Connection_Status.INITIAL_CREATE_TRANSPORT)
+                        self._kick_off_next_step(Connection_Status.INITIAL_CREATE_TRANSPORT)
 
                     case Connection_Status.INITIAL_CREATE_TRANSPORT:
                         # Reset the attempt counter, always make the initial connection
@@ -464,7 +472,7 @@ class ManageConnection(MaintainInterface):
                         )
                         attempt_counter += 1
                         if attempt_counter >= self._max_connection_attempts:
-                            self.kick_off_next_step(Connection_Status.STOP)
+                            self._kick_off_next_step(Connection_Status.STOP)
                         elif await self._async_create_transport():
                             self.logger.logstate_debug(
                                 f"........... connection attempt {attempt_counter + 1} of {1 if force else self._max_connection_attempts}{'     (with no future reconnections)' if force else ''}"
@@ -472,29 +480,29 @@ class ManageConnection(MaintainInterface):
                             create_timer()
                         else:
                             # Exception so go back to the beginning, and stop and start protocol and transport
-                            self.kick_off_next_step(Connection_Status.READY_TO_START)
+                            self._kick_off_next_step(Connection_Status.READY_TO_START)
 
                     case Connection_Status.BAUD_CHANGE | Connection_Status.BAUD_CHANGE_RESET_PROTOCOL:
                         # cycle the baud for the next reconnection.....
 
+                        self.logger.logstate_debug("Setting Baud %s", self._serial_baud_rate)
                         if self._baud_index >= len(self._connection_baud_list):
-                            self.logger.logstate_debug("Reset Baud Selection")
+                            self.logger.logstate_debug("    Reset Baud Selection List")
                             self.reset_baud_list()
+
+                        self._last_baud_rate_change_success = False
 
                         if device_type == DeviceType.ETHERNET:
                             # For ethernet we do not terminate the connection, we
                             #   - change the baud in the panel itself
                             #   - use the select entity to change the baud of the serial connection in the ESPHome device
                             if self.is_select_entity_valid(str(self._serial_baud_rate)):
-                                if await self.send_baud_change_to_panel(self._serial_baud_rate):
-                                    self.logger.logstate_debug("    Baud set in panel")
-                                else:
-                                    self.logger.logstate_debug("Baud change failed in panel")
-                                self.set_select_entity(str(self._serial_baud_rate))
-                                self.logger.logstate_debug("Select updated successfully!")
+                                self._last_baud_rate_change_success = await self._send_baud_change_to_panel(self._serial_baud_rate)
+                                if self._last_baud_rate_change_success:
+                                    self.set_select_entity(str(self._serial_baud_rate))
                             else:
-                                self.logger.logstate_debug("NOT change Baud %s, entity invalid", self._serial_baud_rate)
-                            self.kick_off_next_step(Connection_Status.NO_OPERATION)
+                                self.logger.logstate_debug("    NOT changed Baud %s, entity invalid", self._serial_baud_rate)
+                            self._kick_off_next_step(Connection_Status.NO_OPERATION)
 
                         elif device_type == DeviceType.SERIAL:
                             # For serial we terminate the connection, we
@@ -502,19 +510,16 @@ class ManageConnection(MaintainInterface):
                             #   - terinate the connection
                             #   - create the connection with the new baud
                             #       Note: We could modify the baud of an ESPHome serial connection but we don't know if it is ESPHome
-                            self.logger.logstate_debug(f"Setting Baud {self._serial_baud_rate}")
-                            if await self.send_baud_change_to_panel(self._serial_baud_rate):
-                                self.logger.logstate_debug("    Baud set in panel")
-                            else:
-                                self.logger.logstate_debug("Baud change failed in panel")
-                            # Recreate the protocol/transport with the new baud
+                            self._last_baud_rate_change_success = await self._send_baud_change_to_panel(self._serial_baud_rate)
+                            # Recreate the protocol/transport with the old or new baud
                             await self._async_stop_transport()
                             if current_state == Connection_Status.BAUD_CHANGE_RESET_PROTOCOL:
-                                self.kick_off_next_step(Connection_Status.INITIAL_CREATE_PROTOCOL)
+                                self._kick_off_next_step(Connection_Status.INITIAL_CREATE_PROTOCOL)
                             else:
-                                self.kick_off_next_step(Connection_Status.INITIAL_CREATE_TRANSPORT)
+                                self._kick_off_next_step(Connection_Status.INITIAL_CREATE_TRANSPORT)
                         else:
-                            self.logger.logstate_debug("Baud not updated!")
+                            self.logger.logstate_debug("    Incorrect device type %s, baud not updated!", device_type)
+                            self._kick_off_next_step(Connection_Status.NO_OPERATION)
 
                     case Connection_Status.STOP:
                         #if self.hasStarted():
@@ -527,7 +532,7 @@ class ManageConnection(MaintainInterface):
 
                     case Connection_Status.CLOSE_CONNECTION:
                         await self.async_stop()
-                        self.kick_off_next_step(Connection_Status.READY_TO_START)
+                        self._kick_off_next_step(Connection_Status.READY_TO_START)
 
             # Do not cause a full Home Assistant Exception, keep it local here
             except (ConnectTimeout, HTTPError) as ex:
@@ -553,85 +558,6 @@ class ManageConnection(MaintainInterface):
             except Exception as ex:  # noqa: BLE001
                 tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
                 self.logger.logstate_error(f"General Exception: \n\n{tb_str}")
-
-    def update_t_p(self, transport: asyncio.Transport, protocol: ServerProtocol):
-        """Update the transport and protocol. Tie everything back together with the new transport and protocol."""
-        if protocol is not None:
-            protocol.set_vp(self._visonic_protocol)
-        #################################################################
-        # TODO:
-        # This isn't going to work any more so do it a different way
-        #################################################################
-        #if transport is not None:
-        #    transport.update_transport(transport)
-
-    async def async_server_connect(self, transport: asyncio.Transport, protocol: ServerProtocol) -> bool:
-        """Connect to the alarm panel using the pyvisonic library."""
-
-        if self.hasStarted():
-            self.logger.logstate_warning(
-                "Request to Start and the integraion is already running and connected"
-            )
-        else:
-            self._visonic_protocol = None
-            try:
-                # self.logger.logstate_debug(f"[async_server_connect]       async_forward_entry_setups")
-                self.logger.logstate_debug(
-                    "[async_server_connect] Client connecting.....      async_forward_entry_setups"
-                )
-                await self.hass.config_entries.async_forward_entry_setups(
-                    self.entry, PLATFORMS
-                )
-                self.logger.logstate_debug(
-                    "[async_server_connect] Client connecting.....      async_forward_entry_setups done"
-                )
-
-                self._visonic_protocol = VisonicProtocol(
-                    force_standard_mode=False,
-                    disable_all_commands=False,
-                    download_code=None,
-                    user_code_slot=1,
-                    loop=self.hass.loop,
-                )
-                self._visonic_protocol.set_log_events(
-                    self.language_decoder.getLogEventList()
-                )
-                self.platform_manager.set_alarm_device_information(self.get_panel_model())
-
-                await self.platform_manager.setup_visonic_entity(
-                    Platform.ALARM_CONTROL_PANEL, AlarmPanelData(
-                        getAlarmPanelUniqueIdent(self.panel_ident),
-                        self.get_partitions_in_use()
-                    )
-                )
-
-                self.platform_manager.create_ha_fire_event(
-                    event_id=PanelCondition.CONNECTION,
-                    datadictionary={
-                        "state": "connected",
-                        "attempt": 1,
-                    },
-                )
-
-                if transport is not None and protocol is not None:
-                    self.update_t_p(transport, protocol)
-
-                self._visonic_protocol.on_panel_change(self.on_panel_change_handler)
-                self._visonic_protocol.on_panel_event_log(self.on_panel_event_log_handler)
-                self._visonic_protocol.on_problem(self.on_panel_problem)
-                self._visonic_protocol.on_new_sensor(self.on_new_sensor)
-                self._visonic_protocol.on_new_switch(self.on_new_switch)
-
-                # Record that we have started the system
-                self._system_started = True
-
-            except (ConnectTimeout, HTTPError) as ex:
-                self.logger.create_ha_notification(
-                    AvailableNotifications.CONNECTION,
-                    f"Visonic Panel Connection Error: {ex}<br />You will need to restart hass after fixing.",
-                )
-
-        return self.hasStarted()
 
     # Manage the devices: Sensors, Switches and Devices
 
@@ -817,22 +743,102 @@ class ManageConnection(MaintainInterface):
             baud = self._connection_baud_list[self._baud_index]
             self._baud_index += 1  # for next time
             self._serial_baud_rate = baud
-            self.kick_off_next_step(Connection_Status.BAUD_CHANGE_RESET_PROTOCOL)
+            self._kick_off_next_step(Connection_Status.BAUD_CHANGE_RESET_PROTOCOL)
 
-            if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED:
-                self.logger.logstate_debug("No data from panel (disconnected) so try a different baud rate %s", baud)
-            else:
-                self.logger.logstate_debug("No data from panel (never connected) so try a different baud rate %s", baud)
+            reason = "disconnected" if termination == AlTerminationType.NO_DATA_FROM_PANEL_DISCONNECTED else "never connected"
+            self.logger.logstate_debug("No data from panel (%s) so try a different baud rate %s", reason, baud)
 
         elif self._max_connection_attempts == 0:
             # If the user says 0 restart attempts then do not restart at all
             self.logger.logstate_debug("  User config explicitly prevents any reconnection attempts, stopping the connection")
             # stop, do not restart
-            self.kick_off_next_step(Connection_Status.STOP)
+            self._kick_off_next_step(Connection_Status.STOP)
         else:
             # termination:
             #    CRC_ERROR = 3
             #    SAME_PACKET_ERROR = 4
             #    EXTERNAL_TERMINATION = 5
             #    NO_POWERLINK_FOR_PERIOD = 6
-            self.kick_off_next_step(Connection_Status.RESTART)
+            self._kick_off_next_step(Connection_Status.RESTART)
+
+
+    # The following 2 functions are used by the TCP Server/Discovery configuration, this is not currently used
+
+    def update_t_p(self, transport: asyncio.Transport, protocol: ServerProtocol):
+        """Update the transport and protocol. Tie everything back together with the new transport and protocol."""
+        if protocol is not None:
+            protocol.set_vp(self._visonic_protocol)
+        #################################################################
+        # TODO:
+        # This isn't going to work any more so do it a different way
+        #################################################################
+        #if transport is not None:
+        #    transport.update_transport(transport)
+
+    async def async_server_connect(self, transport: asyncio.Transport, protocol: ServerProtocol) -> bool:
+        """Connect to the alarm panel using the pyvisonic library."""
+
+        if self.hasStarted():
+            self.logger.logstate_warning(
+                "Request to Start and the integraion is already running and connected"
+            )
+        else:
+            self._visonic_protocol = None
+            try:
+                # self.logger.logstate_debug(f"[async_server_connect]       async_forward_entry_setups")
+                self.logger.logstate_debug(
+                    "[async_server_connect] Client connecting.....      async_forward_entry_setups"
+                )
+                await self.hass.config_entries.async_forward_entry_setups(
+                    self.entry, PLATFORMS
+                )
+                self.logger.logstate_debug(
+                    "[async_server_connect] Client connecting.....      async_forward_entry_setups done"
+                )
+
+                self._visonic_protocol = VisonicProtocol(
+                    force_standard_mode=False,
+                    disable_all_commands=False,
+                    download_code=None,
+                    user_code_slot=1,
+                    loop=self.hass.loop,
+                )
+                self._visonic_protocol.set_log_events(
+                    self.language_decoder.getLogEventList()
+                )
+                self.platform_manager.set_alarm_device_information(self.get_panel_model())
+
+                await self.platform_manager.setup_visonic_entity(
+                    Platform.ALARM_CONTROL_PANEL, AlarmPanelData(
+                        getAlarmPanelUniqueIdent(self.panel_ident),
+                        self.get_partitions_in_use()
+                    )
+                )
+
+                self.platform_manager.create_ha_fire_event(
+                    event_id=PanelCondition.CONNECTION,
+                    datadictionary={
+                        "state": "connected",
+                        "attempt": 1,
+                    },
+                )
+
+                if transport is not None and protocol is not None:
+                    self.update_t_p(transport, protocol)
+
+                self._visonic_protocol.on_panel_change(self.on_panel_change_handler)
+                self._visonic_protocol.on_panel_event_log(self.on_panel_event_log_handler)
+                self._visonic_protocol.on_problem(self.on_panel_problem)
+                self._visonic_protocol.on_new_sensor(self.on_new_sensor)
+                self._visonic_protocol.on_new_switch(self.on_new_switch)
+
+                # Record that we have started the system
+                self._system_started = True
+
+            except (ConnectTimeout, HTTPError) as ex:
+                self.logger.create_ha_notification(
+                    AvailableNotifications.CONNECTION,
+                    f"Visonic Panel Connection Error: {ex}<br />You will need to restart hass after fixing.",
+                )
+
+        return self.hasStarted()

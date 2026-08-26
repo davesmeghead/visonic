@@ -39,8 +39,11 @@ class MessageHandlingB0Data(MessageHandlingBase):
         """Initialize class."""
         super().__init__(loop=loop, force_standard_mode=force_standard_mode, disable_all_commands=disable_all_commands, download_code=download_code, user_code_slot=user_code_slot, logger=logger)
 
-    def _settings_data_type_formatter( self, data_type: int, data: bytes, data_item_size: int = 16, byte_size: int = 1, no_of_entries: int = 1 ) -> int | str | bytearray | list:
+    def _settings_data_type_formatter( self, data_type: int, data: bytes | memoryview, data_item_size: int = 16, byte_size: int = 1, no_of_entries: int = 1 ) -> int | str | bytearray | list:
         """Format data for 35 and 42 data."""
+
+        if isinstance(data, memoryview):
+            data = data.tobytes()
 
         match data_type:
             case DataType.ZERO_PADDED_STRING:

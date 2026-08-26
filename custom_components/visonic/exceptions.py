@@ -35,3 +35,6 @@ class VisonicException(HomeAssistantError):
             oe = repr(self.original_exception)
             return f"{base_msg} (caused by {oe})"
         return base_msg
+
+class VisonicAuthException(VisonicException):
+    """Authorisation Exception."""

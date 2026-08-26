@@ -38,6 +38,13 @@
                     "panel_number": "Numero del Pannello (se hai solo 1 pannello lascia questo valore su 0)"
                 }
             },
+            "device_no_panel": {
+                "description": "Inserisci il tipo di dispositivo e il numero del pannello",
+                "title": "Connessione",
+                "data": {
+                    "type": "Ethernet, Server o Serial"
+                }
+            },
             "form_tcp_server": {
                 "description": "Enter your TCP Server Settings",
                 "title": "TCP Server Configuration",

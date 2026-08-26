@@ -3,7 +3,7 @@
     "config": {
         "abort": {
 			"already_configured": "Alarm Connection Already Configured",
-			"device_error": "Device must be either Ethernet, Server or Serial",
+			"device_error": "Connection must be either Ethernet, Server or Serial",
 			"emulation_mode_error": "Incorrect Emulation Mode Setting",
 			"settings_missing": "Essential settings are missing",
 			"email_invalid": "The email address is invalid",
@@ -31,11 +31,18 @@
         },
         "step": {
             "device": {
-                "description": "Enter your Device Type and Panel Number",
+                "description": "Enter your Connection Type and Panel Number",
                 "title": "Connection",
                 "data": {
                     "type": "Ethernet, Server or Serial",
                     "panel_number": "Server/Panel Number (if you only have 1 panel leave this set to 0)"
+                }
+            },
+            "device_no_panel": {
+                "description": "Reconfigure your Connection Type (cannot reconfigure the panel number)",
+                "title": "Reconfigure Connection",
+                "data": {
+                    "type": "Ethernet, Server or Serial"
                 }
             },
             "form_tcp_server": {
@@ -169,7 +176,7 @@
         "abort": {
             "already_configured": "Alarm Connection Already Configured",
             "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "device_error": "Device must be either Ethernet, Server or Serial",
+            "device_error": "Connection must be either Ethernet, Server or Serial",
 			"reconfigure_successful": "Reconfiguration Successful",
 			"cannot_edit_tcp_server": "TCP Server cannot be edited, please reconfigure it (which reloads it)",
 			"unknown": "Unexpected or unknown error"
@@ -266,7 +273,7 @@
         },
         "extra_fields": {
             "code": "Code",
-            "for": "[%key:common::device_automation::extra_fields::for%]"
+            "for": "for"
         },
         "trigger_type": {
             "triggered": "{entity_name} Triggered",
