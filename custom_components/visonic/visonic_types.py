@@ -1,27 +1,11 @@
 """Global Visonic Types."""
 
-import asyncio
-from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field, fields
-from datetime import date, datetime
+from dataclasses import dataclass, field
 from enum import Enum, IntEnum, StrEnum, auto
-from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Self, TypedDict, cast
+from typing import Any, Self
 
 from homeassistant.components.alarm_control_panel.const import AlarmControlPanelState
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.util.hass_dict import HassEntryKey
 
-from .const import DOMAIN
-
-if TYPE_CHECKING:
-    # Imports used purely to define a type for type checking:
-    #    This ensures no cyclic imports
-    from .alarm_control_panel import VisonicAlarm
-    from .coordinator_base import VisonicCoordinator
-    from .sensor import VisonicAlarmSensor
-    from .server import ServerProtocol, TCPServerConnection
-    from .visonic_entity_types import DeviceState, PanelState, SensorState, SwitchState
 
 class VisonicStrEnum(StrEnum):
     """Base class for string enumerations for common functions."""
@@ -103,117 +87,6 @@ class EmulationMode(VisonicStrEnum):
                 return "minimal emulation mode"
         return "this should not happen!!!"
 
-
-###################################################################################################
-# This set of classes define the data that is saved in the HASS config entry and run_time data
-###################################################################################################
-@dataclass
-class VisonicConfigData:
-    """The class that is saved as Home Assistant runtime data (for clients)."""
-    # Made it a class just in case I want to include more parameters in future
-    # Coordinator
-    coordinator: VisonicCoordinator
-    # panel identifier
-    panel_id: int
-    # This is the alarm control entity that is first created.
-    #      For multi partiton panels, this is changed to be the overall control entity.
-    #      For Basic Emulation Mode this is the sensor, otherwise it's the alarm_control_panel
-    alarm_entity: VisonicAlarmSensor | VisonicAlarm | None
-    # A dictionary of dispatchers so I can terminate them all correctly
-    dispatchers: dict[str, Callable[..., None]]
-    # A list of functions to call to cleanup on unload
-    #cleanup_callbacks: list[Callable[..., None]]
-
-@dataclass
-class VisonicServerData:
-    """The class that is saved as Home Assistant runtime data (for servers)."""
-    server: TCPServerConnection
-    # server identifier
-    server_id: int
-    lock: asyncio.Lock
-
-@dataclass
-class VisonicDiscoveryData:
-    """The class that is saved as Home Assistant runtime data (discoveries)."""
-    # panel identifier
-    panel_id: int
-    account: str
-    panel: str
-    protocol: ServerProtocol
-    transport: asyncio.Transport
-
-# This class is the data that is saved in hass.data[VisonicEntryKey]
-#    PANELS:       These are the various client entries in the configuration
-#    SERVERS:      These are the various tcp server entries in the configuration
-#    DISCOVERIES:  These are the discoveries made by the tcp server
-class VisonicDomainData(TypedDict):
-    """Visonic domain data."""
-    PANELS: dict[str, VisonicConfigData]         # Panels
-    SERVERS: dict[str, VisonicServerData]        # TCP Servers
-    DISCOVERIES: dict[str, VisonicDiscoveryData] # TCP Discoveries from TCP Servers
-
-# Create the types for the Configuration Parameter Entry
-VisonicEntryKey: HassEntryKey[VisonicDomainData] = HassEntryKey(DOMAIN)
-type VisonicConfigEntry = ConfigEntry[VisonicConfigData]
-
-# Data class that the coordinator uses to manage the data passed to the entities
-@dataclass(frozen=True, slots=True)
-class VisonicCoordinatorData:
-    """Coordinator data for passing to entities. Make it frozen i.e. immutable."""
-
-    # This is the data that is created as part of the coordinator data capture activities and used by all entities
-
-    connected: bool = False      # Is the lower level connected to the panel
-    ispowermaster: bool = False  # Is the panel confirmed as a powermaster
-    mode: str = ""               # A string shown as an attribute to tell the user the status of the connection
-    model: str | None = None     # The reported panel model
-    statusdict: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
-    panelstate: PanelState | None = None  # Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
-    partition_armcode: Mapping[int, Any] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-    partition_show_keypad: Mapping[int, Any] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-    partition_code_arm_required: Mapping[int, Any] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-    partition_siren: Mapping[int, Any] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-    partition_dict: Mapping[int, Any] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-    zones: Mapping[int, SensorState] = field(default_factory=lambda: MappingProxyType({}))
-    switch: Mapping[int, SwitchState] = field(default_factory=lambda: MappingProxyType({}))
-    device: Mapping[int, DeviceState] = field(default_factory=lambda: MappingProxyType({}))
-
-    def _convert_recursive(self, convert_to_name: bool, obj: Any) -> Any:
-        """Recursively convert Mappings to dicts and sets to lists."""
-        if obj is None:
-            return None
-        if convert_to_name and isinstance(obj, Enum):
-            return obj.name.capitalize()
-        if isinstance(obj, (datetime, date)):
-            return obj.isoformat()
-        if isinstance(obj, Mapping):
-            mapping_obj = cast(Mapping[object, object], obj)
-            return {
-                k: self._convert_recursive(convert_to_name, v)
-                for k, v in mapping_obj.items()
-            }
-        if isinstance(obj, (set, list, tuple)):
-            iterable_obj = cast(Iterable[object], obj)
-            return [self._convert_recursive(convert_to_name, v) for v in iterable_obj]
-        return obj
-
-    def as_dict(self, convert_to_name: bool = False) -> dict[str, Any]:
-        """Return a fully mutable dictionary representation."""
-        return {
-            f.name: self._convert_recursive(convert_to_name, getattr(self, f.name))
-            for f in fields(self)
-        }
-
 class VisonicIntEnum(IntEnum):
     """Int enum for Visonic devices."""
 
@@ -223,9 +96,11 @@ class VisonicIntEnum(IntEnum):
         return set(cls)
 
     @classmethod
-    def members(cls) -> list[str]:
+    def members(cls, tolower: bool = True) -> list[str]:
         """Return enum members as lowercase names."""
-        return [m.name.lower() for m in cls]
+        if tolower:
+            return [m.name.lower() for m in cls]
+        return [m.name for m in cls]
 
     @classmethod
     def from_name(cls, name: str) -> Self | None:

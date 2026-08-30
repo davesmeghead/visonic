@@ -10,7 +10,6 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import slugify
 
 from ..const import (  # noqa: TID252
-    CONF_EMULATION_MODE,
     CONF_ENABLE_REMOTE_ARM,
     CONF_ENABLE_REMOTE_DISARM,
     PARTITION_ID_WHEN_BASE,
@@ -21,6 +20,10 @@ from ..exceptions import VisonicException  # noqa: TID252
 from ..log_events import logEvents  # noqa: TID252
 from ..server import ServerProtocol  # noqa: TID252
 from ..utils import getAlarmPanelUniqueIdent, to_bool  # noqa: TID252
+from ..visonic_data_types import (  # noqa: TID252
+    VisonicConfigEntry,
+    VisonicCoordinatorData,
+)
 from ..visonic_types import (  # noqa: TID252
     AlarmCommandStatus,
     AlarmPanelCommand,
@@ -28,10 +31,7 @@ from ..visonic_types import (  # noqa: TID252
     AlarmSwitchCommand,
     AvailableNotifications,
     CommandResult,
-    EmulationMode,
     PanelStateData,
-    VisonicConfigEntry,
-    VisonicCoordinatorData,
 )
 from .client_visonic_client import VisonicClient
 
@@ -68,14 +68,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         # Use auto (_async_update_data) for minor updates to entity attributes every 60 seconds
         # Also, for both manual and auto, only call the handlers when data changes
 
-        super().__init__(hass, entry, panel_id, event_logger, 60, False, self.state_changed_callback)
-
-        v = EmulationMode(entry.data.get(CONF_EMULATION_MODE, EmulationMode.POWERLINK))
-        self.force_standard_mode = v == EmulationMode.STANDARD
-        self.disable_all_panel_commands = v == EmulationMode.MINIMAL
-        # If disable all commands then force standard is set to True
-        if self.disable_all_panel_commands:
-            self.force_standard_mode = True
+        super().__init__(hass, entry, panel_id=panel_id, lo=event_logger, update_interval=60, always_update=False, state_changed_callback=self.state_changed_callback)
 
         self._client: VisonicClient = VisonicClient(
             hass = hass,

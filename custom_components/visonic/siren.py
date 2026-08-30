@@ -25,8 +25,9 @@ from .const import (
 from .coordinator_base import VisonicCoordinator
 from .exceptions import VisonicException
 from .utils import capitalize, create_sensor_unique_id
+from .visonic_data_types import VisonicPanelData
 from .visonic_entity_types import AlarmPanelData
-from .visonic_types import PanelStateData, TriggerAlarmType, VisonicConfigData
+from .visonic_types import PanelStateData, TriggerAlarmType
 
 PARALLEL_UPDATES = 1
 SUPPORT_FLAGS = SirenEntityFeature.TURN_OFF | SirenEntityFeature.TURN_ON
@@ -44,31 +45,29 @@ async def async_setup_entry(
         """Add Visonic Siren entity."""
         async_add_entities([VisonicSiren(entry=entry, siren_id=siren_data.siren_id, name=siren_data.siren_name, identifier=siren_data.identifier)])
 
-    vce: VisonicConfigData = entry.runtime_data
-    vce.dispatchers[Platform.SIREN] = async_dispatcher_connect(
-        hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.SIREN}", async_add_siren
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.SIREN}", async_add_siren
+        )
     )
-
 
 class VisonicSiren(CoordinatorEntity[VisonicCoordinator], SirenEntity):
     """Representation of a Visonic siren device."""
 
     def __init__(self, entry: ConfigEntry, siren_id: int, name: str, identifier: str) -> None:
         """Initialize the siren entity."""
-        vce: VisonicConfigData = entry.runtime_data
-        vc: VisonicCoordinator = vce.coordinator
-        if vc is None:
+        vcd: VisonicPanelData = entry.runtime_data
+        if vcd.coordinator is None:
             raise VisonicException("Alarm has been given invalid coordinator", 101)
-        super().__init__(vce.coordinator)
+        super().__init__(coordinator=vcd.coordinator)
         self.siren_id = siren_id
         self._name = "Siren"
-        self._panel_id = vce.panel_id
+        self._panel_id = vcd.panel_id
         self._entry = entry
         self._mystate = False
         self.external = False
         self.trigger = ""
         self.alarmReason = ""
-        self.set_siren_sounding_filter(entry)
         self._attr_supported_features = SUPPORT_FLAGS
         self._attr_available_tones = None
         self._attr_name = "Siren"
@@ -81,31 +80,18 @@ class VisonicSiren(CoordinatorEntity[VisonicCoordinator], SirenEntity):
         )
         self.update()
 
-    def set_siren_sounding_filter(self, entry: ConfigEntry):
+    @property
+    def siren_sounding_list(self) -> list:
         """Convert a list of strings in to the AlarmType enumeration."""
         # The siren sounding options are stored as a list of strings
-        strings = entry.options.get(CONF_SIREN_SOUNDING, [])
+        strings = self._entry.options.get(CONF_SIREN_SOUNDING)
         if strings is None:
-            self.siren_sounding_list = []
-        else:
-            self.siren_sounding_list = [
-                m
-                for s in strings
-                if isinstance(s, str) and (m := TriggerAlarmType.from_name(s)) is not None
-            ]
-
-    async def _handle_entry_update(
-        self, _hass: HomeAssistant, entry: ConfigEntry
-    ) -> None:
-        """Handle updates from options."""
-        self._entry = entry
-        self.set_siren_sounding_filter(entry)
-        self.async_write_ha_state()
-
-    async def async_added_to_hass(self) -> None:
-        """Register update listener on entity added."""
-        await super().async_added_to_hass()
-        self.async_on_remove(self._entry.add_update_listener(self._handle_entry_update))
+            return []
+        return [
+            m
+            for s in strings
+            if isinstance(s, str) and (m := TriggerAlarmType.from_name(s)) is not None
+        ]
 
     @callback
     def _handle_coordinator_update(self) -> None:

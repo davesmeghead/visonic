@@ -32,7 +32,6 @@ from .const import (
     PANEL_ATTRIBUTE_NAME,
     PARTITION_ID_WHEN_BASE,
     PE_PARTITION,
-    PLATFORMS,
 )
 from .image_manager import ImageManager
 from .log_events import logEvents
@@ -68,7 +67,6 @@ from .visonic_types import (
     AvailableNotifications,
     EmulationMode,
     PanelCondition,
-    VisonicConfigEntry,
 )
 
 MESSAGE_REASON_DICT = {
@@ -133,18 +131,13 @@ class PlatformManager:
         self.image_manager = image_manager
         self.state_changed_callback: Callable[..., None] | None = state_changed_callback
 
-        v = EmulationMode(entry.data.get(CONF_EMULATION_MODE, EmulationMode.POWERLINK))
-        self.force_standard_mode = v == EmulationMode.STANDARD
-        self.disable_all_panel_commands = v == EmulationMode.MINIMAL
-        # If disable all commands then force standard is set to True
-        if self.disable_all_panel_commands:
-            self.force_standard_mode = True
-
         self.rationalised_ha_devices = False
 
         self.visonic_alarm_setup_lock = asyncio.Lock()
-        self.exclude_switch_list: list[int] = []
-        self.exclude_sensor_list: list[int] = []
+
+        self._createdAlarmPanel = False
+        self.created_download_active_sensor = False
+        self.panel_entity_name: dict[int, str] = {}
 
         # Use a Generic to manage the lists of sensors and switches.
         #    The functions in this class do not need to know the internals,
@@ -165,8 +158,15 @@ class PlatformManager:
         # A set of sensor IDs that are PIR/Camera and have an image
         self._image_created_set: set[int] = set()
 
-        self._createdAlarmPanel = False
-        self.created_download_active_sensor = False
+        # Process the exclude sensor list
+        tmp: list[int] | str | None = self.entry.data.get(CONF_EXCLUDE_SENSOR)
+        self.exclude_sensor_list: list[int] = parse_int_list(tmp)
+        self.logger.logstate_debug("Exclude sensor list = %s", self.exclude_sensor_list)
+
+        # Process the exclude switch list
+        tmp: list[int] | str | None = self.entry.data.get(CONF_EXCLUDE_SWITCH)
+        self.exclude_switch_list: list[int] = parse_int_list(tmp)
+        self.logger.logstate_debug("Exclude switch list = %s", self.exclude_switch_list)
 
         self.panel_event_log: PanelEventLogger = PanelEventLogger(
             hass=self.hass,
@@ -175,38 +175,19 @@ class PlatformManager:
             logger=self.logger,
             create_ha_fire_event=self.create_ha_fire_event,
         )
-        self.panel_entity_name: dict[int, str] = {}
-        self.update()
 
-    def update(self):
-        """Updated user config."""
+    @property
+    def disable_all_panel_commands(self) -> bool:  # noqa: D102
+        v = EmulationMode(self.entry.data.get(CONF_EMULATION_MODE, EmulationMode.POWERLINK))
+        return v == EmulationMode.MINIMAL
 
-        # Dictionary of sensors that are current and valid
-        self._sensor_dict.clear()
-        # Dictionary of switches that are current and valid
-        self._switch_dict.clear()
-        # Dictionary of devices that are current and valid, e.g. fobs, sirens etc.
-        self._device_dict.clear()
-
-        # Process the exclude switch list
-        tmp: list[int] | str = self.entry.data.get(CONF_EXCLUDE_SWITCH, "")
-        if isinstance(tmp, str):
-            self.exclude_switch_list = parse_int_list(tmp)
-        else:
-            self.exclude_switch_list = tmp
-
-        # Process the exclude sensor list
-        self.exclude_sensor_list: list[int] = []
-        tmp: list[int] | str = self.entry.data.get(CONF_EXCLUDE_SENSOR, "")
-        if isinstance(tmp, str):
-            self.exclude_sensor_list = parse_int_list(tmp)
-        else:
-            self.exclude_sensor_list = tmp
-
-        self.rationalised_ha_devices = False
-
-        self.logger.logstate_debug("Exclude sensor list = %s", self.exclude_sensor_list)
-        self.logger.logstate_debug("Exclude switch list = %s", self.exclude_switch_list)
+    @property
+    def force_standard_mode(self) -> bool:  # noqa: D102
+        # If disable all commands then force standard is set to True
+        if self.disable_all_panel_commands:
+            return True
+        v = EmulationMode(self.entry.data.get(CONF_EMULATION_MODE, EmulationMode.POWERLINK))
+        return v == EmulationMode.STANDARD
 
     def create_ha_fire_event(
         self, event_id: PanelCondition, datadictionary: dict[str, Any]
@@ -699,19 +680,6 @@ class PlatformManager:
             return True
         return False
 
-    def terminate_all_dispatchers(self, entry: VisonicConfigEntry):
-        """Kill all the dispatchers for this entry."""
-        for p in PLATFORMS:
-            if d := entry.runtime_data.dispatchers.get(p):
-                d()
-                entry.runtime_data.dispatchers.pop(p, None)
-                self.logger.logstate_debug("[terminate_all_dispatchers]  %s  Success", p)
-            else:
-                self.logger.logstate_info("[terminate_all_dispatchers]  %s  Not Done", p)
-        # Reset the run time data parameters, keep client (and the dispatchers are all kept but set to None above)
-        entry.runtime_data.alarm_entity = None
-        # entry.runtime_data.sensors = []
-
     def get_sensors_to_bypass(self, parts: int | set[int] | None) -> set[int]:
         """Determine the list of sensors that are open and not already bypassed, in order to arm the panel."""
         if isinstance(parts, int):
@@ -731,13 +699,14 @@ class PlatformManager:
             }
         )
 
-    def populateSensorDictionary(self) -> dict[str, Any]:
+    def populateSensorDictionary(self) -> dict[str, list[str]]:
         """Create the sensor dict."""
-        datadict: dict[str, list[str]] = {}
-        datadict["open"] = []
-        datadict["bypass"] = []
-        datadict["tamper"] = []
-        datadict["zonetamper"] = []
+        datadict: dict[str, list[str]] = {
+            "open": [],
+            "bypass": [],
+            "tamper": [],
+            "zonetamper": [],
+        }
 
         base = Platform.BINARY_SENSOR + "."
         for sid, sensor in self._sensor_dict.items():
@@ -759,17 +728,18 @@ class PlatformManager:
             (Platform.BINARY_SENSOR + "." + create_sensor_unique_id(self.panel_ident, sid), sensor)
             for sid, sensor in self._sensor_dict.items()
         ]
+        switches = [
+            (Platform.SWITCH + "." + create_switch_unique_id(self.panel_ident, sid))
+            for sid in self._switch_dict
+            if valid
+        ]
         return {
             "valid": valid,
             "sensors": [ent for ent, _ in sensors_info if valid],
             "batterylow": [ent for ent, s in sensors_info if valid and s.low_battery],
             "open": [ent for ent, s in sensors_info if valid and s.status],
             "bypass": [ent for ent, s in sensors_info if valid and s.bypass],
-            "switches": [
-                Platform.SWITCH + "." + create_switch_unique_id(self.panel_ident, sid)
-                for sid in self._switch_dict
-                if valid
-            ],
+            "switches": switches,
         }
 
     def sensor_state(self) -> dict[int, SensorState]:

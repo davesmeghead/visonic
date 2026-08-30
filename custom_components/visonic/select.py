@@ -27,8 +27,9 @@ from .const import (
     VISONIC_TRANSLATION_KEY,
 )
 from .coordinator_base import VisonicCoordinator
+from .visonic_data_types import VisonicCoordinatorData, VisonicPanelData
 from .visonic_entity_types import SensorState, ZoneSensorData
-from .visonic_types import AlarmCommandStatus, VisonicConfigData, VisonicCoordinatorData
+from .visonic_types import AlarmCommandStatus
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,9 +50,10 @@ async def async_setup_entry(
         """Add a Visonic Select entity to Home Assistant."""
         async_add_entities([VisonicSelect(entry=entry, sensor_id=sensor_data.device_id, identifier=sensor_data.identifier)])
 
-    vce: VisonicConfigData = entry.runtime_data
-    vce.dispatchers[Platform.SELECT] = async_dispatcher_connect(
-        hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.SELECT}", async_add_select
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.SELECT}", async_add_select
+        )
     )
 
 
@@ -63,12 +65,12 @@ class VisonicSelect(CoordinatorEntity[VisonicCoordinator], SelectEntity):
 
     def __init__(self, entry: ConfigEntry, sensor_id: int, identifier: str) -> None:
         """Initialize the select entity with panel info, pending-state tracking, and async lock."""
-        vce: VisonicConfigData = entry.runtime_data
-        super().__init__(vce.coordinator)
+        vcd: VisonicPanelData = entry.runtime_data
+        super().__init__(coordinator=vcd.coordinator)
 
         self._entry = entry
         self._sensor_id = sensor_id
-        self._panel_id = vce.panel_id
+        self._panel_id = vcd.panel_id
         self._attr_name = "Arm Mode"
         self._attr_should_poll = False
         self._attr_translation_key = VISONIC_TRANSLATION_KEY

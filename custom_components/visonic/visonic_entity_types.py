@@ -153,6 +153,8 @@ class BaseStateClass(DataclassDictMixin):
 @dataclass(slots=True, kw_only=True, frozen=True)
 class SensorState(BaseStateClass):
     """State of each sensor to pass to coordinator data."""
+    enabled: bool = False
+    status: bool = False
     problem: str = ""
     sensor_type_id: int
     partition: set[int] = field(default_factory=set)
@@ -161,9 +163,7 @@ class SensorState(BaseStateClass):
     chime: str | None = None
     bypass: bool = False
     low_battery: bool = False
-    status: bool = False
     tamper: bool = False
-    enrolled: bool = False
     triggered: bool = False
     zonetamper: bool = False
     temperature: float | None = None
@@ -181,20 +181,20 @@ class SensorState(BaseStateClass):
 @dataclass(slots=True, kw_only=True, frozen=True)
 class SwitchState(BaseStateClass):
     """Internal switch state."""
-    status: bool = False
     enabled: bool = False
+    status: bool = False
     model: str = ""
     location: str = ""
 
 @dataclass(slots=True, kw_only=True, frozen=True)
 class DeviceState(BaseStateClass):
     """Internal device state."""
-    device_type: str = ""
     enabled: bool = False
+    status: bool = False
+    device_type: str = ""
     name: str = ""
     model: str = ""
     location: str = ""
-    state: bool = False
     low_battery: bool = False
     trouble: str = ""
     tamper: bool = False

@@ -14,8 +14,9 @@ from homeassistant.util import slugify
 
 from .const import DOMAIN, MANUFACTURER
 from .coordinator_base import VisonicCoordinator
+from .visonic_data_types import VisonicPanelData
 from .visonic_entity_types import ZoneSensorData
-from .visonic_types import ImageQueueState, VisonicConfigData
+from .visonic_types import ImageQueueState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,9 +38,10 @@ async def async_setup_entry(
             [VisonicImageRequestButton(entry=entry, sensor_id=sensor_data.device_id, identifier=sensor_data.identifier)]
         )
 
-    vce: VisonicConfigData = entry.runtime_data
-    vce.dispatchers[Platform.BUTTON] = async_dispatcher_connect(
-        hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.BUTTON}", async_add_button
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.BUTTON}", async_add_button
+        )
     )
 
 
@@ -51,8 +53,8 @@ class VisonicImageRequestButton(CoordinatorEntity[VisonicCoordinator], ButtonEnt
 
     def __init__(self, entry: ConfigEntry, sensor_id: int, identifier: str) -> None:
         """Initialize the button entity."""
-        vce: VisonicConfigData = entry.runtime_data
-        CoordinatorEntity.__init__(self, coordinator=vce.coordinator)  # type: ignore[arg-type]
+        vcd: VisonicPanelData = entry.runtime_data
+        CoordinatorEntity.__init__(self, coordinator=vcd.coordinator)  # type: ignore[arg-type]
         self._sensor_id = sensor_id
         self._attr_unique_id = slugify(identifier + "_request_image")
         self._attr_name = "Request image"

@@ -38,6 +38,7 @@ from ..coordinator_base import VisonicCoordinator  # noqa: TID252
 from ..exceptions import VisonicAuthException, VisonicException  # noqa: TID252
 from ..log_events import logEvents  # noqa: TID252
 from ..utils import to_bool, update_config_entry_threadsafe  # noqa: TID252
+from ..visonic_data_types import VisonicCoordinatorData  # noqa: TID252
 from ..visonic_entity_types import (  # noqa: TID252  # noqa: TID252
     AlarmSensorType,
     DeviceState,
@@ -57,7 +58,6 @@ from ..visonic_types import (  # noqa: TID252  # noqa: TID252
     AvailableNotifications,
     CommandResult,
     TriggerAlarmType,
-    VisonicCoordinatorData,
 )
 from .pyvisonicalarm.alarm import AlarmSystem, GenericDevice, PanelInfo
 from .pyvisonicalarm.classes import Alarm, Event, Partition
@@ -129,25 +129,23 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, panel_id: int, event_logger: logEvents):
         """Initialize the coordinator."""
-        update_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_CLOUD_SCAN_INTERVAL)
-        super().__init__(hass, entry, panel_id, event_logger, update_interval, True, self.state_changed_callback)
+        ui = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_CLOUD_SCAN_INTERVAL)
+        super().__init__(hass, entry, panel_id=panel_id, lo=event_logger, update_interval=ui, always_update=True, state_changed_callback=self.state_changed_callback)
 
         self.panel_entity_name: dict[int, str] = {}
         self.partition_list : set[int] = set()
         self.siren_arm = False
         self.siren_disarm = False
         self.testing = False
+        self.entry = entry
 
         self.first_time = True
         self.login_success = False
         self.device_registry = dr.async_get(hass)
-        self._update_settings(entry)
-        self.saved_config = self._grab_config_from_entry()
-        entry.add_update_listener(self._handle_entry_update)
+        #self.saved_config = self._grab_config_from_entry()
         self._remove_dummy_listener = self.async_add_listener(self._dummy_listener)
 
-        self._event_logger.logstate_info(f"{update_interval=}")
-
+        self._event_logger.logstate_info(f"update_interval={ui}")
         self.cloud_alarm: AlarmSystem | None = None
 
     def _dummy_listener(self):
@@ -186,37 +184,27 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         """Called when certain entities are first initialised to make sure they get the latest data."""
         # Needs to be implemented as it gets called, but no action to take
 
-    def _grab_config_from_entry(self) -> list[str]:
-        # These are the parameters that are used to authenticate and login to the remote server
-        return [
-            self.config_entry.data.get(CONF_PANEL_SERIAL),
-            self.config_entry.data.get(CONF_EMAIL),
-            self.config_entry.data.get(CONF_PASSWORD),
-            self.config_entry.data.get(CONF_CODE),
-        ]
+    #def _grab_config_from_entry(self) -> list[str]:
+    #    # These are the parameters that are used to authenticate and login to the remote server
+    #    return [
+    #        self.config_entry.data.get(CONF_PANEL_SERIAL),
+    #        self.config_entry.data.get(CONF_EMAIL),
+    #        self.config_entry.data.get(CONF_PASSWORD),
+    #        self.config_entry.data.get(CONF_CODE),
+    #    ]
 
-    def _update_settings(self, entry: ConfigEntry):
-        # Change the update interval.
-        update_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_CLOUD_SCAN_INTERVAL)
-        self.update_interval = timedelta(seconds=update_interval)
-        # Clear out all sensors, partitions and switches so they are recreated
+    @property
+    def update_interval(self) -> timedelta | None:
+        """Interval between updates."""
+        update_interval = self.entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_CLOUD_SCAN_INTERVAL)
+        self._update_interval = timedelta(seconds=update_interval)
+        self._update_interval_seconds = self._update_interval.total_seconds()
+        return self._update_interval
+
+    @update_interval.setter
+    def update_interval(self, value: timedelta | None) -> None:
+        """Set interval between updates."""
         self.partition_list : set[int] = set()
-
-    async def _handle_entry_update(
-        self, _hass: HomeAssistant, entry: ConfigEntry
-    ) -> None:
-        # Re-read options config
-        self._event_logger.logstate_info("[Cloud Coordinator] Updating configuration parameters from Settings")
-        self._update_settings(entry)
-        self.platform_manager.update()
-        # If we are already logged in to the remote server and
-        #    the user has changed the auth or login parameters then reconnect
-        if self.login_success:
-            tmp = self._grab_config_from_entry()
-            if tmp != self.saved_config:
-                self.saved_config = self._grab_config_from_entry()
-                await self.async_panel_stop()
-                await self.async_panel_connect()
 
     async def authenticate(self):
         """Authenticate with the panel."""
@@ -495,6 +483,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
     async def send_command_sensor_image(self, devid: int | None, eid: str | None, duration: int) -> AlarmCommandStatus:
         """Send the command to the panel to get a camera image."""
         acs = AlarmCommandStatus.FAIL_INVALID_RETURN
+        _LOGGER.warning("Sensor Images are not currently implemented in the Visonic integration.")
         #if self.cloud_alarm:
         #    process_token = await self.cloud_alarm.make_video(devid)
         #    acs = await self.wait_for_process_status(process_token)
@@ -767,7 +756,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             low_battery=device.low_battery,
             status=device.state,
             tamper=device.tamper,
-            enrolled=not device.preenroll and bool(device.enrollment_id),  # fully enrolled and a valid id
+            enabled=not device.preenroll and bool(device.enrollment_id),  # fully enrolled and a valid id
             triggered=triggered,
             zonetamper=device.tamper,
             temperature=temperature,
@@ -799,7 +788,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             enabled=True,
             model=f"{device.device_type} ({device.enrollment_id})",
             location=loc,
-            state=device.state,
+            status=device.state,
             low_battery=device.low_battery,
             trouble=device.trouble,
             tamper=device.tamper,
@@ -824,7 +813,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             for device in devices:
                 if isinstance(device, (ContactDevice, MotionDevice, SmokeDevice, CameraDevice)):
                     sensor: SensorState = self._as_sensor_state(device)
-                    if sensor.enrolled:
+                    if sensor.enabled:
                         self.platform_manager.sensor_update_or_create(sensor)
                     else:
                         self._event_logger.logstate_info(f"Sensor Device Not Enrolled {device}")
@@ -842,7 +831,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
                 elif isinstance(device, ShockDevice):
                     sensor: SensorState = self._as_sensor_state(device)
-                    if sensor.enrolled:
+                    if sensor.enabled:
                         self.platform_manager.sensor_update_or_create(sensor)
                     else:
                         self._event_logger.logstate_info(f"Shock Sensor Device Not Enrolled {device}")

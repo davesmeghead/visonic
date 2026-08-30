@@ -10,6 +10,7 @@
 			"settings_invalid": "There are invalid settings",
             "unknown": "Errore sconosciuto",
 			"reconfigure_successful": "Reconfiguration Successful",
+			"reauth_successful": "Reauthorisation Successful",
 			"already_in_progress": "Panel configuration already in progress",
 			"exclusion_list_invalid": "Either the Sensor or Switch exclusion lists are invalid",
 			"download_code_invalid": "The download code is invalid",
@@ -178,6 +179,7 @@
             "emulation_mode_error": "Impostazione modalit\u00E0 emulazione non corretta",
             "device_error": "Il dispositivo deve essere Ethernet, Server o Serial",
 			"reconfigure_successful": "Reconfiguration Successful",
+			"reauth_successful": "Reauthorisation Successful",
 			"cannot_edit_tcp_server": "TCP Server cannot be edited, please reconfigure it (which reloads it)",
             "unknown": "Errore sconosciuto"
         },
@@ -1124,6 +1126,9 @@
         },
         "panel_initial_connection_failure": {
             "message": "Initial Visonic connection to panel number {panel_id} failure."
+        },
+        "panel_authorisation_failure": {
+            "message": "Cloud Login Authorisation Failure for panel number {panel_id}."
         },
         "no_unique_number_in_config": {
             "message": "Visonic configuration does not include a {ident} number, cannot continue as it is invalid."

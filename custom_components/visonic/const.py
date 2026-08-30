@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 
 # The client version and domain information for the integration
 DOMAIN: Final = "visonic"
-CLIENT_VERSION: Final = "0.13.0.35"
+CLIENT_VERSION: Final = "0.13.0.37"
 MANUFACTURER: Final = "Visonic"
 VISONIC_UNIQUE_NAME: Final = "Visonic Alarm"
 VISONIC_TRANSLATION_KEY: Final = "alarm_panel_key"
@@ -87,6 +87,7 @@ TRANSLATE_EXCEPTION_INVALID_ARM_STATE: Final = "invalid_arm_state"  # Not Used #
 TRANSLATE_EXCEPTION_INVALID_ARM_STATE_NO_OPTION: Final = "invalid_arm_state_no_option"
 TRANSLATE_EXCEPTION_NUMBER_NOT_UNIQUE: Final = "number_in_config_not_unique"
 TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE: Final = "panel_initial_connection_failure"
+TRANSLATE_EXCEPTION_AUTHORISATION_FAILURE: Final = "panel_authorisation_failure"
 TRANSLATE_EXCEPTION_NO_UNIQUE_NUMBER_IN_CONFIG: Final = "no_unique_number_in_config"
 TRANSLATE_EXCEPTION_SERVICE_NO_ENTITY_SPECIFIED: Final = "no_entity_specified_in_service"
 TRANSLATE_EXCEPTION_SERVICE_ENTITY_NOT_IN_DEVICE: Final = "entity_not_attached_to_device"

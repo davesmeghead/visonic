@@ -12,6 +12,7 @@ from ..const import CLIENT_VERSION, CONF_ENABLE_SENSOR_BYPASS  # noqa: TID252
 from ..log_events import logEvents  # noqa: TID252  # noqa: TID252
 from ..platform_manager import PlatformManager  # noqa: TID252
 from ..utils import decode_code_from_dict_or_str, to_bool  # noqa: TID252
+from ..visonic_data_types import VisonicConfigEntry  # noqa: TID252
 from ..visonic_types import (  # noqa: TID252  # noqa: TID252
     AlarmCommandStatus,  # AlCommandStatus  # AlCommandStatus
     AlarmPanelCommand,
@@ -19,7 +20,6 @@ from ..visonic_types import (  # noqa: TID252  # noqa: TID252
     AvailableNotifications,
     CommandResult,
     PanelCondition,
-    VisonicConfigEntry,
 )
 from .client_manage_connection import ManageConnection
 from .pyvisonic.py_abstract_classes import AlPanelInterface

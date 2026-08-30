@@ -41,12 +41,8 @@ from .const import (
 )
 from .coordinator_base import VisonicCoordinator
 from .exceptions import VisonicException
-from .visonic_types import (
-    AlarmPanelCommand,
-    AlarmSwitchCommand,
-    VisonicConfigData,
-    VisonicEntryKey,
-)
+from .visonic_data_types import VisonicEntryKey, VisonicPanelData
+from .visonic_types import AlarmPanelCommand, AlarmSwitchCommand
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -125,7 +121,7 @@ def get_config_from_call(
     call: ServiceCall,
     allow_multiple: bool,
     service_name: str,
-) -> dict[str, VisonicConfigData]:
+) -> dict[str, VisonicPanelData]:
     """Get ids."""
     entity_ids = call.data.get(ATTR_ENTITY_ID)
     if not entity_ids:
@@ -141,7 +137,7 @@ def get_config_from_call(
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
 
-    retval: dict[str, VisonicConfigData] = {}
+    retval: dict[str, VisonicPanelData] = {}
     for entity_id in entity_ids:
         entity_entry = ent_reg.async_get(entity_id)
         if not entity_entry:

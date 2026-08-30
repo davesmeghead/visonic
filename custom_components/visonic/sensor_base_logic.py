@@ -5,7 +5,7 @@ This class supports the VisonicFloatEntity sensor (int/float) and VisonicBinaryE
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
@@ -19,6 +19,7 @@ from .const import (
     PANEL_ATTRIBUTE_NAME,
 )
 from .coordinator_base import VisonicCoordinator
+from .visonic_data_types import VisonicCoordinatorData, VisonicPanelData
 from .visonic_entity_types import (
     DeviceState,
     EntityDataType,
@@ -26,7 +27,6 @@ from .visonic_entity_types import (
     SensorState,
     VisonicSensorDefinition,
 )
-from .visonic_types import VisonicConfigData, VisonicCoordinatorData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,8 +40,8 @@ class VisonicBaseEntity(CoordinatorEntity[VisonicCoordinator]):
     def __init__(self, entry: ConfigEntry, sensor_id: int, identifier:str, initial_state: bool | float | None, definition: VisonicSensorDefinition) -> None:
         """Initialize the sensor."""
         #_LOGGER.debug("[VisonicBaseSensor]   In base sensor VisonicSensor initialisation")
-        vce: VisonicConfigData = entry.runtime_data
-        super().__init__(vce.coordinator)
+        vcd: VisonicPanelData = entry.runtime_data
+        super().__init__(coordinator=vcd.coordinator)
         self.definition = definition
         self._entry = entry
         self._attr_available = False
@@ -54,36 +54,29 @@ class VisonicBaseEntity(CoordinatorEntity[VisonicCoordinator]):
         self._attr_unique_id = slugify(f"{identifier}_{definition.unique_extension}")
 
         self.sensor_id = sensor_id
-        self._panel_id = vce.panel_id
+        self._panel_id = vcd.panel_id
         self.current_value = initial_state
         self.esa = None
-        self._update_sensor_delays()
 
     def update_local(self, state: SensorState | DeviceState | PanelState | None):
         """Use simple update of self.current_value for this class. Override me for more."""
         data_raw = getattr(state, self.definition.data_key.value, None)
         self.current_value = self.definition.value_fn(data_raw)
 
-    def _update_sensor_delays(self):
-        # Trigger Off delays to apply for each sensor type
-        self.motion_timeout = int(self._entry.options.get(CONF_MOTION_OFF_DELAY, 120))
-        self.magnet_timeout = int(self._entry.options.get(CONF_MAGNET_CLOSED_DELAY, 120))
-        self.other_timeout = int(self._entry.options.get(CONF_EMER_OFF_DELAY, 120))
+    @property
+    def motion_timeout(self) -> bool:
+        """Motion timeout property."""
+        return int(self._entry.options.get(CONF_MOTION_OFF_DELAY, 120))
 
-    async def _handle_entry_update(
-        self, hass: HomeAssistant, entry: ConfigEntry
-    ) -> None:
-        # Re-read options
-        self._entry = entry
-        # Grab the timeouts here
-        self._update_sensor_delays()
-        if self._update():
-            self.async_schedule_update_ha_state(True)
+    @property
+    def magnet_timeout(self) -> bool:
+        """Magnet timeout property."""
+        return int(self._entry.options.get(CONF_MAGNET_CLOSED_DELAY, 120))
 
-    async def async_added_to_hass(self) -> None:
-        """Called when this entity has been added to hass."""
-        await super().async_added_to_hass()
-        self.async_on_remove(self._entry.add_update_listener(self._handle_entry_update))
+    @property
+    def other_timeout(self) -> bool:
+        """Other sensors timeout property."""
+        return int(self._entry.options.get(CONF_EMER_OFF_DELAY, 120))
 
     @callback
     def _handle_coordinator_update(self) -> None:

@@ -8,7 +8,6 @@ import asyncio
 from collections.abc import Callable
 import copy
 from copy import deepcopy
-from datetime import timedelta
 import logging
 from typing import Any
 
@@ -18,12 +17,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_CODE, ATTR_ENTITY_ID, CONF_COMMAND, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, valid_entity_id
 from homeassistant.exceptions import Unauthorized, UnknownUser
+from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
 
 from .const import (
     ATTR_BYPASS,
     ATTR_DURATION,
+    CONF_EMULATION_MODE,
     CONF_ENABLE_SENSOR_BYPASS,
     CONF_SWITCH_COMMAND,
     DEVICE_ATTRIBUTE_NAME,
@@ -44,6 +45,7 @@ from .utils import (
     print_partition,
     to_bool,
 )
+from .visonic_data_types import VisonicCoordinatorData
 from .visonic_types import (
     PANEL_TO_HA_STATUS_MAP,
     AlarmCommandStatus,
@@ -52,20 +54,14 @@ from .visonic_types import (
     AlarmSwitchCommand,
     AvailableNotifications,
     CommandResult,
+    EmulationMode,
     PanelCondition,
     PanelStateData,
     TriggerAlarmType,
-    VisonicCoordinatorData,
 )
 
-# Using this and uncommenting the __init__ entry gets coordinator to put debug info in the log file
 _COORDINATOR_LOGGER = logging.getLogger(f"{__package__}.coordinator")
 _COORDINATOR_LOGGER.setLevel(logging.CRITICAL)   # setting this enables the timing debug output from the HA coordinator
-# then we can set it explicitly
-#logger:
-#  logs:
-#    custom_components.visonic: debug
-#    custom_components.visonic.coordinator: info
 
 ###################################################################################
 ##############  Common coordinator for direct and cloud connections ###############
@@ -78,21 +74,28 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                  lo: logEvents, update_interval: int, always_update: bool,
                  state_changed_callback: Callable[..., None] | None = None
     ):
-        """Initialize the base coordinator."""
+        """Initialize the Home Assistant base coordinator."""
         super().__init__(
             hass,
             logger=_COORDINATOR_LOGGER,
             name=f"{capitalize(DOMAIN)} {entry.title}",
             config_entry=entry,
-            update_interval=timedelta(seconds=update_interval),
+            #update_interval=timedelta(seconds=update_interval),
             #always_update=always_update,
         )
 
         self.panel_id = panel_id
         # do not use self.logger as it is defined in parent coordinator class
         self._event_logger = lo
-        self.disable_all_panel_commands = False
         self._prev_panel_connected = False
+
+        # This is the alarm control entity that is first created.
+        #      For multi partiton panels, this is changed to be the overall control entity.
+        #      For Basic Emulation Mode this is the sensor, otherwise it's the alarm_control_panel
+        #   There is not a type definition due to circular imports
+        self.alarm_entity = None #  VisonicAlarmSensor | VisonicAlarm | None
+
+        # Declare image_manager and platform_manager using the base class so they can be used in this and derived classes
 
         self.image_manager: ImageManager = ImageManager(
             hass=self.hass,
@@ -100,7 +103,6 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             entry=entry,
             logger=lo,
         )
-        # Declare platform_manager using the base class so it can be used in this base class
         # Callback needed as this is a panel driven system
         #    All changes come bottom up
         self.platform_manager: PlatformManager = PlatformManager(
@@ -111,6 +113,19 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             image_manager=self.image_manager,
             state_changed_callback=state_changed_callback,
         )
+
+    @property
+    def disable_all_panel_commands(self) -> bool:  # noqa: D102
+        v = EmulationMode(self.config_entry.data.get(CONF_EMULATION_MODE, EmulationMode.POWERLINK))
+        return v == EmulationMode.MINIMAL
+
+    @property
+    def force_standard_mode(self) -> bool:  # noqa: D102
+        # If disable all commands then force standard is set to True
+        if self.disable_all_panel_commands:
+            return True
+        v = EmulationMode(self.config_entry.data.get(CONF_EMULATION_MODE, EmulationMode.POWERLINK))
+        return v == EmulationMode.STANDARD
 
     def state_changed_callback(self):
         """Client calls this when the panel data has changed."""
@@ -656,3 +671,63 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             command: AlarmSwitchCommand | None = AlarmSwitchCommand.from_name(command_name)
             if command is not None:
                 await self.send_switch(devid, command)
+
+    def alarm_and_sensor_common_setup(
+        self, entry: ConfigEntry, alarm: bool, piu: set[int] | None, identifier: str
+    ) -> list[Entity]:
+        """Common function that takes in all parameters to setup either an Alarm Control Panel or a Sensor."""
+        # I import these here otherwise there is a circular import.
+        #    The alternative is to have this function repeated (almost) in VisonicAlarm and VisonicAlarmSensor
+        #     and i'd rather it was in one place i.e. here
+        from .alarm_control_panel import VisonicAlarm  # noqa: PLC0415
+        from .sensor import VisonicAlarmSensor  # noqa: PLC0415
+
+        entities: list[Entity] = []
+
+        # There can be a panel with no partitions    where piu = None
+        # If a panel has partitions then piu is a set. Partitions are 1,2,3 but we use 0,1,2
+        # The problem is, on first connection we don't know of any partitions, we only know when in powerlink/std+ "later"
+        # So on first connection create one Alarm or Sensor Entity and assume no partitions (as not many people would use them)
+        # If there are partitions "later", then
+        #     1) Convert the single Entity to "dumb"
+        #              The entity attributes are a collation from all other partitions
+        #              The partition set is {0,1,2} i.e all partitions.  Commands such as Arm/Disarm then command all partitions
+        #     2) Add new Alarm or Sensor Entities, one per partition
+        #
+        #  e.g. A panel with 2 partitions will have 3 Alarm or Sensor Entities.
+        if piu is None and self.alarm_entity is None:
+            # No partitions and this is the first time the function has been called
+            #   Make sure this is only done once, create the panel Entity
+            self.alarm_entity = (
+                VisonicAlarm(entry=entry, partition=None, identifier=identifier)
+                if alarm
+                else VisonicAlarmSensor(entry=entry, partition=None, identifier=identifier)
+            )
+            entities.append(self.alarm_entity)
+        elif piu is not None and len(piu) > 1:
+            # Partitions
+            if self.alarm_entity is None:
+                # This should probably not happen i.e. partitions are known about straight away
+                # Create the base/dumb panel first to command all partitions
+                self.alarm_entity = (
+                    VisonicAlarm(entry=entry, partition=None, identifier=identifier)
+                    if alarm
+                    else VisonicAlarmSensor(entry=entry, partition=None, identifier=identifier)
+                )
+                self.alarm_entity.set_as_base_panel()
+                entities.append(self.alarm_entity)
+            else:
+                # base/dumb panel entity already created (above) so just modify it
+                self.alarm_entity.set_as_base_panel()
+            # Create an entity for each partition
+            entities.extend(
+                [
+                    (
+                        VisonicAlarm(entry=entry, partition=p, identifier=identifier)
+                        if alarm
+                        else VisonicAlarmSensor(entry=entry, partition=p, identifier=identifier)
+                    )
+                    for p in piu
+                ]
+            )
+        return entities

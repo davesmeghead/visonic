@@ -15,11 +15,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .alarm_base_logic import AlarmBaseLogic
 from .const import DOMAIN, TEXT_CLIENT_VERSION, TEXT_DISCONNECTION_COUNT
+from .visonic_data_types import VisonicCoordinatorData, VisonicPanelData
 from .visonic_entity_types import AlarmPanelData
-from .visonic_types import AlarmPanelCommand, VisonicConfigData, VisonicCoordinatorData
+from .visonic_types import AlarmPanelCommand
 
 _LOGGER = logging.getLogger(__name__)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -31,20 +31,22 @@ async def async_setup_entry(
     @callback
     def async_add_alarm(alarm_data: AlarmPanelData) -> None:
         """Add Visonic Alarm Panel."""
-        # Call the classmethod to create the Entities
-        entities: list[VisonicAlarm] = [
-            e
-            for e in AlarmBaseLogic.alarm_and_sensor_common_setup(
-                entry=entry, alarm=True, piu=alarm_data.partitions, identifier=alarm_data.identifier
-            )
-            if isinstance(e, VisonicAlarm)  # They should be but this makes certain
-        ]
-        if entities:
-            async_add_entities(entities, True)
+        vcd: VisonicPanelData = entry.runtime_data
+        if vcd:
+            entities: list[VisonicAlarm] = [
+                e
+                for e in vcd.coordinator.alarm_and_sensor_common_setup(
+                    entry=entry, alarm=True, piu=alarm_data.partitions, identifier=alarm_data.identifier
+                )
+                if isinstance(e, VisonicAlarm)  # They should be but this makes certain
+            ]
+            if entities:
+                async_add_entities(entities, True)
 
-    vce: VisonicConfigData = entry.runtime_data
-    vce.dispatchers[Platform.ALARM_CONTROL_PANEL] = async_dispatcher_connect(
-        hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.ALARM_CONTROL_PANEL}", async_add_alarm
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.ALARM_CONTROL_PANEL}", async_add_alarm
+        )
     )
 
 

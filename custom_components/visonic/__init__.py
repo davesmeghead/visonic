@@ -25,6 +25,7 @@ from .const import (
     CONF_EMER_OFF_DELAY,
     CONF_EMULATION_MODE,
     CONF_ESPHOME_ENTITY_SELECT,
+    CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_SWITCH,
     CONF_MAGNET_CLOSED_DELAY,
     CONF_MOTION_OFF_DELAY,
@@ -53,35 +54,44 @@ from .const import (
     PLATFORMS,
     SERVERS,
     TEXT_TITLE,
+    TRANSLATE_EXCEPTION_AUTHORISATION_FAILURE,
     TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE,
 )
+from .coordinator_base import VisonicCoordinator
 from .create_schema import FormItems, build_config_items
 from .direct.coordinator_direct import VisonicDirectCoordinator
 from .exceptions import VisonicAuthException, VisonicException
 from .log_events import logEvents
 from .server import ServerProtocol, TCPServerConnection
 from .services import async_register_services
-from .visonic_types import (
-    AvailableNotifications,
-    DeviceType,
-    EmulationMode,
-    VisonicConfigData,
+from .utils import format_int_list
+from .visonic_data_types import (
     VisonicDiscoveryData,
     VisonicDomainData,
     VisonicEntryKey,
+    VisonicPanelData,
     VisonicServerData,
-)
-from .visonic_utils import (
     check_panel_is_unique,
     check_server_is_unique,
     create_key,
     get_next_panel_id,
     get_panel_by_id,
 )
+from .visonic_types import AvailableNotifications, DeviceType, EmulationMode
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+async def terminate_coordinator(coordinator: VisonicCoordinator | None):
+    """Terinate the coordinator."""
+    if coordinator is not None:
+        if coordinator.data is not None:
+            coordinator.data = None            # stop all activity in the hub
+        _LOGGER.debug("........... Terminating Panel Connection")
+        await coordinator.async_panel_stop()
+        _LOGGER.debug("........... Terminating Home Assistant Coordinator")
+        await coordinator.async_shutdown()
 
 async def async_setup(hass: HomeAssistant, _base_config: dict[str, Any]) -> bool:
     """Set up the visonic component."""
@@ -118,7 +128,7 @@ async def async_setup_server(hass: HomeAssistant, entry: ConfigEntry, server_id:
             # Update transport and protocol values (it might have disconnected and reconnected)
             disc.protocol = protocol
             disc.transport = transport
-            vcd: VisonicConfigData | None = get_panel_by_id(hass, disc.panel_id)
+            vcd: VisonicPanelData | None = get_panel_by_id(hass, disc.panel_id)
             if vcd:
                 # The panel has been configured
                 if not isinstance(vcd.coordinator, VisonicDirectCoordinator):
@@ -163,6 +173,10 @@ async def async_setup_server(hass: HomeAssistant, entry: ConfigEntry, server_id:
                 name="Setting up TCP Server"
             )
 
+    # ***************************************************************************************************
+    # This needs to be rewritten
+    #   We are no longer allowed to use entry.add_update_listener in combination with reloading the hub
+    # ***************************************************************************************************
     async def manage_tcp_server_stop_start(entry: ConfigEntry) -> bool:
         rtd: VisonicServerData = entry.runtime_data
         async with rtd.lock:
@@ -177,9 +191,9 @@ async def async_setup_server(hass: HomeAssistant, entry: ConfigEntry, server_id:
                 rtd.server = server
             return success
 
-    async def config_updated(hass: HomeAssistant, entry: ConfigEntry):
-        _LOGGER.info("***************** config updated ******************")
-        await manage_tcp_server_stop_start(entry) # use the config entry
+    #async def config_updated(hass: HomeAssistant, entry: ConfigEntry):
+    #    _LOGGER.info("***************** config updated ******************")
+    #    await manage_tcp_server_stop_start(entry) # use the config entry
 
     if server_id is None:
         return False
@@ -189,9 +203,13 @@ async def async_setup_server(hass: HomeAssistant, entry: ConfigEntry, server_id:
     if success:
         data: VisonicDomainData = hass.data[VisonicEntryKey]
         data.setdefault(SERVERS, {})[entry.entry_id] = vsd
-        entry.async_on_unload(
-            entry.add_update_listener(config_updated)
-        )
+        # ***************************************************************************************************
+        # This needs to be rewritten
+        #   We are no longer allowed to use entry.add_update_listener in combination with reloading the hub
+        # ***************************************************************************************************
+        #entry.async_on_unload(
+        #    entry.add_update_listener(config_updated)
+        #)
     return success
 
 async def async_setup_discovered(hass: HomeAssistant, entry: ConfigEntry, panel_id: int) -> bool:
@@ -204,7 +222,7 @@ async def async_setup_discovered(hass: HomeAssistant, entry: ConfigEntry, panel_
         event_logger = logEvents(hass, entry, _LOGGER, panel_id)
         coordinator = VisonicDirectCoordinator(hass, entry, panel_id, event_logger)
         # Set the runtime data defaults
-        vcd = VisonicConfigData(coordinator, panel_id, None, {})
+        vcd = VisonicPanelData(coordinator, panel_id)
         entry.runtime_data = vcd
         data: VisonicDomainData = hass.data[VisonicEntryKey]
         data.setdefault(PANELS, {})[entry.entry_id] = vcd
@@ -243,8 +261,18 @@ async def async_setup_client(hass: HomeAssistant, entry: ConfigEntry, device_typ
     2. Connects to the visonic cloud server
     3. Connects to the API in Home Assistant for an ESPHome device with a serial_proxy
     """
+
+    async def close_connection(data: VisonicDomainData, coordinator):
+        await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+        await terminate_coordinator(coordinator)
+        if data:
+            data[PANELS].pop(entry.entry_id, None)
+        entry.runtime_data = None
+
+    coordinator = None
+    data: VisonicDomainData = hass.data[VisonicEntryKey]
     try:
-        # Create the coordinator for this panel
+        # Create the event logger and coordinator for this panel
         event_logger = logEvents(hass, entry, _LOGGER, panel_id)
         if device_type == DeviceType.CLOUD:
             # create coordinator to the cloud server
@@ -252,25 +280,24 @@ async def async_setup_client(hass: HomeAssistant, entry: ConfigEntry, device_typ
         else:
             # create coordinator to the panel
             coordinator = VisonicDirectCoordinator(hass, entry, panel_id, event_logger)
-        vcd = VisonicConfigData(coordinator, panel_id, None, {})
+        # The direct coordinator needs these setting up before the async_panel_connect call
+        vcd = VisonicPanelData(coordinator, panel_id)
         entry.runtime_data = vcd
+        data.setdefault(PANELS, {})[entry.entry_id] = vcd
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         if await coordinator.async_panel_connect():
             # Set the runtime data defaults
-            data: VisonicDomainData = hass.data[VisonicEntryKey]
-            data.setdefault(PANELS, {})[entry.entry_id] = vcd
             return True
     # Catch any exception and report it as a config error, connection failure
     except VisonicAuthException as error:
-        unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-        data: VisonicDomainData = hass.data[VisonicEntryKey]
-        _tmp = data[PANELS].pop(entry.entry_id, None)
+        await close_connection(data, coordinator)
         raise ConfigEntryAuthFailed(
             translation_domain=DOMAIN,
-            translation_key=TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE,
+            translation_key=TRANSLATE_EXCEPTION_AUTHORISATION_FAILURE,
             translation_placeholders={"panel_id": panel_id},
         ) from error
     except (VisonicException, TimeoutError, ConnectionError, OSError) as error:
+        await close_connection(data, coordinator)
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,
             translation_key=TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE,
@@ -288,7 +315,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
     if device_type == "usb":
         device_type = "serial"
-        data = deepcopy(dict(MappingProxyType(entry.data)))
+        data = deepcopy(dict(entry.data))
         data[CONF_TYPE] = "serial"
         hass.config_entries.async_update_entry(entry, data=data)
 
@@ -299,9 +326,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     match device_type_enum:
         case DeviceType.TCP_SERVER:
             unique_id = await check_server_is_unique(hass, entry)
-        case DeviceType.TCP_DISCOVERED:
-            unique_id = await check_panel_is_unique(hass, entry)
-        case DeviceType.ETHERNET | DeviceType.SERIAL | DeviceType.CLOUD:
+        case DeviceType.TCP_DISCOVERED | DeviceType.ETHERNET | DeviceType.SERIAL | DeviceType.CLOUD:
             unique_id = await check_panel_is_unique(hass, entry)
 
     _LOGGER.info("***************** creating connection %d to a %s device ******************", unique_id, device_type_enum)
@@ -310,7 +335,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Test the connection to the device, if it fails then ask the config entry to try again "later"
     connection_tester = ConnectionTest()
-    error = await connection_tester.test_connection(device_type=device_type_enum, user_input=entry.data)
+    error = await connection_tester.test_connection(device_type=device_type_enum, data=entry.data)
     if error is not None:
         # Connection error
         _LOGGER.info("***************** creating connection %d to a %s device, test connection failed so trying again later ******************", unique_id, device_type_enum)
@@ -320,6 +345,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             translation_placeholders={"panel_id": unique_id})
 
     # Connection test success so create the necessary servers and clients
+    #    The test does not include cloud authentication, just a TCP connection test to the remote server
     match device_type_enum:
         case DeviceType.TCP_SERVER:
             return await async_setup_server(hass, entry, unique_id)
@@ -481,10 +507,21 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
             elif key not in exclude_list:
                 _LOGGER.warning("User options setting %s not in either config list", key)
 
-        # New CONF names have been added but this is the only change of CONF name that has been made
-        data_out[CONF_EXCLUDE_SWITCH] = data.get(CONF_EXCLUDE_X10, "")   # changed to CONF_EXCLUDE_SWITCH
         # Baud has been removed from the user config, but we need to copy the old value across
         data_out[CONF_DEVICE_BAUD] = data.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD)
+        # New CONF names have been added but this is the only change of CONF name that has been made
+        data_out[CONF_EXCLUDE_SWITCH] = data.get(CONF_EXCLUDE_X10, "")   # changed to CONF_EXCLUDE_SWITCH
+        # Make sure that they are strings and not lists
+        try:
+            data_out[CONF_EXCLUDE_SENSOR] = format_int_list(data_out.get(CONF_EXCLUDE_SENSOR, ""))
+        except ValueError:
+            _LOGGER.info("Migration of exclude sensor list to version %s unsuccessful, list contains invalid values; setting it to an empty string", entry.version)
+            data_out[CONF_EXCLUDE_SENSOR] = ""
+        try:
+            data_out[CONF_EXCLUDE_SWITCH] = format_int_list(data_out.get(CONF_EXCLUDE_SWITCH, ""))
+        except ValueError:
+            _LOGGER.info("Migration of exclude switch list to version %s unsuccessful, list contains invalid values; setting it to an empty string", entry.version)
+            data_out[CONF_EXCLUDE_SWITCH] = ""
 
         data = data_out
         options = options_out
@@ -519,9 +556,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except ValueError:
         _LOGGER.error("Invalid device type: %s", device_type)
         return False
-    _LOGGER.info("***************** async_unload_entry %s ******************", device_type_enum)
+
+    _LOGGER.info("........... async_unload_entry %s ...........", device_type_enum)
     if device_type_enum == DeviceType.TCP_SERVER:
-        vsd : VisonicServerData | None = data[SERVERS].get(entry.entry_id)
+        # Do the opposite of async_setup_server
+        vsd: VisonicServerData | None = data[SERVERS].pop(entry.entry_id, None)
+        _LOGGER.debug("........... Unloading Server %s", vsd.server_id)
         if vsd:
             p = str(vsd.server_id)
             async with vsd.lock:
@@ -529,28 +569,27 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if svr:
                     await svr.async_stop()
                 unload_ok = True # await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-                entry.runtime_data = None
-        _tmp = data[SERVERS].pop(entry.entry_id, None)
 
-    elif device_type_enum in (DeviceType.TCP_DISCOVERED, DeviceType.ETHERNET, DeviceType.SERIAL, DeviceType.CLOUD):
+    elif device_type_enum == DeviceType.TCP_DISCOVERED:
+        # Do the opposite of async_setup_discovered
+        _LOGGER.debug("........... Unloading TCP_DISCOVERED Not yet implemented")
+        unload_ok = True
+
+    elif device_type_enum in (DeviceType.ETHERNET, DeviceType.SERIAL, DeviceType.CLOUD):
+        # Do the opposite of async_setup_client
+        vcd: VisonicPanelData | None = data[PANELS].pop(entry.entry_id, None)
         _LOGGER.debug("........... Unloading Platforms")
         unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-        vcd : VisonicConfigData | None = data[PANELS].get(entry.entry_id)
         if vcd:
+            _LOGGER.debug("........... Unloading Client %s", vcd.panel_id)
             p = str(vcd.panel_id)
-            if vcd.coordinator is not None:
-                #vcd.coordinator.async_set_updated_data(None)  # clears update cycle
-                if vcd.coordinator.data is not None:
-                    vcd.coordinator.data = None            # stop all activity in the hub
-                _LOGGER.debug("........... Killing Panel Connection")
-                await vcd.coordinator.async_panel_stop()
-                #_LOGGER.debug("........... Killing Dispatchers")
-                #vcd.coordinator.platform_manager.terminate_all_dispatchers(entry)
-                _LOGGER.debug("........... Killing Home Assistant Coordinator")
-                await vcd.coordinator.async_shutdown()
-        if not unload_ok:
+            await terminate_coordinator(vcd.coordinator)
+        if not vcd or not unload_ok:
             _LOGGER.debug("***** terminate connection fail, no hub coordinator ****")
-        _tmp = data[PANELS].pop(entry.entry_id, None)
+            unload_ok = False
+
+    else:
+        unload_ok = False
 
     if unload_ok:
         _LOGGER.debug("************** Connection %s terminate success ***************", p)

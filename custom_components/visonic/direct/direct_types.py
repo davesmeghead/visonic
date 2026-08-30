@@ -150,6 +150,7 @@ class SensorStateExt(SensorState):
         state = super().from_dict(data)   # dict
         return dataclasses.replace(
             state,
+            enabled=data.get("enrolled"),
             sensor_type=cls._get_sensor_details(
                 state.sensor_type_id,
                 is_power_master,

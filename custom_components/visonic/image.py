@@ -23,8 +23,8 @@ from .const import (
     VISONIC_TRANSLATION_KEY,
 )
 from .coordinator_base import VisonicCoordinator
+from .visonic_data_types import VisonicCoordinatorData, VisonicPanelData
 from .visonic_entity_types import SensorState, ZoneSensorData
-from .visonic_types import VisonicConfigData, VisonicCoordinatorData
 
 
 async def async_setup_entry(
@@ -41,9 +41,10 @@ async def async_setup_entry(
             [VisonicImage(hass=hass, entry=entry, sensor_id=sensor_data.device_id, identifier=sensor_data.identifier)]
         )
 
-    vce: VisonicConfigData = entry.runtime_data
-    vce.dispatchers[Platform.IMAGE] = async_dispatcher_connect(
-        hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.IMAGE}", async_add_image
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.IMAGE}", async_add_image
+        )
     )
 
 
@@ -54,17 +55,16 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         self, hass: HomeAssistant, entry: ConfigEntry, sensor_id: int, identifier: str
     ) -> None:
         """Initialize the image entity."""
-        vce: VisonicConfigData = entry.runtime_data
-        CoordinatorEntity.__init__(self, coordinator=vce.coordinator)  # type: ignore[arg-type]
+        vcd: VisonicPanelData = entry.runtime_data
+        CoordinatorEntity.__init__(self, coordinator=vcd.coordinator)  # type: ignore[arg-type]
         ImageEntity.__init__(self, hass)
         self._sensor_id = sensor_id
-        self._panel_id = vce.panel_id
+        self._panel_id = vcd.panel_id
         self._attr_unique_id = slugify(identifier + "_sensor_image")
         self._attr_name = "Image"
         self._attr_should_poll = False
         self._attr_translation_key = VISONIC_TRANSLATION_KEY
 
-        self._panel = vce.panel_id
         self._attr_image_last_updated = None
         self._attr_image_last_retrieved = None
         self._cached_image = None

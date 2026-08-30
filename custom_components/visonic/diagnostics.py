@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from .const import CONF_DOWNLOAD_CODE, CONF_SERVER_HOST, CONF_SERVER_PORT
 from .coordinator_base import VisonicCoordinator
 from .exceptions import VisonicException
-from .visonic_types import VisonicConfigData
+from .visonic_data_types import VisonicPanelData
 
 REDACT_ME = (CONF_DOWNLOAD_CODE, CONF_SERVER_HOST, CONF_SERVER_PORT,
              CONF_HOST, CONF_PORT, CONF_PATH,
@@ -21,8 +21,8 @@ async def async_get_config_entry_diagnostics(
     entry: ConfigEntry,
 ) -> dict[str, Any]:
     """Return diagnostics."""
-    vce: VisonicConfigData = entry.runtime_data
-    coordinator: VisonicCoordinator = vce.coordinator
+    vcd: VisonicPanelData = entry.runtime_data
+    coordinator: VisonicCoordinator = vcd.coordinator
     if coordinator is None:
         raise VisonicException("Diagnostics has been given invalid coordinator", 101)
 

@@ -13,6 +13,7 @@ import voluptuous as vol
 from homeassistant.config_entries import (
     CONN_CLASS_LOCAL_POLL,
     HANDLERS,
+    SOURCE_REAUTH,
     SOURCE_RECONFIGURE,
     ConfigEntry,
     ConfigFlow,
@@ -37,6 +38,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.selector import SerialPortSelector
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from homeassistant.helpers.typing import DiscoveryInfoType
+from homeassistant.util import slugify
 
 from .connection_test import ConnectionTest
 from .const import (
@@ -93,7 +95,7 @@ from .const import (
 )
 from .create_schema import FormItems, VisonicSchema
 from .exceptions import VisonicException
-from .utils import parse_int_list, slugify
+from .utils import parse_int_list
 from .visonic_types import DeviceType, EmulationMode
 
 _LOGGER = logging.getLogger(__name__)
@@ -395,14 +397,6 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
         title = self.config_data.get(TEXT_TITLE, DEFAULT_TITLE)
         return self.async_create_entry(title=title, data=self.config_data, options=self.config_options)
 
-    async def async_step_device_no_panel(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Handle the input processing of the config flow."""
-        uicopy = user_input.copy()
-        uicopy[CONF_PANEL_NUMBER] = self.config_data[CONF_PANEL_NUMBER]
-        uicopy[CONF_TYPE] = slugify(user_input[CONF_TYPE])
-        # Push it back to the reconfigure function to process
-        return await self.async_step_reconfigure(user_input=uicopy)
-
     # ask the user: ethernet, server, cloud or serial, and for the unique panel/server number
     async def async_step_device(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:  # TESTED
         """Handle the input processing of the config flow."""
@@ -460,7 +454,7 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
             # Validate the params e.g. DOWNLOAD_CODE is empty tring or 4 characters
             if (error_key:=self.validate_input(self.hass, user_input, device_type)) is None:
                 # Test the connection if applicable
-                if (error_key:=await self.connection_tester.test_connection(device_type, user_input=user_input)) is None:
+                if (error_key:=await self.connection_tester.test_connection(device_type, data=user_input)) is None:
                     # Merge in the data and show the next form in the sequence
                     self.config_data |= user_input
                     cem = EmulationMode(self.config_data.get(CONF_EMULATION_MODE, EmulationMode.POWERLINK))
@@ -531,6 +525,13 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
         if self.source == SOURCE_RECONFIGURE:
             # Push it back to the reconfigure function to process
             return await self.async_step_reconfigure(user_input=user_input)
+        if user_input is not None and self.source == SOURCE_REAUTH:
+            # Save data and reload hub
+            return self.async_update_reload_and_abort(
+                entry = self._get_reauth_entry(),
+                data_updates = user_input,
+                reason="reauth_successful"
+            )
         errors: dict[str, Any] = {}
         if user_input is not None:
             if (error_key:=self.validate_input(self.hass, user_input, DeviceType.CLOUD)) is None:
@@ -546,7 +547,7 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
                     self.step_sequence = self._create_step_sequence()
                     return self._goto_next_step()
             errors["base"] = error_key
-        return self.show_form(step=FORM_CLOUD, errors=errors, values=self.config_data | user_input or {})
+        return self.show_form(step=FORM_CLOUD, errors=errors, values=self.config_data | (user_input or {}))
 
     async def async_step_form_powerlink(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the input processing of the powerlink config flow."""
@@ -840,7 +841,7 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
         # Test the connection --> Do not test the connection as the existing connection has not been closed
         ce: ConfigEntry = self._get_reconfigure_entry()
         if not self.is_same_connection(data, dict(ce.data)):
-            error = await self.connection_tester.test_connection(device_type=device_type, user_input=data)
+            error = await self.connection_tester.test_connection(device_type=device_type, data=data)
             if error is not None:
                 if step == FORM_POWERLINK:
                     # If showing the powerlink form then the user cannot correct any config errors
@@ -848,8 +849,19 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
                 return self.show_form(step=step, errors={"base": error}, values=data)
         return self.async_update_reload_and_abort(
             entry = ce,
-            data = data,
+            data_updates = data,
+            reason="reconfigure_successful",
         )
+
+    async def async_step_device_no_panel(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle the input processing of the config flow."""
+        uicopy = user_input.copy()
+        # user_input only comes in with the device selection, so add the panel number in
+        uicopy[CONF_PANEL_NUMBER] = self.config_data[CONF_PANEL_NUMBER]
+        # slugify the selection (lower case and underscores)
+        uicopy[CONF_TYPE] = slugify(user_input[CONF_TYPE])
+        # Push it back to the reconfigure function to process
+        return await self.async_step_reconfigure(user_input=uicopy)
 
     # Reconfigure - allow the user to change any "data" values, then restart the hub
     async def async_step_reconfigure(
@@ -859,39 +871,35 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
         try:
             # Get the config entry for the reconfigure
             ce = self._get_reconfigure_entry()
+            cedata = ce.data
             # Do some basic checks on ce.data
-            if CONF_TYPE not in ce.data:
+            if CONF_TYPE not in cedata:
                 return self.async_abort(reason=TRANSLATE_ABORT_UNKNOWN)
             if user_input is None:
-                self.config_data = dict(ce.data)
+                # Set config_data to the existing data
+                self.config_data = dict(cedata)
+                # Show the device panel without the panel number selection i.e. only allow user to select Ethernet, Serial or Cloud
                 return self.show_form(step=FORM_DEVICE_NO_PANEL, values=self.config_data)
-            if len(user_input) == 2:  # device type and panel number
-                device_type = user_input.get(CONF_TYPE)
-                if device_type == DeviceType.TCP_DISCOVERED:
-                    return self.async_abort(reason=TRANSLATE_ABORT_CANNOT_CONFIG_DISCOVERED)
-                step = MAP_DEVICE_TO_CONFIG_STEP.get(device_type)
-                if step is None:
-                    return self.async_abort(reason=TRANSLATE_ABORT_UNKNOWN)
-                # Set the config data (but not options)
-                if device_type == ce.data.get(CONF_TYPE):
-                    # the user has retained the same device type connection so use existing data in the forms
-                    self.config_data = dict(ce.data)
-                else:
-                    # the user has chosen a different device type connection to leave it to populate with defaults
-                    self.config_data = dict(user_input)
-                # This shows the next form after the device type form
-                return self.show_form(step=step, values=self.config_data)
             data: dict[str, Any] = self.config_data | user_input
             device_type = data.get(CONF_TYPE)
+            if device_type == DeviceType.TCP_DISCOVERED:
+                return self.async_abort(reason=TRANSLATE_ABORT_CANNOT_CONFIG_DISCOVERED)
             step = MAP_DEVICE_TO_CONFIG_STEP.get(device_type)
-            powerlink_option_supported = MAP_DEVICE_TO_POWERLINK_OPTION.get(device_type)
-            if powerlink_option_supported:
+            if step is None:
+                return self.async_abort(reason=TRANSLATE_ABORT_UNKNOWN)
+            if len(user_input) == 2:
+                # device type and panel number
+                # Set the config data (but not options)
+                self.config_data = data if device_type == cedata.get(CONF_TYPE) else dict(user_input)
+                # This shows the next form after the device type form
+                return self.show_form(step=step, values=self.config_data)
+            self.config_data = data
+            if MAP_DEVICE_TO_POWERLINK_OPTION.get(device_type):
                 cem = data.get(CONF_EMULATION_MODE)
                 if cem is not None:
                     cem = EmulationMode(cem)
                     if cem == EmulationMode.POWERLINK:
                         # Ask user for download code and show eprom data
-                        self.config_data = data
                         return self.show_form(step=FORM_POWERLINK, values=data)
             return await self._finalise_reconfigure(step=step, data=data)
         except AbortFlow:
@@ -900,6 +908,31 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
             tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
             _LOGGER.exception("[ConfigFlow] Unexpected exception\n%s", tb_str)
         return self.async_abort(reason=TRANSLATE_ABORT_UNKNOWN)
+
+    async def async_step_reauth(
+        self,
+        user_input: dict[str, Any],
+    ) -> ConfigFlowResult:
+        """Perform reauthentication upon an authentication error with the Cloud connection."""
+        try:
+            # Get the config entry for the reconfigure
+            ce = self._get_reauth_entry()
+            # Do basic checks on ce.data
+            if CONF_TYPE in ce.data:
+                device_type = ce.data.get(CONF_TYPE)
+                if device_type != DeviceType.CLOUD:
+                    # Reauth can only be done for a Cloud connection
+                    return self.async_abort(reason=TRANSLATE_ABORT_INVALID_DEVICE_TYPE)
+                self.config_data = user_input
+                return self.show_form(step=FORM_CLOUD, values=user_input)
+
+        except AbortFlow:
+            raise
+        except Exception as ex:
+            tb_str = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+            _LOGGER.exception("[ConfigFlow] Unexpected exception\n%s", tb_str)
+        return self.async_abort(reason=TRANSLATE_ABORT_UNKNOWN)
+
 
 class VisonicOptionsFlowHandler(VisonicHandler, OptionsFlow):
     """Handle Visonic options."""

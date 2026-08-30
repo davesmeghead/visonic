@@ -78,21 +78,21 @@ class ConnectionTest:
                 await asu.close()
         return None
 
-    async def test_connection(self, device_type: DeviceType, user_input: dict[str, Any] ) -> str | None:
+    async def test_connection(self, device_type: DeviceType, data: dict[str, Any] ) -> str | None:
         """Test the connection."""
         error = None
         match device_type:
             case DeviceType.TCP_SERVER:
                 error = None
             case DeviceType.CLOUD:
-                host = user_input.get(CONF_EXTERNAL_URL, "")
+                host = data.get(CONF_EXTERNAL_URL, "")
                 error = await self.try_tcp_connection(host, 5001)
             case DeviceType.ETHERNET | DeviceType.TCP_DISCOVERED:
-                host = user_input.get(CONF_HOST, "")
-                port = user_input.get(CONF_PORT, "0")
+                host = data.get(CONF_HOST, "")
+                port = data.get(CONF_PORT, "0")
                 error = await self.try_tcp_connection(host, int(port))
             case DeviceType.SERIAL:
-                dev = user_input.get(CONF_PATH, "")
+                dev = data.get(CONF_PATH, "")
                 error = await self.try_serial_port(dev)
             case _:
                 error=TRANSLATE_ERROR_SETTINGS_MISSING

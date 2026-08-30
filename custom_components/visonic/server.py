@@ -16,7 +16,7 @@ from .direct.crc16 import Crc16Arc
 from .direct.pyvisonic.py_abstract_classes import AlPanelInterface
 from .exceptions import VisonicException
 from .utils import kill_asyncio_task, to_string
-from .visonic_utils import create_key
+from .visonic_data_types import create_key
 
 _LOGGER = logging.getLogger(__name__)
 

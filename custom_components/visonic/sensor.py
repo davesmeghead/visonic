@@ -20,6 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .alarm_base_logic import AlarmBaseLogic
 from .const import DOMAIN, VISONIC_TRANSLATION_KEY
 from .sensor_base_logic import VisonicBaseEntity
+from .visonic_data_types import VisonicPanelData
 from .visonic_entity_types import (
     FLOAT_SENSOR_DEFINITIONS,
     AlarmPanelData,
@@ -27,7 +28,6 @@ from .visonic_entity_types import (
     FloatSensorDefinition,
     VisonicFloatSensorKey,
 )
-from .visonic_types import VisonicConfigData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,37 +45,35 @@ async def async_setup_entry(
         data: SensorData | list[SensorData],
     ) -> None:
         """Create and add Visonic sensor entities (read-only)."""
-        # Call the classmethod to create the Entities
         entities: list[VisonicAlarmSensor | VisonicFloatEntity] = []
         data_list = data if isinstance(data, list) else [data]
 
-        for item in data_list:
-            match item:
-                case FloatSensorData():
-                    vbs = VisonicFloatEntity(entry, item.device_id, item.identifier, item.initial_state, item.sensor_definition)
-                    entities.append(vbs)
-
-                case AlarmPanelData():
-                    entities.extend(
-                        e
-                        for e in AlarmBaseLogic.alarm_and_sensor_common_setup(
-                            entry=entry,
-                            alarm=False,
-                            piu=item.partitions,
-                            identifier=item.identifier
+        vcd: VisonicPanelData = entry.runtime_data
+        if vcd:
+            for item in data_list:
+                match item:
+                    case FloatSensorData():
+                        vbs = VisonicFloatEntity(entry, item.device_id, item.identifier, item.initial_state, item.sensor_definition)
+                        entities.append(vbs)
+                    case AlarmPanelData():
+                        entities.extend(
+                            e
+                            for e in vcd.coordinator.alarm_and_sensor_common_setup(
+                                entry=entry,
+                                alarm=False,
+                                piu=item.partitions,
+                                identifier=item.identifier
+                            )
+                            if isinstance(e, VisonicAlarmSensor)
                         )
-                        if isinstance(e, VisonicAlarmSensor)
-                    )
-
-        if len(entities) > 0:
-            async_add_entities(entities, True)
+            if len(entities) > 0:
+                async_add_entities(entities, True)
 
     # Register dispatcher so new partitions can be added dynamically
-    vce: VisonicConfigData = entry.runtime_data
-    vce.dispatchers[Platform.SENSOR] = async_dispatcher_connect(
-        hass,
-        f"{DOMAIN}_{entry.entry_id}_add_{Platform.SENSOR}",
-        async_add_sensor,
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.SENSOR}", async_add_sensor
+        )
     )
 
 

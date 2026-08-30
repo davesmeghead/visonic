@@ -133,27 +133,43 @@ def to_string(array_alpha: bytearray, gap = " ") -> str:
         return "".join(f"{b:02x}{gap}" for b in array_alpha)[:-len(gap)]
     return "".join(f"{b:02x}" for b in array_alpha)
 
-def parse_int_list(value: str | list[int]) -> list[int]:
-    """Parse comma seperated string to a list."""
+def parse_int_list(value: str | list[int] | None) -> list[int]:
+    """Parse a comma-separated string into a list of integers."""
     if value is None:
         return []
-    if isinstance(value, list):
-        return value
-    if value.strip() == "":
-        return []
-    # We could ignore 2 commas together but we want it to be done properly
-    if value.find(",,") >= 0:
-        raise ValueError
-    result = []
-    for item in value.split(","):
-        item = item.strip()
-        if not item:
-            continue
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return []
         try:
-            result.append(int(item))
+            values = [int(item.strip()) for item in value.split(",")]
         except ValueError as err:
-            raise ValueError from err
-    return result
+            raise ValueError("String must contain only integers") from err
+        return values
+    if isinstance(value, list):
+        if not all(type(item) is int for item in value):
+            raise ValueError("List must contain only integers")
+        return value
+    raise ValueError("Input value must be list or string")
+
+def format_int_list(value: str | list[int] | None) -> str:
+    """Convert a list of integers to a comma-separated string."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return ""
+        try:
+            values = [int(item.strip()) for item in value.split(",")]
+        except ValueError as err:
+            raise ValueError("String must contain only integers") from err
+        return ",".join(map(str, values))
+    if isinstance(value, list):
+        if not all(type(item) is int for item in value):
+            raise ValueError("List must contain only integers")
+        return ",".join(map(str, value))
+    raise ValueError("Input value must be list or string")
 
 def decode_code_from_dict_or_str(data: str | dict[str, Any] | None) -> str:
     """Decode the alarm code."""

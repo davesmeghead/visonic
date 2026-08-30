@@ -25,8 +25,9 @@ from .const import (
 )
 from .coordinator_base import VisonicCoordinator
 from .utils import create_switch_unique_id
+from .visonic_data_types import VisonicCoordinatorData, VisonicPanelData
 from .visonic_entity_types import SwitchState, ZoneSensorData
-from .visonic_types import AlarmSwitchCommand, VisonicConfigData, VisonicCoordinatorData
+from .visonic_types import AlarmSwitchCommand
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,21 +42,21 @@ async def async_setup_entry(
         """Add Visonic Switch."""
         async_add_entities([VisonicSwitch(entry=entry, switch_id=switch_data.device_id, identifier=switch_data.identifier)])
 
-    vce: VisonicConfigData = entry.runtime_data
-    vce.dispatchers[Platform.SWITCH] = async_dispatcher_connect(
-        hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.SWITCH}", async_add_switch
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.SWITCH}", async_add_switch
+        )
     )
-
 
 class VisonicSwitch(CoordinatorEntity[VisonicCoordinator], SwitchEntity):
     """Representation of a Visonic Switch."""
 
     def __init__(self, entry: ConfigEntry, switch_id: str, identifier:str) -> None:
         """Initialise a Visonic Device."""
-        vce: VisonicConfigData = entry.runtime_data
-        super().__init__(vce.coordinator)
+        vcd: VisonicPanelData = entry.runtime_data
+        super().__init__(coordinator=vcd.coordinator)
         self.switch_id = switch_id
-        self._panel_id = vce.panel_id
+        self._panel_id = vcd.panel_id
         self._attr_unique_id = slugify(identifier + "_switch")
         self._attr_name = None
         self._attr_device_class = SwitchDeviceClass.SWITCH

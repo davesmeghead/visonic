@@ -125,15 +125,6 @@ class ManageConnection(MaintainInterface):
 
     def _register_event_listeners(self):
         """Register listeners."""
-        # This function is called when there have been changes made to the parameters in the control flow
-        async def async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-            """Changes made to the visonic config entry, user has updated the config."""
-            self.entry = entry  # update the entry
-            # max connection attempts to mak before giving up
-            self._max_connection_attempts = int(
-                self.entry.options.get(CONF_RETRY_CONNECTION_COUNT, 1)
-            )
-
         # Listener to handle fired config update events
         def handle_core_config_updated(_event: object):
             # If the user has changed the Core HA configuration, they may have changed their language selection
@@ -150,7 +141,6 @@ class ManageConnection(MaintainInterface):
         if self._listeners_registered:
             return
         self._listeners_registered = True
-        self.entry.async_on_unload(self.entry.add_update_listener(async_update_listener))
         # Listen for when EVENT_CORE_CONFIG_UPDATE is fired
         self.entry.async_on_unload(
             self.hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, handle_core_config_updated)
@@ -160,7 +150,10 @@ class ManageConnection(MaintainInterface):
         """Send the commend to the panel to set the baud rate."""
         if self._visonic_protocol is not None:
             retval = await self._visonic_protocol.set_panel_baud(baud)
-            self.logger.logstate_debug("    Baud set in panel" if retval == AlCommandStatus.SUCCESS else "    Baud change failed in panel: %s", retval.name)
+            if retval == AlCommandStatus.SUCCESS:
+                self.logger.logstate_debug("    Baud set in panel")
+            else:
+                self.logger.logstate_debug("    Baud change failed in panel: %s", retval.name)
             return retval == AlCommandStatus.SUCCESS
         return False
 
@@ -191,7 +184,6 @@ class ManageConnection(MaintainInterface):
         if self._visonic_protocol is not None:
             self.logger.logstate_debug("........... Shutting down Visonic Protocol")
             self._visonic_protocol.shutdown()
-            self.platform_manager.terminate_all_dispatchers(self.entry)
             self._visonic_protocol = None
 
     async def _async_create_transport(self) -> bool:
@@ -259,7 +251,7 @@ class ManageConnection(MaintainInterface):
         self._kick_off_next_step(Connection_Status.INITIAL_CREATE_PROTOCOL)
         return True
 
-    async def async_stop(self):
+    async def _async_stop(self):
         """Stop the connection."""
         # stop the serial/ethernet comms with the panel
         await self._async_stop_transport()
@@ -283,6 +275,9 @@ class ManageConnection(MaintainInterface):
     async def async_restart(self, force: bool = False):
         """Full Restart, stop the connection and start it again."""
         # ---- Reconnection not allowed by the user by setting config setting self._max_connection_attempts to 0 ----
+        self._max_connection_attempts = int(
+            self.entry.options.get(CONF_RETRY_CONNECTION_COUNT, 1)
+        )
         if not force and self._max_connection_attempts <= 0:
             self.logger.logstate_debug("Restart disabled by user for panel %s (0 attempts), stopping", self.panel_ident)
             return
@@ -296,13 +291,12 @@ class ManageConnection(MaintainInterface):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._management_task
             self._management_task = None
-        await self.async_stop()
-        #self._kick_off_next_step(Connection_Status.STOP)
-
-    # Connection manager is set up as a HA background task to start and maintain the transport (and protocol)
+        await self._async_stop()
 
     async def connection_manager(self):  # noqa: C901
         """Connection manager task."""
+
+        # Connection manager is set up as a HA background task to start and maintain the transport (and protocol)
 
         self._wait_task = None
 
@@ -397,7 +391,7 @@ class ManageConnection(MaintainInterface):
                         #    - RESTART: Restart has been commanded
                         #    - EXCEPTION: The comms connection has had an exception and is therefore in an unknown state
                         # Stop protocol and transport
-                        await self.async_stop()
+                        await self._async_stop()
                         await asyncio.sleep(1.0)
                         # Goto INITIAL_CREATE_PROTOCOL
                         self._kick_off_next_step(Connection_Status.INITIAL_CREATE_PROTOCOL)
@@ -471,6 +465,9 @@ class ManageConnection(MaintainInterface):
                             },
                         )
                         attempt_counter += 1
+                        self._max_connection_attempts = int(
+                            self.entry.options.get(CONF_RETRY_CONNECTION_COUNT, 1)
+                        )
                         if attempt_counter >= self._max_connection_attempts:
                             self._kick_off_next_step(Connection_Status.STOP)
                         elif await self._async_create_transport():
@@ -524,14 +521,14 @@ class ManageConnection(MaintainInterface):
                     case Connection_Status.STOP:
                         #if self.hasStarted():
                         # If there's an ongoing restart then terminate it
-                        await self.async_stop()
+                        await self._async_stop()
                         #self.logger.create_ha_notification(
                         #    AvailableNotifications.CONNECTION,
                         #    f"Failed to connect into Visonic Alarm Panel {self.panel_ident}. Check Your Network and the Configuration Settings.",
                         #)
 
                     case Connection_Status.CLOSE_CONNECTION:
-                        await self.async_stop()
+                        await self._async_stop()
                         self._kick_off_next_step(Connection_Status.READY_TO_START)
 
             # Do not cause a full Home Assistant Exception, keep it local here
@@ -570,7 +567,7 @@ class ManageConnection(MaintainInterface):
         sensor = SensorStateExt.from_dict(self._visonic_protocol.is_power_master(), py_sensor.as_dict())
         if sensor is None or sensor.sensor_type.type == AlarmSensorType.IGNORED:
             return
-        if create and not sensor.enrolled:
+        if create and not sensor.enabled:
             return
         if create:
             # create
@@ -722,6 +719,9 @@ class ManageConnection(MaintainInterface):
         """Problem Callback for connection disruption to the panel."""
         # Visonic library has responded to a disconnection
 
+        self._max_connection_attempts = int(
+            self.entry.options.get(CONF_RETRY_CONNECTION_COUNT, 1)
+        )
         self.action_panel_termination(termination)
         # push through a panel update to the HA Frontend of any changes
         self.on_panel_change_handler(event_id=PanelCondition.PUSH_CHANGE, data={})

@@ -20,6 +20,7 @@ from .const import DOMAIN, MANUFACTURER, VISONIC_TRANSLATION_KEY
 from .coordinator_base import VisonicCoordinator
 from .sensor_base_logic import VisonicBaseEntity
 from .utils import kill_asyncio_task
+from .visonic_data_types import VisonicPanelData
 from .visonic_entity_types import (
     BINARY_SENSOR_DEFINITIONS,
     STYPE_TO_HA_SENSOR_MAP,
@@ -32,7 +33,6 @@ from .visonic_entity_types import (
     SensorState,
     VisonicBinarySensorKey,
 )
-from .visonic_types import VisonicConfigData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,8 +66,11 @@ async def async_setup_entry(
         if len(entities) > 0:
             async_add_entities(entities)
 
-    vce: VisonicConfigData = entry.runtime_data
-    vce.dispatchers[Platform.BINARY_SENSOR] = async_dispatcher_connect( hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.BINARY_SENSOR}", async_add_binary_sensor )
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, f"{DOMAIN}_{entry.entry_id}_add_{Platform.BINARY_SENSOR}", async_add_binary_sensor
+        )
+    )
 
 
 class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], BinarySensorEntity):
@@ -82,8 +85,8 @@ class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], Bi
 
     def __init__(self, entry: ConfigEntry, identifier: str) -> None:
         """Initialize the panel image-download indicator."""
-        vce: VisonicConfigData = entry.runtime_data
-        super().__init__(vce.coordinator)
+        vcd: VisonicPanelData = entry.runtime_data
+        super().__init__(coordinator=vcd.coordinator)
         self._attr_available = True
         self._attr_translation_key = VISONIC_TRANSLATION_KEY + "_image_download_active"
         self._attr_device_info = DeviceInfo(
