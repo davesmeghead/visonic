@@ -8,6 +8,7 @@ import asyncio
 from collections.abc import Callable
 import copy
 from copy import deepcopy
+from datetime import timedelta
 import logging
 from typing import Any
 
@@ -80,7 +81,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             logger=_COORDINATOR_LOGGER,
             name=f"{capitalize(DOMAIN)} {entry.title}",
             config_entry=entry,
-            #update_interval=timedelta(seconds=update_interval),
+            update_interval=timedelta(seconds=update_interval),
             #always_update=always_update,
         )
 

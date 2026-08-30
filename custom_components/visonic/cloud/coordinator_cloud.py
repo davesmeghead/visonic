@@ -196,8 +196,8 @@ class VisonicCloudCoordinator(VisonicCoordinator):
     @property
     def update_interval(self) -> timedelta | None:
         """Interval between updates."""
-        update_interval = self.entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_CLOUD_SCAN_INTERVAL)
-        self._update_interval = timedelta(seconds=update_interval)
+        _update_interval = self.entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_CLOUD_SCAN_INTERVAL)
+        self._update_interval = timedelta(seconds=_update_interval)
         self._update_interval_seconds = self._update_interval.total_seconds()
         return self._update_interval
 
@@ -205,6 +205,8 @@ class VisonicCloudCoordinator(VisonicCoordinator):
     def update_interval(self, value: timedelta | None) -> None:
         """Set interval between updates."""
         self.partition_list : set[int] = set()
+        self._update_interval = value
+        self._update_interval_seconds = self._update_interval.total_seconds()
 
     async def authenticate(self):
         """Authenticate with the panel."""
@@ -441,6 +443,8 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                     self.login_success = True
                     # The login details are new so save them
                     self.save_connection_entry()
+                    #self.async_update_listeners()
+                    await self.async_request_refresh()
                     return True
             # If authentication fails then fail to load this hub
             self._event_logger.logstate_info("panel connection failure")
