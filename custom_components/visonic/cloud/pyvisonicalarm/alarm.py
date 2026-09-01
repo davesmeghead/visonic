@@ -53,9 +53,9 @@ class AlarmSystem:
         """Revoke access to the alarm panel via the API for a user."""
         return await self.__api.access_revoke(user_id)
 
-    async def activate_siren(self):
+    async def activate_siren(self, mode):
         """Activate the siren (sound the alarm)."""
-        cmd = await self.__api.activate_siren()
+        cmd = await self.__api.activate_siren(mode)
         return cmd.get("process_token")
 
     async def disable_siren(self, mode="all"):

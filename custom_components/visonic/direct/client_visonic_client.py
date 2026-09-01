@@ -47,12 +47,12 @@ class VisonicClient(ManageConnection):
         disable_all_panel_commands,
         platform_manager : PlatformManager,
         panelident: int,
-        state_callback: Callable[..., None],
+        state_changed_callback: Callable[..., None],
     ) -> None:
         """Initialize."""
         super().__init__(hass, entry, diagnostics, force_standard_mode,
                          disable_all_panel_commands, platform_manager,
-                         panelident, state_callback)
+                         panelident, state_changed_callback)
         self.logger.logstate_debug(
             "Initialising Client - Version %s, panel %s language %s",
             CLIENT_VERSION,

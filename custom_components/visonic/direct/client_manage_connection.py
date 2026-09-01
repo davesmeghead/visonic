@@ -95,10 +95,10 @@ class ManageConnection(MaintainInterface):
         disable_all_panel_commands,
         platform_manager : PlatformManager,
         panelident: int,
-        state_callback: Callable[..., None],
+        state_changed_callback: Callable[..., None],
     ) -> None:
         """Initialize."""
-        super().__init__(hass, entry, diagnostics, platform_manager, panelident, state_callback)
+        super().__init__(hass, entry, diagnostics, platform_manager, panelident, state_changed_callback)
         # These are variables used throughout this class and all child classes
         self._listeners_registered = False
         self.force_standard_mode = force_standard_mode
@@ -691,7 +691,8 @@ class ManageConnection(MaintainInterface):
                 )
         else:
             self.send_event(event_id, data)
-        self.state_changed_callback()
+        if self.state_changed_callback:
+            self.state_changed_callback()
 
     def on_panel_event_log_handler(
         self,

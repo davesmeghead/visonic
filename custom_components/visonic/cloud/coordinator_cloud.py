@@ -2,12 +2,13 @@
 
 import asyncio
 from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import traceback
 from typing import Any
 import uuid
 
+from homeassistant.components.alarm_control_panel import AlarmControlPanelState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_CODE,
@@ -23,10 +24,13 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from ..const import (  # noqa: TID252
+    CONF_ARM_CODE_AUTO,
     CONF_ARM_HOME_ENABLED,
     CONF_CLOUD_APP_ID,
     CONF_ENABLE_REMOTE_ARM,
     CONF_ENABLE_REMOTE_DISARM,
+    CONF_ENABLE_SENSOR_BYPASS,
+    CONF_FORCE_KEYPAD,
     CONF_PANEL_SERIAL,
     DEFAULT_CLOUD_SCAN_INTERVAL,
     PARTITION_ID_WHEN_BASE,
@@ -51,12 +55,14 @@ from ..visonic_entity_types import (  # noqa: TID252  # noqa: TID252
     ZoneSensorDetails,
 )
 from ..visonic_types import (  # noqa: TID252  # noqa: TID252
+    PANEL_TO_HA_STATUS_MAP,
     AlarmCommandStatus,
     AlarmPanelCommand,
     AlarmPanelStatus,
     AlarmSwitchCommand,
     AvailableNotifications,
     CommandResult,
+    PanelCondition,
     TriggerAlarmType,
 )
 from .pyvisonicalarm.alarm import AlarmSystem, GenericDevice, PanelInfo
@@ -130,7 +136,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, panel_id: int, event_logger: logEvents):
         """Initialize the coordinator."""
         ui = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_CLOUD_SCAN_INTERVAL)
-        super().__init__(hass, entry, panel_id=panel_id, lo=event_logger, update_interval=ui, always_update=True, state_changed_callback=self.state_changed_callback)
+        super().__init__(hass, entry, panel_id=panel_id, lo=event_logger, update_interval=ui, always_update=True)
 
         self.panel_entity_name: dict[int, str] = {}
         self.partition_list : set[int] = set()
@@ -138,7 +144,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         self.siren_disarm = False
         self.testing = False
         self.entry = entry
-
+        self.partition_dict: dict[int, dict[str, Any]] = {}
         self.first_time = True
         self.login_success = False
         self.device_registry = dr.async_get(hass)
@@ -167,19 +173,6 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                     data = new_data,
                 )
 
-    async def _async_update_data(self) -> VisonicCoordinatorData:
-        """Override the parent function."""
-        _state_snapshot = None
-        try:
-            self._service_image_queue()
-            _state_snapshot = await self.create_state_snapshot()
-            if self.state_changed_callback:
-                self.state_changed_callback()
-        except Exception as err:
-            raise UpdateFailed(str(err)) from err
-        else:
-            return _state_snapshot
-
     def ive_been_created(self):
         """Called when certain entities are first initialised to make sure they get the latest data."""
         # Needs to be implemented as it gets called, but no action to take
@@ -192,21 +185,6 @@ class VisonicCloudCoordinator(VisonicCoordinator):
     #        self.config_entry.data.get(CONF_PASSWORD),
     #        self.config_entry.data.get(CONF_CODE),
     #    ]
-
-    @property
-    def update_interval(self) -> timedelta | None:
-        """Interval between updates."""
-        _update_interval = self.entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_CLOUD_SCAN_INTERVAL)
-        self._update_interval = timedelta(seconds=_update_interval)
-        self._update_interval_seconds = self._update_interval.total_seconds()
-        return self._update_interval
-
-    @update_interval.setter
-    def update_interval(self, value: timedelta | None) -> None:
-        """Set interval between updates."""
-        self.partition_list : set[int] = set()
-        self._update_interval = value
-        self._update_interval_seconds = self._update_interval.total_seconds()
 
     async def authenticate(self):
         """Authenticate with the panel."""
@@ -272,9 +250,25 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         self.panel_type = "Unknown" if panel_type is None else panel_type
         return panel_serial
 
-    def get_diagnostic_data(self) -> dict[str, Any]:
+    async def get_diagnostic_data(self) -> dict[str, Any]:
         """Build and return the diagnostics data for this panel."""
-        return {}
+        try:
+            data = await self.create_state_snapshot()
+            # Add sensors, switches, and logs
+            return {
+                "integration connected": "yes",
+                "panel connected": (
+                    "yes" if data.connected else "no"
+                ),
+                "visonic": data.as_dict(convert_to_name=True),
+                "history": self._event_logger.get_str_log(),
+            }
+        except Exception as err:
+            raise VisonicException(
+                "Get Diagnostic data failed",
+                code=400,
+                original_exception=err,
+            ) from err
 
     def hasStarted(self) -> bool:
         """Has the system started?"""
@@ -287,19 +281,43 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 attempts -= 1
                 await asyncio.sleep(1.0)
                 processes = await self.cloud_alarm.get_process_status(process_token)
-                self._event_logger.logstate_info("          status %s", processes)
+                self._event_logger.logstate_info("        process_token %s  response count %s", process_token, len(processes))
                 for process in processes:
                     self._event_logger.logstate_info(f"          process {process}")
+                    if process.status == "succeeded":
+                        return AlarmCommandStatus.SUCCESS
                     if process.status == "handled":
                         return AlarmCommandStatus.SUCCESS
                     if process.status == "failed":
                         return AlarmCommandStatus.FAIL_INVALID_STATE
+                    if process.status == "error":
+                        return AlarmCommandStatus.FAIL_INVALID_STATE
                     self._event_logger.logstate_info("             process return status not failed or handled, it is %s   message %s   error %s", process.status, process.message, process.error)
-                    return AlarmCommandStatus.FAIL_INVALID_RETURN
+            return AlarmCommandStatus.FAIL_INVALID_RETURN
         return AlarmCommandStatus.FAIL_INVALID_PROCESS_TOKEN
 
+    def _check_command_permitted(
+            self,
+            code: str | None,
+            psc: AlarmPanelStatus | None,
+    ) -> CommandResult | None:
+        if psc is None:
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_STATE,
+                AvailableNotifications.COMMAND,
+                "Invalid Partition State",
+            )
+        is_valid, _final_code, _, _ = self.get_panel_pin_code(code=code, psc=psc)
+        if not is_valid:
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_CODE,
+                AvailableNotifications.INVALID_PIN,
+                "Invalid code",
+            )
+        return None
+
     # the return value indicates whether any sensors needed to be bypassed
-    async def send_command(
+    async def send_command(  # noqa: C901
         self,
         name: str,
         command: AlarmPanelCommand,
@@ -308,6 +326,27 @@ class VisonicCloudCoordinator(VisonicCoordinator):
     ) -> CommandResult:
         """Common send command function."""
         acs = AlarmCommandStatus.FAIL_INVALID_RETURN
+
+        vcd: VisonicCoordinatorData = self.data
+        slot = 0 if partition_set is None or len(partition_set) == 3 or partition_set == self.partition_list else list(partition_set)[0]
+        part_state = vcd.partition_armcode[slot]
+        if (retval := self._check_command_permitted(code, part_state)) is not None:
+            return retval
+        if partition_set is not None and len(partition_set) == 2 and len(self.partition_list) > len(partition_set):
+            # All 3 partitions are in use, the commanded partition_set is 2 of them
+            slot = list(partition_set)[1]
+            part_state = vcd.partition_armcode[slot]
+            if (retval := self._check_command_permitted(code, part_state)) is not None:
+                return retval
+
+        is_valid, _code = self.get_panel_pin_code_simple(code)
+        if not is_valid:
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_CODE,
+                AvailableNotifications.INVALID_PIN,
+                "Invalid code",
+            )
+
         part = PARTITION_ID_WHEN_BASE if partition_set is None or len(partition_set) == 3 or partition_set == self.partition_list else list(partition_set)[0] + 1
         did_bypass = False
         if self.cloud_alarm:
@@ -363,7 +402,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                         user_settings_prevented = True
                 case AlarmPanelCommand.TRIGGER | AlarmPanelCommand.FIRE | AlarmPanelCommand.EMERGENCY | AlarmPanelCommand.PANIC:
                     if self.siren_arm:
-                        process_token = await self.cloud_alarm.activate_siren()
+                        process_token = await self.cloud_alarm.activate_siren(mode=command.name.lower())
                     else:
                         panel_settings_prevented = True
                 case AlarmPanelCommand.MUTE:
@@ -376,8 +415,11 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 acs = AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED
             elif panel_settings_prevented:
                 acs = AlarmCommandStatus.FAIL_PANEL_CONFIG_PREVENTED
-            elif process_token:
+            elif process_token is not None:
                 acs = await self.wait_for_process_status(process_token)
+
+        # schedule an update in 5 seconds time
+        self.state_changed_callback(5.0)
 
         return CommandResult(
             acs,
@@ -395,10 +437,41 @@ class VisonicCloudCoordinator(VisonicCoordinator):
     ) -> CommandResult:
         """Send bypass command."""
         acs = AlarmCommandStatus.FAIL_INVALID_RETURN
+        esb = to_bool(self.entry.options.get(CONF_ENABLE_SENSOR_BYPASS))
+        if not esb:
+            text = "Bypass" if bypass else "Restore"
+            self.platform_manager.generate_event_output(
+                PanelCondition.CHECK_BYPASS_COMMAND,
+                AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
+                text,
+                f"Sensor {text} State",
+            )
+            return CommandResult(
+                AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
+                AvailableNotifications.COMMAND,
+                f"Sensor {text} State",
+            )
+        # is_code_valid
+        is_valid, _code_not_used = self.get_panel_pin_code_simple(code=code)
+        if not is_valid:
+            text = "Bypass" if bypass else "Restore"
+            self.platform_manager.generate_event_output(
+                PanelCondition.CHECK_BYPASS_COMMAND,
+                AlarmCommandStatus.FAIL_INVALID_CODE,
+                text,
+                f"Sensor {text} State",
+            )
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_CODE,
+                AvailableNotifications.COMMAND,
+                f"Sensor {text} State",
+            )
         if self.cloud_alarm:
             process_token = await self.cloud_alarm.set_bypass_zone(devid, bypass)
             if process_token:
                 acs = await self.wait_for_process_status(process_token)
+        # schedule an update in 5 seconds time
+        self.state_changed_callback(5.0)
         return CommandResult(
             acs,
             AvailableNotifications.BYPASS,
@@ -411,6 +484,8 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             AvailableNotifications.SWITCH,
             f"Failed Attempt to set switch device for panel {self.panel_id}, device {devid} Not supported by interface",
         )
+        # schedule an update in 5 seconds time
+        self.state_changed_callback(5.0)
         return CommandResult(
             AlarmCommandStatus.FAIL_INVALID_STATE, AvailableNotifications.SWITCH, f"Send SWITCH {command} to device {devid}"
         )
@@ -422,11 +497,38 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 #            )
 #        return result
 
-    def get_panel_pin_code_simple(self, code: str | None):
+    def get_panel_pin_code_simple(self, code: str | None) -> tuple[bool, str]:
         """Get code code."""
-        if code is None or len(code) != 4:
+        if code is None or (len(code) == 4 and code == self.cloud_alarm.get_user_code()):
             return True, self.cloud_alarm.get_user_code()
-        return True, code
+        return False, None
+
+    def get_panel_pin_code(self, code: str | None, psc: AlarmPanelStatus | None) -> tuple[bool, str | None, bool, bool]:
+        """Get code code."""
+        # get_panel_pin_code: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
+        # Return tuple:  IsCodeValid, code, showKeypad, code_arm_required
+        alarm_state = (
+            PANEL_TO_HA_STATUS_MAP[psc]
+            if psc is not None and psc in PANEL_TO_HA_STATUS_MAP
+            else None
+        )
+        forced_keypad = to_bool(self.entry.options.get(CONF_FORCE_KEYPAD, False))
+        mycode: str | None = (
+            None if code is None or code == "" or len(code) != 4 else code
+        )
+        is_arm_without_code = to_bool(self.entry.options.get(CONF_ARM_CODE_AUTO, False))
+
+        if forced_keypad:
+            # Disarmed: depends on if panel can arm without a code.  Armed: Show keypad
+            keypad = (
+                not is_arm_without_code
+                if alarm_state == AlarmControlPanelState.DISARMED
+                else True
+            )
+            # Bottom 4 rows of Powerlink Table
+            return (True, mycode, keypad, not is_arm_without_code)
+        # Top 2 rows of Powerlink Table. No need for a keypad when in powerlink.
+        return (True, mycode, False, False)
 
     async def async_panel_connect(self) -> bool:
         """Connect to the cloud visonic server."""
@@ -503,10 +605,6 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             and 0 <= partition <= 2
         ):
             self.panel_entity_name[partition] = panel_entity_name
-
-    def get_state_snapshot(self) -> VisonicCoordinatorData:
-        """Return complete snapshot of current state."""
-        return self.data
 
     def _determine_armcode(self, p : Partition) -> AlarmPanelStatus:
         # p.status can be "EXIT" or "" I think
@@ -624,18 +722,10 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             #if fs.home_automation_devices_enabled:
             #    ad = await self.cloud_alarm.get_auto_devices()
 
-
             indices = range(3)
-            show_keypad: dict[int, bool] = {}
-            code_arm_required: dict[int, bool] = {}
-            for i in indices:
-                show_keypad[i] = False
-                code_arm_required[i] = False
-
             self.siren_arm = panel_info.features.enabling_siren
             self.siren_disarm = panel_info.features.disabling_siren
             partition_armcode: dict[int, AlarmPanelStatus] = {}
-            partition_dict: dict[int, dict[str, Any]] = {}
             partition_siren = dict.fromkeys(indices, (False, -1, TriggerAlarmType.NONE))
 
             most_recent_alarm = None
@@ -649,7 +739,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                     if p.id:
                         ac = self._determine_armcode(p)
                         partition_armcode[p.id-1] = ac
-                        partition_dict[p.id-1] = construct_partition_data(p)
+                        self.partition_dict[p.id-1] = construct_partition_data(p)
                         _LOGGER.info(f"Partition {p.id} is {ac.name}")  # noqa: G004
                         if most_recent_alarm is not None and p.id in most_recent_alarm.partitions:
                             al = MAP_ALARM_TYPE.get(most_recent_alarm.alarm_type, TriggerAlarmType.NONE)
@@ -658,13 +748,22 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             else:
                 # Does partition 0 represent the main panel when there are no partitions set?
                 partition_armcode[0] = self._determine_armcode(status.partitions[0])
+                partition_armcode[1] = AlarmPanelStatus.UNKNOWN
+                partition_armcode[2] = AlarmPanelStatus.UNKNOWN
                 if most_recent_alarm is not None:
                     al = MAP_ALARM_TYPE.get(most_recent_alarm.alarm_type, TriggerAlarmType.NONE)
                     zone = most_recent_alarm.zone if most_recent_alarm.zone is not None else -1
                     partition_siren[0] = self._determine_siren_state(partition_armcode[0], al, zone)
                     _LOGGER.info(f"     Setting Siren Data {partition_siren[0]}")  # noqa: G004
                 _LOGGER.info(f"Main Panel is {partition_armcode[0].name}")  # noqa: G004
-                partition_dict[0] = construct_partition_data(status.partitions[0])
+                self.partition_dict[0] = construct_partition_data(status.partitions[0])
+
+            show_keypad: dict[int, bool] = {}
+            code_arm_required: dict[int, bool] = {}
+            for i in indices:
+                _, _, sk, car = self.get_panel_pin_code(code=None, psc=partition_armcode[i])
+                show_keypad[i] = sk
+                code_arm_required[i] = car
 
             new_data = VisonicCoordinatorData(
                 connected=status.connected,
@@ -679,7 +778,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 partition_code_arm_required=code_arm_required,
                 partition_armcode=partition_armcode,
                 partition_siren=partition_siren,
-                partition_dict=partition_dict,
+                partition_dict=self.partition_dict,
                 zones=self.platform_manager.sensor_state(),
                 switch=self.platform_manager.switch_state(),
                 device=self.platform_manager.device_state(),

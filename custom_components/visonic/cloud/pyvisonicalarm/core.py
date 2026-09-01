@@ -385,12 +385,12 @@ class API:
         user_data = {"user": user_id}
         return await self.__send_request(VisonicURL.ACCESS_REVOKE, data=user_data, request_type=RequestType.POST)
 
-    async def activate_siren(self) -> dict[str, Any] | list[Any]:
+    async def activate_siren(self, mode = "trigger") -> dict[str, Any] | list[Any]:
         """Activate the siren (sound the alarm)."""
-        #siren_data: dict[str, Any] = {"mode": mode}
+        siren_data: dict[str, Any] = {"mode": mode}
         return await self.__send_request(
             VisonicURL.ACTIVATE_SIREN,
-            data={},
+            data=siren_data,
             request_type=RequestType.POST,
         )
 

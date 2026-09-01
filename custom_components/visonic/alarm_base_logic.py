@@ -25,6 +25,7 @@ from .const import (
     MANUFACTURER,
     PARTITION_ID_WHEN_BASE,
     PARTITION_NAME_TEMPLATE,
+    PARTITION_NAME_TEMPLATE_SUFFIX,
     VISONIC_TRANSLATION_KEY,
 )
 from .coordinator_base import VisonicCoordinator
@@ -40,7 +41,7 @@ class AlarmBaseLogic(CoordinatorEntity[VisonicCoordinator]):
 
     """Panel and Partition Common."""
 
-    def __init__(self, entry: ConfigEntry, partition: int | None, identifier: str):
+    def __init__(self, entry: ConfigEntry, partition: int | None, identifier: str, show_keypad: bool | None = None):
         """Initialize a Visonic security alarm."""
         vcd: VisonicPanelData = entry.runtime_data
         vc: VisonicCoordinator = vcd.coordinator
@@ -49,24 +50,49 @@ class AlarmBaseLogic(CoordinatorEntity[VisonicCoordinator]):
         super().__init__(coordinator=vc)
         self._entry = entry
         self._panel_id = vcd.panel_id
+        self.show_keypad = show_keypad
         self.last_event_name = None
 
         self._partition = partition
-        self._panel_ident: str = identifier
+        if show_keypad is None:
+            self._panel_ident: str = identifier
+        elif show_keypad:
+            self._panel_ident: str = identifier + "_keypad"
+        else:
+            self._panel_ident: str = identifier + "_nokeypad"
         if partition is None:
             # Partitions are not enabled in the panel, or we are still connecting to the panel and do not know yet
             self._partition_set = None
-            self._name: str = self._panel_ident + "_main_panel"
             self.coordinator.log.logstate_info("[__init__] Setting primary sensor")
             #friendly_name = "Panel" if self._panel_id == 0 else f"Panel {self._panel_id}"
+            if show_keypad is None:
+                self._attr_name = ""
+                self._name: str = self._panel_ident + "_main_panel"
+            elif show_keypad:
+                self._attr_name = "Keypad"
+                self._name: str = self._panel_ident + "_main_panel_keypad"
+            else:
+                self._attr_name = "No Keypad"
+                self._name: str = self._panel_ident + "_main_panel_nokeypad"
         else:
             # Partitions are enabled in the panel, this is the Entity for one of the partitons
             self._partition_set = {partition}
             # self._name : str = self._panel_ident + " Partition " + str(partition+1)        # Add 1 for user interface
-            self._name: str = PARTITION_NAME_TEMPLATE.format(
-                panel_ident=self._panel_ident, partition_index=partition + 1
-            )
-            self._attr_name = f"Partition {partition+1}" # if self._panel_id == 0 else f"Panel {self._panel_id} Partition {partition+1}"
+            if show_keypad is None:
+                self._attr_name = f"Partition {partition+1}"
+                self._name: str = PARTITION_NAME_TEMPLATE.format(
+                    panel_ident=self._panel_ident, partition_index=partition + 1
+                )
+            elif show_keypad:
+                self._attr_name = f"Partition {partition+1} (Keypad)"
+                self._name: str = PARTITION_NAME_TEMPLATE_SUFFIX.format(
+                    panel_ident=self._panel_ident, partition_index=partition + 1, suffix="Keypad"
+                )
+            else:
+                self._attr_name = f"Partition {partition+1} (No Keypad)"
+                self._name: str = PARTITION_NAME_TEMPLATE_SUFFIX.format(
+                    panel_ident=self._panel_ident, partition_index=partition + 1, suffix="No Keypad"
+                )
             self.coordinator.set_partition_name(
                 partition=partition, panel_entity_name=self._name
             )
@@ -92,7 +118,7 @@ class AlarmBaseLogic(CoordinatorEntity[VisonicCoordinator]):
             )
             self.panel_state_data = PanelStateData()
             return
-        self.panel_state_data = self.coordinator.get_panel_and_partition_state(self._partition)
+        self.panel_state_data = self.coordinator.get_panel_and_partition_state(self._partition, self.show_keypad)
 
     @abstractmethod
     def update_local(self, entry: ConfigEntry) -> None:

@@ -6,7 +6,6 @@ from typing import Any
 from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import slugify
 
 from ..const import (  # noqa: TID252
@@ -68,7 +67,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         # Use auto (_async_update_data) for minor updates to entity attributes every 60 seconds
         # Also, for both manual and auto, only call the handlers when data changes
 
-        super().__init__(hass, entry, panel_id=panel_id, lo=event_logger, update_interval=60, always_update=False, state_changed_callback=self.state_changed_callback)
+        super().__init__(hass, entry, panel_id=panel_id, lo=event_logger, update_interval=60, always_update=False)
 
         self._client: VisonicClient = VisonicClient(
             hass = hass,
@@ -78,15 +77,15 @@ class VisonicDirectCoordinator(VisonicCoordinator):
             disable_all_panel_commands = self.disable_all_panel_commands,
             platform_manager = self.platform_manager,
             panelident = panel_id,
-            state_callback = self.state_changed_callback,
+            state_changed_callback = self.state_changed_callback,
         )
         self._event_logger = event_logger
 
     def ive_been_created(self):
         """Called when certain entities are first initialised to make sure they get the latest data."""
         try:
-            data = self.get_state_snapshot()
-            super().async_set_updated_data(data)
+            if self.state_changed_callback:
+                self.state_changed_callback()
         except Exception as err:
             raise VisonicException(
                 "Client not created properly",
@@ -97,15 +96,6 @@ class VisonicDirectCoordinator(VisonicCoordinator):
     def hasStarted(self) -> bool:
         """Has the system started?"""
         return self._client.hasStarted()
-
-    async def _async_update_data(self) -> VisonicCoordinatorData:
-        """Override the parent function."""
-        try:
-            self._service_image_queue()
-            return self.get_state_snapshot()
-        except Exception as err:
-            raise UpdateFailed(str(err)) from err
-
 
 #    @callback
 #    def async_handle_client_update(self, data: VisonicCoordinatorData) -> None:
@@ -121,7 +111,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         """Shortcut to set the partition name (used in HA events)."""
         self._client.set_partition_name(partition, panel_entity_name)
 
-    def get_diagnostic_data(self) -> dict[str, Any]:
+    async def get_diagnostic_data(self) -> dict[str, Any]:
         """Build and return the diagnostics data for this panel."""
         if not self._client:
             return {
@@ -130,7 +120,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                 "history": self._event_logger.get_str_log(),
             }
         try:
-            data = self.get_state_snapshot()
+            data = await self.create_state_snapshot()
             # Add sensors, switches, and logs
             return {
                 "integration connected": "yes",
@@ -310,7 +300,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         """Send the command to the panel to get a camera image."""
         return await self._client.send_client_get_sensor_image(devid, eid, duration)
 
-    def get_state_snapshot(self) -> VisonicCoordinatorData:
+    async def create_state_snapshot(self) -> VisonicCoordinatorData:
         """Return complete snapshot of current state."""
 
         partitions = self._client.get_partitions_in_use() or {}

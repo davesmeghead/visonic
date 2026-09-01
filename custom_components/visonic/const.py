@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 
 # The client version and domain information for the integration
 DOMAIN: Final = "visonic"
-CLIENT_VERSION: Final = "0.13.0.38"
+CLIENT_VERSION: Final = "0.13.0.39"
 MANUFACTURER: Final = "Visonic"
 VISONIC_UNIQUE_NAME: Final = "Visonic Alarm"
 VISONIC_TRANSLATION_KEY: Final = "alarm_panel_key"
@@ -23,6 +23,7 @@ CAMERA_CLIP_EVENT: Final = f"{DOMAIN}_camera_clip"  # a PIR capture finished ren
 
 # Template for partition names
 PARTITION_NAME_TEMPLATE: Final = "{panel_ident} Partition {partition_index}"
+PARTITION_NAME_TEMPLATE_SUFFIX: Final = "{panel_ident} Partition {partition_index} {suffix}"
 
 # The HA Services.  These strings match the content of the services.yaml file
 ALARM_PANEL_COMMAND: Final = "alarm_panel_command"

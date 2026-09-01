@@ -111,7 +111,7 @@ class MaintainInterface:
         diagnostics: logEvents | None,
         platform_manager : PlatformManager,
         panelident: int,
-        state_callback: Callable[..., None],
+        state_changed_callback: Callable[..., None],
     ) -> None:
         """Initialize."""
         # These are variables used throughout this class and all child classes
@@ -138,7 +138,7 @@ class MaintainInterface:
         self._serial_baud_rate = int(self.entry.data.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD))
 
         self.language_decoder: LanguageDecoder = LanguageDecoder(hass)
-        self.state_changed_callback: Callable[..., None] = state_callback
+        self.state_changed_callback: Callable[..., None] = state_changed_callback
         self.saved_startup_success_time = None
 
     def _initialise(self):
@@ -487,7 +487,8 @@ class MaintainInterface:
                 )
 
             self.setupAlarmPanel(self.get_partitions_in_use())
-            self.state_changed_callback()
+            if self.state_changed_callback:
+                self.state_changed_callback()
             # This will only succeed if in powerlink mode and the panel is a powermaster
             #   This also works for ethernet as self._serial_baud_rate should not have been changed
             if self._serial_baud_rate == 9600 and self.is_power_master() and self.get_panel_mode() == AlPanelMode.POWERLINK:
@@ -532,6 +533,8 @@ class MaintainInterface:
     def setupAlarmPanel(self, piu: set[int] | None):
         """Setup the alarm panel.  This has to be done only when all partitions are known."""
         self.entry.async_create_task(self.hass, self.platform_manager.async_setup_alarm_panel(piu), name=f"Setup alarm panel {self.panel_ident} entity")
+        if self.state_changed_callback:
+            self.state_changed_callback()
 
     def save_working_baud(self, baud: int) -> None:
         """Persist the detected working baud rate."""

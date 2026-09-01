@@ -21,6 +21,9 @@ from .visonic_types import AlarmPanelCommand
 
 _LOGGER = logging.getLogger(__name__)
 
+experimental_keypad_alarm_panel_entities = True
+#experimental_keypad_alarm_panel_entities = False
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -33,13 +36,24 @@ async def async_setup_entry(
         """Add Visonic Alarm Panel."""
         vcd: VisonicPanelData = entry.runtime_data
         if vcd:
+            # Create a list of alarm panels with the user settings for showing keypad
             entities: list[VisonicAlarm] = [
                 e
                 for e in vcd.coordinator.alarm_and_sensor_common_setup(
-                    entry=entry, alarm=True, piu=alarm_data.partitions, identifier=alarm_data.identifier
+                    entry=entry, alarm=True, ref=0, piu=alarm_data.partitions, identifier=alarm_data.identifier, show_keypad=None
                 )
                 if isinstance(e, VisonicAlarm)  # They should be but this makes certain
             ]
+            if experimental_keypad_alarm_panel_entities:
+                _LOGGER.info("Adding experimental keypad alarm panel entities")
+                # Add to list of alarm panels for showing keypad
+                entities.extend([
+                    e
+                    for e in vcd.coordinator.alarm_and_sensor_common_setup(
+                        entry=entry, alarm=True, ref=1, piu=alarm_data.partitions, identifier=alarm_data.identifier, show_keypad=True
+                    )
+                    if isinstance(e, VisonicAlarm)  # They should be but this makes certain
+                ])
             if entities:
                 async_add_entities(entities, True)
 
@@ -67,9 +81,9 @@ class VisonicAlarm(
         }
     )
 
-    def __init__(self, entry: ConfigEntry, partition: int | None, identifier: str):
+    def __init__(self, entry: ConfigEntry, partition: int | None, identifier: str, show_keypad: bool | None):
         """Initialise and pass on the mro."""
-        super().__init__(entry=entry, partition=partition, identifier=identifier)
+        super().__init__(entry=entry, partition=partition, identifier=identifier, show_keypad=show_keypad)
 
     # Respond to the user commands
 
@@ -146,7 +160,7 @@ class VisonicAlarm(
         self._attr_extra_state_attributes = self.panel_state_data.attributes
         self._attr_alarm_state = self.panel_state_data.alarm_state
         self._attr_available = self.panel_state_data.connected
-        #_LOGGER.info(f"[alarm control panel update]  _attr_available {self._attr_available}    _attr_alarm_state {self._attr_alarm_state}")
+        #_LOGGER.info(f"[alarm control panel update]  _attr_available {self._attr_available}    _attr_alarm_state {self._attr_alarm_state}      keypad={self.panel_state_data.show_keypad}")
 
         if self.panel_state_data.connected and not self.disable_all_panel_commands:
             self._attr_code_arm_required = self.panel_state_data.code_arm_required
@@ -167,6 +181,7 @@ class VisonicAlarm(
 
             #_LOGGER.info(f"[alarm control panel update]  code format {self._attr_code_format}")
             #_LOGGER.info(f"[alarm control panel update]  code arm reqd {self._attr_code_arm_required}")
+            #_LOGGER.info(f"[alarm control panel update]  attr name {self._attr_name}")
 
         else:
             self._attr_supported_features = AlarmControlPanelEntityFeature(0)

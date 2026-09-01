@@ -33,6 +33,6 @@ async def async_get_config_entry_diagnostics(
         }
         return async_redact_data(diagdata, REDACT_ME)
 
-    diagdata = coordinator.get_diagnostic_data()
+    diagdata = await coordinator.get_diagnostic_data()
     ev = {"entry": entry.options, **diagdata}
     return async_redact_data(ev, REDACT_ME)

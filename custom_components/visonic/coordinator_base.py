@@ -5,10 +5,10 @@ This class contains abstract methods that the coordinator in "cloud" and "direct
 
 from abc import abstractmethod
 import asyncio
-from collections.abc import Callable
+import contextlib
 import copy
 from copy import deepcopy
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 from typing import Any
 
@@ -16,10 +16,21 @@ from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 from homeassistant.components.alarm_control_panel.const import AlarmControlPanelState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_CODE, ATTR_ENTITY_ID, CONF_COMMAND, Platform
-from homeassistant.core import HomeAssistant, ServiceCall, valid_entity_id
+from homeassistant.core import (
+    Callable,
+    HomeAssistant,
+    ServiceCall,
+    callback,
+    valid_entity_id,
+)
 from homeassistant.exceptions import Unauthorized, UnknownUser
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.update_coordinator import (
+    DataUpdateCoordinator,
+    Debouncer,
+    UpdateFailed,
+)
 from homeassistant.util import slugify
 
 from .const import (
@@ -73,15 +84,22 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, panel_id: int,
                  lo: logEvents, update_interval: int, always_update: bool,
-                 state_changed_callback: Callable[..., None] | None = None
     ):
         """Initialize the Home Assistant base coordinator."""
+        request_refresh_debouncer = Debouncer(
+            hass,
+            logger=_COORDINATOR_LOGGER,
+            cooldown=update_interval,
+            immediate=True,
+        )
         super().__init__(
             hass,
             logger=_COORDINATOR_LOGGER,
             name=f"{capitalize(DOMAIN)} {entry.title}",
             config_entry=entry,
             update_interval=timedelta(seconds=update_interval),
+            update_method=self.my_update_data,
+            request_refresh_debouncer=request_refresh_debouncer,   # The function gets added inside
             #always_update=always_update,
         )
 
@@ -89,12 +107,13 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         # do not use self.logger as it is defined in parent coordinator class
         self._event_logger = lo
         self._prev_panel_connected = False
+        self._cancel_timer: Callable[[], None] | None = None
 
         # This is the alarm control entity that is first created.
         #      For multi partiton panels, this is changed to be the overall control entity.
         #      For Basic Emulation Mode this is the sensor, otherwise it's the alarm_control_panel
         #   There is not a type definition due to circular imports
-        self.alarm_entity = None #  VisonicAlarmSensor | VisonicAlarm | None
+        self.alarm_entity: list = [None, None] #  VisonicAlarmSensor | VisonicAlarm | None
 
         # Declare image_manager and platform_manager using the base class so they can be used in this and derived classes
 
@@ -112,7 +131,6 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             entry=entry,
             logger=lo,
             image_manager=self.image_manager,
-            state_changed_callback=state_changed_callback,
         )
 
     @property
@@ -128,42 +146,74 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         v = EmulationMode(self.config_entry.data.get(CONF_EMULATION_MODE, EmulationMode.POWERLINK))
         return v == EmulationMode.STANDARD
 
-    def state_changed_callback(self):
-        """Client calls this when the panel data has changed."""
-        data = self.get_state_snapshot()
-        self.async_set_updated_data(data)
-
     @property
     def log(self) -> logEvents:
         """Allow joined classes to log to the event log for diagnostics. Use it wisely."""
         return self._event_logger
 
+    def start_timer(self, delay: float) -> None:
+        """Update timer for sequential update control."""
+        if self._cancel_timer is not None:
+            self.log.logstate_debug("start timer - cancelled old timer")
+            self._cancel_timer()
+            self._cancel_timer = None
+        if delay <= 0.0:
+            self.log.logstate_debug("start timer - create task straight away, no delay")
+            self.hass.async_create_task(self.async_state_changed_callback())
+            return
+        self.log.logstate_debug(f"start timer {delay=}")
+        self._cancel_timer = async_call_later(
+            self.hass,
+            delay,
+            self._timer_callback,
+        )
+
+    @callback
+    def _timer_callback(self, _now: datetime) -> None:
+        self._cancel_timer = None
+        self.log.logstate_debug("start timer - create task")
+        self.hass.async_create_task(self.async_state_changed_callback())
+
+    async def async_state_changed_callback(self) -> None:
+        """An async version of state_changed_callback."""
+        self.log.logstate_debug("start timer - async_state_changed_callback")
+        data = await self.create_state_snapshot()
+        self.async_set_updated_data(data)
+
+    def state_changed_callback(self, delay: float = 0.5) -> None:
+        """Client calls this when the panel data has changed."""
+        self.start_timer(delay)
+
+    async def my_update_data(self) -> VisonicCoordinatorData:
+        """Override the parent function."""
+        if self._cancel_timer is not None:
+            self.log.logstate_debug("start timer - cancelled timer as doing update_data")
+            self._cancel_timer()
+            self._cancel_timer = None
+        with contextlib.suppress(Exception):
+            self._service_image_queue()
+        _state_snapshot = None
+        try:
+            _state_snapshot = await self.create_state_snapshot()
+        except Exception as err:
+            raise UpdateFailed(str(err)) from err
+        else:
+            return _state_snapshot
+
     @abstractmethod
-    def get_state_snapshot(self) -> VisonicCoordinatorData:
+    async def create_state_snapshot(self) -> VisonicCoordinatorData:
         """Get the state snapshot."""
 
     @abstractmethod
     def hasStarted(self) -> bool:
         """Has the system started?"""
 
-    async def get_cached_image(self, sensor_id: int) -> bytearray | None:
-        """Get the cached image."""
-        if self.image_manager and hasattr(self.image_manager, "async_get_jpg_image"):
-            return await self.image_manager.async_get_jpg_image(sensor_id)
-        if self.image_manager and hasattr(self.image_manager, "get_jpg_image"):
-            # run blocking sync code in executor
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(
-                None, self.image_manager.get_jpg_image, sensor_id
-            )
-        return None
-
     @abstractmethod
     def ive_been_created(self):
         """Called when certain entities are first initialised to make sure they get the latest data."""
 
     @abstractmethod
-    def get_diagnostic_data(self) -> dict[str, Any]:
+    async def get_diagnostic_data(self) -> dict[str, Any]:
         """Build and return the diagnostics data for this panel."""
 
     @abstractmethod
@@ -231,6 +281,18 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
     @abstractmethod
     async def send_command_sensor_image(self, devid: int | None, eid: str | None, duration: int) -> AlarmCommandStatus:
         """Abstract to implement send the command to the panel to get a camera image/video."""
+
+    async def get_cached_image(self, sensor_id: int) -> bytearray | None:
+        """Get the cached image."""
+        if self.image_manager and hasattr(self.image_manager, "async_get_jpg_image"):
+            return await self.image_manager.async_get_jpg_image(sensor_id)
+        if self.image_manager and hasattr(self.image_manager, "get_jpg_image"):
+            # run blocking sync code in executor
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(
+                None, self.image_manager.get_jpg_image, sensor_id
+            )
+        return None
 
     async def send_get_sensor_image(self, devid: int | None, eid: str | None, duration: int):
         """Send the command to the panel to get a camera image/video, after a few basic checks."""
@@ -311,7 +373,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         vcd: VisonicCoordinatorData = self.data
         return vcd is not None and vcd.ispowermaster
 
-    def get_panel_and_partition_state(self, partition: int | None) -> PanelStateData:
+    def get_panel_and_partition_state(self, partition: int | None, show_keypad: bool | None) -> PanelStateData:
         """Update the state of the entity based on device data. This is common to Alarm and Sensor Entity."""
 
         vcd: VisonicCoordinatorData = self.data
@@ -391,7 +453,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         part = 0 if partition is None or partition == PARTITION_ID_WHEN_BASE else partition
         return PanelStateData(
             connected=vcd.connected,
-            show_keypad=vcd.partition_show_keypad.get(part, False),
+            show_keypad=show_keypad if show_keypad is not None else vcd.partition_show_keypad.get(part, False),
             code_arm_required=vcd.partition_code_arm_required.get(part, False),
             is_power_master=vcd.ispowermaster,
             trigger_device=(dev, alarm),
@@ -674,7 +736,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 await self.send_switch(devid, command)
 
     def alarm_and_sensor_common_setup(
-        self, entry: ConfigEntry, alarm: bool, piu: set[int] | None, identifier: str
+        self, entry: ConfigEntry, alarm: bool, ref: int, piu: set[int] | None, identifier: str, show_keypad: bool | None = None
     ) -> list[Entity]:
         """Common function that takes in all parameters to setup either an Alarm Control Panel or a Sensor."""
         # I import these here otherwise there is a circular import.
@@ -696,35 +758,35 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         #     2) Add new Alarm or Sensor Entities, one per partition
         #
         #  e.g. A panel with 2 partitions will have 3 Alarm or Sensor Entities.
-        if piu is None and self.alarm_entity is None:
+        if piu is None and self.alarm_entity[ref] is None:
             # No partitions and this is the first time the function has been called
             #   Make sure this is only done once, create the panel Entity
-            self.alarm_entity = (
-                VisonicAlarm(entry=entry, partition=None, identifier=identifier)
+            self.alarm_entity[ref] = (
+                VisonicAlarm(entry=entry, partition=None, identifier=identifier, show_keypad=show_keypad)
                 if alarm
                 else VisonicAlarmSensor(entry=entry, partition=None, identifier=identifier)
             )
-            entities.append(self.alarm_entity)
+            entities.append(self.alarm_entity[ref])
         elif piu is not None and len(piu) > 1:
             # Partitions
-            if self.alarm_entity is None:
+            if self.alarm_entity[ref] is None:
                 # This should probably not happen i.e. partitions are known about straight away
                 # Create the base/dumb panel first to command all partitions
-                self.alarm_entity = (
-                    VisonicAlarm(entry=entry, partition=None, identifier=identifier)
+                self.alarm_entity[ref] = (
+                    VisonicAlarm(entry=entry, partition=None, identifier=identifier, show_keypad=show_keypad)
                     if alarm
                     else VisonicAlarmSensor(entry=entry, partition=None, identifier=identifier)
                 )
-                self.alarm_entity.set_as_base_panel()
-                entities.append(self.alarm_entity)
+                self.alarm_entity[ref].set_as_base_panel()
+                entities.append(self.alarm_entity[ref])
             else:
                 # base/dumb panel entity already created (above) so just modify it
-                self.alarm_entity.set_as_base_panel()
+                self.alarm_entity[ref].set_as_base_panel()
             # Create an entity for each partition
             entities.extend(
                 [
                     (
-                        VisonicAlarm(entry=entry, partition=p, identifier=identifier)
+                        VisonicAlarm(entry=entry, partition=p, identifier=identifier, show_keypad=show_keypad)
                         if alarm
                         else VisonicAlarmSensor(entry=entry, partition=p, identifier=identifier)
                     )

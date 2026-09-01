@@ -61,6 +61,7 @@ async def async_setup_entry(
                             for e in vcd.coordinator.alarm_and_sensor_common_setup(
                                 entry=entry,
                                 alarm=False,
+                                ref=0,
                                 piu=item.partitions,
                                 identifier=item.identifier
                             )

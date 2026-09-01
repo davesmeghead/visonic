@@ -1,7 +1,6 @@
 """Helper classes for the coordinator."""
 
 import asyncio
-from collections.abc import Callable
 import re
 from typing import Any, NamedTuple
 
@@ -121,7 +120,6 @@ class PlatformManager:
         entry: ConfigEntry,
         logger: logEvents,
         image_manager: ImageManager,
-        state_changed_callback: Callable[..., None] | None = None,
     ) -> None:
         """Initialize the Event Logger."""
         self.hass = hass
@@ -129,7 +127,6 @@ class PlatformManager:
         self.logger = logger
         self.panel_ident = panelident
         self.image_manager = image_manager
-        self.state_changed_callback: Callable[..., None] | None = state_changed_callback
 
         self.rationalised_ha_devices = False
 
@@ -343,8 +340,6 @@ class PlatformManager:
                             BinarySensorData(identifier=puid, device_id=-1, sensor_definition=VisonicBinarySensorKey.PANEL_TAMPER, initial_state=None, timeout_type=SensorOnTimeout.NO_TIMEOUT)
                         ],
                     )
-            if self.state_changed_callback:
-                self.state_changed_callback()
 
     def rationalise_ha_devices(self, force: bool):
         """Rationalise Home Assistant devices and entities to remove any that are no longer valid."""
