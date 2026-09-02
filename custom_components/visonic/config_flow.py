@@ -28,14 +28,12 @@ from homeassistant.const import (
     CONF_HOST,
     CONF_NAME,
     CONF_PASSWORD,
-    CONF_PATH,
     CONF_PORT,
     CONF_TYPE,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.selector import SerialPortSelector
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.util import slugify
@@ -100,15 +98,8 @@ from .visonic_types import DeviceType, EmulationMode
 
 _LOGGER = logging.getLogger(__name__)
 
-SERIAL_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_DEVICE): SerialPortSelector(),
-    }
-)
-
-
 DEFAULT_TITLE = "Visonic Security System"
-VISONIC_CONFIG_VERSION = 6
+VISONIC_CONFIG_VERSION = 7
 
 MAP_DEVICE_TO_CONFIG_STEP: dict[DeviceType, str] = {
     DeviceType.ETHERNET: FORM_ETHERNET,
@@ -201,7 +192,7 @@ class VisonicHandler:
                         return TRANSLATE_ERROR_SETTINGS_MISSING
                 case DeviceType.SERIAL:
                     # There must be a path to the serial device on this machine
-                    if not data.get(CONF_PATH):
+                    if not data.get(CONF_DEVICE):
                         return TRANSLATE_ERROR_SETTINGS_MISSING
                 case DeviceType.CLOUD:
                     # Must be login settings to cloud server
@@ -431,11 +422,6 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
                     )
                     if existing_entry:
                         raise AbortFlow(TRANSLATE_ABORT_ALREADY_CONFIGURED)
-                #self._abort_if_unique_id_configured() not needed as existing_entry raises AbortFlow
-                #return self.async_show_form(
-                #    step_id=cf,
-                #    data_schema=SERIAL_SCHEMA,
-                #)
                 return self.show_form(step=step, values=self.config_data)
         return self.show_form(step=FORM_DEVICE, errors={"base": TRANSLATE_ERROR_ETHERNET_SERVER_OR_SERIAL}, values=self.config_data)
 
@@ -686,7 +672,7 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
             CONF_PORT: str(port),
             CONF_ESPHOME_ENTITY_SELECT: baud_entity,
             CONF_PANEL_NUMBER: panel_num,
-            CONF_PATH: path,
+            CONF_DEVICE: path,
             CONF_EMULATION_MODE: emulation_mode,
             CONF_NAME: name,
             CONF_USAGE: EmulationMode.usage(emulation_mode),
@@ -761,40 +747,8 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
     # This is run to import the configuration.yaml parameters
     async def async_step_import(self, import_config: dict[str, Any]):
         """Import a config entry from configuration.yaml."""
-        # _LOGGER.debug("Visonic in async_step_import in %s", import_config)
-
-        # convert the yaml file format for the device (ethernet or serial) settings to a flat dictionary structure
-        data: dict[str, Any] = {}
-        try:
-            for k in import_config:
-                if k == CONF_DEVICE:
-                    # flatten out the structure so the data variable is a simple dictionary
-                    device_type: dict[str, Any] = import_config.get(CONF_DEVICE, {})  # This must be set so default to an empty {}
-                    if device_type.get(CONF_TYPE) == DeviceType.ETHERNET:
-                        data[CONF_TYPE] = DeviceType.ETHERNET
-                        data[CONF_HOST] = device_type[CONF_HOST]
-                        data[CONF_PORT] = device_type[CONF_PORT]
-                        data[CONF_ESPHOME_ENTITY_SELECT] = device_type[
-                            CONF_ESPHOME_ENTITY_SELECT
-                        ]
-                        data[CONF_PATH] = ""
-                    elif device_type.get(CONF_TYPE) == DeviceType.SERIAL:
-                        data[CONF_TYPE] = DeviceType.SERIAL
-                        data[CONF_PATH] = device_type[CONF_PATH]
-                        data[CONF_HOST] = ""
-                        data[CONF_PORT] = ""
-                        data[CONF_ESPHOME_ENTITY_SELECT] = ""
-                else:
-                    data[k] = import_config.get(k)
-        except (KeyError, TypeError) as er:
-            _LOGGER.debug(
-                "Importing settings from configuration.yaml but something went wrong or some essential data is missing %s",
-                str(er),
-            )
-            # _LOGGER.debug("     The current data is %s", import_config)
-            return self.async_abort(reason=TRANSLATE_ERROR_SETTINGS_MISSING)
-
-        return await self.async_step_user(data)
+        _LOGGER.debug("Visonic in async_step_import not supported in %s", import_config)
+        raise VisonicException("Import not supported", code=600)
 
     def is_same_connection(self, data1: dict[str, Any], data2: dict[str, Any]) -> bool:
         """Test to determine if data1 and data2 are the same connection."""
@@ -823,8 +777,8 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
                 if host1 != host2:
                     return False
             case DeviceType.SERIAL:
-                path1 = data1.get(CONF_PATH, "")
-                path2 = data2.get(CONF_PATH, "")
+                path1 = data1.get(CONF_DEVICE, "")
+                path2 = data2.get(CONF_DEVICE, "")
                 if path1 != path2:
                     return False
             case _:

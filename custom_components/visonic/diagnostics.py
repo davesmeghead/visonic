@@ -4,7 +4,7 @@ from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PATH, CONF_PORT
+from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 
 from .const import CONF_DOWNLOAD_CODE, CONF_SERVER_HOST, CONF_SERVER_PORT
@@ -13,7 +13,7 @@ from .exceptions import VisonicException
 from .visonic_data_types import VisonicPanelData
 
 REDACT_ME = (CONF_DOWNLOAD_CODE, CONF_SERVER_HOST, CONF_SERVER_PORT,
-             CONF_HOST, CONF_PORT, CONF_PATH,
+             CONF_HOST, CONF_PORT, CONF_DEVICE,
              )
 
 async def async_get_config_entry_diagnostics(

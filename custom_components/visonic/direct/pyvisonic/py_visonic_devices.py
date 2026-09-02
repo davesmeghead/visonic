@@ -557,12 +557,13 @@ class ManageDevices(ProtocolBase):
 
         #log.warning(f"[Process Settings]    AlarmLED10 {self.epromManager.lookupEprom("AlarmLED10")}") # Only works if full eprom is retrieved
         #log.warning(f"[Process Settings]    AlarmLED30 {self.epromManager.lookupEprom("AlarmLED30")}") # Only works if full eprom is retrieved
-        gsm_installed: bool = self.epromManager.lookupEpromSingle(EPROM.GSM_INSTALLED) == 1
+        gsm_value = self.epromManager.lookupEpromSingle(EPROM.GSM_INSTALLED)
+        gsm_installed: bool = gsm_value == 1
         if gsm_installed:
             log.warning("A GSM Module is installed in the panel. You may see disconnections and/or seemingly random changes in alarm entity states.")
             self.send_panel_update(AlCondition.GSM_MODULE_INSTALLED)
         else:
-            log.info("[Process Settings]     GSM Module Not Installed")
+            log.info(f"[Process Settings]     GSM Module Not Installed {gsm_value=}")
 
         bell = self.epromManager.lookupEpromSingle(EPROM.BELL_TIME)
         log.info(f"[Process Settings]     Bell Time {type(bell)=}   {bell=}")

@@ -9,7 +9,13 @@ from typing import Any
 from voluptuous.schema_builder import UNDEFINED as VOL_UNDEFINED
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
-from homeassistant.const import CONF_NAME, CONF_SOURCE, CONF_TYPE
+from homeassistant.const import (
+    CONF_DEVICE,
+    CONF_NAME,
+    CONF_PATH,
+    CONF_SOURCE,
+    CONF_TYPE,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
@@ -313,12 +319,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     device_type: str = entry.data.get(CONF_TYPE)
     if device_type is None:
         return False
-    if device_type == "usb":
-        device_type = "serial"
-        data = deepcopy(dict(entry.data))
-        data[CONF_TYPE] = "serial"
-        hass.config_entries.async_update_entry(entry, data=data)
-
     device_type_enum = DeviceType(device_type)
 
     # Check for the id being unique
@@ -430,9 +430,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
         if CONF_ESPHOME_ENTITY_SELECT not in options and CONF_ESPHOME_ENTITY_SELECT not in data:
             data[CONF_ESPHOME_ENTITY_SELECT] = ""
 
-        if data.get(CONF_TYPE, "") == "usb":
-            data[CONF_TYPE] = "serial"
-
         # Split the data and options correctly:
         #     data is defined by the user on first creation and then only by reconfigure
         #     options can be edited easily and are pushed in to the integration without reload
@@ -525,6 +522,14 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
 
         data = data_out
         options = options_out
+        changed = True
+
+    if version == 6:
+        if CONF_PATH in data:
+            data[CONF_DEVICE] = data.pop(CONF_PATH)
+        if data.get(CONF_TYPE, "") == "usb":
+            data[CONF_TYPE] = "serial"
+        version = 7
         changed = True
 
     if changed:

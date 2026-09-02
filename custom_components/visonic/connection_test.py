@@ -9,7 +9,7 @@ from typing import Any
 import serial
 import serialx
 
-from homeassistant.const import CONF_EXTERNAL_URL, CONF_HOST, CONF_PATH, CONF_PORT
+from homeassistant.const import CONF_DEVICE, CONF_EXTERNAL_URL, CONF_HOST, CONF_PORT
 
 from .const import (
     TRANSLATE_ERROR_CONNECTION_REFUSED,
@@ -92,7 +92,7 @@ class ConnectionTest:
                 port = data.get(CONF_PORT, "0")
                 error = await self.try_tcp_connection(host, int(port))
             case DeviceType.SERIAL:
-                dev = data.get(CONF_PATH, "")
+                dev = data.get(CONF_DEVICE, "")
                 error = await self.try_serial_port(dev)
             case _:
                 error=TRANSLATE_ERROR_SETTINGS_MISSING

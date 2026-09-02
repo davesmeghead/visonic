@@ -10,11 +10,11 @@ from voluptuous.schema_builder import UNDEFINED as VOL_UNDEFINED
 
 from homeassistant.const import (
     CONF_CODE,
+    CONF_DEVICE,
     CONF_EMAIL,
     CONF_EXTERNAL_URL,
     CONF_HOST,
     CONF_PASSWORD,
-    CONF_PATH,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
     CONF_TYPE,
@@ -108,7 +108,7 @@ FormItems: dict[str, list[str]] = {
     #     FORM_TCP_DISCOVERED is only used for reconnection, host and port cannot be edited
     #     For those that support CONF_EMULATION_MODE then FORM_POWERLINK is shown next if Powerlink Emulation Mode is selected
     FORM_ETHERNET: [CONF_HOST, CONF_PORT, CONF_ESPHOME_ENTITY_SELECT, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
-    FORM_SERIAL: [CONF_PATH, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
+    FORM_SERIAL: [CONF_DEVICE, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
     FORM_CLOUD: [CONF_EXTERNAL_URL, CONF_EMAIL, CONF_PASSWORD, CONF_CODE, CONF_PANEL_SERIAL, CONF_SCAN_INTERVAL, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
     FORM_TCP_SERVER: [CONF_SERVER_HOST, CONF_SERVER_PORT],
     FORM_TCP_DISCOVERED: [CONF_ESPHOME_ENTITY_SELECT, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
@@ -188,7 +188,7 @@ def build_config_items() -> dict[str, ConfigItem]:
             validator=cv.positive_int,
             default=0,
         ),
-        CONF_PATH: ConfigItem(
+        CONF_DEVICE: ConfigItem(
             marker=req,
             validator=SerialPortSelector(),
             default=VOL_UNDEFINED,

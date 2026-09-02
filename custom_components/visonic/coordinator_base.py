@@ -107,7 +107,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         # do not use self.logger as it is defined in parent coordinator class
         self._event_logger = lo
         self._prev_panel_connected = False
-        self._cancel_timer: Callable[[], None] | None = None
+        self._coordinator_update_timer: Callable[[], None] | None = None
 
         # This is the alarm control entity that is first created.
         #      For multi partiton panels, this is changed to be the overall control entity.
@@ -151,45 +151,50 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         """Allow joined classes to log to the event log for diagnostics. Use it wisely."""
         return self._event_logger
 
-    def start_timer(self, delay: float) -> None:
+    def start_coordinator_update_timer(self, delay: float) -> None:
         """Update timer for sequential update control."""
-        if self._cancel_timer is not None:
-            self.log.logstate_debug("start timer - cancelled old timer")
-            self._cancel_timer()
-            self._cancel_timer = None
+        if self._coordinator_update_timer is not None:
+            self.log.logstate_debug("coordinator update timer - cancelled old timer")
+            self._coordinator_update_timer()
+            self._coordinator_update_timer = None
         if delay <= 0.0:
-            self.log.logstate_debug("start timer - create task straight away, no delay")
+            self.log.logstate_debug("coordinator update timer - create task straight away, no delay")
             self.hass.async_create_task(self.async_state_changed_callback())
             return
-        self.log.logstate_debug(f"start timer {delay=}")
-        self._cancel_timer = async_call_later(
+        self.log.logstate_debug(f"coordinator update timer {delay=}")
+        self._coordinator_update_timer = async_call_later(
             self.hass,
             delay,
-            self._timer_callback,
+            self._coordinator_update_timer_callback,
         )
 
     @callback
-    def _timer_callback(self, _now: datetime) -> None:
-        self._cancel_timer = None
-        self.log.logstate_debug("start timer - create task")
+    def _coordinator_update_timer_callback(self, _now: datetime) -> None:
+        self._coordinator_update_timer = None
+        #self.log.logstate_debug("coordinator update timer - create task")
         self.hass.async_create_task(self.async_state_changed_callback())
 
     async def async_state_changed_callback(self) -> None:
         """An async version of state_changed_callback."""
-        self.log.logstate_debug("start timer - async_state_changed_callback")
+        self.log.logstate_debug("doing async_state_changed_callback")
         data = await self.create_state_snapshot()
         self.async_set_updated_data(data)
 
-    def state_changed_callback(self, delay: float = 0.5) -> None:
+    def state_changed_callback(self, delay: float = 0.2) -> None:
         """Client calls this when the panel data has changed."""
-        self.start_timer(delay)
+        # If a single message from the panel contains multiple updates (i.e to multiple sensors, switches etc)
+        #   meaning that this function gets called multiple times in quick succession
+        #   then we should delay the update until they've all be processed.
+        #   This cuts down on the number of coordinator update calls to the listeners
+        self.start_coordinator_update_timer(delay)
 
     async def my_update_data(self) -> VisonicCoordinatorData:
         """Override the parent function."""
-        if self._cancel_timer is not None:
+        if self._coordinator_update_timer is not None:
+            # If a timer is in progress to perform a data update then cancel it
             self.log.logstate_debug("start timer - cancelled timer as doing update_data")
-            self._cancel_timer()
-            self._cancel_timer = None
+            self._coordinator_update_timer()
+            self._coordinator_update_timer = None
         with contextlib.suppress(Exception):
             self._service_image_queue()
         _state_snapshot = None

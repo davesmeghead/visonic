@@ -13,8 +13,8 @@ from requests import ConnectTimeout, HTTPError
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    CONF_DEVICE,
     CONF_HOST,
-    CONF_PATH,
     CONF_PORT,
     CONF_TYPE,
     EVENT_CORE_CONFIG_UPDATE,
@@ -205,7 +205,7 @@ class ManageConnection(MaintainInterface):
                     )
                     return True
                 case DeviceType.SERIAL:
-                    path = self.entry.data.get(CONF_PATH, DEFAULT_DEVICE_SERIAL)
+                    path = self.entry.data.get(CONF_DEVICE, DEFAULT_DEVICE_SERIAL)
                     await async_create_serial_client(
                         self.logger,
                         self.hass,
