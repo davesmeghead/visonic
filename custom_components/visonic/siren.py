@@ -110,7 +110,7 @@ class VisonicSiren(CoordinatorEntity[VisonicCoordinator], SirenEntity):
 #                "Coordinator not ready for siren %s", self._name
 #            )
 #            return
-        state: PanelStateData = self.coordinator.get_panel_and_partition_state(PARTITION_ID_WHEN_BASE, None)
+        state: PanelStateData = self.coordinator.get_panel_and_partition_state(PARTITION_ID_WHEN_BASE)
 
         # Update siren state
         dev = -1

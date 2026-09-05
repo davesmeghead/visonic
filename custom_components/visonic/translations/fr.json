@@ -97,6 +97,7 @@
                 "data": {
                     "show_eeprom_attributes": "Afficher les donn\u00e9es EPROM dans les attributs d'alarme",
                     "user_code_slot": "Panel User Code for Commands",
+					"enable_keypad_alarm_entity": "Create Extra Alarm Panel Entities with Keypads",
                     "download_code": "EPROM Code t\u00e9l\u00e9chargement"
                 }
 			},
@@ -132,7 +133,7 @@
                 "title": "Param\u00e8tres d’armement/d\u00e9sarmement de la Centrale d’alarme",
                 "data": {
                     "arm_without_usercode": "Armement sans code utilisateur (non pris en charge par tous les panneaux)",
-                    "force_numeric_keypad": "Forcer l'utilisation d'un pav\u00e9 num\u00e9rique",
+					"arm_without_usercode_alarm_keypad": "Arm Keypad Alarm without User Code (not supported by all panels)",
                     "arm_home_enabled": "Armement Partiel Activ\u00e9",
                     "arm_night_enabled": "Armement Nuit Activ\u00e9",
                     "arm_away_instant": "Armement Total effectue un Armement Total Instantan\u00e9",
@@ -215,7 +216,7 @@
                 "title": "Centrale d'Alarme Armement/D\u00e9sarmement Param\u00e8tres",
                 "data": {
                     "arm_without_usercode": "Armement sans Code Utilisateur (pas support\u00e9 par toutes les centrales)",
-                    "force_numeric_keypad": "Clavier Num\u00e9rique Obligatoire",
+					"arm_without_usercode_alarm_keypad": "Arm Keypad Alarm without User Code (not supported by all panels)",
                     "arm_home_enabled": "Armement Partiel Activ\u00e9",
                     "arm_night_enabled": "Armement Nuit Activ\u00e9",
                     "arm_away_instant": "Armement Total effectue un Armement Total Instantan\u00e9",

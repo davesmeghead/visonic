@@ -14,6 +14,7 @@ from .devices import (
     PanelDevice,
     PGMDevice,
     ShockDevice,
+    SirenDevice,
     SmokeDevice,
     TagDevice,
 )
@@ -50,7 +51,7 @@ DEVICE_SUBTYPES: dict[str, device_type] = {
     "GENERIC_PROXY_TAG": device_type(TagDevice, SensorGroup.TOKEN),
     "FLAT_PIR_SMART": device_type(MotionDevice, SensorGroup.MOTION),
     "CURTAIN": device_type(MotionDevice, SensorGroup.MOTION),
-    "WL_SIREN": device_type(GenericDevice, SensorGroup.SIREN),
+    "WL_SIREN": device_type(SirenDevice, SensorGroup.SIREN),
     "SHOCK_CONTACT_AUX_ANTIMASK": device_type(ShockDevice, SensorGroup.SHOCK),
     "HW_ZONE_CONNECTED_DIRECTLY_TO_THE_PANEL": device_type(ContactDevice, SensorGroup.WIRED),
 }

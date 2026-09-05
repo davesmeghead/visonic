@@ -19,6 +19,7 @@ Based on the DomotiGa and Vera implementation:
 import asyncio
 from copy import deepcopy
 import logging
+import re
 from typing import Any
 
 from .py_const import (
@@ -90,6 +91,8 @@ pmSwitchState = {
     AlSwitchCommand.OFF : 0x00, AlSwitchCommand.ON : 0x01, AlSwitchCommand.DIMMER : 0x0A, AlSwitchCommand.BRIGHTEN : 0x0B
 }
 
+
+PIN_REGEX = re.compile(r"^[0-9]{4}$")
 
 ###################################################################################
 ##########################  Code Start  ###########################################
@@ -196,13 +199,12 @@ class VisonicProtocol(MessageHandling):
             # Request the bypass status from the panel to update the sensors
             self.add_message_to_send_queue(Send.BYPASSTAT, priority = MessagePriority.IMMEDIATE)
 
-
     def _createPin(self, pin : str | None):
         # Pin is None when either we can perform the action without a code OR we're in Powerlink/StandardPlus and have the pin code to use
         # Other cases, the pin must be set
         if pin is None:
             bpin = self._get_user_code() # defaults to 0000
-        elif len(pin) == 4:
+        elif PIN_REGEX.match(pin):
             bpin = convert_bytearray(pin[0:2] + " " + pin[2:4])
         else:
             # default to setting it to "0000" and see what happens when its sent to the panel

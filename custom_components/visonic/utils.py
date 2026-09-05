@@ -171,17 +171,6 @@ def format_int_list(value: str | list[int] | None) -> str:
         return ",".join(map(str, value))
     raise ValueError("Input value must be list or string")
 
-def decode_code_from_dict_or_str(data: str | dict[str, Any] | None) -> str:
-    """Decode the alarm code."""
-    if data is not None:
-        if isinstance(data, str):
-            if len(data) == 4:
-                return data
-        elif "code" in data:
-            if len(data["code"]) == 4:
-                return data["code"]
-    return ""
-
 @callback
 def _update_entry(
     hass: HomeAssistant,

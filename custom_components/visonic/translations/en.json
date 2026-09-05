@@ -97,6 +97,7 @@
                 "data": {
                     "show_eeprom_attributes": "Show the EPROM Data in the Alarm Attributes",
                     "user_code_slot": "Panel User Code for Commands",
+					"enable_keypad_alarm_entity": "Create Extra Alarm Panel Entities with Keypads",
                     "download_code": "EPROM Download Code"
                 }
 			},
@@ -131,8 +132,8 @@
                 "description": "",
                 "title": "Alarm Panel Arm/Disarm Settings",
                 "data": {
-                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
-                    "force_numeric_keypad": "Force use of a Numeric Keypad",
+                    "arm_without_usercode": "Arm Normal Alarm without User Code (not supported by all panels)",
+					"arm_without_usercode_alarm_keypad": "Arm Keypad Alarm without User Code (not supported by all panels)",
                     "arm_home_enabled": "Arm Home Enabled",
                     "arm_night_enabled": "Arm Night Enabled",
                     "arm_away_instant": "Arm Away performs an Arm Away Instant",
@@ -214,8 +215,8 @@
                 "description": "",
                 "title": "Alarm Panel Arm/Disarm Settings",
                 "data": {
-                    "arm_without_usercode": "Arm without User Code (not supported by all panels)",
-                    "force_numeric_keypad": "Force use of a Numeric Keypad",
+                    "arm_without_usercode": "Arm Normal Alarm without User Code (not supported by all panels)",
+					"arm_without_usercode_alarm_keypad": "Arm Keypad Alarm without User Code (not supported by all panels)",
                     "arm_home_enabled": "Arm Home Enabled",
                     "arm_night_enabled": "Arm Night Enabled",
                     "arm_away_instant": "Arm Away performs an Arm Away Instant",

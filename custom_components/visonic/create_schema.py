@@ -29,11 +29,13 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_ALARM_NOTIFICATIONS,
     CONF_ARM_CODE_AUTO,
+    CONF_ARM_CODE_AUTO_KEYPAD_ENTITY,
     CONF_ARM_HOME_ENABLED,
     CONF_ARM_NIGHT_ENABLED,
     CONF_DOWNLOAD_CODE,
     CONF_EMER_OFF_DELAY,
     CONF_EMULATION_MODE,
+    CONF_ENABLE_KEYPAD_ALARM_ENTITY,
     CONF_ENABLE_REMOTE_ARM,
     CONF_ENABLE_REMOTE_DISARM,
     CONF_ENABLE_SENSOR_BYPASS,
@@ -41,7 +43,6 @@ from .const import (
     CONF_ESPHOME_ENTITY_SELECT,
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_SWITCH,
-    CONF_FORCE_KEYPAD,
     CONF_IMAGE_MEDIA_PATH,
     CONF_IMAGE_SINGLE_FRAME,
     CONF_INSTANT_ARM_AWAY,
@@ -112,12 +113,12 @@ FormItems: dict[str, list[str]] = {
     FORM_CLOUD: [CONF_EXTERNAL_URL, CONF_EMAIL, CONF_PASSWORD, CONF_CODE, CONF_PANEL_SERIAL, CONF_SCAN_INTERVAL, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
     FORM_TCP_SERVER: [CONF_SERVER_HOST, CONF_SERVER_PORT],
     FORM_TCP_DISCOVERED: [CONF_ESPHOME_ENTITY_SELECT, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
-    FORM_POWERLINK: [CONF_DOWNLOAD_CODE, CONF_USER_CODE_SLOT, CONF_EPROM_ATTRIBUTES],
+    FORM_POWERLINK: [CONF_DOWNLOAD_CODE, CONF_USER_CODE_SLOT, CONF_EPROM_ATTRIBUTES, CONF_ENABLE_KEYPAD_ALARM_ENTITY],
     # Supporting forms to get the config
     #     parameters in entry.options
     FORM_PARAM10: [CONF_SIREN_SOUNDING, CONF_ALARM_NOTIFICATIONS, CONF_RETRY_CONNECTION_COUNT, CONF_RETRY_CONNECTION_DELAY],
     FORM_PARAM11: [CONF_MOTION_OFF_DELAY, CONF_MAGNET_CLOSED_DELAY, CONF_EMER_OFF_DELAY],
-    FORM_PARAM12: [CONF_ARM_CODE_AUTO, CONF_FORCE_KEYPAD, CONF_ARM_HOME_ENABLED, CONF_ARM_NIGHT_ENABLED, CONF_INSTANT_ARM_AWAY,
+    FORM_PARAM12: [CONF_ARM_CODE_AUTO, CONF_ARM_CODE_AUTO_KEYPAD_ENTITY, CONF_ARM_HOME_ENABLED, CONF_ARM_NIGHT_ENABLED, CONF_INSTANT_ARM_AWAY, # CONF_FORCE_KEYPAD,
                    CONF_INSTANT_ARM_HOME, CONF_ENABLE_REMOTE_ARM, CONF_ENABLE_REMOTE_DISARM, CONF_ENABLE_SENSOR_BYPASS],
     FORM_PARAM13: [CONF_LOG_EVENT, CONF_LOG_DONE, CONF_LOG_REVERSE, CONF_LOG_CSV_TITLE, CONF_LOG_XML_FN, CONF_LOG_CSV_FN, CONF_LOG_MAX_ENTRIES],
     FORM_PARAM14: [CONF_SIREN_SOUNDING, CONF_ALARM_NOTIFICATIONS],
@@ -265,6 +266,21 @@ def build_config_items() -> dict[str, ConfigItem]:
             validator=str,
             default=VOL_UNDEFINED,
         ),
+        CONF_ENABLE_KEYPAD_ALARM_ENTITY: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_ARM_CODE_AUTO: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
+        CONF_ARM_CODE_AUTO_KEYPAD_ENTITY: ConfigItem(
+            marker=opt,
+            validator=bool,
+            default=False,
+        ),
         CONF_USER_CODE_SLOT: ConfigItem(
             marker=req,
             validator=selector.NumberSelector
@@ -357,16 +373,6 @@ def build_config_items() -> dict[str, ConfigItem]:
                     )
                 ),  # type: ignore[type-arg]
             default=30,
-        ),
-        CONF_ARM_CODE_AUTO: ConfigItem(
-            marker=opt,
-            validator=bool,
-            default=False,
-        ),
-        CONF_FORCE_KEYPAD: ConfigItem(
-            marker=opt,
-            validator=bool,
-            default=False,
         ),
         CONF_ARM_HOME_ENABLED: ConfigItem(
             marker=opt,

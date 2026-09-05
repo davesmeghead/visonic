@@ -51,7 +51,6 @@ from .log_events import logEvents
 from .platform_manager import PlatformManager
 from .utils import (
     capitalize,
-    decode_code_from_dict_or_str,
     getAlarmPanelUniqueIdent,
     parse_int_list,
     print_partition,
@@ -86,6 +85,9 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                  lo: logEvents, update_interval: int, always_update: bool,
     ):
         """Initialize the Home Assistant base coordinator."""
+        from .alarm_control_panel import VisonicAlarm  # noqa: PLC0415
+        from .sensor import VisonicAlarmSensor  # noqa: PLC0415
+
         request_refresh_debouncer = Debouncer(
             hass,
             logger=_COORDINATOR_LOGGER,
@@ -113,10 +115,9 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         #      For multi partiton panels, this is changed to be the overall control entity.
         #      For Basic Emulation Mode this is the sensor, otherwise it's the alarm_control_panel
         #   There is not a type definition due to circular imports
-        self.alarm_entity: list = [None, None] #  VisonicAlarmSensor | VisonicAlarm | None
+        self.alarm_entity: list[VisonicAlarmSensor | VisonicAlarm | None] = [None, None] #  VisonicAlarmSensor | VisonicAlarm | None
 
         # Declare image_manager and platform_manager using the base class so they can be used in this and derived classes
-
         self.image_manager: ImageManager = ImageManager(
             hass=self.hass,
             panelident=panel_id,
@@ -154,14 +155,14 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
     def start_coordinator_update_timer(self, delay: float) -> None:
         """Update timer for sequential update control."""
         if self._coordinator_update_timer is not None:
-            self.log.logstate_debug("coordinator update timer - cancelled old timer")
+            #self.log.logstate_debug("coordinator update timer - cancelled old timer")
             self._coordinator_update_timer()
             self._coordinator_update_timer = None
         if delay <= 0.0:
-            self.log.logstate_debug("coordinator update timer - create task straight away, no delay")
+            #self.log.logstate_debug("coordinator update timer - create task straight away, no delay")
             self.hass.async_create_task(self.async_state_changed_callback())
             return
-        self.log.logstate_debug(f"coordinator update timer {delay=}")
+        #self.log.logstate_debug(f"coordinator update timer {delay=}")
         self._coordinator_update_timer = async_call_later(
             self.hass,
             delay,
@@ -274,7 +275,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         return await self.platform_manager.async_get_zone_switch_info(valid)
 
     @abstractmethod
-    def get_panel_pin_code_simple(self, code: str | None):
+    def get_panel_pin_code(self, code: str | None):
         """Get code code."""
 
     @abstractmethod
@@ -378,7 +379,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         vcd: VisonicCoordinatorData = self.data
         return vcd is not None and vcd.ispowermaster
 
-    def get_panel_and_partition_state(self, partition: int | None, show_keypad: bool | None) -> PanelStateData:
+    def get_panel_and_partition_state(self, partition: int | None) -> PanelStateData:
         """Update the state of the entity based on device data. This is common to Alarm and Sensor Entity."""
 
         vcd: VisonicCoordinatorData = self.data
@@ -454,13 +455,10 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         _last_event_name: str | None = (
             last_event if last_event and len(last_event) > 2 else None
         )
-
-        part = 0 if partition is None or partition == PARTITION_ID_WHEN_BASE else partition
         return PanelStateData(
             connected=vcd.connected,
-            show_keypad=show_keypad if show_keypad is not None else vcd.partition_show_keypad.get(part, False),
-            code_arm_required=vcd.partition_code_arm_required.get(part, False),
             is_power_master=vcd.ispowermaster,
+            achieved_powerlink=vcd.achieved_powerlink,
             trigger_device=(dev, alarm),
             alarm_state=_mystate,
             panel_state=_armcode,
@@ -561,14 +559,27 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
     ) -> tuple[bool, str | None]:
         """Decode the alarm code from the call data."""
         code = call.data.get(ATTR_CODE)
+
         # If the code is defined then it must be a 4 digit string
+        if code is not None:
+            if isinstance(code, dict):
+                code: str = code["code"]
+            if isinstance(code, str):
+                if len(code) == 0:
+                    code = None
+                elif not PIN_REGEX.match(code):
+                    return False, None
+            else:
+                return False, None
+        else:
+            self._event_logger.logstate_debug("[decode_code_from_call_data] Decode code from call and it's None")
+
         if code and not PIN_REGEX.match(code):
             code = "0000"
-        pcode = decode_code_from_dict_or_str(code)
-        is_valid, pin_code = self.get_panel_pin_code_simple(code=pcode)
+        is_valid, pin_code = self.get_panel_pin_code(code=code)
         if is_valid:
             return True, pin_code
-        return False, ""
+        return False, None
 
     async def decode_entity(
         self,
@@ -620,7 +631,15 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         if not await self.check_the_basics(call, "event log"):
             return
         is_valid, code = self.decode_code_from_call_data(call)
-        await self.send_get_event_log(is_valid, code)
+        if not is_valid:
+            self.platform_manager.generate_event_output(
+                PanelCondition.CHECK_EVENT_LOG_COMMAND,
+                AlarmCommandStatus.FAIL_INVALID_CODE,
+                "event log",
+                "event log Request",
+            )
+            return
+        await self.send_get_event_log(code=code)
 
     async def async_service_sensor_image(self, call: ServiceCall):
         """Service call to fetch camera images, for one camera or several."""
@@ -741,7 +760,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 await self.send_switch(devid, command)
 
     def alarm_and_sensor_common_setup(
-        self, entry: ConfigEntry, alarm: bool, ref: int, piu: set[int] | None, identifier: str, show_keypad: bool | None = None
+        self, entry: ConfigEntry, alarm: bool, ref: int, piu: set[int] | None, identifier: str, show_keypad: bool
     ) -> list[Entity]:
         """Common function that takes in all parameters to setup either an Alarm Control Panel or a Sensor."""
         # I import these here otherwise there is a circular import.

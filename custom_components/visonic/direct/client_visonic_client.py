@@ -11,7 +11,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from ..const import CLIENT_VERSION, CONF_ENABLE_SENSOR_BYPASS  # noqa: TID252
 from ..log_events import logEvents  # noqa: TID252  # noqa: TID252
 from ..platform_manager import PlatformManager  # noqa: TID252
-from ..utils import decode_code_from_dict_or_str, to_bool  # noqa: TID252
+from ..utils import to_bool  # noqa: TID252
 from ..visonic_data_types import VisonicConfigEntry  # noqa: TID252
 from ..visonic_types import (  # noqa: TID252  # noqa: TID252
     AlarmCommandStatus,  # AlCommandStatus  # AlCommandStatus
@@ -78,31 +78,6 @@ class VisonicClient(ManageConnection):
             AlarmCommandStatus.SUCCESS, AvailableNotifications.ALWAYS
         )
 
-    def get_panel_pin_code_simple(self, code: str | None):
-        """Get code code."""
-        # get_panel_pin_code_simple: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
-        #   This is used from the bypass command and the get event log command
-        if code is None or code == "" or len(code) != 4:
-            panelmode = self.get_panel_mode()
-            if panelmode in [
-                AlPanelMode.POWERLINK,
-                AlPanelMode.POWERLINK_BRIDGED,
-                AlPanelMode.STANDARD_PLUS,
-            ]:
-                # Powerlink or StdPlus and so we downloaded the code codes
-                return True, None
-            self.logger.logstate_warning(
-                f"Warning: [get_panel_pin_code_simple] Valid 4 digit PIN not found, panelmode is {panelmode}"
-            )
-            return False, None
-        return True, code
-
-    def is_code_required(self) -> bool:
-        """Determine if a user code is required given the panel mode and user settings."""
-        psc = self.get_partition_status(partition=0)
-        is_valid, _, _, _ = self.get_panel_pin_code(code=None, psc=psc)
-        return not is_valid
-
     # This is not called from anywhere, use it for debug purposes and/or to clear all entities from HA
     def print_all_entities(self, delete_as_well: bool = False):
         """Print all entities and devices from the registry for this config entry."""
@@ -128,9 +103,6 @@ class VisonicClient(ManageConnection):
     ):
         """Set the partition naming for the alarm panel entities."""
         self.platform_manager.set_partition_name(partition, panel_entity_name)
-
-    # get_panel_pin_code_simple: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
-    #   This is used from the bypass command and the get event log command
 
     async def send_client_get_sensor_image(self, devid: int | None, eid: str | None, duration: int) -> AlarmCommandStatus:
         """Send the command to the panel to get a camera image."""
@@ -168,29 +140,10 @@ class VisonicClient(ManageConnection):
         if protocol is None or result.status != AlarmCommandStatus.SUCCESS:
             return result
 
-        if code is None or len(code) == 0:
-            code_required = self.is_code_required()
-            if code_required:
-                return CommandResult(
-                    AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
-                    AvailableNotifications.COMMAND,
-                    "Invalid code",
-                )
-
-        is_valid, final_code, _, _ = self.get_panel_pin_code(
-            code=code, psc=self.get_partition_status(0)
-        )
-        if not is_valid:
-            return CommandResult(
-                AlarmCommandStatus.FAIL_INVALID_CODE,
-                AvailableNotifications.INVALID_PIN,
-                "Invalid code",
-            )
-
         self.logger.logstate_debug(
             f"Send command to Visonic Alarm Panel: {command.name}"
         )
-        status = protocol.panel_command(self.convert_to_alarm_command(command), final_code, partitions)
+        status = protocol.panel_command(self.convert_to_alarm_command(command), code, partitions)
         return CommandResult(
             self.convert_to_alarm_status(status),
             AvailableNotifications.COMMAND,
@@ -259,17 +212,7 @@ class VisonicClient(ManageConnection):
                 AvailableNotifications.COMMAND,
                 f"Sensor {text} State",
             )
-        # Decode the pin from the call data
-        dpin = decode_code_from_dict_or_str(code)
-        # Get pin code simple
-        is_valid, final_code = self.get_panel_pin_code_simple(code=dpin)
-        if not is_valid:
-            return CommandResult(
-                AlarmCommandStatus.FAIL_INVALID_CODE,
-                AvailableNotifications.INVALID_PIN,
-                "Invalid pin",
-            )
-        status = protocol.bypass_command(devid, bypass, final_code)
+        status = protocol.bypass_command(devid, bypass, code)
         self.platform_manager.generate_event_output(
             PanelCondition.CHECK_BYPASS_COMMAND,
             self.convert_to_alarm_status(status),
@@ -294,30 +237,20 @@ class VisonicClient(ManageConnection):
             f"Send Switch {command} to device {devid}"
         )
 
-    async def send_get_event_log(
-        self, isValidPL: bool, code: str | None
-    ) -> CommandResult:
+    async def send_get_event_log(self, code: str | None) -> CommandResult:
         """Send get event log."""
         protocol, result = self._get_protocol_for_panel_command()
         if protocol is None or result.status != AlarmCommandStatus.SUCCESS:
             return result
         status = AlarmCommandStatus.FAIL_INVALID_STATE
-        if isValidPL:
-            self.logger.logstate_debug("Sending event log request to panel")
-            status = protocol.get_event_log(code)
-            self.platform_manager.generate_event_output(
-                PanelCondition.CHECK_EVENT_LOG_COMMAND,
-                self.convert_to_alarm_status(status),
-                "EventLog",
-                "Event Log Request",
-            )
-        else:
-            self.platform_manager.generate_event_output(
-                PanelCondition.CHECK_EVENT_LOG_COMMAND,
-                AlarmCommandStatus.FAIL_INVALID_CODE,
-                "EventLog",
-                "EventLog Request",
-            )
+        self.logger.logstate_debug("Sending event log request to panel")
+        status = protocol.get_event_log(code)
+        self.platform_manager.generate_event_output(
+            PanelCondition.CHECK_EVENT_LOG_COMMAND,
+            self.convert_to_alarm_status(status),
+            "EventLog",
+            "Event Log Request",
+        )
         return CommandResult(
             self.convert_to_alarm_status(status), AvailableNotifications.EVENTLOG, "EventLog Request"
         )

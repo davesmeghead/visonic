@@ -97,6 +97,7 @@
                 "data": {
 					"show_eeprom_attributes": "Toon de EPROM-gegevens in de alarmattributen",
                     "user_code_slot": "Panel User Code for Commands",
+					"enable_keypad_alarm_entity": "Create Extra Alarm Panel Entities with Keypads",
 					"download_code": "EPROM Downloadcode"
                 }
 			},
@@ -132,7 +133,7 @@
 				"title": "Alarm Paneel In/Uit-schakel Instellingen",
 				"data": {
 					"arm_without_usercode": "Inschakelen zonder gebruikerscode (niet ondersteund door alle panelen)",
-					"force_numeric_keypad": "Gebruik van een numeriek toetsenbord forceren",
+					"arm_without_usercode_alarm_keypad": "Arm Keypad Alarm without User Code (not supported by all panels)",
 					"arm_home_enabled": "Inschakelen voor Thuis ingeschakeld",
 					"arm_night_enabled": "Inschakelen voor Nacht ingeschakeld",
 					"arm_away_instant": "Inschakelen voor Afwezigheid voert een directe inschakeling uit",
@@ -215,7 +216,7 @@
 				"title": "Alarm Paneel In/Uit-schakel Instellingen",
 				"data": {
 					"arm_without_usercode": "Inschakelen zonder gebruikerscode (niet ondersteund door alle panelen)",
-					"force_numeric_keypad": "Gebruik van een numeriek toetsenbord forceren",
+					"arm_without_usercode_alarm_keypad": "Arm Keypad Alarm without User Code (not supported by all panels)",
 					"arm_home_enabled": "Inschakelen voor Thuis ingeschakeld",
 					"arm_night_enabled": "Inschakelen voor Nacht ingeschakeld",
 					"arm_away_instant": "Inschakelen voor Afwezigheid voert een directe inschakeling uit",

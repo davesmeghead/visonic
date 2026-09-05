@@ -27,9 +27,12 @@ from .connection_test import ConnectionTest
 # Most of the CONF_ are only imported because of the migration function from one version to the next
 from .const import (
     CONF_ALARM_NOTIFICATIONS,
+    CONF_ARM_CODE_AUTO,
+    CONF_ARM_CODE_AUTO_KEYPAD_ENTITY,
     CONF_DEVICE_BAUD,
     CONF_EMER_OFF_DELAY,
     CONF_EMULATION_MODE,
+    CONF_ENABLE_KEYPAD_ALARM_ENTITY,
     CONF_ESPHOME_ENTITY_SELECT,
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_SWITCH,
@@ -381,8 +384,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
 
     if version == 1:
         # Leave CONF_FS in place but use it to add CONF_EMULATION_MODE
-        version = 2
-
         _LOGGER.debug(" CONF_FS from %s", options[CONF_FS])
         if CONF_FS in options and isinstance(options[CONF_FS], bool):
             _LOGGER.debug(" CONF_FS from %s", options[CONF_FS])
@@ -393,11 +394,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
                 _LOGGER.info("  Force standard not set, using %s", EmulationMode.POWERLINK)
                 options[CONF_EMULATION_MODE] = EmulationMode.POWERLINK
             _LOGGER.info(" Emulation mode set to %s", options[CONF_EMULATION_MODE])
+        version = 2
         changed = True
 
     if version == 2:
-        version = 3
-
         CONF_FORCE_AUTOENROLL = "force_autoenroll"  # noqa: N806
         CONF_AUTO_SYNC_TIME = "sync_time"  # noqa: N806
         if CONF_FS in options:
@@ -419,10 +419,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
             AvailableNotifications.SIREN,
         ]
         _LOGGER.debug(" Alarm Notification list set to default")
+        version = 3
         changed = True
 
     if version in [3, 4, 5]:
-        version = 6
         if CONF_PANEL_NUMBER not in options and CONF_PANEL_NUMBER not in data:
             # We have to assume that multiple panels will be updated at the same time, otherwise it gets complicated
             # Create a panel number that is unique
@@ -520,6 +520,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
             _LOGGER.info("Migration of exclude switch list to version %s unsuccessful, list contains invalid values; setting it to an empty string", entry.version)
             data_out[CONF_EXCLUDE_SWITCH] = ""
 
+        version = 6
         data = data_out
         options = options_out
         changed = True
@@ -529,6 +530,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
             data[CONF_DEVICE] = data.pop(CONF_PATH)
         if data.get(CONF_TYPE, "") == "usb":
             data[CONF_TYPE] = "serial"
+        data[CONF_ENABLE_KEYPAD_ALARM_ENTITY] = options.pop("force_numeric_keypad", False)
+        options[CONF_ARM_CODE_AUTO_KEYPAD_ENTITY] = options[CONF_ARM_CODE_AUTO]
         version = 7
         changed = True
 

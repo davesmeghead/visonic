@@ -113,6 +113,26 @@ class Device(BaseClass):
         """Returns the current state of the contact."""
         return self._data.get("state", TEXT_UNKNOWN)
 
+@dataclass
+class SirenDevice(Device):
+    """Siren device class definition."""
+
+    @property
+    def bypass(self) -> bool | None:
+        """Get if bypass enabled."""
+        return self._get_nested_key("bypass", None)
+
+    @property
+    @title_case
+    def location(self) -> str:
+        """Get device location."""
+        return self._get_nested_key("location")
+
+    @property
+    def soak(self) -> bool:
+        """Get if device part of soak test."""
+        return self._get_nested_key("soak", False)
+
 
 @dataclass
 class PanelDevice(Device):
@@ -136,7 +156,6 @@ class ContactDevice(Device):
 @dataclass
 class ShockDevice(Device):
     """Contact device class definition."""
-
 
 @dataclass
 class MotionDevice(Device):

@@ -97,6 +97,7 @@
                 "data": {
                     "show_eeprom_attributes": "Mostra i Dati EPROM negli Attributi dell'Allarme",
                     "user_code_slot": "Panel User Code for Commands",
+					"enable_keypad_alarm_entity": "Create Extra Alarm Panel Entities with Keypads",
                     "download_code": "EPROM Codice di Download"
                 }
 			},
@@ -132,7 +133,7 @@
                 "title": "Impostazioni Inserimento/Disinserimento del Pannello di Allarme",
                 "data": {
                     "arm_without_usercode": "Attiva senza codice utente (non supportato da tutti i pannelli)",
-                    "force_numeric_keypad": "Forza l'uso di una Tastiera Numerica",
+					"arm_without_usercode_alarm_keypad": "Arm Keypad Alarm without User Code (not supported by all panels)",
                     "arm_home_enabled": "Inserimento modalit\u00E0 Casa abilitata",
                     "arm_night_enabled": "Inserimento modalit\u00E0 Notte abilitata",
                     "arm_away_instant": "Inserimento modalit\u00E0 Assente istantanea",
@@ -215,7 +216,7 @@
                 "title": "Impostazioni Inserimento/Disinserimento del Pannello di Allarme",
                 "data": {
                     "arm_without_usercode": "Attiva senza codice utente (non supportato da tutti i pannelli)",
-                    "force_numeric_keypad": "Forza l'uso di una Tastiera Numerica",
+					"arm_without_usercode_alarm_keypad": "Arm Keypad Alarm without User Code (not supported by all panels)",
                     "arm_home_enabled": "Inserimento modalit\u00E0 Casa abilitata",
                     "arm_night_enabled": "Inserimento modalit\u00E0 Notte abilitata",
                     "arm_away_instant": "Inserimento modalit\u00E0 Assente istantanea",

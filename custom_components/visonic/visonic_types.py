@@ -243,9 +243,8 @@ class TriggerAlarmType(VisonicIntEnum):
 class PanelStateData:
     """Return class for update."""
     connected: bool = False
-    show_keypad: bool = False
-    code_arm_required: bool = True
     is_power_master: bool = False
+    achieved_powerlink: bool = False
     trigger_device: tuple[int, TriggerAlarmType] = (0, TriggerAlarmType.NONE)
     alarm_state: AlarmControlPanelState = None
     panel_state: AlarmPanelStatus = AlarmPanelStatus.UNKNOWN

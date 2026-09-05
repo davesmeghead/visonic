@@ -6,18 +6,16 @@ from collections.abc import Callable
 from datetime import timedelta
 import logging
 
-from homeassistant.components.alarm_control_panel import AlarmControlPanelState
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, valid_entity_id
 from homeassistant.util import Any
 
 from ..const import (  # noqa: TID252  # noqa: TID252  # noqa: TID252
     CLIENT_VERSION,
-    CONF_ARM_CODE_AUTO,
     CONF_DEVICE_BAUD,
     CONF_EPROM_ATTRIBUTES,
     CONF_ESPHOME_ENTITY_SELECT,
-    CONF_FORCE_KEYPAD,
+    #CONF_FORCE_KEYPAD,
     DEFAULT_DEVICE_BAUD,
     PE_EVENT,
     PE_NAME,
@@ -42,7 +40,6 @@ from ..utils import (  # noqa: TID252
 )
 from ..visonic_entity_types import PanelState  # noqa: TID252
 from ..visonic_types import (  # noqa: TID252
-    PANEL_TO_HA_STATUS_MAP,
     AvailableNotifications,
     PanelCondition,
     TriggerAlarmType,  # AlAlarmType,
@@ -140,6 +137,7 @@ class MaintainInterface:
         self.language_decoder: LanguageDecoder = LanguageDecoder(hass)
         self.state_changed_callback: Callable[..., None] = state_changed_callback
         self.saved_startup_success_time = None
+        self.last_achieved_powerlink = False
 
     def _initialise(self):
         """Initialise local variables to this class."""
@@ -252,6 +250,18 @@ class MaintainInterface:
         """Get the panel model."""
         return self._protocol.get_panel_model()
 
+    def achieved_powerlink(self) -> bool:
+        """Has powerlink mode been achieved?"""
+        if not self.is_panel_connected():
+            self.last_achieved_powerlink = False
+            return False
+        pm = self._visonic_protocol.get_panel_mode()
+        if self.last_achieved_powerlink and pm not in [AlPanelMode.DOWNLOAD, AlPanelMode.PAUSED]:
+            return True
+        # include standard plus for now, maybe change it later
+        self.last_achieved_powerlink = pm in [AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED, AlPanelMode.STANDARD_PLUS]
+        return self.last_achieved_powerlink
+
     def get_partition_status_dict(self, partition: int) -> dict[str, Any]:
         """Get the panel status."""
         return self._protocol.get_partition_status_dict(partition)
@@ -263,89 +273,16 @@ class MaintainInterface:
             statuses = [self.get_partition_status(p) for p in partitions]
             panelmode = self.get_panel_mode()
 
-            return panelmode != AlPanelMode.UNKNOWN and any(
+            is_connected = panelmode not in [AlPanelMode.UNKNOWN, AlPanelMode.STARTING, AlPanelMode.STOPPED, AlPanelMode.PAUSED] and any(
                 status != AlPanelStatus.UNKNOWN for status in statuses
             )
+            if not is_connected:
+                self.last_achieved_powerlink = False
         except VisonicException:
             return False
-
-#    def is_panel_connected_old(self) -> bool:
-#        """Are we connected to the Alarm Panel."""
-#        # If we are starting up then assume we need a valid code
-#        #  This is the opposite of code_format as we want to prevent operation during startup
-#        # Are we just starting up or has there been a problem  and we are disconnected?
-#        armcode = AlPanelStatus.UNKNOWN
-#        for p in range(MAX_PARTITIONS):
-#            ps = self.get_partition_status(p)
-#            armcode = max(armcode, ps)
-#        panelmode = self.get_panel_mode()
-#        return not (
-#            armcode == AlPanelStatus.UNKNOWN or panelmode == AlPanelMode.UNKNOWN
-#        )
-
-    def get_panel_pin_code(
-        self, code: str | None, psc: AlPanelStatus | None
-    ) -> tuple[bool, str | None, bool, bool]:
-        """Get code code."""
-        # get_panel_pin_code: Convert a PIN given as 4 digit string in the PIN PDU format as used in messages to powermax
-        # Return tuple:  IsCodeValid, code, showKeypad, code_arm_required
-        alarm_state = (
-            PANEL_TO_HA_STATUS_MAP[psc]
-            if psc is not None and psc in PANEL_TO_HA_STATUS_MAP
-            else None
-        )
-        panelmode = self.get_panel_mode()
-        forced_keypad = to_bool(self.entry.options.get(CONF_FORCE_KEYPAD, False))
-        mycode: str | None = (
-            None if code is None or code == "" or len(code) != 4 else code
-        )
-        is_arm_without_code = to_bool(self.entry.options.get(CONF_ARM_CODE_AUTO, False))
-
-        # IsCodeValid, code, showKeypad, code_arm_required
-        if psc in [
-            AlPanelStatus.UNKNOWN,
-            AlPanelStatus.USER_TEST,
-            AlPanelStatus.DOWNLOADING,
-        ]:
-            # Return invalid as panel not in correct state to do anything
-            return (False, None, False, True)
-        if panelmode in [
-            AlPanelMode.UNKNOWN,
-            AlPanelMode.DOWNLOAD,
-            AlPanelMode.STOPPED,
-            AlPanelMode.STARTING,
-            AlPanelMode.MINIMAL_ONLY,
-        ]:
-            # Return invalid as panel downloading EPROM, stopped or starting
-            return (False, None, False, True)
-        if panelmode == AlPanelMode.STANDARD:
-            if alarm_state == AlarmControlPanelState.DISARMED:
-                if is_arm_without_code:
-                    # If the panel can arm without a usercode then we can use 0000 as the usercode --> top row in standard Table
-                    return (True, "0000", False, False)
-            elif mycode is not None and forced_keypad:
-                # Armed and force keypad --> bottom row in Standard Table
-                # use keypad so invalidate the return, there should be a valid 4 code code
-                return (True, mycode, True, True)
-
-            if mycode is None:
-                # use keypad to get code
-                return (False, None, True, True)
-            # code is valid so no keypad needed
-            return (True, mycode, False, True)
-
-        # Here when panelmode in [AlPanelMode.STANDARD_PLUS, AlPanelMode.POWERLINK, AlPanelMode.POWERLINK_BRIDGED]
-        if forced_keypad:
-            # Disarmed: depends on if panel can arm without a code.  Armed: Show keypad
-            keypad = (
-                not is_arm_without_code
-                if alarm_state == AlarmControlPanelState.DISARMED
-                else True
-            )
-            # Bottom 4 rows of Powerlink Table
-            return (True, mycode, keypad, not is_arm_without_code)
-        # Top 2 rows of Powerlink Table. No need for a keypad when in powerlink.
-        return (True, mycode, False, False)
+        else:
+            return is_connected
+        return False
 
     def is_select_entity_valid(self, option: str | None = None) -> bool:
         """Is the HA Select entity valid?"""

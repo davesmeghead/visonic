@@ -12,6 +12,7 @@ from ..const import (  # noqa: TID252
     CONF_ENABLE_REMOTE_ARM,
     CONF_ENABLE_REMOTE_DISARM,
     PARTITION_ID_WHEN_BASE,
+    PIN_REGEX,
     TEXT_DISCONNECTION_COUNT,
 )
 from ..coordinator_base import VisonicCoordinator  # noqa: TID252
@@ -200,6 +201,14 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         """Common send command function."""
         did_bypass = False
 
+        is_valid, code = self.get_panel_pin_code(code=code)
+        if not is_valid:
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_CODE,
+                AvailableNotifications.INVALID_PIN,
+                "Invalid code",
+            )
+
         if self._client.is_power_master() and command in POWERMASTER_COMMANDS:
             return await self._client.send_command(command, code, None)
 
@@ -261,6 +270,14 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         code: str | None,
     ) -> CommandResult:
         """Send bypass command."""
+        # Get pin code simple
+        is_valid, code = self.get_panel_pin_code(code=code)
+        if not is_valid:
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_CODE,
+                AvailableNotifications.INVALID_PIN,
+                "Invalid pin",
+            )
         partition_state: PanelStateData = self.get_panel_and_partition_state(PARTITION_ID_WHEN_BASE)
         result: CommandResult = await self._client.send_bypass(
             devid, bypass, code, partition_state.panel_state
@@ -286,15 +303,25 @@ class VisonicDirectCoordinator(VisonicCoordinator):
     # ======== Functions below this are the service calls and the Frontend controls from Home Assistant =====
     # =======================================================================================================
 
-    def get_panel_pin_code_simple(self, code: str | None):
-        """Get code code."""
-        return self._client.get_panel_pin_code_simple(code)
+    def get_panel_pin_code(self, code: str | None):
+        """Get code."""
+        if code is not None:
+            if isinstance(code, str) and PIN_REGEX.match(code):
+                # code has been provide and it validates
+                return True, code
+            # code has been provide and it does not validate
+            return False, None
+        if self._client.achieved_powerlink():
+            # In powerlink so lower level code already has code
+            return True, None
+        self._event_logger.logstate_warning(
+            f"Warning: [get_panel_pin_code] Valid 4 digit PIN not found, panelmode is {self._client.get_panel_mode().name}"
+        )
+        return False, None
 
-    async def send_get_event_log(
-        self, isValidPL: bool, code: str | None
-    ) -> CommandResult:
+    async def send_get_event_log(self, code: str | None) -> CommandResult:
         """Send get event log."""
-        await self._client.send_get_event_log(isValidPL, code)
+        await self._client.send_get_event_log(code=code)
 
     async def send_command_sensor_image(self, devid: int | None, eid: str | None, duration: int) -> AlarmCommandStatus:
         """Send the command to the panel to get a camera image."""
@@ -314,25 +341,15 @@ class VisonicDirectCoordinator(VisonicCoordinator):
 
         partition_armcode = {i: AlarmPanelStatus(self._client.get_partition_status(i).value) for i in indices}
 
-        show_keypad: dict[int, bool] = {}
-        code_arm_required: dict[int, bool] = {}
-        for i in indices:
-            _, _, sk, car = self._client.get_panel_pin_code(code=None, psc=partition_armcode[i])
-            show_keypad[i] = sk
-            code_arm_required[i] = car
-
         return VisonicCoordinatorData(
             connected=True,
             ispowermaster=self._client.is_power_master(),
-            #ident=getAlarmPanelUniqueIdent(self.panel_id),
             mode=self._client.get_panel_mode().name.lower(),
+            achieved_powerlink=self._client.achieved_powerlink(),
             model=self._client.get_panel_model(),
             statusdict={TEXT_DISCONNECTION_COUNT: self._client.panel_disconnection_counter},
             panelstate=self._client.get_panel_status_dict(),
-            #partition_in_use=self._client.get_partitions_in_use(),
             partition_armcode=partition_armcode,
-            partition_show_keypad=show_keypad,
-            partition_code_arm_required=code_arm_required,
             partition_siren={i: self._client.is_siren_active(i) for i in indices},
             partition_dict={i: self._client.get_partition_status_dict(i) for i in indices},
             zones=self.platform_manager.sensor_state(),

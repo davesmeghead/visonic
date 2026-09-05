@@ -1033,7 +1033,7 @@ class Sequencer(Despatcher):
                     if _sequencer_state == SequencerType.WaitingForEnrolSuccess:   ################################################################ WaitingForEnrolSuccess  ###################################################
 
                         self.keep_alive_counter += 1
-                        log.debug(f"[_sequencer]     WaitingForEnrolSuccess {self._is_send_queue_empty()=} {self.pmDownloadMode=} {self.keep_alive_counter=}  threshold is 15")
+                        #log.debug(f"[_sequencer]     WaitingForEnrolSuccess {self._is_send_queue_empty()=} {self.pmDownloadMode=} {self.keep_alive_counter=}  threshold is 15")
 
                         if self.PanelType is not None and not self.AutoEnrol:
                             self.PanelMode = AlPanelMode.STANDARD_PLUS                    # Cannot AutoEnrol this panel so go straight to Std+ operation

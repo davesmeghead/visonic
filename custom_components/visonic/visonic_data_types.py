@@ -154,16 +154,11 @@ class VisonicCoordinatorData:
     connected: bool = False      # Is the lower level connected to the panel
     ispowermaster: bool = False  # Is the panel confirmed as a powermaster
     mode: str = ""               # A string shown as an attribute to tell the user the status of the connection
+    achieved_powerlink: bool = False
     model: str | None = None     # The reported panel model
     statusdict: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     panelstate: PanelState | None = None  # Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     partition_armcode: Mapping[int, Any] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-    partition_show_keypad: Mapping[int, Any] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-    partition_code_arm_required: Mapping[int, Any] = field(
         default_factory=lambda: MappingProxyType({})
     )
     partition_siren: Mapping[int, Any] = field(

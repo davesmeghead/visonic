@@ -354,7 +354,7 @@ class MessageHandlingB0Data(MessageHandlingBase):
                     triggered = sensor.status_log is None or (trigger - sensor.status_log) >= timedelta(milliseconds=500)
 
                 if triggered:
-                    log.debug(f"[_decode_4B]           Sensor Updated = {sensor.id:>2}  code {code}")
+                    log.debug(f"[_decode_4B]           Sensor Updated = {sensor.id:>2}  sensor code {code}")
                     if code == 1:
                         sensor.do_status(True)
                     elif code == 2:
@@ -367,9 +367,9 @@ class MessageHandlingB0Data(MessageHandlingBase):
 
                     sensor.status_log = trigger
                 else:
-                    log.debug(f"[_decode_4B]           Sensor {sensor.id:>2} Not Updated as Timestamp the same   code {code}     sensor time {trigger}     {sensor.status_log}")
+                    log.debug(f"[_decode_4B]           Sensor {sensor.id:>2} Not Updated as Timestamp the same   sensor code {code}     sensor time {trigger}     {sensor.status_log}")
             else:
-                log.debug(f"[_decode_4B]           Abnormal: Sensor {sensor.id:>2} Not Updated as data code {code} not known")
+                log.debug(f"[_decode_4B]           Abnormal: Sensor {sensor.id:>2} Not Updated as sensor code {code} not known")
 
     def _process_B0_log_entry(self, total, current, data):
         # PM10

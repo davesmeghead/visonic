@@ -132,7 +132,7 @@ async def async_create_tcp_client(
 ) -> None:
     """Connect as a TCP client to a TCP Server (with TTL RS232 to the panel)."""
 
-    def createSocketConnection(address: str, port: int):
+    def _create_socket_connection(address: str, port: int):
         """Create the Socket Connection to the Device in the Panel."""
         sock = None
         try:
@@ -180,7 +180,7 @@ async def async_create_tcp_client(
             logger.logstate_debug(
                 "Creating TCP Connection, Creating socket and setting socket options"
             )
-            sock = await hass.async_add_executor_job(createSocketConnection, address, port)
+            sock = await hass.async_add_executor_job(_create_socket_connection, address, port)
             if sock:
                 loop = asyncio.get_running_loop()
                 _, cvp = await loop.create_connection(
@@ -194,10 +194,6 @@ async def async_create_tcp_client(
     if cvp is not None:
         cvp.close()
     connection_status_callback(CVP_Status.NO_CONNECTION_MADE)
-
-def is_esphome_url(url: str) -> bool:
-    """Is the serialx connection an esphome device."""
-    return url.startswith("esphome-hass://")
 
 async def async_create_serial_client(
     logger: logEvents,
