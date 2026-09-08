@@ -484,7 +484,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 )
             for s in sl:
                 self._event_logger.logstate_debug(f"Attempting to bypass sensor: {s}")
-                status: CommandResult = await self.send_bypass(s, True)
+                status: CommandResult = await self.send_bypass(s, True, None)
                 if status != AlarmCommandStatus.SUCCESS:
                     return CommandResult(
                         status.status,

@@ -305,7 +305,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
     def get_panel_pin_code(self, code: str | None) -> tuple[bool, str]:
         """Get code code."""
-        if code is None or (PIN_REGEX.match(code) and code == self.cloud_alarm.get_user_code()):
+        if not code or (PIN_REGEX.match(code) and code == self.cloud_alarm.get_user_code()):
             return True, self.cloud_alarm.get_user_code()
         return False, None
 

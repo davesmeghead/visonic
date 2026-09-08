@@ -305,7 +305,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
 
     def get_panel_pin_code(self, code: str | None):
         """Get code."""
-        if code is not None:
+        if code:
             if isinstance(code, str) and PIN_REGEX.match(code):
                 # code has been provide and it validates
                 return True, code
