@@ -1123,6 +1123,9 @@
         "invalid_arm_state_no_option": {
             "message": "Armed state not defined. Allowed states are: {options}"
 		},
+        "invalid_disarm_state_code": {
+            "message": "Disarm Commanded without a valid user code: {entity}"
+        },
         "number_in_config_not_unique": {
             "message": "Visonic configuration has a {ident} number {ref} that is not unique, cannot continue as it is invalid."
         },
@@ -1149,6 +1152,9 @@
         },
         "device_not_linked_to_configuration": {
             "message": "Visonic service {service}, device not linked to a config entity: {entity_id}"
+        },
+        "service_operation_failed": {
+            "message": "Visonic service {service} failed, {reason}"
         },
         "config_entry_not_found": {
             "message": "Visonic service {service}, config Entry not found for entity {entity_id}"

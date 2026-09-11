@@ -23,6 +23,7 @@ from .exceptions import (
     AlreadyGrantedError,
     AlreadyLinkedError,
     AppIDRequiredError,
+    BadRequestPanelIsArmedError,
     ConnectionTimeoutError,
     EmailRequiredError,
     InternalServerError,
@@ -217,6 +218,8 @@ class API:
                         raise WrongUsernameOrPasswordError
                     if pair["key"] == "panel_serial" or pair["key"] == "master_user_code":
                         raise WrongPanelSerialOrMasterUserCodeError
+        elif api["error"] == 10039:  # Cannot complete command as panel is armed (usually from a bypass sensor command)
+            raise BadRequestPanelIsArmedError
         elif api["error"] == 10021:  # WrongUserCode
             raise UserCodeIncorrectError
         elif api["error"] == 400 and api["error_reason_code"] == "PanelNotConnected":

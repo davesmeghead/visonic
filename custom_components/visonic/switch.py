@@ -131,7 +131,7 @@ class VisonicSwitch(CoordinatorEntity[VisonicCoordinator], SwitchEntity):
                 translation_placeholders={"myname": self._attr_unique_id},
             )
 
-        await self.coordinator.send_switch(self.switch_id, state)
+        await self.coordinator.send_switch(self.entity_id, self.switch_id, state)
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:

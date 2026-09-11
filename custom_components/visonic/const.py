@@ -7,9 +7,10 @@ from homeassistant.const import Platform
 
 # The client version and domain information for the integration
 DOMAIN: Final = "visonic"
-CLIENT_VERSION: Final = "0.13.0.42"
+CLIENT_VERSION: Final = "0.13.0.43"
 MANUFACTURER: Final = "Visonic"
 VISONIC_UNIQUE_NAME: Final = "Visonic Alarm"
+VISONIC_PANEL: Final = "Visonic Panel"
 VISONIC_TRANSLATION_KEY: Final = "alarm_panel_key"
 VISONIC_CLOUD_SERVER: Final = "Visonic Cloud Server"
 
@@ -86,6 +87,7 @@ TRANSLATE_ERROR_SELECT_INVALID: Final = "select_entity_invalid"
 TRANSLATE_EXCEPTION_NO_PANEL_CONNECTION: Final = "no_panel_connection"
 TRANSLATE_EXCEPTION_INVALID_ARM_STATE: Final = "invalid_arm_state"  # Not Used ###################################
 TRANSLATE_EXCEPTION_INVALID_ARM_STATE_NO_OPTION: Final = "invalid_arm_state_no_option"
+TRANSLATE_EXCEPTION_DISARM_CODE_NOT_ENTERED: Final = "invalid_disarm_state_code"
 TRANSLATE_EXCEPTION_NUMBER_NOT_UNIQUE: Final = "number_in_config_not_unique"
 TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE: Final = "panel_initial_connection_failure"
 TRANSLATE_EXCEPTION_AUTHORISATION_FAILURE: Final = "panel_authorisation_failure"
@@ -96,6 +98,7 @@ TRANSLATE_EXCEPTION_SERVICE_ENTITY_NOT_IN_REGISTRY: Final = "entity_not_in_regis
 TRANSLATE_EXCEPTION_SERVICE_INVALID_DEVICE_FOR_ENTITY: Final = "invalid_device_for_entity"
 TRANSLATE_EXCEPTION_SERVICE_DEVICE_NO_IN_CONFIG: Final = "device_not_linked_to_configuration"
 TRANSLATE_EXCEPTION_SERVICE_CONFIG_ENTRY_NOT_FOUND: Final = "config_entry_not_found"
+TRANSLATE_EXCEPTION_SERVICE_OPERATION_FAILED: Final = "service_operation_failed"
 
 # Supplement the HA attributes with a bypass, this is for individual sensors in the service call. It is used as a boolean.
 ATTR_BYPASS: Final = "bypass"

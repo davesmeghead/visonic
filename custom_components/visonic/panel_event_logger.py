@@ -3,7 +3,6 @@
 This class captures and saves the panel event log as it is transferred from the panel.
 """
 import asyncio
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +21,7 @@ from .const import (
     CONF_LOG_REVERSE,
     CONF_LOG_XML_FN,
     TEXT_XML_LOG_FILE_TEMPLATE,
+    VISONIC_PANEL,
 )
 from .log_events import logEvents
 from .utils import to_bool
@@ -47,7 +47,6 @@ class PanelEventLogger:
         panelident: int,
         entry: ConfigEntry,
         logger: logEvents,
-        create_ha_fire_event: Callable[..., None] | None,
     ) -> None:
         """Initialize the Event Logger."""
         self.hass = hass
@@ -56,7 +55,6 @@ class PanelEventLogger:
         self.panel_ident = panelident
         # Language translations for the event zone/location
         # For firing the HA event on each event and then on completion
-        self.create_ha_fire_event = create_ha_fire_event
         # variables for creating the event log for csv and xml
         self.collating_data = False
         self.csvdata = []
@@ -168,10 +166,11 @@ class PanelEventLogger:
         )
 
         # Fire HA event if enabled
-        if to_bool(self.entry.options.get(CONF_LOG_EVENT, False)) and current <= total and self.create_ha_fire_event is not None:
-            self.create_ha_fire_event(
+        if to_bool(self.entry.options.get(CONF_LOG_EVENT, False)) and current <= total:
+            self.logger.create_ha_fire_event(
                 event_id=PanelCondition.PANEL_LOG_ENTRY,
                 datadictionary={
+                    "panel": self.panel_ident,
                     "current": current,
                     "total": total,
                     "date": dateandtime,
@@ -224,7 +223,7 @@ class PanelEventLogger:
                 )
                 self.logger.create_ha_notification(
                     AvailableNotifications.EVENTLOG,
-                    f"Panel Event Log - Failed to write {ftype.upper()} file",
+                    f"{VISONIC_PANEL} {self.panel_ident} - Failed to write {ftype.upper()} file",
                 )
 
         def blocking_save():
@@ -251,7 +250,7 @@ class PanelEventLogger:
                 except (OSError, TemplateError):
                     self.logger.create_ha_notification(
                         AvailableNotifications.EVENTLOG,
-                        "Panel Event Log - Failed to create xml content",
+                        f"{VISONIC_PANEL} {self.panel_ident} - Failed to create xml content",
                     )
 
             csv_file_path = str(self.entry.options.get(CONF_LOG_CSV_FN, ""))
@@ -277,20 +276,21 @@ class PanelEventLogger:
                 except (OSError, AttributeError, TypeError):
                     self.logger.create_ha_notification(
                         AvailableNotifications.EVENTLOG,
-                        "Panel Event Log - Failed to create csv content",
+                        f"{VISONIC_PANEL} {self.panel_ident} - Failed to create csv content",
                     )
 
         # Need to run in executor as it does blocking I/O to save the 2 files
         await self.hass.async_add_executor_job(blocking_save)
 
         # Fire completion event if configured
-        if to_bool(self.entry.options.get(CONF_LOG_DONE, False)) and self.create_ha_fire_event is not None:
+        if to_bool(self.entry.options.get(CONF_LOG_DONE, False)):
             self.logger.logstate_debug(
                 "Panel Event Log - Firing Completion Event",
             )
-            self.create_ha_fire_event(
+            self.logger.create_ha_fire_event(
                 event_id=PanelCondition.PANEL_LOG_COMPLETE,
                 datadictionary={
+                    "panel": self.panel_ident,
                     "total": total,
                     "available": completed,
                     "reverse": reverse,
@@ -302,4 +302,4 @@ class PanelEventLogger:
         self.csvdata = []
         self.xmldata = []
         self.save_task = None
-        self.logger.logstate_debug("Panel Event Log - Complete")
+        self.logger.logstate_debug(f"Panel Event Log - Panel {self.panel_ident}. Complete")

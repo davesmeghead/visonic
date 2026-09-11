@@ -33,6 +33,7 @@ from ..const import (  # noqa: TID252  # noqa: TID252
     DEFAULT_DEVICE_SERIAL,
     PE_NAME,
     PLATFORMS,
+    VISONIC_PANEL,
 )
 from ..log_events import logEvents  # noqa: TID252  # noqa: TID252
 from ..platform_manager import PlatformManager  # noqa: TID252
@@ -423,7 +424,7 @@ class ManageConnection(MaintainInterface):
                         self._system_started = True
                         # Connection to the panel has been initially successful
                         self.logger.logstate_debug("........... connection made")
-                        self.platform_manager.create_ha_fire_event(
+                        self.logger.create_ha_fire_event(
                             event_id=PanelCondition.CONNECTION,
                             datadictionary={
                                 "state": "connected",
@@ -457,7 +458,7 @@ class ManageConnection(MaintainInterface):
 
                     case Connection_Status.RETRY_CREATE_TRANSPORT:
                         # Timer instigates this step, transport failed so set up for next loop around
-                        self.platform_manager.create_ha_fire_event(
+                        self.logger.create_ha_fire_event(
                             event_id=PanelCondition.CONNECTION,
                             datadictionary={
                                 "state": "failedattempt",
@@ -524,7 +525,7 @@ class ManageConnection(MaintainInterface):
                         await self._async_stop()
                         #self.logger.create_ha_notification(
                         #    AvailableNotifications.CONNECTION,
-                        #    f"Failed to connect into Visonic Alarm Panel {self.panel_ident}. Check Your Network and the Configuration Settings.",
+                        #    f"{VISONIC_PANEL} {self.panel_ident} - Failed to connect into Visonic Alarm Panel. Check Your Network and the Configuration Settings.",
                         #)
 
                     case Connection_Status.CLOSE_CONNECTION:
@@ -535,7 +536,7 @@ class ManageConnection(MaintainInterface):
             except (ConnectTimeout, HTTPError) as ex:
                 self.logger.create_ha_notification(
                     AvailableNotifications.CONNECTION,
-                    f"Visonic Panel Connection Error: {ex}<br />You will need to restart hass after fixing.",
+                    f"{VISONIC_PANEL} {self.panel_ident} - Connection Error: {ex}<br />You will need to restart hass after fixing.",
                 )
             except asyncio.CancelledError:
                 # Re-raise so Home Assistant can properly shut down the task
@@ -816,7 +817,7 @@ class ManageConnection(MaintainInterface):
                     )
                 )
 
-                self.platform_manager.create_ha_fire_event(
+                self.logger.create_ha_fire_event(
                     event_id=PanelCondition.CONNECTION,
                     datadictionary={
                         "state": "connected",
@@ -839,7 +840,7 @@ class ManageConnection(MaintainInterface):
             except (ConnectTimeout, HTTPError) as ex:
                 self.logger.create_ha_notification(
                     AvailableNotifications.CONNECTION,
-                    f"Visonic Panel Connection Error: {ex}<br />You will need to restart hass after fixing.",
+                    f"{VISONIC_PANEL} {self.panel_ident} - Connection Error: {ex}<br />You will need to restart hass after fixing.",
                 )
 
         return self.hasStarted()

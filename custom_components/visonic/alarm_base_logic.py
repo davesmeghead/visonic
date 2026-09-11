@@ -19,6 +19,7 @@ from .const import (
     CONF_ARM_HOME_ENABLED,
     CONF_ARM_NIGHT_ENABLED,
     CONF_EMULATION_MODE,
+    CONF_ENABLE_SENSOR_BYPASS,
     CONF_INSTANT_ARM_AWAY,
     CONF_INSTANT_ARM_HOME,
     DOMAIN,
@@ -134,6 +135,10 @@ class AlarmBaseLogic(CoordinatorEntity[VisonicCoordinator]):
     def disable_all_panel_commands(self) -> bool:  # noqa: D102
         v = EmulationMode(self._entry.data.get(CONF_EMULATION_MODE, EmulationMode.POWERLINK))
         return v == EmulationMode.MINIMAL
+
+    @property
+    def isenablesensorbypass(self) -> bool:  # noqa: D102
+        return to_bool(self._entry.options.get(CONF_ENABLE_SENSOR_BYPASS))
 
     @callback
     def _handle_coordinator_update(self) -> None:

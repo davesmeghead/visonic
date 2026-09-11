@@ -16,20 +16,14 @@ from ..visonic_data_types import VisonicConfigEntry  # noqa: TID252
 from ..visonic_types import (  # noqa: TID252  # noqa: TID252
     AlarmCommandStatus,  # AlCommandStatus  # AlCommandStatus
     AlarmPanelCommand,
+    AlarmPanelStatus,
     AlarmSwitchCommand,  # AlSwitchCommand  # AlSwitchCommand
     AvailableNotifications,
     CommandResult,
-    PanelCondition,
 )
 from .client_manage_connection import ManageConnection
 from .pyvisonic.py_abstract_classes import AlPanelInterface
-from .pyvisonic.py_enum import (
-    AlCommandStatus,
-    AlPanelCommand,
-    AlPanelMode,
-    AlPanelStatus,
-    AlSwitchCommand,
-)
+from .pyvisonic.py_enum import AlCommandStatus, AlPanelCommand, AlSwitchCommand
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,22 +54,26 @@ class VisonicClient(ManageConnection):
             str(hass.config.language),
         )
 
-    def _get_protocol_for_panel_command(self) -> tuple[AlPanelInterface | None, CommandResult]:
+    def _get_protocol_for_panel_command(self, entity_id: str | None = None) -> tuple[AlPanelInterface | None, CommandResult]:
         """Safely get the visonic protocol."""
         if self._visonic_protocol is None:
             return None, CommandResult(
                 AlarmCommandStatus.FAIL_PANEL_NO_CONNECTION,
                 AvailableNotifications.CONNECTION,
-                "Panel Disconnected",
+                message="Panel Disconnected",
+                eid=entity_id
             )
         if self.disable_all_panel_commands:
             return None, CommandResult(
                 AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
                 AvailableNotifications.COMMAND,
-                "Panel Commands Disabled",
+                message="Panel Commands Disabled",
+                eid=entity_id
             )
         return self._visonic_protocol, CommandResult(
-            AlarmCommandStatus.SUCCESS, AvailableNotifications.ALWAYS
+            AlarmCommandStatus.SUCCESS,
+            AvailableNotifications.ALWAYS,
+            eid=entity_id
         )
 
     # This is not called from anywhere, use it for debug purposes and/or to clear all entities from HA
@@ -98,15 +96,9 @@ class VisonicClient(ManageConnection):
         # The platforms do not initially exist, but after a reload they already exist
         # platforms = ep.async_get_platforms(self.hass, DOMAIN)
 
-    def set_partition_name(
-        self, partition: int | None = None, panel_entity_name: str | None = None
-    ):
-        """Set the partition naming for the alarm panel entities."""
-        self.platform_manager.set_partition_name(partition, panel_entity_name)
-
     async def send_client_get_sensor_image(self, devid: int | None, eid: str | None, duration: int) -> AlarmCommandStatus:
         """Send the command to the panel to get a camera image."""
-        protocol, result = self._get_protocol_for_panel_command()
+        protocol, result = self._get_protocol_for_panel_command(eid)
         if protocol is None or result.status != AlarmCommandStatus.SUCCESS:
             return AlarmCommandStatus.FAIL_PANEL_NO_CONNECTION
         # Convert duration in seconds to a number of images to request from the panel
@@ -131,12 +123,13 @@ class VisonicClient(ManageConnection):
 
     async def send_command(
         self,
+        entity_id: str,
         command: AlarmPanelCommand,
         code: str | None,
         partitions: set[int] | None,
     ) -> CommandResult:
         """Send a command to the panel."""
-        protocol, result = self._get_protocol_for_panel_command()
+        protocol, result = self._get_protocol_for_panel_command(entity_id)
         if protocol is None or result.status != AlarmCommandStatus.SUCCESS:
             return result
 
@@ -147,27 +140,30 @@ class VisonicClient(ManageConnection):
         return CommandResult(
             self.convert_to_alarm_status(status),
             AvailableNotifications.COMMAND,
-            "Command Result",
+            message="Command Result",
+            eid=entity_id
         )
 
-    def get_sensor_bypass_state(self) -> CommandResult:
+    def get_sensor_bypass_state(self, entity_id: str) -> CommandResult:
         """Get bypass update."""
-        protocol, result = self._get_protocol_for_panel_command()
+        protocol, result = self._get_protocol_for_panel_command(entity_id)
         if protocol is None or result.status != AlarmCommandStatus.SUCCESS:
             return result
         protocol.get_sensor_bypass_state()
         return CommandResult(
             AlarmCommandStatus.SUCCESS,
             AvailableNotifications.BYPASS,
-            "Send Bypass",
+            message="Send Bypass",
+            eid=entity_id,
         )
 
     async def send_bypass(
         self,
+        entity_id: str,
         devid: int,
         bypass: bool,
         code: str | None,
-        alarm_state: AlPanelStatus | None,
+        alarm_state: AlarmPanelStatus | None,
     ) -> CommandResult:
         """Send bypass."""
         if bypass:
@@ -181,60 +177,53 @@ class VisonicClient(ManageConnection):
                 str(devid),
             )
         # Get the visonic protocol low level library
-        protocol, result = self._get_protocol_for_panel_command()
+        protocol, result = self._get_protocol_for_panel_command(entity_id)
         if protocol is None or result.status != AlarmCommandStatus.SUCCESS:
             return result
         # Is the panel Disarmed?
-        if alarm_state is None or alarm_state == AlPanelStatus.UNKNOWN:
-            return CommandResult(
-                AlarmCommandStatus.FAIL_INVALID_STATE,
-                AvailableNotifications.COMMAND,
-                f"Panel {self.get_partition_status()} State",
-            )
-        if alarm_state != AlPanelStatus.DISARMED:
+        if alarm_state is None or alarm_state == AlarmPanelStatus.UNKNOWN:
             return CommandResult(
                 AlarmCommandStatus.FAIL_INVALID_STATE,
                 AvailableNotifications.BYPASS,
-                f"Panel {alarm_state} State",
+                message=f"Panel {self.get_partition_status()} State",
+                eid=entity_id,
+            )
+        if alarm_state != AlarmPanelStatus.DISARMED:
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_STATE,
+                AvailableNotifications.BYPASS,
+                message=f"Panel {alarm_state} State",
+                eid=entity_id,
             )
         # Has the user allowed bypass in the configuration
         text = "Bypass" if bypass else "Restore"
         esb = to_bool(self.entry.options.get(CONF_ENABLE_SENSOR_BYPASS))
         if not esb:
-            self.platform_manager.generate_event_output(
-                PanelCondition.CHECK_BYPASS_COMMAND,
-                AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
-                text,
-                f"Sensor {text} State",
-            )
             return CommandResult(
                 AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
-                AvailableNotifications.COMMAND,
-                f"Sensor {text} State",
+                AvailableNotifications.BYPASS,
+                message=f"Sensor {text} State",
+                eid=entity_id,
             )
         status = protocol.bypass_command(devid, bypass, code)
-        self.platform_manager.generate_event_output(
-            PanelCondition.CHECK_BYPASS_COMMAND,
-            self.convert_to_alarm_status(status),
-            text,
-            f"Sensor {text} State",
-        )
         return CommandResult(
             self.convert_to_alarm_status(status),
             AvailableNotifications.BYPASS,
-            f"{text} sensor {devid}",
+            message=f"{text} sensor {devid}",
+            eid=entity_id,
         )
 
-    async def send_switch(self, devid: int, command: AlarmSwitchCommand) -> CommandResult:
+    async def send_switch(self, entity_id: str, devid: int, command: AlarmSwitchCommand) -> CommandResult:
         """Send Switch."""
-        protocol, result = self._get_protocol_for_panel_command()
+        protocol, result = self._get_protocol_for_panel_command(entity_id)
         if protocol is None or result.status != AlarmCommandStatus.SUCCESS:
             return result
         status = protocol.send_switch(devid, self.convert_to_switch_command(command))
         return CommandResult(
             self.convert_to_alarm_status(status),
             AvailableNotifications.SWITCH,
-            f"Send Switch {command} to device {devid}"
+            message=f"Send Switch {command} to device {devid}",
+            eid=entity_id,
         )
 
     async def send_get_event_log(self, code: str | None) -> CommandResult:
@@ -245,12 +234,8 @@ class VisonicClient(ManageConnection):
         status = AlarmCommandStatus.FAIL_INVALID_STATE
         self.logger.logstate_debug("Sending event log request to panel")
         status = protocol.get_event_log(code)
-        self.platform_manager.generate_event_output(
-            PanelCondition.CHECK_EVENT_LOG_COMMAND,
-            self.convert_to_alarm_status(status),
-            "EventLog",
-            "Event Log Request",
-        )
         return CommandResult(
-            self.convert_to_alarm_status(status), AvailableNotifications.EVENTLOG, "EventLog Request"
+            self.convert_to_alarm_status(status),
+            AvailableNotifications.EVENTLOG,
+            message="EventLog Request",
         )

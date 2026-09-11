@@ -188,7 +188,7 @@ class VisonicSelect(CoordinatorEntity[VisonicCoordinator], SelectEntity):
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
                     translation_key=TRANSLATE_EXCEPTION_NO_PANEL_CONNECTION,
-                    translation_placeholders={"myname": self._name},
+                    translation_placeholders={"myname": self.name},
                 )
 
             if option not in self.options:
@@ -204,23 +204,19 @@ class VisonicSelect(CoordinatorEntity[VisonicCoordinator], SelectEntity):
                 return
 
             # Send the command to the panel
-            result = await self.coordinator.send_bypass(
-                self._sensor_id, option == BYPASS, ""
+            cr = await self.coordinator.send_bypass(
+                self.entity_id, self._sensor_id, option == BYPASS, ""
             )
+            self.coordinator.process_command_result(cr)
 
-            if result.status == AlarmCommandStatus.SUCCESS:
+            if cr.status == AlarmCommandStatus.SUCCESS:
                 self._pending_state_is_armed = option == ARMED
-
                 self._pending_task = async_call_later(
                     self.hass,
                     PENDING_TIMEOUT_SECONDS,
                     HassJob(self._clear_pending_state, cancel_on_shutdown=True),
                 )
                 self.async_write_ha_state()
-            else:
-                self.coordinator.log.logstate_warning(
-                    "[select_option] Command %s not sent to panel %s", option, result
-                )
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:

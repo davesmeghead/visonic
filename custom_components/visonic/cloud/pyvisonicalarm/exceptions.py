@@ -206,3 +206,8 @@ class UnsupportedRestAPIVersionError(Error):
 
     message = "Unsupported REST API version."
 
+class BadRequestPanelIsArmedError(Error):
+    """Raised when a command is refused when the panel is in the armed state."""
+
+    message = "Panel Is Armed and cannot complete the command."
+

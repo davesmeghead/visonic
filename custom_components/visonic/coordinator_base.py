@@ -20,6 +20,7 @@ from homeassistant.core import (
     Callable,
     HomeAssistant,
     ServiceCall,
+    State,
     callback,
     valid_entity_id,
 )
@@ -43,8 +44,10 @@ from .const import (
     DOMAIN,
     PANEL_ATTRIBUTE_NAME,
     PARTITION_ID_WHEN_BASE,
+    PE_PARTITION,
     PIN_REGEX,
     TEXT_LAST_EVENT_NAME,
+    VISONIC_PANEL,
 )
 from .image_manager import ImageManager
 from .log_events import logEvents
@@ -71,8 +74,34 @@ from .visonic_types import (
     TriggerAlarmType,
 )
 
+# ARM commands
+ARM_COMMANDS = {
+    AlarmPanelCommand.ARM_HOME,
+    AlarmPanelCommand.ARM_AWAY,
+    AlarmPanelCommand.ARM_HOME_INSTANT,
+    AlarmPanelCommand.ARM_AWAY_INSTANT,
+    AlarmPanelCommand.ARM_HOME_BYPASS,
+    AlarmPanelCommand.ARM_AWAY_BYPASS,
+}
+
+MESSAGE_REASON_DICT = {
+    AlarmCommandStatus.SUCCESS: "Success, sent Command to Panel",
+    AlarmCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS: "Failed to Send Command To Panel, not supported when downloading EPROM",
+    AlarmCommandStatus.FAIL_INVALID_CODE: "Failed to Send Command To Panel, not allowed without valid pin",
+    AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED: "Failed to Send Command To Panel, disabled by user settings",
+    AlarmCommandStatus.FAIL_INVALID_STATE: "Failed to Send Command To Panel, invalid state requested",
+    AlarmCommandStatus.FAIL_INVALID_RETURN: "Failed to Send Command To Panel, invalid state returned",
+    AlarmCommandStatus.FAIL_INVALID_PROCESS_TOKEN: "Failed to Send Command To Panel, invalid process token from cloud server",
+    AlarmCommandStatus.FAIL_SWITCH_PROBLEM: "Failed to Send Command To Panel, general Switch Problem",
+    AlarmCommandStatus.FAIL_PANEL_CONFIG_PREVENTED: "Failed to Send Command To Panel, disabled by panel settings",
+    AlarmCommandStatus.FAIL_ENTITY_INCORRECT: "Failed to Send Command To Panel, entity not supported",
+    AlarmCommandStatus.FAIL_PANEL_NO_CONNECTION: "Failed to Send Command To Panel, no connection to panel",
+    AlarmCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED: "Failed to Send Command To Panel, report error to integration author and send a log file",
+}
+
 _COORDINATOR_LOGGER = logging.getLogger(f"{__package__}.coordinator")
 _COORDINATOR_LOGGER.setLevel(logging.CRITICAL)   # setting this enables the timing debug output from the HA coordinator
+_MISSING = object()
 
 ###################################################################################
 ##############  Common coordinator for direct and cloud connections ###############
@@ -110,6 +139,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         self._event_logger = lo
         self._prev_panel_connected = False
         self._coordinator_update_timer: Callable[[], None] | None = None
+        self._last_my_state = None
 
         # This is the alarm control entity that is first created.
         #      For multi partiton panels, this is changed to be the overall control entity.
@@ -222,13 +252,11 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
     async def get_diagnostic_data(self) -> dict[str, Any]:
         """Build and return the diagnostics data for this panel."""
 
-    @abstractmethod
     def set_partition_name(
-        self,
-        partition: int | None = None,
-        panel_entity_name: str | None = None,
+        self, partition: int | None = None, panel_entity_name: str | None = None
     ):
-        """Shortcut to set the partition name (used in HA events)."""
+        """Set the partition naming for the alarm panel entities, this is for logging and reporting purposes."""
+        self._event_logger.set_partition_name(partition, panel_entity_name)
 
     @abstractmethod
     async def async_panel_connect(self) -> bool:
@@ -246,7 +274,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
     @abstractmethod
     async def send_command(
         self,
-        name: str,
+        entity_id: str,
         command: AlarmPanelCommand,
         code: str | None,
         partition_set: set[int] | None,
@@ -256,6 +284,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
     @abstractmethod
     async def send_bypass(
         self,
+        entity_id: str,
         devid: int,
         bypass: bool,
         code: str | None,
@@ -263,16 +292,8 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         """Send bypass command."""
 
     @abstractmethod
-    async def send_switch(self, devid: int, command: AlarmSwitchCommand) -> CommandResult:
+    async def send_switch(self, entity_id: str, devid: int, command: AlarmSwitchCommand) -> CommandResult:
         """Set the Switch/PGM switch."""
-
-    async def async_service_panel_zoneinfo(self, call: ServiceCall) -> dict[str, Any]:
-        """Service call get open zones in the panel."""
-        valid = await self.check_the_basics(
-            call, "panel zone info"
-        )
-        # Passing valid = False in returns an empty structure with the validity False
-        return await self.platform_manager.async_get_zone_switch_info(valid)
 
     @abstractmethod
     def get_panel_pin_code(self, code: str | None):
@@ -300,42 +321,87 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             )
         return None
 
+    def process_command_result(self, cr: CommandResult | None):
+        """Process the alarm command result and if not Success take appropriate action."""
+        # This is generic across Direct and Cloud connections
+        if cr is None:
+            return
+        acs_message = ""
+        match (cr.status):
+            case AlarmCommandStatus.SUCCESS:
+                return
+            case AlarmCommandStatus.FAIL_INVALID_CODE:
+                acs_message = "invalid user code."
+            case AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED:
+                acs_message = "user configuration prevented."
+            case AlarmCommandStatus.FAIL_SWITCH_PROBLEM:
+                acs_message = "switch problem."
+            case AlarmCommandStatus.FAIL_PANEL_CONFIG_PREVENTED:
+                acs_message = "panel configuration prevented."
+            case AlarmCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED:
+                acs_message = "internal error."
+            case AlarmCommandStatus.FAIL_PANEL_NO_CONNECTION:
+                acs_message = "no panel connection."
+            case AlarmCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
+                acs_message = "eeprom download in progress."
+            case AlarmCommandStatus.FAIL_INVALID_STATE:
+                acs_message = "invalid panel state."
+            case AlarmCommandStatus.FAIL_INVALID_RETURN:
+                acs_message = "invalid return."
+            case AlarmCommandStatus.FAIL_ENTITY_INCORRECT:
+                acs_message = "invalid or unknown sensor."
+            case AlarmCommandStatus.FAIL_INVALID_PROCESS_TOKEN:
+                acs_message = "cloud connection problem."
+
+        if cr.panel is not None and cr.panel is not PanelCondition.NO_PANEL_CONDITION_DEFINED:
+            full_message = f"{VISONIC_PANEL} {self.panel_id} - {cr.message}. " + MESSAGE_REASON_DICT[cr.status]
+            datadict = self.platform_manager.populateSensorDictionary()
+            datadict["command"] = cr.notify.title()
+            datadict["reason"] = int(cr.status)
+            datadict["reason_str"] = cr.status.name.replace("_", " ").title()
+            datadict["message"] = full_message
+            if cr.partitions is not None:
+                datadict[PE_PARTITION] = cr.partitions
+            self._event_logger.create_ha_fire_event(cr.panel, datadict, cr.eid)
+            if cr.status != AlarmCommandStatus.SUCCESS:
+                self._event_logger.create_ha_notification(
+                    cr.notify,
+                    full_message,
+                )
+        elif cr.eid is None:
+            if cr.status != AlarmCommandStatus.SUCCESS:
+                self._event_logger.create_ha_notification(
+                    cr.notify,
+                    f"{VISONIC_PANEL} {self.panel_id} - {cr.message}, failed, {acs_message}",
+                )
+        elif cr.status != AlarmCommandStatus.SUCCESS:
+            self._event_logger.create_ha_notification(
+                cr.notify,
+                f"{VISONIC_PANEL} {self.panel_id} - {cr.message}, entity {cr.eid} failed, {acs_message}",
+            )
+
     async def send_get_sensor_image(self, devid: int | None, eid: str | None, duration: int):
         """Send the command to the panel to get a camera image/video, after a few basic checks."""
+        cr = CommandResult(
+            status=AlarmCommandStatus.FAIL_ENTITY_INCORRECT,
+            notify=AvailableNotifications.IMAGE,
+            message="Attempt to retrieve sensor image for panel",
+            panel=PanelCondition.COMMAND_REJECTED,
+            eid=eid,
+        )
         if eid is None:
-            self._event_logger.create_ha_notification(
-                AvailableNotifications.IMAGE,
-                f"Attempt to retrieve sensor image/video for panel {self.panel_id}, entity {eid} not found",
-            )
+            self.process_command_result(cr)
             return
         if devid is None or devid < 0 or devid > 64:
-            self._event_logger.create_ha_notification(
-                AvailableNotifications.IMAGE,
-                f"Attempt to retrieve sensor image/video for panel {self.panel_id}, entity not found",
-            )
+            cr.eid = eid
+            self.process_command_result(cr)
             return
-
         self.image_manager.mark_image_request(devid, duration)
-        status: AlarmCommandStatus = await self.send_command_sensor_image(devid, eid, duration)
+        cr.status = await self.send_command_sensor_image(devid, eid, duration)
+        cr.eid=self.name
         self.async_update_listeners()
-
-        if status != AlarmCommandStatus.SUCCESS:
-            message = ""
-            match (status):
-                case AlarmCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS:
-                    message = "eeprom download in progress."
-                case AlarmCommandStatus.FAIL_INVALID_STATE:
-                    message = "invalid panel state."
-                case AlarmCommandStatus.FAIL_INVALID_RETURN:
-                    message = "invalid return."
-                case AlarmCommandStatus.FAIL_ENTITY_INCORRECT:
-                    message = "invalid or unknown sensor."
-                case AlarmCommandStatus.FAIL_INVALID_PROCESS_TOKEN:
-                    message = "cloud connection problem."
-            self._event_logger.create_ha_notification(
-                AvailableNotifications.IMAGE,
-                f"Attempt to retrieve sensor image for panel {self.panel_id}, entity {eid} failed, {message}",
-            )
+        self.process_command_result(cr)
+        return
 
     def _service_image_queue(self) -> None:
         """On (re)connect drop stale image state; while idle and connected, dispatch the next queued request."""
@@ -386,8 +452,8 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         if not vcd or not vcd.connected:
             return PanelStateData()
 
-        _armcode = AlarmPanelStatus.UNKNOWN
-        _mystate = AlarmControlPanelState.DISARMED
+        #_armcode = AlarmPanelStatus.UNKNOWN
+        #_mystate = AlarmControlPanelState.DISARMED
 
         if partition == PARTITION_ID_WHEN_BASE and vcd.panelstate.partition is None:
             # Check to make sure we have partitions, if not then set partition to None
@@ -429,10 +495,14 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
 
         if isa:
             _mystate = AlarmControlPanelState.TRIGGERED
+        elif _armcode == AlarmPanelStatus.DOWNLOADING:
+            _mystate = self._last_my_state
         elif _armcode in PANEL_TO_HA_STATUS_MAP:
             _mystate = PANEL_TO_HA_STATUS_MAP[_armcode]
         else:
             _mystate = None
+
+        self._last_my_state = _mystate
 
         statusdict: dict[str, Any] = (
             dict(vcd.statusdict) if partition in (None, PARTITION_ID_WHEN_BASE) else {}
@@ -471,16 +541,11 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             # There is at least one zone needs bypassing so check the user setting whether it's allowed
             esb = to_bool(self.config_entry.options.get(CONF_ENABLE_SENSOR_BYPASS))
             if not esb:
-                self.platform_manager.generate_event_output(
-                    PanelCondition.CHECK_BYPASS_COMMAND,
-                    AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
-                    "Bypass",
-                    "Sensor Bypass State",
-                )
                 return CommandResult(
                     AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
                     AvailableNotifications.COMMAND,
-                    "Sensor Bypass State",
+                    message="Sensor Bypass State",
+                    panel=PanelCondition.CHECK_BYPASS_COMMAND,
                 )
             for s in sl:
                 self._event_logger.logstate_debug(f"Attempting to bypass sensor: {s}")
@@ -489,7 +554,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                     return CommandResult(
                         status.status,
                         AvailableNotifications.BYPASS,
-                        "Failed bypass",
+                        message="Failed bypass",
                     )
         return None
 
@@ -525,10 +590,6 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 f"Received {message} request - user approved"
             )
             return True
-        self._event_logger.create_ha_notification(
-            AvailableNotifications.COMMAND,
-            "Visonic Alarm Panel: Panel Commands Disabled",
-        )
         return False
 
     async def checkUserPermission(self, call: ServiceCall, perm: str, entity: str):
@@ -556,6 +617,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
     def decode_code_from_call_data(
         self,
         call: ServiceCall,
+        strict: bool = False,
     ) -> tuple[bool, str | None]:
         """Decode the alarm code from the call data."""
         code = call.data.get(ATTR_CODE)
@@ -566,6 +628,8 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 code: str = code["code"]
             if isinstance(code, str):
                 if len(code) == 0:
+                    if strict:
+                        return False, None
                     code = None
                 elif not PIN_REGEX.match(code):
                     return False, None
@@ -573,6 +637,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 return False, None
         else:
             self._event_logger.logstate_debug("[decode_code_from_call_data] Decode code from call and it's None")
+            return False, None
 
         if code and not PIN_REGEX.match(code):
             code = "0000"
@@ -581,7 +646,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             return True, pin_code
         return False, None
 
-    async def decode_entity(
+    async def _decode_entity(
         self,
         call: ServiceCall,
         ent_type: str,
@@ -590,12 +655,8 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
     ) -> tuple[int | None, str | None]:
         """Decode the entity from the call data using inline assignments."""
 
-        def fail(msg: str) -> tuple[None, None]:
-            self._event_logger.create_ha_notification(
-                an,
-                f"Attempt to {message} for panel {self.panel_id}, {msg}",
-            )
-            return None, None
+        def fail(msg: str) -> tuple[int | None, str | None]:
+            return None, msg
 
         if ATTR_ENTITY_ID not in call.data:
             return fail("but entity not defined")
@@ -619,33 +680,47 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             if panel is None or devid is None:
                 return fail(f"incorrect entity {eid}")
             if panel != self.panel_id:
-                return fail(
-                    f"device {devid} but entity {eid} not connected to this panel"
-                )
+                return fail(f"device {devid} but entity {eid} not connected to this panel")
             return devid, eid
 
         return fail(f"invalid entity type {eid}  {type(eid)}")
 
-    async def async_service_panel_eventlog(self, call: ServiceCall):
+    async def async_service_panel_eventlog(self, call: ServiceCall) -> CommandResult:
         """Service call to retrieve the event log from the panel. This currently just gets dumped in the HA log file."""
         if not await self.check_the_basics(call, "event log"):
-            return
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_STATE,
+                AvailableNotifications.EVENTLOG,
+                message="The basic checks failed",
+                panel=PanelCondition.CHECK_EVENT_LOG_COMMAND,
+            )
         is_valid, code = self.decode_code_from_call_data(call)
         if not is_valid:
-            self.platform_manager.generate_event_output(
-                PanelCondition.CHECK_EVENT_LOG_COMMAND,
+            return CommandResult(
                 AlarmCommandStatus.FAIL_INVALID_CODE,
-                "event log",
-                "event log Request",
+                AvailableNotifications.EVENTLOG,
+                message="Invalid Code",
+                panel=PanelCondition.CHECK_EVENT_LOG_COMMAND,
             )
-            return
-        await self.send_get_event_log(code=code)
+        return await self.send_get_event_log(code=code)
 
-    async def async_service_sensor_image(self, call: ServiceCall):
+    async def async_service_panel_zoneinfo(self, call: ServiceCall) -> dict[str, Any]:
+        """Service call get open zones in the panel."""
+        valid = await self.check_the_basics(
+            call, "panel zone info"
+        )
+        # Passing valid = False in returns an empty structure with the validity False
+        return await self.platform_manager.async_get_zone_switch_info(valid)
+
+    async def async_service_sensor_image(self, call: ServiceCall) -> CommandResult:
         """Service call to fetch camera images, for one camera or several."""
         if not await self.check_the_basics(call, "sensor image"):
-            return
-        # decode_entity only ever looks at the first entity, so walk the list and ask for each.
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_STATE,
+                AvailableNotifications.BYPASS,
+                message="The basic checks failed",
+            )
+        # _decode_entity only ever looks at the first entity, so walk the list and ask for each.
         # The requests queue in the coordinator and go out one at a time.
         entities = call.data.get(ATTR_ENTITY_ID) or []
         duration = call.data.get(ATTR_DURATION, 5)
@@ -656,108 +731,174 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 call.hass, call.domain, call.service,
                 {**call.data, ATTR_ENTITY_ID: entity}, call.context,
             )
-            devid, eid = await self.decode_entity(
+            devid, eid = await self._decode_entity(
                 single,
                 Platform.IMAGE,
                 "retrieve sensor image",
                 AvailableNotifications.IMAGE,
             )
-            if devid is not None:
-                await self.send_get_sensor_image(devid, eid, duration)
+            if devid is None:  # This creates notifications so no need to do anything else
+                return CommandResult(
+                    AlarmCommandStatus.FAIL_ENTITY_INCORRECT,
+                    AvailableNotifications.IMAGE,
+                    eid=eid,
+                )
+            await self.send_get_sensor_image(devid, eid, duration)
+        return None
 
-    async def async_service_sensor_bypass(self, call: ServiceCall):
+    async def async_service_sensor_bypass(self, call: ServiceCall) -> CommandResult:
         """Service call to bypass a sensor in the panel."""
         # These create notifications so no need to do anything else
         if not await self.check_the_basics(call, "sensor bypass"):
-            return
-        devid, _eid = await self.decode_entity(
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_STATE,
+                AvailableNotifications.BYPASS,
+                message="The basic checks failed",
+            )
+        devid, eid = await self._decode_entity(
             call,
             Platform.SELECT,
             "bypass a sensor",
             AvailableNotifications.BYPASS,
         )
-        if not devid:  # This creates notifications so no need to do anything else
-            return
+        if devid is None:  # This creates notifications so no need to do anything else
+            return CommandResult(
+                AlarmCommandStatus.FAIL_ENTITY_INCORRECT,
+                AvailableNotifications.BYPASS,
+                eid=eid,
+            )
         is_valid, code = self.decode_code_from_call_data(call)
         if not is_valid:
-            self.platform_manager.generate_event_output(
-                PanelCondition.CHECK_BYPASS_COMMAND,
+            return CommandResult(
                 AlarmCommandStatus.FAIL_INVALID_CODE,
-                "bypass a sensor",
-                "bypass a sensor Request",
+                AvailableNotifications.BYPASS,
+                message="Invalid Code",
+                panel=PanelCondition.CHECK_BYPASS_COMMAND,
+                eid=eid,
             )
-            return
         bypass: bool = call.data.get(ATTR_BYPASS, False)
-        await self.send_bypass(devid, bypass, code)
+        return await self.send_bypass(eid, devid, bypass, code)
 
-    async def async_service_panel_command(self, call: ServiceCall) -> bool:
+    async def async_service_panel_command(self, call: ServiceCall) -> CommandResult:
         """Service call to send an arm/disarm command to the panel."""
         if not await self.check_the_basics(call, "command"):
-            return False
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_STATE,
+                AvailableNotifications.COMMAND,
+                message="The basic checks failed"
+            )
         command_name: str | None = call.data.get(CONF_COMMAND, "")
         if not command_name:
-            self._event_logger.create_ha_notification(
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_STATE,
                 AvailableNotifications.COMMAND,
-                f"Attempt to send command to panel {self.panel_id}, command not set for entity",
+                message="Command not set",
             )
-            return False
         if not (eid := call.data.get(ATTR_ENTITY_ID)):
-            self._event_logger.create_ha_notification(
+            return CommandResult(
+                AlarmCommandStatus.FAIL_ENTITY_INCORRECT,
                 AvailableNotifications.COMMAND,
-                f"Attempt to send command to panel {self.panel_id}, entity not set",
+                message="Entity not set",
             )
-            return False
-        is_valid, code = self.decode_code_from_call_data(call)
-        if not is_valid:
-            self.platform_manager.generate_event_output(
-                PanelCondition.CHECK_ARM_DISARM_COMMAND,
-                AlarmCommandStatus.FAIL_INVALID_CODE,
-                "PanelCommand",
-                "Panel Command Request",
-            )
-            return False
 
         command: AlarmPanelCommand | None = AlarmPanelCommand.from_name(command_name)
         if command is None:
-            return False
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_STATE,
+                AvailableNotifications.COMMAND,
+                message="Command not set",
+                eid=eid,
+            )
+
+        # Get the code_format and code_arm_required from the alarm control panel entity
+        state : State | None = self.hass.states.get(eid)
+        if state is None:
+            return CommandResult(
+                AlarmCommandStatus.FAIL_ENTITY_INCORRECT,
+                AvailableNotifications.COMMAND,
+                message="Entity state not available",
+                panel=PanelCondition.CHECK_ARM_DISARM_COMMAND,
+                eid=eid,
+            )
+        attributes: dict[str, Any] = state.attributes if state else {}
+        code_format = attributes.get("code_format", _MISSING)
+        code_arm_required = attributes.get("code_arm_required", _MISSING)
+        if code_format is _MISSING or code_arm_required is _MISSING:
+            # If the code format or code_arm_required is missing, we assume that the panel is disconnected
+            return CommandResult(
+                AlarmCommandStatus.FAIL_PANEL_NO_CONNECTION,
+                AvailableNotifications.COMMAND,
+                message="Entity state prevents command being executed, assume the panel is disconnected",
+                panel=PanelCondition.CHECK_ARM_DISARM_COMMAND,
+                eid=eid,
+            )
+
+        # If the code is required and we're trying to disarm or mute the siren
+        condition1 = code_format is not None and command in (AlarmPanelCommand.DISARM, AlarmPanelCommand.MUTE)
+        condition2 = code_arm_required and command not in (AlarmPanelCommand.DISARM, AlarmPanelCommand.MUTE)
+        strict = condition1 or condition2
+
+        is_valid, code = self.decode_code_from_call_data(call, strict = strict)
+
+        self._event_logger.logstate_debug(f"[async_service_panel_command] {strict=}  {is_valid=}")
+
+        if not is_valid:
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_CODE,
+                AvailableNotifications.COMMAND,
+                message="Invalid code for this command",
+                panel=PanelCondition.CHECK_ARM_DISARM_COMMAND,
+                eid=eid,
+            )
 
         self._event_logger.logstate_debug(
-            f"[service_panel_command]   Sending Command: {command}  from raw string: {command_name}"
+            f"[service_panel_command]   Sending Command: {command.name}  from raw string: {command_name}"
         )
-
-        state = self.hass.states.get(eid)
-        attributes: dict[str, Any] = state.attributes if state else {}
-
         partition = attributes.get("partition")
         partition_set = None   # all partitions
         if isinstance(partition, str) and len(partition) > 0:
             partition_list = parse_int_list(partition)
             partition_set = {a-1 for a in partition_list if a >= 1}
 
-        result: CommandResult = await self.send_command(
-            "Alarm Service Call",
-            command,
-            code,
-            partition_set,
+        return await self.send_command(
+            eid, command, code, partition_set,
         )
-        return result.did_bypass
 
-    async def async_service_panel_switch(self, call: ServiceCall):
+    async def async_service_panel_switch(self, call: ServiceCall) -> CommandResult:
         """Service call to set an switch device in the panel."""
         # This creates notifications so no need to do anything else
         if not await self.check_the_basics(call, "switch command"):
-            return
-        devid, _eid = await self.decode_entity(
+            return CommandResult(
+                AlarmCommandStatus.FAIL_INVALID_STATE,
+                AvailableNotifications.SWITCH,
+                message="The basic checks failed",
+            )
+        devid, eid = await self._decode_entity(
             call,
             Platform.SWITCH,
             "switch command",
             AvailableNotifications.SWITCH,
         )
-        if devid is not None:
-            command_name = call.data.get(CONF_SWITCH_COMMAND, "OFF")
-            command: AlarmSwitchCommand | None = AlarmSwitchCommand.from_name(command_name)
-            if command is not None:
-                await self.send_switch(devid, command)
+        if devid is None:  # This creates notifications so no need to do anything else
+            return CommandResult(
+                AlarmCommandStatus.FAIL_ENTITY_INCORRECT,
+                AvailableNotifications.SWITCH,
+                message="Invalid Entity",
+                eid=eid
+            )
+
+        command_name = call.data.get(CONF_SWITCH_COMMAND, "OFF")
+        command: AlarmSwitchCommand | None = AlarmSwitchCommand.from_name(command_name)
+        if command is not None:
+            return await self.send_switch(eid, devid, command)
+
+        return CommandResult(
+            AlarmCommandStatus.FAIL_SWITCH_PROBLEM,
+            AvailableNotifications.SWITCH,
+            message="Invalid Command",
+            eid=eid,
+        )
+
 
     def alarm_and_sensor_common_setup(
         self, entry: ConfigEntry, alarm: bool, ref: int, piu: set[int] | None, identifier: str, show_keypad: bool

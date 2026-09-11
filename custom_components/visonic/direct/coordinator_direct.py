@@ -31,6 +31,7 @@ from ..visonic_types import (  # noqa: TID252
     AlarmSwitchCommand,
     AvailableNotifications,
     CommandResult,
+    PanelCondition,
     PanelStateData,
 )
 from .client_visonic_client import VisonicClient
@@ -97,20 +98,6 @@ class VisonicDirectCoordinator(VisonicCoordinator):
     def hasStarted(self) -> bool:
         """Has the system started?"""
         return self._client.hasStarted()
-
-#    @callback
-#    def async_handle_client_update(self, data: VisonicCoordinatorData) -> None:
-#        """Handle update. This function is passed in to VisonicClient when the client is created. The client calls this callback on data change."""
-#        # Called by VisonicClient when data changes state
-#        self.async_set_updated_data(data)
-
-    def set_partition_name(
-        self,
-        partition: int | None = None,
-        panel_entity_name: str | None = None,
-    ):
-        """Shortcut to set the partition name (used in HA events)."""
-        self._client.set_partition_name(partition, panel_entity_name)
 
     async def get_diagnostic_data(self) -> dict[str, Any]:
         """Build and return the diagnostics data for this panel."""
@@ -193,7 +180,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
     # the return value indicates whether any sensors needed to be bypassed
     async def send_command(
         self,
-        name: str,
+        entity_id: str,
         command: AlarmPanelCommand,
         code: str | None,
         partition_set: set[int] | None,  # needs to already be 0 based
@@ -205,12 +192,15 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         if not is_valid:
             return CommandResult(
                 AlarmCommandStatus.FAIL_INVALID_CODE,
-                AvailableNotifications.INVALID_PIN,
-                "Invalid code",
+                AvailableNotifications.COMMAND,
+                message="Invalid code",
+                panel=PanelCondition.CHECK_ARM_DISARM_COMMAND,
+                partitions=partition_set,
+                eid=entity_id,
             )
 
         if self._client.is_power_master() and command in POWERMASTER_COMMANDS:
-            return await self._client.send_command(command, code, None)
+            return await self._client.send_command(entity_id, command, code, None)
 
         if command in ARM_DISARM_COMMANDS:
             if not (
@@ -228,7 +218,8 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                 return CommandResult(
                     AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
                     AvailableNotifications.COMMAND,
-                    "Request Arm/Disarm",
+                    message="Request Arm/Disarm",
+                    eid=entity_id,
                 )
 
             if command in {AlarmPanelCommand.ARM_HOME_BYPASS, AlarmPanelCommand.ARM_AWAY_BYPASS}:
@@ -244,27 +235,23 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                 )
                 did_bypass = True
 
-            result: CommandResult = await self._client.send_command(command, code, partition_set)
-
+            result: CommandResult = await self._client.send_command(entity_id, command, code, partition_set)
+            result.message=f"Sent Command success {command}   entity_id {entity_id}" if result.status == AlarmCommandStatus.SUCCESS else f"Failed to send command {command}   entity_id {entity_id}"
             if did_bypass:
-                self._client.get_sensor_bypass_state()
-
-            if result.status != AlarmCommandStatus.SUCCESS:
-                self._event_logger.create_ha_notification(
-                    result.notify,
-                    f"Failed Attempt on {name} to {command} panel {self.panel_id}  {result.message}",
-                )
-            else:
+                self._client.get_sensor_bypass_state(entity_id)
+            if result.status == AlarmCommandStatus.SUCCESS:
                 result.did_bypass = did_bypass
             return result
         return CommandResult(
             AlarmCommandStatus.FAIL_PANEL_CONFIG_PREVENTED,
             AvailableNotifications.COMMAND,
-            "Invalid Command for Panel",
+            message="Invalid Command for Panel",
+            eid=entity_id,
         )
 
     async def send_bypass(
         self,
+        entity_id: str,
         devid: int,
         bypass: bool,
         code: str | None,
@@ -275,29 +262,19 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         if not is_valid:
             return CommandResult(
                 AlarmCommandStatus.FAIL_INVALID_CODE,
-                AvailableNotifications.INVALID_PIN,
-                "Invalid pin",
+                AvailableNotifications.BYPASS,
+                message="Invalid pin",
+                eid=entity_id,
             )
         partition_state: PanelStateData = self.get_panel_and_partition_state(PARTITION_ID_WHEN_BASE)
         result: CommandResult = await self._client.send_bypass(
-            devid, bypass, code, partition_state.panel_state
+            entity_id, devid, bypass, code, partition_state.panel_state
         )
-        if result.status != AlarmCommandStatus.SUCCESS:
-            self._event_logger.create_ha_notification(
-                result.notify,
-                f"Failed Attempt to send bypass/arm to panel {self.panel_id}  {result.message}",
-            )
         return result
 
-    async def send_switch(self, devid: int, command: AlarmSwitchCommand) -> CommandResult:
+    async def send_switch(self, entity_id: str, devid: int, command: AlarmSwitchCommand) -> CommandResult:
         """Set the Switch/PGM switch."""
-        result: CommandResult = await self._client.send_switch(devid, command)
-        if result.status != AlarmCommandStatus.SUCCESS:
-            self._event_logger.create_ha_notification(
-                result.notify,
-                f"Failed Attempt to set switch device for panel {self.panel_id}, device {devid} {result.message}",
-            )
-        return result
+        return await self._client.send_switch(entity_id, devid, command)
 
     # =======================================================================================================
     # ======== Functions below this are the service calls and the Frontend controls from Home Assistant =====

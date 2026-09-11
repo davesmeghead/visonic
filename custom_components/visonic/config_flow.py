@@ -89,6 +89,7 @@ from .const import (
     TRANSLATE_ERROR_SETTINGS_MISSING,
     TRANSLATE_EXCEPTION_NO_UNIQUE_NUMBER_IN_CONFIG,
     VISONIC_CLOUD_SERVER,
+    VISONIC_PANEL,
     VISONIC_UNIQUE_NAME,
 )
 from .create_schema import FormItems, VisonicSchema
@@ -585,7 +586,7 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
 
         # Pre-fill the configuration form
         self.context["title_placeholders"] = {
-            "name": f"Visonic Panel {panel_num} Device Detected"
+            "name": f"{VISONIC_PANEL} {panel_num} - Device Detected"
         }
         return await self.async_step_discovery_confirm()
 

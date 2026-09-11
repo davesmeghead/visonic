@@ -83,7 +83,11 @@ from .pyvisonicalarm.devices import (
     SmokeDevice,
     TagDevice,
 )
-from .pyvisonicalarm.exceptions import UnauthorizedError, WrongUsernameOrPasswordError
+from .pyvisonicalarm.exceptions import (
+    Error,
+    UnauthorizedError,
+    WrongUsernameOrPasswordError,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -142,7 +146,6 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         ui = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_CLOUD_SCAN_INTERVAL)
         super().__init__(hass, entry, panel_id=panel_id, lo=event_logger, update_interval=ui, always_update=True)
 
-        self.panel_entity_name: dict[int, str] = {}
         self.partition_list : set[int] = set()
         self.siren_arm = False
         self.siren_disarm = False
@@ -157,8 +160,9 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
         self._event_logger.logstate_info(f"update_interval={ui}")
         self.cloud_alarm: AlarmSystem | None = None
-        self.last_connected_timestamp = None
-        self.last_disconnection_count_timestamp = get_utc_time()
+        # Initialise the connection time stamp
+        self.last_connected_timestamp: datetime = get_utc_time()
+        self.never_connected = True
         self.disconnection_counter = 0
 
     def _dummy_listener(self):
@@ -312,7 +316,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
     # the return value indicates whether any sensors needed to be bypassed
     async def send_command(  # noqa: C901
         self,
-        name: str,
+        entity_id: str,
         command: AlarmPanelCommand,
         code: str | None,
         partition_set: set[int] | None,   # needs to already be 0 based
@@ -324,8 +328,11 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         if not is_valid:
             return CommandResult(
                 AlarmCommandStatus.FAIL_INVALID_CODE,
-                AvailableNotifications.INVALID_PIN,
-                "Invalid code",
+                AvailableNotifications.COMMAND,
+                message="Invalid code",
+                panel=PanelCondition.CHECK_ARM_DISARM_COMMAND,
+                partitions=partition_set,
+                eid=entity_id,
             )
 
         part = PARTITION_ID_WHEN_BASE if partition_set is None or len(partition_set) == 3 or partition_set == self.partition_list else list(partition_set)[0] + 1
@@ -337,6 +344,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             process_token = None
             user_settings_prevented = False
             panel_settings_prevented = False
+            self._event_logger.logstate_info(f"Sending panel command {command}")
             match command:
                 case AlarmPanelCommand.ARM_AWAY_BYPASS:
                     if conf_remote_arm:
@@ -405,13 +413,15 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         return CommandResult(
             acs,
             AvailableNotifications.COMMAND,
-            message=f"Sent Command success {command}   name {name}" if acs == AlarmCommandStatus.SUCCESS else f"Failed to send command {command}   name {name}",
+            message=f"Sent Command success {command}   entity_id {entity_id}" if acs == AlarmCommandStatus.SUCCESS else f"Failed to send command {command}   entity_id {entity_id}",
             partitions=part,
-            did_bypass=did_bypass
+            did_bypass=did_bypass,
+            eid=entity_id
         )
 
     async def send_bypass(
         self,
+        entity_id: str,
         devid: int,
         bypass: bool,
         code: str | None,
@@ -421,61 +431,52 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         esb = to_bool(self.entry.options.get(CONF_ENABLE_SENSOR_BYPASS))
         if not esb:
             text = "Bypass" if bypass else "Restore"
-            self.platform_manager.generate_event_output(
-                PanelCondition.CHECK_BYPASS_COMMAND,
-                AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
-                text,
-                f"Sensor {text} State",
-            )
             return CommandResult(
                 AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED,
-                AvailableNotifications.COMMAND,
-                f"Sensor {text} State",
+                AvailableNotifications.BYPASS,
+                message=f"Sensor {text} State",
+                panel=PanelCondition.CHECK_BYPASS_COMMAND,
+                eid=entity_id,
             )
         # is_code_valid
         is_valid, _ = self.get_panel_pin_code(code=code)
         if not is_valid:
             text = "Bypass" if bypass else "Restore"
-            self.platform_manager.generate_event_output(
-                PanelCondition.CHECK_BYPASS_COMMAND,
-                AlarmCommandStatus.FAIL_INVALID_CODE,
-                text,
-                f"Sensor {text} State",
-            )
             return CommandResult(
                 AlarmCommandStatus.FAIL_INVALID_CODE,
-                AvailableNotifications.COMMAND,
-                f"Sensor {text} State",
+                AvailableNotifications.BYPASS,
+                message=f"Sensor {text} State",
+                panel=PanelCondition.CHECK_BYPASS_COMMAND,
+                eid=entity_id,
             )
         if self.cloud_alarm:
-            process_token = await self.cloud_alarm.set_bypass_zone(devid, bypass)
-            if process_token:
-                acs = await self.wait_for_process_status(process_token)
+            try:
+                self._event_logger.logstate_info(f"Sending panel bypass {devid=} {bypass=}")
+                process_token = await self.cloud_alarm.set_bypass_zone(devid, bypass)
+                if process_token:
+                    acs = await self.wait_for_process_status(process_token)
+            except Error as err:
+                return CommandResult(
+                    AlarmCommandStatus.FAIL_INVALID_RETURN,
+                    AvailableNotifications.BYPASS,
+                    message=f"Failed to send bypass:   zone={devid}   bypass={bypass}   detail={err}",
+                    eid=entity_id,
+                )
+
         # schedule an update in 5 seconds time
         self.state_changed_callback(5.0)
         return CommandResult(
             acs,
             AvailableNotifications.BYPASS,
-            message=f"Sent Bypass success, zone {devid}   bypass {bypass}" if acs == AlarmCommandStatus.SUCCESS else f"Failed to send bypass zone {devid}   bypass {bypass}"
+            message=f"Sent Bypass success, zone {devid}   bypass {bypass}" if acs == AlarmCommandStatus.SUCCESS else f"Failed to send bypass:   zone={devid}   bypass={bypass}",
+            eid=entity_id,
         )
 
-    async def send_switch(self, devid: int, command: AlarmSwitchCommand) -> CommandResult:
+    async def send_switch(self, entity_id: str, devid: int, command: AlarmSwitchCommand) -> CommandResult:
         """Set the Switch/PGM switch."""
-        self._event_logger.create_ha_notification(
-            AvailableNotifications.SWITCH,
-            f"Failed Attempt to set switch device for panel {self.panel_id}, device {devid} Not supported by interface",
-        )
         # schedule an update in 5 seconds time
         self.state_changed_callback(5.0)
-        return CommandResult(
-            AlarmCommandStatus.FAIL_INVALID_STATE, AvailableNotifications.SWITCH, f"Send SWITCH {command} to device {devid}"
-        )
 #        result: CommandResult = await self.__client.send_switch(devid, command)
-#        if result.status != AlarmCommandStatus.SUCCESS:         # AlarmCommandStatus
-#            self._event_logger.create_ha_notification(
-#                result.notify,
-#                f"Failed Attempt to set switch device for panel {self.panel_id}, device {devid} {result.message}",
-#            )
 #        return result
 
     async def async_panel_connect(self) -> bool:
@@ -514,10 +515,12 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         if not is_valid:
             return CommandResult(
                 AlarmCommandStatus.FAIL_INVALID_CODE,
-                AvailableNotifications.INVALID_PIN,
-                "Invalid code",
+                AvailableNotifications.EVENTLOG,
+                message="Invalid code",
+                panel=PanelCondition.CHECK_EVENT_LOG_COMMAND,
             )
 
+        self._event_logger.logstate_info("Sending panel get panel event log")
         events: list[Event] = await self.cloud_alarm.get_events()
         success = True
         for count, event in enumerate(events, start=1):
@@ -547,17 +550,6 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         #    process_token = await self.cloud_alarm.make_video(devid)
         #    acs = await self.wait_for_process_status(process_token)
         return acs
-
-    def set_partition_name(
-        self, partition: int | None = None, panel_entity_name: str | None = None
-    ):
-        """Set the partition naming for the alarm panel entities."""
-        if (
-            panel_entity_name is not None
-            and partition is not None
-            and 0 <= partition <= 2
-        ):
-            self.panel_entity_name[partition] = panel_entity_name
 
     def _determine_armcode(self, p : Partition) -> AlarmPanelStatus:
         # p.status can be "EXIT" or "" I think
@@ -598,13 +590,17 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             }
 
         try:
-
             if self.cloud_alarm is None:
-                return VisonicCoordinatorData(
-                    connected=False,
-                    mode="unknown",
-                    #ident=getAlarmPanelUniqueIdent(self.panel_id)
-                )
+                self._event_logger.logstate_info("Updating data - Cloud connection has not been made")
+                await self.async_service_panel_reconnect(None) # This should reconnect to the cloud
+                if self.cloud_alarm is None:
+                    return VisonicCoordinatorData(
+                        connected=False,
+                        ispowermaster=True,
+                        mode="cloud",
+                        achieved_powerlink=True,
+                        model=self.config_entry.title, # .panel_model,
+                    )
 
             # Notes:
             ### alerts: Empty list when I tried
@@ -639,33 +635,38 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             # Call this and save to xml and csv files.
             #events = await self.cloud_alarm.get_events(timestamp_hour_offset=1)
 
+            timenow = get_utc_time()
             # Attempt to get status using current session
-            #   Assume we're connected
-            connected = True
             status = await self.cloud_alarm.get_status()
-            if status.connected:
-                self.last_connected_timestamp = get_utc_time()
-            else:
-                timenow = get_utc_time()
-                # not less than 60 seconds, but allow 4 tries at updating before it's considered a timeout
-                timeout = min(60, 4.5 * self.update_interval.total_seconds())
-                if self.last_connected_timestamp is None or (timenow - self.last_connected_timestamp) >= timedelta(seconds=timeout):
-                    connected = False
-                    if (self.last_connected_timestamp is not None and
-                       (self.last_connected_timestamp - self.last_disconnection_count_timestamp) >= timedelta(seconds=0)
-                    ):
-                        # We've connected at least once and the last connection is later than the last disconnection
-                        self.disconnection_counter += 1
-                        self._event_logger.logstate_info(f"Updating data - Incremented disconnection counter to {self.disconnection_counter}")
-                        self.last_disconnection_count_timestamp = timenow
+            self._event_logger.logstate_info(f"Updating data - visonic cloud connection: live={status.connected}")
 
-            self._event_logger.logstate_info(f"Updating data - visonic cloud connection: live={status.connected}    latent={connected}")
-            if not connected:
-                return VisonicCoordinatorData(
-                    connected=False,
-                    mode="unknown",
-                    #ident=getAlarmPanelUniqueIdent(self.panel_id)
-                )
+            if status.connected:
+                self.last_connected_timestamp = timenow
+                self.never_connected = False
+            else:
+                timeout = min(60, 2.5 * self.update_interval.total_seconds())
+                delta_time = timenow - self.last_connected_timestamp
+                if self.never_connected or delta_time >= timedelta(seconds=timeout):
+                    # not less than 60 seconds, but allow 2 tries at updating before it's considered a timeout
+                    timeout = min(90, 4.5 * self.update_interval.total_seconds())
+                    if delta_time > timedelta(seconds=timeout):
+                        # not less than 90 seconds, but allow 4 tries at updating before it's considered a reconnect
+                        self._event_logger.logstate_info("Updating data - re-connection to cloud server")
+                        self.last_connected_timestamp = timenow
+                        self.disconnection_counter += 1
+                        await self.async_service_panel_reconnect(None)
+                    self._event_logger.logstate_info("Updating data - panel is not connected to the cloud, no access!")
+                    return VisonicCoordinatorData(
+                        connected=False,
+                        ispowermaster=True,
+                        mode="cloud",
+                        achieved_powerlink=True,
+                        model=self.config_entry.title, # .panel_model,
+                    )
+                # Here when it's disconnected but within the timeout so return last times data
+                d: VisonicCoordinatorData = deepcopy(self.data)
+                self._event_logger.logstate_info(f"Updating data - returning deepcopy of existing data, connected set to {d.connected}")
+                return d
 
             panel_info: PanelInfo = await self.cloud_alarm.get_panel_info()
             partition_list: set[int] = set()
@@ -730,10 +731,10 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 self.partition_dict[0] = construct_partition_data(status.partitions[0])
 
             new_data = VisonicCoordinatorData(
-                connected=connected,
-                ispowermaster=connected,
+                connected=True,
+                ispowermaster=True,
                 mode="cloud",
-                achieved_powerlink=connected,
+                achieved_powerlink=True,
                 model=self.config_entry.title, # .panel_model,
                 statusdict={
                     TEXT_DISCONNECTION_COUNT: self.disconnection_counter
@@ -766,8 +767,10 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
         return VisonicCoordinatorData(
             connected=False,
-            #ident=getAlarmPanelUniqueIdent(self.panel_id),
-            mode="cloud"
+            ispowermaster=True,
+            mode="cloud",
+            achieved_powerlink=True,
+            model=self.config_entry.title, # .panel_model,
         )
 
     def _as_sensor_state(self, device: Device) -> SensorState:

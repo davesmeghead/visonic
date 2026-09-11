@@ -2,7 +2,7 @@
 
 import asyncio
 import re
-from typing import Any, NamedTuple
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -14,23 +14,15 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity import UNDEFINED, UndefinedType
-from homeassistant.util import slugify
 
 from .const import (
-    ALARM_COMMAND_EVENT,
-    ALARM_PANEL_CHANGE_EVENT,
-    ALARM_PANEL_LOG_FILE_COMPLETE,
-    ALARM_PANEL_LOG_FILE_ENTRY,
-    ALARM_SENSOR_CHANGE_EVENT,
     CONF_EMULATION_MODE,
     CONF_ENABLE_SENSOR_BYPASS,
     CONF_EXCLUDE_SENSOR,
     CONF_EXCLUDE_SWITCH,
     DOMAIN,
     MANUFACTURER,
-    PANEL_ATTRIBUTE_NAME,
     PARTITION_ID_WHEN_BASE,
-    PE_PARTITION,
 )
 from .image_manager import ImageManager
 from .log_events import logEvents
@@ -61,54 +53,8 @@ from .visonic_entity_types import (
     VisonicFloatSensorKey,
     ZoneSensorData,
 )
-from .visonic_types import (
-    AlarmCommandStatus,
-    AvailableNotifications,
-    EmulationMode,
-    PanelCondition,
-)
+from .visonic_types import EmulationMode
 
-MESSAGE_REASON_DICT = {
-    AlarmCommandStatus.SUCCESS: "Success, sent Command to Panel",
-    AlarmCommandStatus.FAIL_DOWNLOAD_IN_PROGRESS: "Failed to Send Command To Panel, not supported when downloading EPROM",
-    AlarmCommandStatus.FAIL_INVALID_CODE: "Failed to Send Command To Panel, not allowed without valid pin",
-    AlarmCommandStatus.FAIL_USER_CONFIG_PREVENTED: "Failed to Send Command To Panel, disabled by user settings",
-    AlarmCommandStatus.FAIL_INVALID_STATE: "Failed to Send Command To Panel, invalid state requested",
-    AlarmCommandStatus.FAIL_SWITCH_PROBLEM: "Failed to Send Command To Panel, general Switch Problem",
-    AlarmCommandStatus.FAIL_PANEL_CONFIG_PREVENTED: "Failed to Send Command To Panel, disabled by panel settings",
-    AlarmCommandStatus.FAIL_ENTITY_INCORRECT: "Failed to Send Command To Panel, entity not supported",
-    AlarmCommandStatus.FAIL_PANEL_NO_CONNECTION: "Failed to Send Command To Panel, no connection to panel",
-    AlarmCommandStatus.FAIL_ABSTRACT_CLASS_NOT_IMPLEMENTED: "Failed to Send Command To Panel, report error to integration author and send a log file",
-}
-
-class HA_Event_Type(NamedTuple):
-    """Represents a Home Assistant event type with a name and action."""
-    name: str
-    action: str
-
-# fmt: off
-AlarmPanelEventActionList: dict[PanelCondition, HA_Event_Type]= {
-    PanelCondition.ZONE_UPDATE                : HA_Event_Type(ALARM_SENSOR_CHANGE_EVENT,     ""),
-    PanelCondition.PANEL_UPDATE               : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "panelupdate"),
-    PanelCondition.PANEL_RESET                : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "panelreset"),
-    PanelCondition.IMAGE_UPDATE               : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "imageupdate"),
-    PanelCondition.PIN_REJECTED               : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "pinrejected"),
-    PanelCondition.DOWNLOAD_TIMEOUT           : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "timeoutdownload"),
-    PanelCondition.WATCHDOG_TIMEOUT_GIVINGUP  : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "timeoutwaiting"),
-    PanelCondition.WATCHDOG_TIMEOUT_RETRYING  : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "timeoutactive"),
-    PanelCondition.NO_DATA_FROM_PANEL         : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "nopaneldata"),
-    PanelCondition.DOWNLOAD_SUCCESS           : HA_Event_Type(None, None),
-    PanelCondition.STARTUP_SUCCESS            : HA_Event_Type(None, None),
-    PanelCondition.PUSH_CHANGE                : HA_Event_Type(None, None),
-    PanelCondition.CONNECTION                 : HA_Event_Type(ALARM_PANEL_CHANGE_EVENT,      "connection"),
-    PanelCondition.PANEL_LOG_COMPLETE         : HA_Event_Type(ALARM_PANEL_LOG_FILE_COMPLETE, ""),
-    PanelCondition.PANEL_LOG_ENTRY            : HA_Event_Type(ALARM_PANEL_LOG_FILE_ENTRY,    ""),
-    PanelCondition.CHECK_ARM_DISARM_COMMAND   : HA_Event_Type(ALARM_COMMAND_EVENT,           "armdisarm"),
-    PanelCondition.CHECK_BYPASS_COMMAND       : HA_Event_Type(ALARM_COMMAND_EVENT,           "bypass"),
-    PanelCondition.CHECK_EVENT_LOG_COMMAND    : HA_Event_Type(ALARM_COMMAND_EVENT,           "eventlog"),
-    PanelCondition.CHECK_SWITCH_COMMAND       : HA_Event_Type(ALARM_COMMAND_EVENT,           "switch")
-}
-# fmt: on
 
 class PlatformManager:
     """Generic Platform Manager."""
@@ -170,7 +116,6 @@ class PlatformManager:
             panelident=self.panel_ident,
             entry=entry,
             logger=self.logger,
-            create_ha_fire_event=self.create_ha_fire_event,
         )
 
     @property
@@ -186,103 +131,6 @@ class PlatformManager:
         v = EmulationMode(self.entry.data.get(CONF_EMULATION_MODE, EmulationMode.POWERLINK))
         return v == EmulationMode.STANDARD
 
-    def create_ha_fire_event(
-        self, event_id: PanelCondition, datadictionary: dict[str, Any]
-    ) -> None:
-        """Fire an HA Event in to HA with the associated data dictionary."""
-        # Check to ensure variables are set correctly
-        if self.hass is not None:
-            # Event ID must be in the list to fire an HA event out
-            if event_id in AlarmPanelEventActionList:
-                name = AlarmPanelEventActionList[event_id].name
-                if name is not None:
-                    event_action = AlarmPanelEventActionList[event_id].action
-                    # Base event dictionary
-                    dd: dict[str, Any] = {
-                        PANEL_ATTRIBUTE_NAME: self.panel_ident,
-                        **(datadictionary.copy() if datadictionary else {}),
-                    }
-                    # Include action if present
-                    if event_action:
-                        dd["action"] = event_action
-                    # Default panel_id
-                    panel_id = f"{Platform.ALARM_CONTROL_PANEL}.{slugify(getAlarmPanelUniqueIdent(self.panel_ident))}"
-                    pe_part: set[int] | int | None = dd.get(PE_PARTITION)
-                    candidates: list[int] | set[int] = (
-                        [pe_part]
-                        if isinstance(pe_part, int)
-                        else pe_part if isinstance(pe_part, set) else []
-                    )
-                    # Add partition is set
-                    partition_index = next(
-                        (p for p in candidates if p in self.panel_entity_name), None
-                    )
-                    if partition_index is not None:
-                        self.logger.logstate_debug(
-                            "Client [fire] pe_part=%s  panel_entity_name=%s",
-                            pe_part,
-                            self.panel_entity_name,
-                        )
-                        panel_id = f"{Platform.ALARM_CONTROL_PANEL}.{slugify(self.panel_entity_name[partition_index])}"
-                        dd[PE_PARTITION] = partition_index + 1
-                    elif isinstance(pe_part, set):
-                        dd.pop(PE_PARTITION, None)
-                    # Add panel_id
-                    dd["panel_id"] = panel_id
-                    self.logger.logstate_info(
-                        "Client (panel %s) [fire] Sending HA Event %s  with data %s",
-                        self.panel_ident,
-                        name,
-                        dd,
-                    )
-                    # Fire the HA Event :)
-                    self.hass.bus.fire(name, dd)
-            else:
-                # Capture invalid event_ids just in case
-                self.logger.logstate_warning(
-                    "Attempt to generate HA event with unknown event_id %s",
-                    event_id,
-                )
-        else:
-            self.logger.logstate_warning(
-                "Attempt to generate HA event when hass is undefined"
-            )
-
-    def generate_event_output(
-        self,
-        event_id: PanelCondition,
-        reason: AlarmCommandStatus,
-        command: str,
-        message: str,
-        partition: set[int] | None = None,
-    ) -> dict:
-        """Generate an HA Bus Event with a Reason Code."""
-        full_message = message + " " + MESSAGE_REASON_DICT[reason]
-        datadict = self.populateSensorDictionary()
-        datadict["command"] = command.title()
-        datadict["reason"] = int(reason)
-        datadict["reason_str"] = reason.name.title()
-        datadict["message"] = full_message
-        if partition is not None:
-            datadict[PE_PARTITION] = partition
-        self.create_ha_fire_event(event_id, datadict)
-        if reason != AlarmCommandStatus.SUCCESS:
-            self.logger.create_ha_notification(
-                AvailableNotifications.COMMAND,
-                full_message,
-            )
-        return datadict
-
-    def set_partition_name(
-        self, partition: int | None = None, panel_entity_name: str | None = None
-    ):
-        """Set the partition naming for the alarm panel entities."""
-        if (
-            panel_entity_name is not None
-            and partition is not None
-            and 0 <= partition <= 2
-        ):
-            self.panel_entity_name[partition] = panel_entity_name
 
     def setup_visonic_entity(
         self, specific_domain: str, data: Any

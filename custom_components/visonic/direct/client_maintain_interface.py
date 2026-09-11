@@ -26,6 +26,7 @@ from ..const import (  # noqa: TID252  # noqa: TID252  # noqa: TID252
     TEXT_LAST_EVENT_NAME,
     TEXT_LAST_EVENT_PARTITION,
     TEXT_LAST_EVENT_TIME,
+    VISONIC_PANEL,
 )
 from ..exceptions import VisonicException  # noqa: TID252
 from ..log_events import logEvents  # noqa: TID252
@@ -349,7 +350,7 @@ class MaintainInterface:
             action,
             data,
         )
-        self.platform_manager.create_ha_fire_event(event_id=action, datadictionary=data)
+        self.logger.create_ha_fire_event(event_id=action, datadictionary=data)
 
     def sensors_to_string_list(self) -> list[str]:
         """Dump sensors to string list."""
@@ -390,7 +391,7 @@ class MaintainInterface:
             elif isinstance(data[PE_PARTITION], set | list):
                 data[PE_PARTITION] = [p+1 for p in data[PE_PARTITION]]
 
-        self.platform_manager.create_ha_fire_event(
+        self.logger.create_ha_fire_event(
             event_id=event_id, datadictionary=data if data is not None else {}
         )
 
@@ -446,11 +447,11 @@ class MaintainInterface:
         isa, _, _ = self.is_any_siren_active()
         if event_id in standard_notifications:
             value = standard_notifications[event_id]
-            self.logger.create_ha_notification(value[0], value[1])
+            self.logger.create_ha_notification(value[0], f"{VISONIC_PANEL} {self.panel_ident} - {value[1]}")
         elif event_id == PanelCondition.PANEL_UPDATE and isa:
             self.logger.create_ha_notification(
                 AvailableNotifications.SIREN,
-                "Siren is Sounding, Alarm has been Activated",
+                f"{VISONIC_PANEL} {self.panel_ident} - Siren is Sounding, Alarm has been Activated",
             )
         elif event_id == PanelCondition.WATCHDOG_TIMEOUT_GIVINGUP:
             if (
@@ -459,12 +460,12 @@ class MaintainInterface:
             ):
                 self.logger.create_ha_notification(
                     AvailableNotifications.CONNECTION,
-                    "Communication Timeout - Watchdog Timeout too many times within 24 hours. Dropping out of Powerlink",
+                    f"{VISONIC_PANEL} {self.panel_ident} - Communication Timeout, Watchdog Timeout too many times within 24 hours. Dropping out of Powerlink",
                 )
             else:
                 self.logger.create_ha_notification(
                     AvailableNotifications.CONNECTION,
-                    "Communication Timeout - Watchdog Timeout too many times within 24 hours.",
+                    f"{VISONIC_PANEL} {self.panel_ident} - Communication Timeout, Watchdog Timeout too many times within 24 hours.",
                 )
 
     def setupAlarmPanel(self, piu: set[int] | None):

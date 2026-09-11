@@ -9,9 +9,10 @@ from homeassistant.components.alarm_control_panel.const import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, HomeAssistantError, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import slugify
 
 from .alarm_base_logic import AlarmBaseLogic
 from .const import (
@@ -21,11 +22,18 @@ from .const import (
     DOMAIN,
     TEXT_CLIENT_VERSION,
     TEXT_DISCONNECTION_COUNT,
+    TRANSLATE_EXCEPTION_DISARM_CODE_NOT_ENTERED,
 )
 from .utils import to_bool
 from .visonic_data_types import VisonicCoordinatorData, VisonicPanelData
 from .visonic_entity_types import AlarmPanelData
-from .visonic_types import AlarmPanelCommand
+from .visonic_types import (
+    AlarmCommandStatus,
+    AlarmPanelCommand,
+    AvailableNotifications,
+    CommandResult,
+    PanelCondition,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,22 +108,31 @@ class VisonicAlarm(
             "[alarm control panel] partition %s, %s %s",
             self._partition_set,
             message,
-            self.entity_id,
+            slugify(self._panel_ident),
         )
 
     async def async_alarm_disarm(self, code: str | None = None):
         """Send disarm command."""
         #self.log_state(f"disarm, {code=}")
-        await self.coordinator.send_command(
-            self._name, AlarmPanelCommand.DISARM, code, self._partition_set
+        if self.code_format is not None and code is None:
+            # Code required but user has selected the green tick without entering a string
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key=TRANSLATE_EXCEPTION_DISARM_CODE_NOT_ENTERED,
+                translation_placeholders={"entity": self.name},
+            )
+        cr = await self.coordinator.send_command(
+            slugify(self._panel_ident), AlarmPanelCommand.DISARM, code, self._partition_set
         )
+        self.coordinator.process_command_result(cr)
 
     async def async_alarm_arm_night(self, code: str | None = None):
         """Send arm night command (Same as arm home)."""
         self.log_state("arm night")
-        await self.coordinator.send_command(
-            self._name, AlarmPanelCommand.ARM_HOME_INSTANT, code, self._partition_set
+        cr = await self.coordinator.send_command(
+            slugify(self._panel_ident), AlarmPanelCommand.ARM_HOME_INSTANT, code, self._partition_set
         )
+        self.coordinator.process_command_result(cr)
 
     async def async_alarm_arm_home(self, code: str | None = None):
         """Send arm home command."""
@@ -125,9 +142,10 @@ class VisonicAlarm(
             else AlarmPanelCommand.ARM_HOME
         )
         #self.log_state(f"{command.name.lower()},{code=}")
-        await self.coordinator.send_command(
-            self._name, command, code, self._partition_set
+        cr = await self.coordinator.send_command(
+            slugify(self._panel_ident), command, code, self._partition_set
         )
+        self.coordinator.process_command_result(cr)
 
     async def async_alarm_arm_away(self, code: str | None = None):
         """Send arm away command."""
@@ -137,26 +155,39 @@ class VisonicAlarm(
             else AlarmPanelCommand.ARM_AWAY
         )
         self.log_state(command.name.lower())
-        await self.coordinator.send_command(
-            self._name, command, code, self._partition_set
+        cr = await self.coordinator.send_command(
+            slugify(self._panel_ident), command, code, self._partition_set
         )
+        self.coordinator.process_command_result(cr)
 
     async def async_alarm_trigger(self, code: str | None = None):
         """Send alarm trigger command."""
         self.log_state("trigger")
         data: VisonicCoordinatorData = self.coordinator.data
         if data.ispowermaster:
-            await self.coordinator.send_command(
-                self._name, AlarmPanelCommand.TRIGGER, code, self._partition_set
+            cr = await self.coordinator.send_command(
+                slugify(self._panel_ident), AlarmPanelCommand.TRIGGER, code, self._partition_set
             )
+            self.coordinator.process_command_result(cr)
+            return
+        cr = CommandResult(
+            status=AlarmCommandStatus.FAIL_PANEL_CONFIG_PREVENTED,
+            notify=AvailableNotifications.COMMAND,
+            message="Attempt to trigger alarm from a PowerMax panel",
+            panel=PanelCondition.COMMAND_REJECTED,
+        )
+        self.coordinator.process_command_result(cr)
 
     async def async_alarm_arm_vacation(self, code: str | None = None):
         """Send arm vacation command."""
         _LOGGER.debug("Alarm Panel Vacation Mode Not Yet Implemented")
 
     async def async_alarm_arm_custom_bypass(self, code: str | None = None) -> None:
-        """Bypass Panel."""
-        _LOGGER.debug("Alarm Panel Custom Bypass Not Yet Implemented")
+        """Arm Away whilst Bypassing Open sensors."""
+        cr = await self.coordinator.send_command(
+            slugify(self._panel_ident), AlarmPanelCommand.ARM_AWAY_BYPASS, code, self._partition_set
+        )
+        self.coordinator.process_command_result(cr)
 
     # Implement the abstract class
     #   Update local variables accordingly, self.async_write_ha_state() is called outside
@@ -181,6 +212,7 @@ class VisonicAlarm(
 
             #sf = AlarmControlPanelEntityFeature(0)
             sf = AlarmControlPanelEntityFeature.ARM_AWAY        # add this unconditionally
+            #sf |= AlarmControlPanelEntityFeature.ARM_CUSTOM_BYPASS if self.isenablesensorbypass else 0
             sf |= AlarmControlPanelEntityFeature.ARM_HOME if self.isarmhome else 0
             sf |= AlarmControlPanelEntityFeature.ARM_NIGHT if self.isarmnight else 0
             sf |= AlarmControlPanelEntityFeature.TRIGGER if self.panel_state_data.is_power_master else 0
@@ -192,7 +224,7 @@ class VisonicAlarm(
             ):
                 self._attr_changed_by = self.panel_state_data.last_event_name
 
-            #_LOGGER.info(f"[alarm control panel update]   attr name {self._attr_name}  code format {self._attr_code_format}  code arm reqd {self._attr_code_arm_required}")  # noqa: G004
+            #_LOGGER.info(f"[alarm control panel update]   attr name {self._attr_name}  code format {self._attr_code_format}  code arm reqd {self._attr_code_arm_required}")
 
         else:
             self._attr_supported_features = AlarmControlPanelEntityFeature(0)

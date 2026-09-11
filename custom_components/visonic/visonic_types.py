@@ -281,6 +281,7 @@ class PanelCondition(VisonicIntEnum):
     CONNECTION = 104
     PANEL_LOG_COMPLETE = 105
     PANEL_LOG_ENTRY = 106
+    NO_PANEL_CONDITION_DEFINED = 1000
 
 class AvailableNotifications(VisonicStrEnum):
     """Available Notifications for Home Assistant front end."""
@@ -305,12 +306,15 @@ class CommandResult:
     status: AlarmCommandStatus
     notify: AvailableNotifications
     message: str | None = None
+    # Setting the panel condition creates an event to be fired in HA
+    panel: PanelCondition = PanelCondition.NO_PANEL_CONDITION_DEFINED
     # These 2 are only used if status is SUCCESS
     partitions: set[int] | None = None
     did_bypass: bool = False
+    eid: str | None = None
 
 # Map the alarm panel states across to the Home Assistant states
-PANEL_TO_HA_STATUS_MAP: dict[AlarmPanelStatus, AlarmControlPanelState] = {
+PANEL_TO_HA_STATUS_MAP: dict[AlarmPanelStatus, AlarmControlPanelState | None] = {
     AlarmPanelStatus.UNKNOWN: None,
     AlarmPanelStatus.DISARMED: AlarmControlPanelState.DISARMED,
     AlarmPanelStatus.ARMING_HOME: AlarmControlPanelState.ARMING,
@@ -327,4 +331,3 @@ PANEL_TO_HA_STATUS_MAP: dict[AlarmPanelStatus, AlarmControlPanelState] = {
     AlarmPanelStatus.DOWNLOADING: None,
     AlarmPanelStatus.INSTALLER: None,
 }
-

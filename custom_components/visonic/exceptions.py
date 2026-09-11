@@ -38,3 +38,6 @@ class VisonicException(HomeAssistantError):
 
 class VisonicAuthException(VisonicException):
     """Authorisation Exception."""
+
+class VisonicUserCodeException(VisonicException):
+    """Authorisation Exception."""
