@@ -9,7 +9,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/davesmeghead/visonic/issues",
   "loggers": ["visonic"],
-  "requirements": ["Pillow", "serialx"],
+  "requirements": ["serialx"],
   "single_config_entry": false,
   "version": "0.12.6.0",
   "zeroconf": [
