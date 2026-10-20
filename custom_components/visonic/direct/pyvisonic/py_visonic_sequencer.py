@@ -630,13 +630,16 @@ class Sequencer(Despatcher):
         def do_eeprom_started_download(lastrecv) -> SequencerType | None:
             # We got a first response, now we can Download the panel EPROM settings
             if (s := processPanelErrorMessages()) != PanelErrorStates.AllGood:
-                if s in [PanelErrorStates.AccessDeniedDownload, PanelErrorStates.DownloadRetryReceived, PanelErrorStates.TimeoutReceived]:
+                if s == PanelErrorStates.AccessDeniedStop and self.PowerMaster is False:
+                    log.debug("[_sequencer] Ignoring STOP denial during PowerMax EPROM download")
+                elif s in [PanelErrorStates.AccessDeniedDownload, PanelErrorStates.DownloadRetryReceived, PanelErrorStates.TimeoutReceived]:
                     self.pmExpectedResponse = set()
                     return SequencerType.EPROMInitialiseDownload
-                if s == PanelErrorStates.DespatcherException:
+                elif s == PanelErrorStates.DespatcherException:
                     # start again, restart the despatcher task
                     return SequencerType.Reset
-                return SequencerType.InitialisePanel
+                else:
+                    return SequencerType.InitialisePanel
             interval = get_utc_time() - self._last_send_download_eprom
             log.debug(f"[_sequencer] interval={interval}  td={DOWNLOAD_RETRY_DELAY}   self._last_send_download_eprom(UTC)={self._last_send_download_eprom}    timenow(UTC)={get_utc_time()}")
 
@@ -649,13 +652,16 @@ class Sequencer(Despatcher):
         def do_eeprom_doing_download() -> SequencerType | None:
             if (s := processPanelErrorMessages()) != PanelErrorStates.AllGood:
                 # Handle error messages from the panel
-                if s in [PanelErrorStates.AccessDeniedDownload, PanelErrorStates.DownloadRetryReceived, PanelErrorStates.TimeoutReceived]:
+                if s == PanelErrorStates.AccessDeniedStop and self.PowerMaster is False:
+                    log.debug("[_sequencer] Ignoring STOP denial during PowerMax EPROM download")
+                elif s in [PanelErrorStates.AccessDeniedDownload, PanelErrorStates.DownloadRetryReceived, PanelErrorStates.TimeoutReceived]:
                     self.pmExpectedResponse = set()
                     return SequencerType.EPROMInitialiseDownload
-                if s == PanelErrorStates.DespatcherException:
+                elif s == PanelErrorStates.DespatcherException:
                     # start again, restart the despatcher task
                     return SequencerType.Reset
-                return SequencerType.InitialisePanel
+                else:
+                    return SequencerType.InitialisePanel
             if self.pmDownloadComplete:
                 # Download Complete
                 return SequencerType.EPROMDownloadComplete
