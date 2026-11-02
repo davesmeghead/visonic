@@ -5,8 +5,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-import voluptuous as vol
-from voluptuous.schema_builder import UNDEFINED as VOL_UNDEFINED
+import probatio as pro
+from probatio import UNDEFINED as PROBATIO_UNDEFINED
 
 from homeassistant.const import (
     CONF_CODE,
@@ -127,11 +127,11 @@ FormItems: dict[str, list[str]] = {
 
 # fmt: on
 
-Validator = Callable[[Any], Any] | type | vol.Schema | selector.SelectSelector | selector.NumberSelector
+Validator = Callable[[Any], Any] | type | pro.Schema | selector.SelectSelector | selector.NumberSelector
 
 class Marker(Protocol):
-    """Marker for vol creation."""
-    def __call__(self, key: str, *, default: Any) -> vol.Required | vol.Optional:
+    """Marker for pro creation."""
+    def __call__(self, key: str, *, default: Any) -> pro.Required | pro.Optional:
         """Callable prototype."""
         ...
 
@@ -145,15 +145,15 @@ class ConfigItem:
 # ---- Helper functions ----
 def req(key: str, *, default: Any):
     """Required."""
-    if default is VOL_UNDEFINED:
-        return vol.Required(key)
-    return vol.Required(key, default=default)
+    if default is PROBATIO_UNDEFINED:
+        return pro.Required(key)
+    return pro.Required(key, default=default)
 
 def opt(key: str, *, default: Any):
     """Optional."""
-    if default is VOL_UNDEFINED:
-        return vol.Optional(key)
-    return vol.Optional(key, default=default)
+    if default is PROBATIO_UNDEFINED:
+        return pro.Optional(key)
+    return pro.Optional(key, default=default)
 
 def build_config_items() -> dict[str, ConfigItem]:
     """Build the config_item dictionary."""
@@ -174,7 +174,7 @@ def build_config_items() -> dict[str, ConfigItem]:
     return {
         CONF_TYPE: ConfigItem(
             marker=req,
-            validator=vol.In(
+            validator=pro.In(
                     [
                         DeviceType.ETHERNET.title(),
                         DeviceType.SERIAL.title(),
@@ -192,7 +192,7 @@ def build_config_items() -> dict[str, ConfigItem]:
         CONF_DEVICE: ConfigItem(
             marker=req,
             validator=SerialPortSelector(),
-            default=VOL_UNDEFINED,
+            default=PROBATIO_UNDEFINED,
         ),
         CONF_HOST: ConfigItem(
             marker=req,
@@ -209,7 +209,7 @@ def build_config_items() -> dict[str, ConfigItem]:
             validator=EntitySelector(
                 EntitySelectorConfig(domain=["select"], multiple=False)
             ),
-            default=VOL_UNDEFINED,
+            default=PROBATIO_UNDEFINED,
         ),
         CONF_EXTERNAL_URL: ConfigItem(
             marker=req,
@@ -258,13 +258,13 @@ def build_config_items() -> dict[str, ConfigItem]:
         ),
         CONF_EMULATION_MODE: ConfigItem(
             marker=opt,
-            validator=vol.In(EMULATION_MODE_OPTIONS),
+            validator=pro.In(EMULATION_MODE_OPTIONS),
             default=EmulationMode.POWERLINK.value,
         ),
         CONF_DOWNLOAD_CODE: ConfigItem(
             marker=opt,
             validator=str,
-            default=VOL_UNDEFINED,
+            default=PROBATIO_UNDEFINED,
         ),
         CONF_ENABLE_KEYPAD_ALARM_ENTITY: ConfigItem(
             marker=opt,
@@ -469,14 +469,14 @@ class VisonicSchema:
         self._options = {
             key: deepcopy(config_item.default)
             for key, config_item in self._config_items.items()
-            if config_item.default is not VOL_UNDEFINED
+            if config_item.default is not PROBATIO_UNDEFINED
         }
 
     def _merge_options(self, overrides: dict[str, Any] | None) -> dict[str, Any]:
         base = deepcopy(self._options)
         return {**base, **(overrides or {})}
 
-    def _build_schema(self, keys: list[str], overrides: dict[str, Any] | None = None) -> vol.Schema:
+    def _build_schema(self, keys: list[str], overrides: dict[str, Any] | None = None) -> pro.Schema:
         """Build a voluptuous schema from config item definitions."""
         merged = self._merge_options(overrides)
         schema: dict[Any, Any] = {}
@@ -489,7 +489,7 @@ class VisonicSchema:
             marker = config_item.marker(key, default=default)
             schema[marker] = config_item.validator
 
-        return vol.Schema(schema)
+        return pro.Schema(schema)
 
     def set_base_options(self, options: dict[str, Any] | None):
         """Set schema defaults."""
@@ -504,7 +504,7 @@ class VisonicSchema:
         self,
         item: str,
         overrides: dict[str, Any] | None = None,
-    ) -> vol.Schema:
+    ) -> pro.Schema:
         """Create a schema for the given menu item."""
         if item not in FormItems:
             raise ValueError(f"Unknown menu item: {item}")

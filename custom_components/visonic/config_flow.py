@@ -8,10 +8,9 @@ import traceback
 from typing import Any
 import uuid
 
-import voluptuous as vol
+import probatio as pro
 
 from homeassistant.config_entries import (
-    CONN_CLASS_LOCAL_POLL,
     HANDLERS,
     SOURCE_REAUTH,
     SOURCE_RECONFIGURE,
@@ -163,22 +162,22 @@ class VisonicHandler:
 
         entity = cv.entity_id(value)
         if not entity.startswith("select."):
-            raise vol.Invalid("Entity must be from the select domain")
+            raise pro.Invalid("Entity must be from the select domain")
 
         # Get current entity
         state_obj = hass.states.get(entity)
         if state_obj is None:
-            raise vol.Invalid(f"Entity {entity} not found")
+            raise pro.Invalid(f"Entity {entity} not found")
 
         # Get available options
         options = state_obj.attributes.get("options", [])
         if not options:
-            raise vol.Invalid("No options found for selected entity")
+            raise pro.Invalid("No options found for selected entity")
 
         # Check if the available options are valid
         required = {"9600", "38400"}
         if not required.issubset(set(options)):
-            raise vol.Invalid(f"Invalid options for {entity}, options: {options}")
+            raise pro.Invalid(f"Invalid options for {entity}, options: {options}")
         return entity
 
     def validate_input(self, hass: HomeAssistant, data: dict[str, Any], dt: DeviceType | None = None) -> str | None:  # noqa: C901
@@ -220,7 +219,7 @@ class VisonicHandler:
             c = data.get(CONF_DOWNLOAD_CODE)
             if len(c) != 0 and len(c) != 4:
                 return TRANSLATE_ERROR_DL_CODE_INVALID
-            if len(c) == 4 and not c.isdigit():
+            if len(c) == 4 and not all(char in "0123456789abcdefABCDEF" for char in c):
                 return TRANSLATE_ERROR_DL_CODE_INVALID
 
         if CONF_USER_CODE_SLOT in data:
@@ -251,7 +250,7 @@ class VisonicHandler:
                 select_entity = data.get(CONF_ESPHOME_ENTITY_SELECT, "")
                 # Use as validator
                 self.baud_select_entity_or_empty(hass, select_entity)
-            except vol.Invalid:
+            except pro.Invalid:
                 return TRANSLATE_ERROR_SELECT_INVALID
 
         return None
@@ -365,7 +364,6 @@ class VisonicConfigFlow(VisonicHandler, ConfigFlow, domain=DOMAIN):
     # All functions here need to save user data in to the "data" config_entry and not the "options"
 
     VERSION = VISONIC_CONFIG_VERSION
-    CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     @staticmethod
     @callback
@@ -893,7 +891,6 @@ class VisonicOptionsFlowHandler(VisonicHandler, OptionsFlow):
     """Handle Visonic options."""
 
     VERSION = VISONIC_CONFIG_VERSION
-    CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""

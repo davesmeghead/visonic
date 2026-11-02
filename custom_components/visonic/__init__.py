@@ -6,7 +6,7 @@ import logging
 from types import MappingProxyType
 from typing import Any
 
-from voluptuous.schema_builder import UNDEFINED as VOL_UNDEFINED
+from probatio import UNDEFINED as PROBATIO_UNDEFINED
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
 from homeassistant.const import (
@@ -423,6 +423,11 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
         changed = True
 
     if version in [3, 4, 5]:
+        if CONF_DEVICE not in data and CONF_PATH in data:
+            data[CONF_DEVICE] = data.pop(CONF_PATH)
+        if data.get(CONF_TYPE) == "usb":
+            data[CONF_TYPE] = "serial"
+
         if CONF_PANEL_NUMBER not in options and CONF_PANEL_NUMBER not in data:
             # We have to assume that multiple panels will be updated at the same time, otherwise it gets complicated
             # Create a panel number that is unique
@@ -460,7 +465,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
 
         for key in key_data_list:
             default = config_items[key].default
-            if default in [TYPE_UNDEFINED, VOL_UNDEFINED]:
+            if default in [TYPE_UNDEFINED, PROBATIO_UNDEFINED]:
                 _LOGGER.info("Missing config data key: %s", key)
                 data_out[key] = None
             else:
@@ -468,7 +473,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
 
         for key in key_option_list:
             default = config_items[key].default
-            if default in [TYPE_UNDEFINED, VOL_UNDEFINED]:
+            if default in [TYPE_UNDEFINED, PROBATIO_UNDEFINED]:
                 _LOGGER.info("Missing config options key: %s", key)
                 options_out[key] = None
             else:
@@ -503,6 +508,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
                 options_out[key] = value
             elif key not in exclude_list:
                 _LOGGER.warning("User options setting %s not in either config list", key)
+
+        if "force_numeric_keypad" in options:
+            options_out["force_numeric_keypad"] = options["force_numeric_keypad"]
 
         # Baud has been removed from the user config, but we need to copy the old value across
         data_out[CONF_DEVICE_BAUD] = data.get(CONF_DEVICE_BAUD, DEFAULT_DEVICE_BAUD)
