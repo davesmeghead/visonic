@@ -8,10 +8,11 @@
   "integration_type": "hub",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/davesmeghead/visonic/issues",
-  "loggers": ["visonic"],
-  "requirements": ["serialx"],
+  "loggers": ["pyvisonic", "pyvisonicalarm"],
+  "quality_scale": "bronze",
+  "requirements": ["pyvisonic==4.1.3", "pyvisonicalarm==0.4.3", "serialx"],
   "single_config_entry": false,
-  "version": "0.13.0.45",
+  "version": "0.13.1.0",
   "zeroconf": [
     {
        "type": "_visonic._tcp.local.",

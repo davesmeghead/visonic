@@ -49,6 +49,7 @@ from .const import (
     TEXT_LAST_EVENT_NAME,
     VISONIC_PANEL,
 )
+from .exceptions import VisonicException
 from .image_manager import ImageManager
 from .log_events import logEvents
 from .platform_manager import PlatformManager
@@ -398,7 +399,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             return
         self.image_manager.mark_image_request(devid, duration)
         cr.status = await self.send_command_sensor_image(devid, eid, duration)
-        cr.eid=self.name
+        cr.eid = eid
         self.async_update_listeners()
         self.process_command_result(cr)
         return
@@ -455,7 +456,9 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         #_armcode = AlarmPanelStatus.UNKNOWN
         #_mystate = AlarmControlPanelState.DISARMED
 
-        if partition == PARTITION_ID_WHEN_BASE and vcd.panelstate.partition is None:
+        if partition == PARTITION_ID_WHEN_BASE and (
+            vcd.panelstate is None or vcd.panelstate.partition is None
+        ):
             # Check to make sure we have partitions, if not then set partition to None
             partition = None
 
@@ -463,7 +466,9 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             # A panel with no partitions and the siren data is for a single panel
             isa, dev, alarm = vcd.partition_siren.get(0, (False, 0, TriggerAlarmType.NONE))
             _armcode = vcd.partition_armcode.get(0, AlarmPanelStatus.UNKNOWN)
-            stat: dict[str, Any] = deepcopy(vcd.panelstate.as_dict())
+            stat: dict[str, Any] = deepcopy(
+                vcd.panelstate.as_dict() if vcd.panelstate is not None else {}
+            )
             stat |= vcd.partition_dict.get(0, {})
             stat.pop("partition", None)
 
@@ -480,7 +485,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             stat: dict[str, Any] = deepcopy(vcd.panelstate.as_dict())
             if vcd.panelstate.partition is not None:
                 # Update the partition numbers, list all partitions
-                stat["partition"] = print_partition(vcd.panelstate.partition)
+                stat["partition"] = print_partition(vcd.panelstate.partition, 1)
 
         else:
             # A panel with partitions
@@ -491,7 +496,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             )
             _armcode = vcd.partition_armcode.get(partition, AlarmPanelStatus.UNKNOWN)
             # Update the partition number, only identify the current partition
-            stat["partition"] = print_partition(partition)
+            stat["partition"] = print_partition(partition, 1)
 
         if isa:
             _mystate = AlarmControlPanelState.TRIGGERED
@@ -521,7 +526,7 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
             if v is None:
                 _dsa[k] = "none"
 
-        last_event: str | None = stat.get(TEXT_LAST_EVENT_NAME)
+        last_event: str | None = _dsa.get(TEXT_LAST_EVENT_NAME)
         _last_event_name: str | None = (
             last_event if last_event and len(last_event) > 2 else None
         )
@@ -549,8 +554,8 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
                 )
             for s in sl:
                 self._event_logger.logstate_debug(f"Attempting to bypass sensor: {s}")
-                status: CommandResult = await self.send_bypass(s, True, None)
-                if status != AlarmCommandStatus.SUCCESS:
+                status = await self.send_bypass(None, s, True, None)
+                if status.status != AlarmCommandStatus.SUCCESS:
                     return CommandResult(
                         status.status,
                         AvailableNotifications.BYPASS,
@@ -664,6 +669,8 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         eid: str | list[str] = call.data.get(ATTR_ENTITY_ID, "")
 
         if isinstance(eid, list):  # sometimes it is a list with 1 entry
+            if not eid:
+                return fail("but entity not defined")
             eid = eid[0]
 
         if len(eid) > 0:
@@ -909,6 +916,9 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         #     and i'd rather it was in one place i.e. here
         from .alarm_control_panel import VisonicAlarm  # noqa: PLC0415
         from .sensor import VisonicAlarmSensor  # noqa: PLC0415
+
+        if not 0 <= ref < len(self.alarm_entity):
+            raise VisonicException("Alarm panel references are in error", code=300)
 
         entities: list[Entity] = []
 

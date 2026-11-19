@@ -41,8 +41,6 @@ DEVICE_ATTRIBUTE_NAME: Final = "visonic_device"
 # Default connection details (connection can be one of Ethernet, Serial, RS232)
 DEFAULT_DEVICE_HOST: Final = "127.0.0.1"
 DEFAULT_DEVICE_PORT: Final = 30000
-DEFAULT_DEVICE_SERV_HOST: Final = "0.0.0.0"
-DEFAULT_DEVICE_SERV_PORT: Final = 5001
 DEFAULT_DEVICE_SERIAL: Final = "/dev/ttyUSB0"
 DEFAULT_DEVICE_BAUD: Final = 9600
 DEFAULT_PANEL_USER_CODE: Final = "1111"
@@ -63,19 +61,18 @@ TEXT_LAST_EVENT_NAME: Final = "lasteventname"
 TEXT_LAST_EVENT_TIME: Final = "lasteventtime"
 TEXT_LAST_EVENT_PARTITION: Final = "lasteventpartition"
 TEXT_LAST_EVENT_ACTION: Final = "lasteventaction"
+TEXT_LAST_ALARM_TRIGGER_SOURCES: Final = "last_alarm_trigger_sources"
 
 TEXT_XML_LOG_FILE_TEMPLATE: Final = "visonic_template.xml"
 
 # These are the translation strings for the various abort and error indications to the user for the configuration
 TRANSLATE_ABORT_ALREADY_CONFIGURED: Final = "already_configured"
 TRANSLATE_ABORT_INVALID_DEVICE_TYPE: Final = "device_error"
-TRANSLATE_ABORT_CANNOT_CONFIG_DISCOVERED: Final = "cannot_configure_tcp_discovered"
 TRANSLATE_ABORT_EMULATION_MODE: Final = "emulation_mode_error"
 TRANSLATE_ABORT_UNKNOWN: Final = "unknown"
-TRANSLATE_ABORT_CANNOT_EDIT_SERVER: Final = "cannot_edit_tcp_server"
 TRANSLATE_ERROR_SETTINGS_MISSING: Final = "settings_missing"
 TRANSLATE_ERROR_EMAIL_INVALID: Final = "email_invalid"
-TRANSLATE_ERROR_ETHERNET_SERVER_OR_SERIAL: Final = "ethernet_server_or_serial"
+TRANSLATE_ERROR_CONNECTION_TYPE_INVALID: Final = "connection_type_invalid"
 TRANSLATE_ERROR_CONNECTION_TIMEOUT: Final = "cannot_connect_timeout"
 TRANSLATE_ERROR_CONNECTION_REFUSED: Final = "cannot_connect_refused"
 TRANSLATE_ERROR_SETTINGS_INVALID: Final = "settings_invalid"
@@ -110,7 +107,6 @@ PARTITION_ID_WHEN_BASE: Final = -1
 #   These are set by the user (with a few more from HA const.py)
 # settings that are used for creation
 CONF_PANEL_NUMBER: Final = "panel_number"
-CONF_SERVER_NUMBER: Final = "server_number"
 CONF_ESPHOME_ENTITY_SELECT: Final = "esphome_entity_select"
 CONF_EXCLUDE_SENSOR: Final = "exclude_sensor"
 CONF_EXCLUDE_SWITCH: Final = "exclude_switch"
@@ -152,8 +148,6 @@ CONF_IMAGE_SINGLE_FRAME: Final = "image_single_frame"
 CONF_LOG_DONE: Final = "panellog_complete_event"
 CONF_LOG_REVERSE: Final = "panellog_reverse_order"
 CONF_LOG_MAX_ENTRIES: Final = "panellog_max_entries"
-CONF_SERVER_HOST: Final = "server_host"
-CONF_SERVER_PORT: Final = "server_port"
 CONF_PANEL_SERIAL: Final = "panel_serial"
 CONF_CLOUD_APP_ID: Final = "cloud_app_id"
 CONF_CLOUD_USER_TOKEN: Final = "cloud_user_token"
@@ -190,8 +184,6 @@ PE_EVENT: Final = "event"
 PE_NAME: Final = "name"
 
 PANELS: Final = "PANELS"
-SERVERS: Final = "SERVERS"
-DISCOVERIES: Final = "DISCOVERIES"
 
 # The main configuration forms
 #   These need to be in the language translation file
@@ -200,8 +192,6 @@ FORM_DEVICE_NO_PANEL: Final = "device_no_panel"
 FORM_ETHERNET: Final = "form_ethernet"
 FORM_SERIAL: Final = "form_serial"
 FORM_CLOUD: Final = "form_cloud"
-FORM_TCP_SERVER: Final = "form_tcp_server"
-FORM_TCP_DISCOVERED: Final = "form_tcp_discovered"
 FORM_POWERLINK: Final = "form_powerlink"
 FORM_PARAM10: Final = "parameters10"
 FORM_PARAM11: Final = "parameters11"

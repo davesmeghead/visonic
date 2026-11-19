@@ -7,12 +7,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_DEVICE, CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_DOWNLOAD_CODE, CONF_SERVER_HOST, CONF_SERVER_PORT
+from .const import CONF_DOWNLOAD_CODE
 from .coordinator_base import VisonicCoordinator
 from .exceptions import VisonicException
 from .visonic_data_types import VisonicPanelData
 
-REDACT_ME = (CONF_DOWNLOAD_CODE, CONF_SERVER_HOST, CONF_SERVER_PORT,
+REDACT_ME = (CONF_DOWNLOAD_CODE,
              CONF_HOST, CONF_PORT, CONF_DEVICE,
              )
 

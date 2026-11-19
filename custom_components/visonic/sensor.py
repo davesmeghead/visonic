@@ -63,7 +63,8 @@ async def async_setup_entry(
                                 alarm=False,
                                 ref=0,
                                 piu=item.partitions,
-                                identifier=item.identifier
+                                identifier=item.identifier,
+                                show_keypad=False,
                             )
                             if isinstance(e, VisonicAlarmSensor)
                         )
@@ -82,13 +83,18 @@ class VisonicAlarmSensor(AlarmBaseLogic, SensorEntity):
     """A Sensor that mimics an Alarm Panel for Minimal operation."""
     def __init__(self, entry: ConfigEntry, partition: int | None, identifier: str):
         """Initialise and pass on the mro."""
-        super().__init__(entry=entry, partition=partition, identifier=identifier)
+        super().__init__(
+            entry=entry,
+            partition=partition,
+            identifier=identifier,
+            show_keypad=False,
+        )
 
     # Implement the abstract class
     def update_local(self, entry: ConfigEntry):
         """Update the sensor's state from coordinator data."""
         self._attr_available = self.panel_state_data.connected #  and self.panel_state_data.panel_state not in [AlarmPanelStatus.UNKNOWN, AlarmPanelStatus.USER_TEST, AlarmPanelStatus.DOWNLOADING]
-        self._attr_state = self.panel_state_data.alarm_state
+        self._attr_native_value = self.panel_state_data.alarm_state
         if self.panel_state_data.connected:
             self._attr_extra_state_attributes = self.panel_state_data.attributes
             self._attr_changed_by = self.panel_state_data.last_event_name

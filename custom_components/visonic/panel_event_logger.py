@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader, TemplateError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.util import datetime
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_LOG_CSV_FN,
@@ -150,7 +151,9 @@ class PanelEventLogger:
 
         # Accumulate template and CSV data
         dt = dateandtime
-        if not isinstance(dateandtime, datetime):
+        if dateandtime is None:
+            dt = dt_util.now()
+        elif not isinstance(dateandtime, datetime):
             dt: datetime = datetime.fromtimestamp(dateandtime)
         self.xmldata.append(
             {

@@ -441,7 +441,7 @@ def sensor_full_attributes(
         attr[ATTR_BATTERY_LEVEL] = 0 if sensor.low_battery else 100
 
     if len(sensor.partition) > 0:
-        attr["partition"] = print_partition(sensor.partition)
+        attr["partition"] = print_partition(sensor.partition, 1)
 
     attr["device_name"] = create_sensor_label(sensor.id)
 

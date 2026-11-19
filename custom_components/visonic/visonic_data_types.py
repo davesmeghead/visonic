@@ -1,6 +1,5 @@
 """Global Visonic Data Types."""
 
-import asyncio
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, fields
 from datetime import date, datetime
@@ -15,10 +14,8 @@ from homeassistant.util.hass_dict import HassEntryKey
 
 from .const import (
     CONF_PANEL_NUMBER,
-    CONF_SERVER_NUMBER,
     DOMAIN,
     PANELS,
-    SERVERS,
     TRANSLATE_EXCEPTION_NO_UNIQUE_NUMBER_IN_CONFIG,
     TRANSLATE_EXCEPTION_NUMBER_NOT_UNIQUE,
 )
@@ -27,7 +24,6 @@ if TYPE_CHECKING:
     # Imports used purely to define a type for type checking:
     #    This ensures no cyclic imports
     from .coordinator_base import VisonicCoordinator
-    from .server import ServerProtocol, TCPServerConnection
     from .visonic_entity_types import DeviceState, PanelState, SensorState, SwitchState
 
 ###################################################################################################
@@ -42,33 +38,11 @@ class VisonicPanelData:
     # panel identifier
     panel_id: int
 
-@dataclass
-class VisonicServerData:
-    """The class that is saved as Home Assistant runtime data (for servers)."""
-    server: TCPServerConnection
-    # server identifier
-    server_id: int
-    lock: asyncio.Lock
-
-@dataclass
-class VisonicDiscoveryData:
-    """The class that is saved as Home Assistant runtime data (discoveries)."""
-    # panel identifier
-    panel_id: int
-    account: str
-    panel: str
-    protocol: ServerProtocol
-    transport: asyncio.Transport
-
 # This class is the data that is saved in hass.data[VisonicEntryKey]
 #    PANELS:       These are the various client entries in the configuration
-#    SERVERS:      These are the various tcp server entries in the configuration
-#    DISCOVERIES:  These are the discoveries made by the tcp server
 class VisonicDomainData(TypedDict):
     """Visonic domain data."""
     PANELS: dict[str, VisonicPanelData]         # Panels
-    SERVERS: dict[str, VisonicServerData]        # TCP Servers
-    DISCOVERIES: dict[str, VisonicDiscoveryData] # TCP Discoveries from TCP Servers
 
 # Create the types for the Configuration Parameter Entry
 VisonicEntryKey: HassEntryKey[VisonicDomainData] = HassEntryKey(DOMAIN)
@@ -78,10 +52,6 @@ def get_panels(data: VisonicDomainData) -> list[int]:
     """Return a list of known Panels."""
     return [entry.panel_id for entry in data[PANELS].values()]
 
-def get_servers(data: VisonicDomainData) -> list[int]:
-    """Return a list of known Servers."""
-    return [entry.server_id for entry in data[SERVERS].values()]
-
 def get_panel_by_id(hass: HomeAssistant, panel_id: int) -> VisonicPanelData | None:
     """Find VCD by panel id."""
     data = hass.data[VisonicEntryKey]
@@ -90,15 +60,6 @@ def get_panel_by_id(hass: HomeAssistant, panel_id: int) -> VisonicPanelData | No
         if panel.panel_id == panel_id:
             return panel
     return None
-
-#def get_server_by_id(hass: HomeAssistant, server_id: int) -> VisonicServerData | None:
-#    """Find VCD by panel id."""
-#    data = hass.data[VisonicEntryKey]
-#    for server in data[SERVERS].values():
-#        assert isinstance(server, VisonicServerData)  # runtime check
-#        if server.server_id == server_id:
-#            return server
-#    return None
 
 def create_key(account: str, panel: str) -> str | None:
     """Create key function."""
@@ -126,6 +87,12 @@ def _check_ident_valid(entry: ConfigEntry, valid_idents: list[int], conf: str, m
             translation_placeholders={"ident": mess},
 
         )
+    if not isinstance(ident, int) or isinstance(ident, bool):
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key=TRANSLATE_EXCEPTION_NUMBER_NOT_UNIQUE,
+            translation_placeholders={"ident": mess, "ref": ident},
+        )
     # When here, server_id/panel_id should be unique in the hubs configured so far.
     if ident in valid_idents:
         raise ConfigEntryError(
@@ -138,10 +105,6 @@ def _check_ident_valid(entry: ConfigEntry, valid_idents: list[int], conf: str, m
 async def check_panel_is_unique(hass: HomeAssistant, entry: ConfigEntry) -> int:
     """Ensure that the user selected panel id is unique. This must be enforced."""
     return _check_ident_valid(entry, get_panels(hass.data[VisonicEntryKey]), CONF_PANEL_NUMBER, "panel")
-
-async def check_server_is_unique(hass: HomeAssistant, entry: ConfigEntry) -> int:
-    """Ensure that the user selected server id is unique. This must be enforced."""
-    return _check_ident_valid(entry, get_servers(hass.data[VisonicEntryKey]), CONF_SERVER_NUMBER, "server")
 
 
 # Data class that the coordinator uses to manage the data passed to the entities

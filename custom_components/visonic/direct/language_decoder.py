@@ -150,6 +150,7 @@ class LanguageDecoder:
     def __init__(self, hass: HomeAssistant) -> None:
         """Init."""
         self.hass = hass
+        self.log_event = list(type(self).log_event)
 
         # Create the defaults in English to be updated by settings from the Integration, derive the actuals from device_types
         self.user_log_power_max: list[str] = []
@@ -179,6 +180,7 @@ class LanguageDecoder:
         hass: HomeAssistant
             The Home Assistant instance.
         """
+        self.log_event = list(type(self).log_event)
         ###################################################################################################
         # Retrieve the names of the things that create the events from the language translations files ####
         ###################################################################################################
@@ -249,13 +251,13 @@ class LanguageDecoder:
 
     def getPowerMaxEntry(self, index: int | None) -> str:
         """Get powermax language entry."""
-        if index is not None and index < len(self.user_log_power_max):
+        if index is not None and 0 <= index < len(self.user_log_power_max):
             return self.user_log_power_max[index]
         return "Unknown"
 
     def getPowerMasterEntry(self, index: int | None) -> str:
         """Get powermaster language entry."""
-        if index is not None and index < len(self.user_log_power_master):
+        if index is not None and 0 <= index < len(self.user_log_power_master):
             return self.user_log_power_master[index]
         return "Unknown"
 

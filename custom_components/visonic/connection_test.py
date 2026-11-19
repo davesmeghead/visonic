@@ -31,12 +31,12 @@ class ConnectionTest:
 
     # Make an initial connection to the device and then close it to see it we can.
 
-    async def try_tcp_connection(self, host: str, port: int):
+    async def try_tcp_connection(self, host: str, port: int | None):
         """Connect to an IP host address and port to check validity."""
         # This can also be used to try the cloud connection
         if TESTING:
             return None
-        if not host:
+        if not host or not port:
             return TRANSLATE_ERROR_SETTINGS_MISSING
         try:
             _reader, writer = await asyncio.wait_for(
@@ -57,6 +57,7 @@ class ConnectionTest:
         """Connect to serial port to check validity."""
         if TESTING:
             return None
+        asu = None
         try:
             asu = serialx.async_serial_for_url(
                 url=device,
@@ -64,7 +65,6 @@ class ConnectionTest:
             )
             await asu.open()
             _ = asu.is_open
-            await asu.close()
         except serialx.SerialException:
             return TRANSLATE_ERROR_CONNECTION_REFUSED
         except serial.SerialTimeoutException, TimeoutError:
@@ -82,12 +82,10 @@ class ConnectionTest:
         """Test the connection."""
         error = None
         match device_type:
-            case DeviceType.TCP_SERVER:
-                error = None
             case DeviceType.CLOUD:
                 host = data.get(CONF_EXTERNAL_URL, "")
                 error = await self.try_tcp_connection(host, 5001)
-            case DeviceType.ETHERNET | DeviceType.TCP_DISCOVERED:
+            case DeviceType.ETHERNET:
                 host = data.get(CONF_HOST, "")
                 port = data.get(CONF_PORT, "0")
                 error = await self.try_tcp_connection(host, int(port))

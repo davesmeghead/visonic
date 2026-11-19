@@ -4,6 +4,8 @@ import asyncio
 import re
 from typing import Any
 
+from typing_extensions import Sentinel
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -13,7 +15,10 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.entity import UNDEFINED, UndefinedType
+try:
+    from homeassistant.helpers.typing import Undefined
+except ImportError:
+    from homeassistant.helpers.typing import UNDEFINED as Undefined
 
 from .const import (
     CONF_EMULATION_MODE,
@@ -141,7 +146,7 @@ class PlatformManager:
             self.hass, f"{DOMAIN}_{entry_id}_add_{specific_domain}", data
         )
 
-    def set_alarm_device_information(self, model: str | None = UNDEFINED):
+    def set_alarm_device_information(self, model: str | Sentinel = Undefined):
         """Set the alarm panel device information in Home Assistant."""
         device_registry = dr.async_get(self.hass)
         device_registry.async_get_or_create(
@@ -328,7 +333,7 @@ class PlatformManager:
                     area.id: area.name
                     for area in area_reg.async_list_areas()
                 }
-                suggested_area: str | UndefinedType | None = UNDEFINED # set to default for async_get_or_create
+                suggested_area: str | Sentinel | None = Undefined
                 loc0 = sensor.location[0].casefold() if sensor.location is not None else "area_undefined_so_do_not_match_the_area"
                 loc1 = sensor.location[1].casefold() if sensor.location is not None else "area_undefined_so_do_not_match_the_area"
                 for areavalue in area_map.values():
@@ -387,6 +392,8 @@ class PlatformManager:
             unique_id = create_sensor_unique_id(self.panel_ident, sid)
             self._delete_from_device_registry(identifier=(DOMAIN, unique_id))
             self._sensor_dict.pop(sid, None)
+            self._sensor_created_set.discard(sid)
+            self._image_created_set.discard(sid)
             self.image_manager.delete_all_sensor_jpeg(sid)
             self.logger.logstate_debug("Sensor %s to be deleted, also need to delete the select entity if it was created", sid)
             return True
@@ -446,6 +453,7 @@ class PlatformManager:
             unique_id = create_switch_unique_id(self.panel_ident, sid)
             self._delete_from_device_registry(identifier=(DOMAIN, unique_id))
             self._switch_dict.pop(sid, None)
+            self._switch_created_set.discard(sid)
             self.logger.logstate_debug("Switch %s deleted", sid)
             return True
         self.logger.logstate_debug("Switch %s in exclusion list or None", sid)
@@ -516,9 +524,12 @@ class PlatformManager:
         """Delete Sensor."""
         if sid is not None and sid in self._device_dict:
             device = self._device_dict[sid]
-            unique_id = create_device_unique_id(self.panel_ident, self.create_device_type(device), device)
+            unique_id = create_device_unique_id(
+                self.panel_ident, self.create_device_type(device), sid
+            )
             self._delete_from_device_registry(identifier=(DOMAIN, unique_id))
             self._device_dict.pop(sid, None)
+            self._device_created_set.discard(sid)
             self.logger.logstate_debug("Device %s deleted", sid)
             return True
         return False
@@ -527,20 +538,13 @@ class PlatformManager:
         """Determine the list of sensors that are open and not already bypassed, in order to arm the panel."""
         if isinstance(parts, int):
             parts = None if parts == PARTITION_ID_WHEN_BASE else [parts]
-        return (
-            {
-                sid
-                for p in parts
-                for sid, s in self._sensor_dict.items()
-                if p in s.partition and not s.bypass and s.status
-            }
-            if parts
-            else {
-                sid
-                for sid, s in self._sensor_dict.items()
-                if not s.bypass and s.status
-            }
-        )
+        return {
+            sid
+            for sid, sensor in self._sensor_dict.items()
+            if (parts is None or bool(sensor.partition & set(parts)))
+            and not sensor.bypass
+            and sensor.status
+        }
 
     def populateSensorDictionary(self) -> dict[str, list[str]]:
         """Create the sensor dict."""

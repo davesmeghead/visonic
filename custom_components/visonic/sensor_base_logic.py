@@ -116,7 +116,7 @@ class VisonicBaseEntity(CoordinatorEntity[VisonicCoordinator]):
         self.update_local(state)
 
         # Create the extra_state_attributes, adding panel id
-        self.esa = self.definition.attributes_fn(state)
+        self.esa = self.definition.attributes_fn(state) or {}
         self.esa[PANEL_ATTRIBUTE_NAME] = self._panel_id
 
         self._attr_available = self.coordinator.is_connected()

@@ -97,15 +97,20 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
         if (sensor := self._get_sensor()) is None:
             return
 
-        self._attr_available = self.coordinator.is_connected()
+        available = self.coordinator.is_connected()
+        availability_changed = available != self._attr_available
+        self._attr_available = available
         self._has_image = sensor.has_image
 
+        image_changed = False
         if self._has_image:
             image_time = sensor.image_time
             if image_time != self._attr_image_last_updated:
                 self._attr_image_last_updated = image_time
                 self._attr_state: StateType = STATE_OK
-                self.async_write_ha_state()
+                image_changed = True
+        if availability_changed or image_changed:
+            self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
@@ -139,4 +144,4 @@ class VisonicImage(CoordinatorEntity[VisonicCoordinator], ImageEntity):
                 self._image_data: bytearray | None = (
                     await self.coordinator.get_cached_image(self._sensor_id)
                 )
-        return self._image_data
+        return bytes(self._image_data) if self._image_data is not None else None

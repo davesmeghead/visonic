@@ -3,7 +3,7 @@
     "config": {
         "abort": {
 			"already_configured": "Alarm Connection Already Configured",
-			"device_error": "Connection must be either Ethernet, Server or Serial",
+			"device_error": "Connection must be either Ethernet, Serial or Cloud",
 			"emulation_mode_error": "Incorrect Emulation Mode Setting",
 			"settings_missing": "Essential settings are missing",
 			"email_invalid": "The email address is invalid",
@@ -14,11 +14,10 @@
 			"already_in_progress": "Panel configuration already in progress",
 			"exclusion_list_invalid": "Either the Sensor or Switch exclusion lists are invalid",
 			"download_code_invalid": "The download code is invalid",
-			"cannot_configure_tcp_discovered": "A TCP discovered Hub cannot be reconfigured",
 			"select_entity_invalid": "The baud select entity is invalid"
         },
         "error": {
-			"ethernet_server_or_serial": "Must be one of Ethernet, Server or Serial",
+			"connection_type_invalid": "Must be one of Ethernet, Serial or Cloud",
 			"emulation_mode_error": "Incorrect Emulation Mode Setting",
 			"cannot_connect_timeout": "Connection timed out. Ensure the device is online.",
 			"cannot_connect_refused": "Connection refused",
@@ -35,23 +34,15 @@
                 "description": "Enter your Connection Type and Panel Number",
                 "title": "Connection",
                 "data": {
-                    "type": "Ethernet, Server or Serial",
-                    "panel_number": "Server/Panel Number (if you only have 1 panel leave this set to 0)"
+                    "type": "Ethernet, Serial or Cloud",
+                    "panel_number": "Panel Number (if you only have 1 panel leave this set to 0)"
                 }
             },
             "device_no_panel": {
                 "description": "Reconfigure your Connection Type (cannot reconfigure the panel number)",
                 "title": "Reconfigure Connection",
                 "data": {
-                    "type": "Ethernet, Server or Serial"
-                }
-            },
-            "form_tcp_server": {
-                "description": "Enter your TCP Server Settings",
-                "title": "TCP Server Configuration",
-                "data": {
-                    "host": "Listening Address",
-                    "port": "Local Port"
+                    "type": "Ethernet, Serial or Cloud"
                 }
             },
             "form_ethernet": {
@@ -179,14 +170,13 @@
         "abort": {
             "already_configured": "Alarm Connection Already Configured",
             "emulation_mode_error": "Incorrect Emulation Mode Setting",
-            "device_error": "Connection must be either Ethernet, Server or Serial",
+            "device_error": "Connection must be either Ethernet, Serial or Cloud",
 			"reconfigure_successful": "Reconfiguration Successful",
 			"reauth_successful": "Reauthorisation Successful",
-			"cannot_edit_tcp_server": "TCP Server cannot be edited, please reconfigure it (which reloads it)",
 			"unknown": "Unexpected or unknown error"
         },
         "error": {
-            "ethernet_server_or_serial": "Must be one of Ethernet or Serial",
+            "connection_type_invalid": "Must be one of Ethernet, Serial or Cloud",
 			"settings_missing": "Essential settings are missing",
 			"email_invalid": "The email address is invalid",
 			"settings_invalid": "There are invalid settings",

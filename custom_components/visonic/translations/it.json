@@ -3,7 +3,7 @@
     "config": {
         "abort": {
             "already_configured": "Errore: Connessione al Pannello di Allarme gi\u00E0 configurata",
-            "device_error": "Errore: il dispositivo deve essere Ethernet, Server o Serial",
+            "device_error": "Errore: il dispositivo deve essere Ethernet, Serial o Cloud",
             "emulation_mode_error": "Errore: impostazione modalit\u00E0 emulazione non corretta",
             "settings_missing": "Errore: importazione impostazioni dal file yaml ma mancano impostazioni essenziali",
 			"email_invalid": "The email address is invalid",
@@ -14,11 +14,10 @@
 			"already_in_progress": "Panel configuration already in progress",
 			"exclusion_list_invalid": "Either the Sensor or Switch exclusion lists are invalid",
 			"download_code_invalid": "The download code is invalid",
-			"cannot_configure_tcp_discovered": "A TCP discovered Hub cannot be reconfigured",
 			"select_entity_invalid": "The baud select entity is invalid"
         },
         "error": {
-            "ethernet_server_or_serial": "Deve essere Ethernet, Server o Serial",
+            "connection_type_invalid": "Deve essere Ethernet, Serial o Cloud",
             "emulation_mode_error": "Impostazione modalit\u00E0 emulazione non corretta",
   		    "cannot_connect_timeout": "Connection timed out. Ensure the device is online",
 			"cannot_connect_refused": "Connection refused",
@@ -35,7 +34,7 @@
                 "description": "Inserisci il tipo di dispositivo e il numero del pannello",
                 "title": "Connessione",
                 "data": {
-                    "type": "Ethernet, Server o Serial",
+                    "type": "Ethernet, Serial o Cloud",
                     "panel_number": "Numero del Pannello (se hai solo 1 pannello lascia questo valore su 0)"
                 }
             },
@@ -43,15 +42,7 @@
                 "description": "Inserisci il tipo di dispositivo e il numero del pannello",
                 "title": "Connessione",
                 "data": {
-                    "type": "Ethernet, Server o Serial"
-                }
-            },
-            "form_tcp_server": {
-                "description": "Enter your TCP Server Settings",
-                "title": "TCP Server Configuration",
-                "data": {
-                    "host": "Listening Address",
-                    "port": "Local Port"
+                    "type": "Ethernet, Serial o Cloud"
                 }
             },
             "form_ethernet": {
@@ -179,14 +170,13 @@
         "abort": {
             "already_configured": "Connessione al Pannello di Allarme gi\u00E0 configurata",
             "emulation_mode_error": "Impostazione modalit\u00E0 emulazione non corretta",
-            "device_error": "Il dispositivo deve essere Ethernet, Server o Serial",
+            "device_error": "Il dispositivo deve essere Ethernet, Serial o Cloud",
 			"reconfigure_successful": "Reconfiguration Successful",
 			"reauth_successful": "Reauthorisation Successful",
-			"cannot_edit_tcp_server": "TCP Server cannot be edited, please reconfigure it (which reloads it)",
             "unknown": "Errore sconosciuto"
         },
         "error": {
-            "ethernet_server_or_serial": "Deve essere Ethernet, Server o Serial",
+            "connection_type_invalid": "Deve essere Ethernet, Serial o Cloud",
             "settings_missing": "Errore: importazione impostazioni dal file yaml ma mancano impostazioni essenziali",
 			"email_invalid": "The email address is invalid",
 			"settings_invalid": "There are invalid settings",

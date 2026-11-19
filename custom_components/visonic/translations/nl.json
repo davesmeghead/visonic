@@ -3,7 +3,7 @@
 	"config": {
 		"abort": {
 			"already_configured": "Alarmpaneelverbinding al geconfigureerd",
-			"device_error": "Apparaat moet Ethernet, Server of Serial zijn",
+			"device_error": "Apparaat moet Ethernet, Serial of Cloud zijn",
 			"emulation_mode_error": "Onjuiste instelling voor emulatiemodus",
 			"settings_missing": "Instellingen importeren uit yaml-bestand, maar essentiële instellingen ontbreken",
 			"email_invalid": "The email address is invalid",
@@ -14,11 +14,10 @@
 			"already_in_progress": "Panel configuration already in progress",
 			"exclusion_list_invalid": "Either the Sensor or Switch exclusion lists are invalid",
 			"download_code_invalid": "The download code is invalid",
-			"cannot_configure_tcp_discovered": "A TCP discovered Hub cannot be reconfigured",
 			"select_entity_invalid": "The baud select entity is invalid."
 		},
 		"error": {
-			"ethernet_server_or_serial": "Moet Ethernet, Server of Serial zijn",
+			"connection_type_invalid": "Moet Ethernet, Serial of Cloud zijn",
 			"emulation_mode_error": "Onjuiste instelling voor emulatiemodus",
   		    "cannot_connect_timeout": "Connection timed out. Ensure the device is online",
 			"cannot_connect_refused": "Connection refused",
@@ -35,7 +34,7 @@
 				"description": "Voer uw apparaattype en paneelnummer in",
 				"title": "Verbinding",
 				"data": {
-					"type": "Ethernet, Server of Serial",
+					"type": "Ethernet, Serial of Cloud",
 					"panel_number": "Paneelnummer (als u maar 1 paneel heeft, laat u deze op 0 staan)"
 				}
 			},
@@ -43,15 +42,7 @@
 				"description": "Voer uw apparaattype en paneelnummer in",
 				"title": "Verbinding",
 				"data": {
-					"type": "Ethernet, Server of Serial"
-                }
-            },
-            "form_tcp_server": {
-                "description": "Enter your TCP Server Settings",
-                "title": "TCP Server Configuration",
-                "data": {
-                    "host": "Listening Address",
-                    "port": "Local Port"
+					"type": "Ethernet, Serial of Cloud"
                 }
             },
 			"form_ethernet": {
@@ -179,14 +170,13 @@
 		"abort": {
 			"already_configured": "Alarmpaneelverbinding al geconfigureerd",
 			"emulation_mode_error": "Onjuiste instelling voor emulatiemodus",
-			"device_error": "Apparaat moet Ethernet, Server of Serial zijn",
+			"device_error": "Apparaat moet Ethernet, Serial of Cloud zijn",
 			"reconfigure_successful": "Reconfiguration Successful",
 			"reauth_successful": "Reauthorisation Successful",
-			"cannot_edit_tcp_server": "TCP Server cannot be edited, please reconfigure it (which reloads it)",
 			"unknown": "Onverwachte fout"
 		},
 		"error": {
-			"ethernet_server_or_serial": "Moet Ethernet, Server of Serial zijn",
+			"connection_type_invalid": "Moet Ethernet, Serial of Cloud zijn",
 			"settings_missing": "Instellingen importeren uit yaml-bestand, maar essentiële instellingen ontbreken",
 			"email_invalid": "The email address is invalid",
 			"settings_invalid": "There are invalid settings",

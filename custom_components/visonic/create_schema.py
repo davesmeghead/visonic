@@ -60,15 +60,11 @@ from .const import (
     CONF_PANEL_SERIAL,
     CONF_RETRY_CONNECTION_COUNT,
     CONF_RETRY_CONNECTION_DELAY,
-    CONF_SERVER_HOST,
-    CONF_SERVER_PORT,
     CONF_SIREN_SOUNDING,
     CONF_USER_CODE_SLOT,
     DEFAULT_CLOUD_SCAN_INTERVAL,
     DEFAULT_DEVICE_HOST,
     DEFAULT_DEVICE_PORT,
-    DEFAULT_DEVICE_SERV_HOST,
-    DEFAULT_DEVICE_SERV_PORT,
     DEFAULT_IMAGE_MEDIA_PATH,
     DEFAULT_PANEL_USER_CODE,
     FORM_CLOUD,
@@ -83,8 +79,6 @@ from .const import (
     FORM_PARAM15,
     FORM_POWERLINK,
     FORM_SERIAL,
-    FORM_TCP_DISCOVERED,
-    FORM_TCP_SERVER,
 )
 from .visonic_types import (
     AvailableNotifications,
@@ -106,13 +100,10 @@ FormItems: dict[str, list[str]] = {
     FORM_DEVICE_NO_PANEL: [CONF_TYPE],
     # The connection choices
     #     parameters in entry.data
-    #     FORM_TCP_DISCOVERED is only used for reconnection, host and port cannot be edited
     #     For those that support CONF_EMULATION_MODE then FORM_POWERLINK is shown next if Powerlink Emulation Mode is selected
     FORM_ETHERNET: [CONF_HOST, CONF_PORT, CONF_ESPHOME_ENTITY_SELECT, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
     FORM_SERIAL: [CONF_DEVICE, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
     FORM_CLOUD: [CONF_EXTERNAL_URL, CONF_EMAIL, CONF_PASSWORD, CONF_CODE, CONF_PANEL_SERIAL, CONF_SCAN_INTERVAL, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH, CONF_ENABLE_KEYPAD_ALARM_ENTITY],
-    FORM_TCP_SERVER: [CONF_SERVER_HOST, CONF_SERVER_PORT],
-    FORM_TCP_DISCOVERED: [CONF_ESPHOME_ENTITY_SELECT, CONF_EMULATION_MODE, CONF_EXCLUDE_SENSOR, CONF_EXCLUDE_SWITCH],
     FORM_POWERLINK: [CONF_DOWNLOAD_CODE, CONF_USER_CODE_SLOT, CONF_EPROM_ATTRIBUTES, CONF_ENABLE_KEYPAD_ALARM_ENTITY],
     # Supporting forms to get the config
     #     parameters in entry.options
@@ -178,7 +169,6 @@ def build_config_items() -> dict[str, ConfigItem]:
                     [
                         DeviceType.ETHERNET.title(),
                         DeviceType.SERIAL.title(),
-#                        DeviceType.TCP_SERVER.title(),    # Disabled as incomplete and untested
                         DeviceType.CLOUD.title(),
                     ]
             ),
@@ -235,16 +225,6 @@ def build_config_items() -> dict[str, ConfigItem]:
             marker=opt,
             validator=str,
             default="",
-        ),
-        CONF_SERVER_HOST: ConfigItem(
-            marker=req,
-            validator=str,
-            default=DEFAULT_DEVICE_SERV_HOST,
-        ),
-        CONF_SERVER_PORT: ConfigItem(
-            marker=req,
-            validator=str,
-            default=str(DEFAULT_DEVICE_SERV_PORT),
         ),
         CONF_EXCLUDE_SENSOR: ConfigItem(
             marker=opt,

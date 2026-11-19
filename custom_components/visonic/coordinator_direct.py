@@ -8,23 +8,20 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.util import slugify
 
-from ..const import (  # noqa: TID252
+from .const import (
     CONF_ENABLE_REMOTE_ARM,
     CONF_ENABLE_REMOTE_DISARM,
     PARTITION_ID_WHEN_BASE,
     PIN_REGEX,
     TEXT_DISCONNECTION_COUNT,
 )
-from ..coordinator_base import VisonicCoordinator  # noqa: TID252
-from ..exceptions import VisonicException  # noqa: TID252
-from ..log_events import logEvents  # noqa: TID252
-from ..server import ServerProtocol  # noqa: TID252
-from ..utils import getAlarmPanelUniqueIdent, to_bool  # noqa: TID252
-from ..visonic_data_types import (  # noqa: TID252
-    VisonicConfigEntry,
-    VisonicCoordinatorData,
-)
-from ..visonic_types import (  # noqa: TID252
+from .coordinator_base import VisonicCoordinator
+from .direct.ha_adapter import HomeAssistantVisonicClient
+from .exceptions import VisonicException
+from .log_events import logEvents
+from .utils import getAlarmPanelUniqueIdent, to_bool
+from .visonic_data_types import VisonicConfigEntry, VisonicCoordinatorData
+from .visonic_types import (
     AlarmCommandStatus,
     AlarmPanelCommand,
     AlarmPanelStatus,
@@ -34,9 +31,8 @@ from ..visonic_types import (  # noqa: TID252
     PanelCondition,
     PanelStateData,
 )
-from .client_visonic_client import VisonicClient
 
-#_LOGGER = logging.getLogger(__name__)
+# _LOGGER = logging.getLogger(__name__)
 
 # ARM/DISARM commands
 ARM_DISARM_COMMANDS = {
@@ -57,11 +53,16 @@ POWERMASTER_COMMANDS = {
     AlarmPanelCommand.PANIC,
 }
 
+
 class VisonicDirectCoordinator(VisonicCoordinator):
     """Visonic Coordinator."""
 
     def __init__(
-        self, hass: HomeAssistant, entry: VisonicConfigEntry, panel_id: int, event_logger: logEvents
+        self,
+        hass: HomeAssistant,
+        entry: VisonicConfigEntry,
+        panel_id: int,
+        event_logger: logEvents,
     ) -> None:
         """Initialse."""
         # Manually update (async_handle_client_update) for significant changes in state and some attributes
@@ -69,17 +70,24 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         # Use auto (_async_update_data) for minor updates to entity attributes every 60 seconds
         # Also, for both manual and auto, only call the handlers when data changes
 
-        super().__init__(hass, entry, panel_id=panel_id, lo=event_logger, update_interval=60, always_update=False)
+        super().__init__(
+            hass,
+            entry,
+            panel_id=panel_id,
+            lo=event_logger,
+            update_interval=60,
+            always_update=False,
+        )
 
-        self._client: VisonicClient = VisonicClient(
-            hass = hass,
-            entry = entry,
-            diagnostics = event_logger,
-            force_standard_mode = self.force_standard_mode,
-            disable_all_panel_commands = self.disable_all_panel_commands,
-            platform_manager = self.platform_manager,
-            panelident = panel_id,
-            state_changed_callback = self.state_changed_callback,
+        self._client: HomeAssistantVisonicClient = HomeAssistantVisonicClient(
+            hass=hass,
+            entry=entry,
+            diagnostics=event_logger,
+            force_standard_mode=self.force_standard_mode,
+            disable_all_panel_commands=self.disable_all_panel_commands,
+            platform_manager=self.platform_manager,
+            panelident=panel_id,
+            state_changed_callback=self.state_changed_callback,
         )
         self._event_logger = event_logger
 
@@ -125,14 +133,6 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                 original_exception=err,
             ) from err
 
-    def update_t_p(self, transport: asyncio.Transport, protocol: ServerProtocol):
-        """Update transport and protocol."""
-        self._client.update_t_p(transport, protocol)
-
-    async def async_server_connect(self, transport: asyncio.Transport, protocol: ServerProtocol) -> bool:
-        """Server produced connection."""
-        await self._client.async_server_connect(transport, protocol)
-
     # =======================================================================================================
     # ============ These 3 functions are panel connection commands : connect, reconnect and stop ============
     # =======================================================================================================
@@ -160,7 +160,7 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                     + "."
                     + slugify(getAlarmPanelUniqueIdent(self.panel_id)),
                 )
-            self._client.async_restart(True)
+            await self._client.async_restart(True)
         except (OSError, TimeoutError) as ex:
             # Do not cause a full Home Assistant Exception, keep it local here
             self._event_logger.logstate_warning(
@@ -212,7 +212,9 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                 )
                 or (
                     command != AlarmPanelCommand.DISARM
-                    and to_bool(self.config_entry.options.get(CONF_ENABLE_REMOTE_ARM, False))
+                    and to_bool(
+                        self.config_entry.options.get(CONF_ENABLE_REMOTE_ARM, False)
+                    )
                 )
             ):
                 return CommandResult(
@@ -222,9 +224,18 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                     eid=entity_id,
                 )
 
-            if command in {AlarmPanelCommand.ARM_HOME_BYPASS, AlarmPanelCommand.ARM_AWAY_BYPASS}:
+            if command in {
+                AlarmPanelCommand.ARM_HOME_BYPASS,
+                AlarmPanelCommand.ARM_AWAY_BYPASS,
+            }:
                 pl = self._client.get_partitions_in_use()
-                part = PARTITION_ID_WHEN_BASE if partition_set is None or len(partition_set) == 3 or partition_set == pl else list(partition_set)[0] + 1
+                part = (
+                    PARTITION_ID_WHEN_BASE
+                    if partition_set is None
+                    or len(partition_set) == 3
+                    or partition_set == pl
+                    else list(partition_set)[0] + 1
+                )
                 result = await self.bypass_open_zones(part)
                 if result.status != AlarmCommandStatus.SUCCESS:
                     return result
@@ -235,8 +246,14 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                 )
                 did_bypass = True
 
-            result: CommandResult = await self._client.send_command(entity_id, command, code, partition_set)
-            result.message=f"Sent Command success {command}   entity_id {entity_id}" if result.status == AlarmCommandStatus.SUCCESS else f"Failed to send command {command}   entity_id {entity_id}"
+            result: CommandResult = await self._client.send_command(
+                entity_id, command, code, partition_set
+            )
+            result.message = (
+                f"Sent Command success {command}   entity_id {entity_id}"
+                if result.status == AlarmCommandStatus.SUCCESS
+                else f"Failed to send command {command}   entity_id {entity_id}"
+            )
             if did_bypass:
                 self._client.get_sensor_bypass_state(entity_id)
             if result.status == AlarmCommandStatus.SUCCESS:
@@ -266,13 +283,17 @@ class VisonicDirectCoordinator(VisonicCoordinator):
                 message="Invalid pin",
                 eid=entity_id,
             )
-        partition_state: PanelStateData = self.get_panel_and_partition_state(PARTITION_ID_WHEN_BASE)
+        partition_state: PanelStateData = self.get_panel_and_partition_state(
+            PARTITION_ID_WHEN_BASE
+        )
         result: CommandResult = await self._client.send_bypass(
             entity_id, devid, bypass, code, partition_state.panel_state
         )
         return result
 
-    async def send_switch(self, entity_id: str, devid: int, command: AlarmSwitchCommand) -> CommandResult:
+    async def send_switch(
+        self, entity_id: str, devid: int, command: AlarmSwitchCommand
+    ) -> CommandResult:
         """Set the Switch/PGM switch."""
         return await self._client.send_switch(entity_id, devid, command)
 
@@ -300,7 +321,9 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         """Send get event log."""
         await self._client.send_get_event_log(code=code)
 
-    async def send_command_sensor_image(self, devid: int | None, eid: str | None, duration: int) -> AlarmCommandStatus:
+    async def send_command_sensor_image(
+        self, devid: int | None, eid: str | None, duration: int
+    ) -> AlarmCommandStatus:
         """Send the command to the panel to get a camera image."""
         return await self._client.send_client_get_sensor_image(devid, eid, duration)
 
@@ -313,10 +336,13 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         if not self._client.is_panel_connected():
             return VisonicCoordinatorData(
                 connected=False,
-                #ident=getAlarmPanelUniqueIdent(self.panel_id)
+                # ident=getAlarmPanelUniqueIdent(self.panel_id)
             )
 
-        partition_armcode = {i: AlarmPanelStatus(self._client.get_partition_status(i).value) for i in indices}
+        partition_armcode = {
+            i: AlarmPanelStatus(self._client.get_partition_status(i).value)
+            for i in indices
+        }
 
         return VisonicCoordinatorData(
             connected=True,
@@ -324,11 +350,15 @@ class VisonicDirectCoordinator(VisonicCoordinator):
             mode=self._client.get_panel_mode().name.lower(),
             achieved_powerlink=self._client.achieved_powerlink(),
             model=self._client.get_panel_model(),
-            statusdict={TEXT_DISCONNECTION_COUNT: self._client.panel_disconnection_counter},
+            statusdict={
+                TEXT_DISCONNECTION_COUNT: self._client.panel_disconnection_counter
+            },
             panelstate=self._client.get_panel_status_dict(),
             partition_armcode=partition_armcode,
             partition_siren={i: self._client.is_siren_active(i) for i in indices},
-            partition_dict={i: self._client.get_partition_status_dict(i) for i in indices},
+            partition_dict={
+                i: self._client.get_partition_status_dict(i) for i in indices
+            },
             zones=self.platform_manager.sensor_state(),
             switch=self.platform_manager.switch_state(),
             device=self.platform_manager.device_state(),

@@ -34,12 +34,6 @@ class VisonicStrEnum(StrEnum):
 #                          The Visonic Go App can be used in conjunction with this
 #                     The panel must be PowerMaster with a Powerlink 3 hardware module
 #                     As this is a polled mechanism (and not a direct connection to the panel) this has delayed updates
-#    TCP_SERVER       A TCP_SERVER is created to listen on port 5001 (by default), when a panel connects then
-#    TCP_DISCOVERED        an HA discovery sequence is triggered.
-#                     The TCP_SERVER appears in the list of HUBs as a server but it does not have a panel or entities.
-#                          The connection (panel) that connects to the server is then spawned as a TCP_DISCOVERED client (HUB)
-#                     These are therefore used in combination.
-#                     These are not currently supported. It is still in development
 #
 #  EmulationMode is only applicable to ETHERNET, SERIAL
 ########################################################################################################################################
@@ -48,8 +42,6 @@ class DeviceType(VisonicStrEnum):
     ETHERNET = "ethernet"
     SERIAL = "serial"
     CLOUD = "visonic_cloud_server"
-    TCP_DISCOVERED = "server_discovered"  # Not currently supported, in development
-    TCP_SERVER = "local_powerlink_server"  # Not currently supported, in development
 
 
 class EmulationMode(VisonicStrEnum):

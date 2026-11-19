@@ -1,1 +1,0 @@
-"""Visonic Alarm API."""
