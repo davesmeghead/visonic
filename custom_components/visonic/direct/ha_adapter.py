@@ -432,7 +432,7 @@ class HomeAssistantVisonicClient(PyVisonicClient):
             if state.enabled:
                 self.platform_manager.device_update_or_create(state)
         else:
-            self.platform_manager.delete_device(state.id)
+            self.platform_manager.delete_device(state.device_uid)
             if self.panel_mode not in (
                 AlPanelMode.POWERLINK,
                 AlPanelMode.POWERLINK_BRIDGED,

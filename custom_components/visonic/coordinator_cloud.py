@@ -1,6 +1,7 @@
 """Visonic Coordinator Cloud class."""
 
 import asyncio
+from collections import Counter
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -9,17 +10,21 @@ import traceback
 from typing import Any
 import uuid
 
-from pyvisonicalarm.alarm import AlarmSystem, GenericDevice, PanelInfo
+from pyvisonicalarm.alarm import AlarmSystem, PanelInfo
 from pyvisonicalarm.classes import Alarm, Event, Partition
 from pyvisonicalarm.core import API
+from pyvisonicalarm.device_definitions import get_device_definition
 from pyvisonicalarm.devices import (
     CameraDevice,
     ContactDevice,
     Device,
+    FloodDevice,
     KeyFobDevice,
+    KeypadDevice,
     MotionDevice,
     PanelDevice,
     PGMDevice,
+    RepeaterDevice,
     ShockDevice,
     SirenDevice,
     SmokeDevice,
@@ -57,6 +62,10 @@ from .const import (
     PIN_REGEX,
     TEXT_DISCONNECTION_COUNT,
     TEXT_LAST_ALARM_TRIGGER_SOURCES,
+    TEXT_LAST_EVENT_ACTION,
+    TEXT_LAST_EVENT_NAME,
+    TEXT_LAST_EVENT_PARTITION,
+    TEXT_LAST_EVENT_TIME,
     TEXT_PANEL_MODEL,
     VISONIC_CLOUD_SERVER,
 )
@@ -93,6 +102,13 @@ from .visonic_types import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+PANEL_INFO_REFRESH_INTERVAL = timedelta(minutes=30)
+CLOUD_DIAGNOSTIC_REFRESH_INTERVAL = timedelta(minutes=5)
+
+
+def _normalize_trouble(value: bool | int | str | None) -> str:
+    """Normalize a cloud trouble value while preserving active trouble codes."""
+    return str(value) if to_bool(value) else "none"
 
 
 MAP_ALARM_STATUS = {
@@ -130,6 +146,11 @@ LUX_NO_TIMEOUT = (VisonicFloatSensorKey.ZONE_LUX, SensorOnTimeout.NO_TIMEOUT)
 #   Trigger and Status cannot appear in the same setting row (as they are both called "Zone")
 #   Trigger and Contact are in the same row for SHOCK sensors that have both trigger and state, CONTACT is used as a different name (i.e. not "Zone")
 BASIC_STATUS = [TAMPER_NO_TIMEOUT, PROBLEM_NO_TIMEOUT]
+BATTERY_NO_TRIGGER = [
+    TAMPER_NO_TIMEOUT,
+    PROBLEM_NO_TIMEOUT,
+    BATTERY_NO_TIMEOUT,
+]
 BATTERY_AND_STATUS_TIMEOUT = [
     TAMPER_NO_TIMEOUT,
     PROBLEM_NO_TIMEOUT,
@@ -191,7 +212,12 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         self.siren_disarm = False
         self.testing = False
         self.partition_dict: dict[int, dict[str, Any]] = {}
+        self._last_cloud_partition_states: dict[int, AlarmPanelStatus] = {}
         self.last_alarm_trigger_source: dict[str, Any] | None = None
+        self._last_cloud_event_attributes: dict[str, Any] = {}
+        self._logged_cloud_sensor_initial_state: set[int] = set()
+        self._logged_cloud_device_type_pairs: set[tuple[str, str]] = set()
+        self._cloud_device_type_inventory: dict[tuple[str, str], int] = {}
         self.first_time = True
         self.login_success = False
         self.device_registry = dr.async_get(hass)
@@ -200,6 +226,9 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
         self._event_logger.logstate_info(f"update_interval={ui}")
         self.cloud_alarm: AlarmSystem | None = None
+        self._panel_info: PanelInfo | None = None
+        self._panel_info_refreshed_at: datetime | None = None
+        self._cloud_diagnostic_data_refreshed_at: datetime | None = None
         # Initialise the connection time stamp
         self.last_connected_timestamp: datetime = get_utc_time()
         self.never_connected = True
@@ -326,6 +355,18 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 "integration connected": "yes",
                 "panel connected": ("yes" if data.connected else "no"),
                 "visonic": data.as_dict(convert_to_name=True),
+                "cloud_device_types": [
+                    {
+                        "device_type": device_type,
+                        "subtype": subtype,
+                        "last_observed_device_count": count,
+                        "mapped": get_device_definition(device_type, subtype)
+                        is not None,
+                    }
+                    for (device_type, subtype), count in sorted(
+                        self._cloud_device_type_inventory.items()
+                    )
+                ],
                 "history": self._event_logger.get_str_log(),
             }
         except Exception as err:
@@ -334,6 +375,24 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 code=400,
                 original_exception=err,
             ) from err
+
+    def _record_cloud_device_types(self, devices: list[Device]) -> None:
+        """Record anonymized cloud device type and subtype pairs."""
+        counts = Counter((device.device_type, device.subtype) for device in devices)
+        for (device_type, subtype), count in counts.items():
+            self._cloud_device_type_inventory[(device_type, subtype)] = count
+            if (device_type, subtype) in self._logged_cloud_device_type_pairs:
+                continue
+            self._logged_cloud_device_type_pairs.add((device_type, subtype))
+            mapped = get_device_definition(device_type, subtype) is not None
+            self._event_logger.logstate_debug(
+                "Observed cloud device pair: device_type=%s subtype=%s mapped=%s "
+                "device_count=%s",
+                device_type,
+                subtype,
+                mapped,
+                count,
+            )
 
     def hasStarted(self) -> bool:
         """Has the system started?"""
@@ -583,6 +642,11 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
     async def async_panel_connect(self) -> bool:
         """Connect to the cloud visonic server."""
+        self.cloud_api_connected = False
+        self.panel_cloud_connected = None
+        self._panel_info = None
+        self._panel_info_refreshed_at = None
+        self._cloud_diagnostic_data_refreshed_at = None
         # Initialize API
         try:
             api = await self.authenticate()
@@ -596,6 +660,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 ):
                     self._event_logger.logstate_info("panel login success")
                     self.login_success = True
+                    self.platform_manager.setup_cloud_connection_sensors()
                     # The login details are new so save them
                     self.save_connection_entry()
                     # self.async_update_listeners()
@@ -615,7 +680,12 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
     async def async_service_panel_reconnect(self, call: ServiceCall | None):
         """Service call to re-connect the comms connection."""
-        await self.async_panel_connect()
+        connected = False
+        try:
+            connected = await self.async_panel_connect()
+        finally:
+            if not connected and self.data is not None:
+                self.async_set_updated_data(self.data)
 
     async def send_get_event_log(self, code: str | None) -> CommandResult:
         """Send get event log."""
@@ -768,6 +838,8 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
         try:
             if self.cloud_alarm is None:
+                self.cloud_api_connected = False
+                self.panel_cloud_connected = None
                 self._event_logger.logstate_info(
                     "Updating data - Cloud connection has not been made"
                 )
@@ -818,9 +890,14 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             timenow = get_utc_time()
             # Attempt to get status using current session
             status = await self.cloud_alarm.get_status()
-            connected = status is not None and status.connected
+            response_received = status is not None
+            panel_connected = status.connected if status is not None else None
+            self.cloud_api_connected = response_received
+            self.panel_cloud_connected = panel_connected
             self._event_logger.logstate_info(
-                f"Updating data - visonic cloud connection: live={connected}"
+                "Updating data - cloud status: response_received=%s panel_connected=%s",
+                response_received,
+                panel_connected,
             )
 
             if status is None or not status.connected:
@@ -857,7 +934,14 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             self.last_connected_timestamp = timenow
             self.never_connected = False
 
-            panel_info: PanelInfo | None = await self.cloud_alarm.get_panel_info()
+            if (
+                self._panel_info_refreshed_at is None
+                or timenow - self._panel_info_refreshed_at
+                >= PANEL_INFO_REFRESH_INTERVAL
+            ):
+                self._panel_info = await self.cloud_alarm.get_panel_info()
+                self._panel_info_refreshed_at = timenow
+            panel_info = self._panel_info
             partition_list: set[int] = set()
             multi_partitions = bool(panel_info and panel_info.multi_partitions)
             if multi_partitions:
@@ -872,15 +956,12 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 partition_list = None
 
             devices: list[Device] = await self.cloud_alarm.get_devices()
+            self._record_cloud_device_types(devices)
             panelstate: PanelState = self.process_devices(
                 devices=devices, partition_list=partition_list
             )
 
             alarms: list[Alarm] = await self.cloud_alarm.get_alarms()
-            # troubles: list[Trouble] = await self.cloud_alarm.get_troubles()
-            # alerts = await self.cloud_alarm.get_alerts()
-            # events: list[Event] = await self.cloud_alarm.get_events()
-            # troubles: list[Trouble] = await self.cloud_alarm.get_troubles()
             # sd = await self.cloud_alarm.get_smart_devices()
             # sds = await self.cloud_alarm.get_smart_devices_settings()
             # users = await self.cloud_alarm.get_users()
@@ -974,9 +1055,23 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                     _LOGGER.info(f"     Setting Siren Data {partition_siren[0]}")  # noqa: G004
                 _LOGGER.info(f"Main Panel is {partition_armcode[0].name}")  # noqa: G004
 
+            state_transition_detected = self._update_cloud_partition_states(
+                partition_armcode
+            )
+            if state_transition_detected:
+                self._event_logger.logstate_debug(
+                    "Cloud partition entered a stable armed or disarmed state; "
+                    "refreshing events"
+                )
+                await self._refresh_cloud_events()
+            await self._log_cloud_diagnostic_data(
+                timenow, refresh_events=not state_transition_detected
+            )
+
             statusdict: dict[str, Any] = {
                 TEXT_DISCONNECTION_COUNT: self.disconnection_counter
             }
+            statusdict.update(self._last_cloud_event_attributes)
             if self.last_alarm_trigger_source:
                 statusdict[TEXT_LAST_ALARM_TRIGGER_SOURCES] = (
                     self.last_alarm_trigger_source
@@ -1010,6 +1105,8 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             return new_data  # noqa: TRY300
 
         except UnauthorizedError:
+            self.cloud_api_connected = False
+            self.panel_cloud_connected = None
             # Session expired, attempt to re-authenticate
             self._event_logger.logstate_info(
                 "Visonic session expired, re-authenticating..."
@@ -1017,6 +1114,8 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             await self.async_panel_connect()
 
         except Exception as err:
+            self.cloud_api_connected = False
+            self.panel_cloud_connected = None
             raise UpdateFailed(
                 f"Error communicating with Visonic Cloud: {err}"
             ) from err
@@ -1029,11 +1128,153 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             model=self.config_entry.title,  # .panel_model,
         )
 
+    async def _log_cloud_diagnostic_data(
+        self, now: datetime, *, refresh_events: bool = True
+    ) -> None:
+        """Log optional cloud diagnostics on a slower cadence for API inspection."""
+        if (
+            self._cloud_diagnostic_data_refreshed_at is not None
+            and now - self._cloud_diagnostic_data_refreshed_at
+            < CLOUD_DIAGNOSTIC_REFRESH_INTERVAL
+        ):
+            return
+
+        self._cloud_diagnostic_data_refreshed_at = now
+        if self.cloud_alarm is None:
+            return
+
+        for name, getter in (
+            ("troubles", self.cloud_alarm.get_troubles),
+            ("alerts", self.cloud_alarm.get_alerts),
+        ):
+            try:
+                data = await getter()
+            except UnauthorizedError:
+                raise
+            except Error as err:
+                self._event_logger.logstate_debug(
+                    "Unable to fetch cloud %s: %s", name, err
+                )
+            else:
+                self._event_logger.logstate_debug("Cloud %s: %s", name, data)
+
+        if refresh_events:
+            await self._refresh_cloud_events()
+
+    async def _refresh_cloud_events(self) -> None:
+        """Fetch cloud events and update the alarm panel's last-event attributes."""
+        if self.cloud_alarm is None:
+            return
+        try:
+            events: list[Event] = await self.cloud_alarm.get_events()
+        except UnauthorizedError:
+            raise
+        except Error as err:
+            self._event_logger.logstate_debug(
+                "Unable to fetch cloud events: %s", err
+            )
+        else:
+            self._update_last_cloud_event(events)
+            self._event_logger.logstate_debug("Cloud events: %s", events)
+
+    def _update_cloud_partition_states(
+        self, partition_states: dict[int, AlarmPanelStatus]
+    ) -> bool:
+        """Track cloud panel states and report transitions to stable arm states."""
+        stable_states = {
+            AlarmPanelStatus.DISARMED,
+            AlarmPanelStatus.ARMED_HOME,
+            AlarmPanelStatus.ARMED_AWAY,
+            AlarmPanelStatus.ARMED_HOME_BYPASS,
+            AlarmPanelStatus.ARMED_AWAY_BYPASS,
+            AlarmPanelStatus.ARMED_HOME_INSTANT,
+            AlarmPanelStatus.ARMED_AWAY_INSTANT,
+        }
+        state_changed = False
+        for partition, current_state in partition_states.items():
+            previous_state = self._last_cloud_partition_states.get(partition)
+            if (
+                previous_state is not None
+                and previous_state != current_state
+                and current_state in stable_states
+            ):
+                state_changed = True
+        self._last_cloud_partition_states.update(partition_states)
+        return state_changed
+
+    def _update_last_cloud_event(self, events: list[Event]) -> None:
+        """Update the alarm panel's last-event attributes from cloud events."""
+        dated_events: list[tuple[datetime, Event]] = []
+        for event in events:
+            try:
+                event_time = datetime.strptime(event.datetime, "%Y-%m-%d %H:%M:%S")
+            except (TypeError, ValueError):
+                continue
+            dated_events.append((event_time, event))
+
+        if not dated_events:
+            return
+
+        latest_time = max(event_time for event_time, _event in dated_events)
+        latest_events = [
+            event for event_time, event in dated_events if event_time == latest_time
+        ]
+        latest_event = latest_events[0]
+        partitions = sorted(
+            {
+                partition
+                for event in latest_events
+                if event.appointment == latest_event.appointment
+                and event.description == latest_event.description
+                and event.label == latest_event.label
+                and event.device_type == latest_event.device_type
+                and event.zone == latest_event.zone
+                for partition in (event.partitions or [])
+            }
+        )
+        self._last_cloud_event_attributes = {
+            TEXT_LAST_EVENT_NAME: latest_event.appointment or latest_event.device_type,
+            TEXT_LAST_EVENT_ACTION: latest_event.description or latest_event.label,
+            TEXT_LAST_EVENT_TIME: latest_event.datetime,
+        }
+        if partitions:
+            self._last_cloud_event_attributes[TEXT_LAST_EVENT_PARTITION] = (
+                partitions[0]
+                if len(partitions) == 1
+                else ",".join(str(partition) for partition in partitions)
+            )
+
     def _as_sensor_state(self, device: Device) -> SensorState:
         loc = device.location.lower() if device.location else "undefined"
         zonetype = (
             device.zone_type_name.lower() if device.zone_type_name else "undefined"
         )
+
+        if device.device_number not in self._logged_cloud_sensor_initial_state:
+            self._logged_cloud_sensor_initial_state.add(device.device_number)
+            raw_data = getattr(device, "_data", {})
+            warnings = raw_data.get("warnings", "<missing>")
+            warnings_state = (
+                "missing"
+                if "warnings" not in raw_data
+                else "null"
+                if warnings is None
+                else "empty list"
+                if warnings == []
+                else type(warnings).__name__
+            )
+            self._event_logger.logstate_debug(
+                "Initial cloud sensor data: device=%s subtype=%s warnings_state=%s "
+                "warnings=%s library_state=%s low_battery=%s tamper=%s trouble=%s",
+                device.device_number,
+                device.subtype,
+                warnings_state,
+                warnings,
+                device.state,
+                device.low_battery,
+                device.tamper,
+                device.trouble,
+            )
 
         triggered = False
         temperature = None
@@ -1050,7 +1291,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 sensor_type = ZoneSensorDetails(
                     "Contact", AlarmSensorType.MAGNET, BATTERY_AND_STATUS_TIMEOUT
                 )
-            triggered = device.state
+            triggered = to_bool(device.state)
 
         elif isinstance(device, SmokeDevice):
             sensor_type_id = 10
@@ -1058,10 +1299,16 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                 "Smoke", AlarmSensorType.SMOKE, BATTERY_AND_TRIGGER_OTHER
             )
 
+        elif isinstance(device, FloodDevice):
+            sensor_type_id = 0x19
+            sensor_type = ZoneSensorDetails(
+                "Flood", AlarmSensorType.FLOOD, BATTERY_AND_STATUS_TIMEOUT
+            )
+
         elif isinstance(device, CameraDevice):
             sensor_type_id = 16
             sensor_type = ZoneSensorDetails(
-                "Camera", AlarmSensorType.CAMERA, BATTERY_AND_TRIGGER_MOTION
+                "Camera", AlarmSensorType.CAMERA, BATTERY_NO_TRIGGER
             )
 
         elif isinstance(device, ShockDevice):
@@ -1073,7 +1320,7 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         elif isinstance(device, MotionDevice):
             sensor_type_id = 3
             sensor_type = ZoneSensorDetails(
-                "Motion", AlarmSensorType.MOTION, BATTERY_AND_TRIGGER_MOTION
+                "Motion", AlarmSensorType.MOTION, BATTERY_NO_TRIGGER
             )
             temperature = device.temperature
             luminance = device.brightness
@@ -1085,22 +1332,26 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
         return SensorState(
             id=device.device_number,
-            problem=device.trouble,
+            problem=_normalize_trouble(device.trouble),
             sensor_type_id=sensor_type_id,
             # sensor=device.device_number,
-            partition=set(device.partitions),
+            partition={
+                partition - 1
+                for partition in device.partitions
+                if partition > 0
+            },
             location=(loc, loc),
             zonetype=zonetype,
             # model=device.name,
             chime="chime_off",
             bypass=to_bool(device.bypass),
-            low_battery=device.low_battery,
-            status=device.state,
-            tamper=device.tamper,
+            low_battery=to_bool(device.low_battery),
+            status=to_bool(device.state),
+            tamper=to_bool(device.tamper),
             enabled=not device.preenroll
             and bool(device.enrollment_id),  # fully enrolled and a valid id
             triggered=triggered,
-            zonetamper=device.tamper,
+            zonetamper=to_bool(device.tamper),
             temperature=temperature,
             luminance=luminance,
             ismissing=None,
@@ -1127,14 +1378,15 @@ class VisonicCloudCoordinator(VisonicCoordinator):
         loc = device.location.lower() if device.location else "undefined"
         return DeviceState(
             id=device.device_number,
+            device_uid=device.device_uid,
             enabled=True,
             device_type=device.device_type or "",
             model=f"{device.device_type} ({device.enrollment_id})",
             location=loc,
-            status=device.state,
-            low_battery=device.low_battery,
-            trouble=device.trouble,
-            tamper=device.tamper,
+            status=to_bool(device.state),
+            low_battery=to_bool(device.low_battery),
+            trouble=_normalize_trouble(device.trouble),
+            tamper=to_bool(device.tamper),
             partitions=set(device.partitions),
             bypass=to_bool(device.bypass),
         )
@@ -1157,7 +1409,14 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             )
             for device in devices:
                 if isinstance(
-                    device, (ContactDevice, MotionDevice, SmokeDevice, CameraDevice)
+                    device,
+                    (
+                        ContactDevice,
+                        MotionDevice,
+                        SmokeDevice,
+                        CameraDevice,
+                        FloodDevice,
+                    ),
                 ):
                     sensor: SensorState = self._as_sensor_state(device)
                     if sensor.enabled:
@@ -1173,14 +1432,12 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                         f"Tag Device {device.device_type} currently ignored: {tag}"
                     )
 
-                elif isinstance(device, GenericDevice):
-                    if (
-                        device.device_type is not None
-                        and device.device_type != "POWER_LINK"
-                    ):
-                        self._event_logger.logstate_info(
-                            f"Generic Device {device.device_type} currently ignored: {device}"
-                        )
+                elif isinstance(device, KeypadDevice):
+                    self._event_logger.logstate_info(
+                        "Keypad Device %s currently ignored: %s",
+                        device.device_type,
+                        device,
+                    )
 
                 elif isinstance(device, SirenDevice):
                     siren: SirenDevice = device
@@ -1197,6 +1454,11 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                         self._event_logger.logstate_info(
                             f"Keyfob Device Not Enabled {device}"
                         )
+
+                elif isinstance(device, RepeaterDevice):
+                    self.platform_manager.device_update_or_create(
+                        self._as_device_state(device)
+                    )
 
                 elif isinstance(device, ShockDevice):
                     sensor: SensorState = self._as_sensor_state(device)
@@ -1224,9 +1486,9 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                     # use the current used partitions and not the total possible in the panel
                     panel: PanelDevice = device
                     # self._event_logger.logstate_debug(f"panel warnings {panel.warnings}")
-                    panelstate.battery_level = 0 if panel.low_battery else 100
-                    panelstate.tamper = panel.tamper
-                    panelstate.trouble = panel.trouble
+                    panelstate.battery_level = 0 if to_bool(panel.low_battery) else 100
+                    panelstate.tamper = to_bool(panel.tamper)
+                    panelstate.trouble = _normalize_trouble(panel.trouble)
                     panelstate.partition = partition_list
 
         except Exception as ex:  # noqa: BLE001

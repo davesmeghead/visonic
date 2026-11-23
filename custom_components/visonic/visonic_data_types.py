@@ -132,7 +132,7 @@ class VisonicCoordinatorData:
     )
     zones: Mapping[int, SensorState] = field(default_factory=lambda: MappingProxyType({}))
     switch: Mapping[int, SwitchState] = field(default_factory=lambda: MappingProxyType({}))
-    device: Mapping[int, DeviceState] = field(default_factory=lambda: MappingProxyType({}))
+    device: Mapping[str, DeviceState] = field(default_factory=lambda: MappingProxyType({}))
 
     def _convert_recursive(self, convert_to_name: bool, obj: Any) -> Any:
         """Recursively convert Mappings to dicts and sets to lists."""

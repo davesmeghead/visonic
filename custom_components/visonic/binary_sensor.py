@@ -6,9 +6,12 @@ import asyncio
 import logging
 from typing import Any
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import EntityCategory, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
@@ -72,6 +75,26 @@ async def async_setup_entry(
         )
     )
 
+    @callback
+    def async_add_cloud_connection_sensors(identifier: str) -> None:
+        """Add the cloud API and panel reporting diagnostics."""
+        async_add_entities(
+            [
+                VisonicCloudConnectionBinarySensor(
+                    entry, identifier, "power_manage"
+                ),
+                VisonicCloudConnectionBinarySensor(entry, identifier, "panel"),
+            ]
+        )
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"{DOMAIN}_{entry.entry_id}_add_cloud_connection",
+            async_add_cloud_connection_sensors,
+        )
+    )
+
 
 class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], BinarySensorEntity):
     """Panel-level indicator: on while the panel is downloading a PIR camera image sequence.
@@ -108,6 +131,44 @@ class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], Bi
         return self.coordinator.image_download_data()
 
 
+class VisonicCloudConnectionBinarySensor(
+    CoordinatorEntity[VisonicCoordinator], BinarySensorEntity
+):
+    """Report cloud API access or the panel's reported cloud connection."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self, entry: ConfigEntry, identifier: str, connection: str
+    ) -> None:
+        """Initialize a cloud connection diagnostic sensor."""
+        vcd: VisonicPanelData = entry.runtime_data
+        super().__init__(coordinator=vcd.coordinator)
+        self._connection = connection
+        self._attr_name = (
+            "PowerManage connection" if connection == "power_manage" else "Panel reporting"
+        )
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            manufacturer=MANUFACTURER,
+        )
+        self._attr_unique_id = slugify(f"{identifier}_{connection}_connection")
+
+    @property
+    def available(self) -> bool:
+        """Stay available so a failed cloud request is shown as off, not unavailable."""
+        return getattr(self.coordinator, "cloud_alarm", None) is not None
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the independent cloud API or panel connection status."""
+        if self._connection == "power_manage":
+            return self.coordinator.cloud_api_connected
+        return self.coordinator.panel_cloud_connected
+
+
 class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
     """Binary sensor entity."""
 
@@ -137,7 +198,7 @@ class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):
 
     entity_description: BinarySensorDefinition
 
-    def __init__(self, entry: ConfigEntry, sensor_id: int, identifier:str, initial_state: bool, definition: VisonicBinarySensorKey, timeout_type: SensorOnTimeout) -> None:
+    def __init__(self, entry: ConfigEntry, sensor_id: int | str, identifier:str, initial_state: bool, definition: VisonicBinarySensorKey, timeout_type: SensorOnTimeout) -> None:
         """Initialize the sensor."""
         self.entity_description = BINARY_SENSOR_DEFINITIONS[definition]
         if self.entity_description.translation_key is None:

@@ -139,6 +139,8 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         # do not use self.logger as it is defined in parent coordinator class
         self._event_logger = lo
         self._prev_panel_connected = False
+        self.cloud_api_connected: bool | None = None
+        self.panel_cloud_connected: bool | None = None
         self._coordinator_update_timer: Callable[[], None] | None = None
         self._last_my_state = None
 

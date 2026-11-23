@@ -66,6 +66,8 @@ class VisonicBinarySensorKey(VisonicStrEnum):
     ZONE_CONTACT = "zone_contact"
     ZONE_BATTERY = "zone_battery"
     DEVICE_BATTERY = "device_battery"
+    DEVICE_TAMPER = "device_tamper"
+    DEVICE_PROBLEM = "device_problem"
     PANEL_BATTERY = "panel_battery"
     ZONE_TAMPER = "zone_tamper"
     PANEL_TAMPER = "panel_tamper"
@@ -189,6 +191,7 @@ class SwitchState(BaseStateClass):
 @dataclass(slots=True, kw_only=True, frozen=True)
 class DeviceState(BaseStateClass):
     """Internal device state."""
+    device_uid: str = ""
     enabled: bool = False
     status: bool = False
     device_type: str = ""
@@ -200,6 +203,13 @@ class DeviceState(BaseStateClass):
     tamper: bool = False
     bypass: bool = False
     partitions: set[int] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        """Provide a type-scoped identity for older library payloads."""
+        if not self.device_uid:
+            object.__setattr__(
+                self, "device_uid", f"{self.device_type.casefold()}_{self.id}"
+            )
 
 @dataclass(slots=True)
 class BaseData:
@@ -243,7 +253,7 @@ class BinaryImageDownloadData(BaseData):
 @dataclass(slots=True)
 class BinarySensorData(BaseData):
     """Binary (boolean) Sensor Data."""
-    device_id: int
+    device_id: int | str
     sensor_definition: VisonicBinarySensorKey
     initial_state: bool
     timeout_type: SensorOnTimeout
@@ -550,6 +560,29 @@ BINARY_SENSOR_DEFINITIONS: Mapping[
         value_fn=evaluate_binary_state_normal,
         attributes_fn=device_basic_attributes,
         friendly_name="Battery"
+    ),
+    VisonicBinarySensorKey.DEVICE_TAMPER: BinarySensorDefinition(
+        key="device_tamper",
+        device_class=BinarySensorDeviceClass.TAMPER,
+        source=EntityDataType.DEVICE,
+        data_key=StateField.TAMPER,
+        unique_extension="_tamper",
+        translation_key=VISONIC_TRANSLATION_KEY + "_zone_tamper",
+        value_fn=evaluate_binary_state_normal,
+        attributes_fn=device_basic_attributes,
+        friendly_name="Tamper",
+    ),
+    VisonicBinarySensorKey.DEVICE_PROBLEM: BinarySensorDefinition(
+        key="device_problem",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        source=EntityDataType.DEVICE,
+        data_key=StateField.TROUBLE,
+        unique_extension="_problem",
+        translation_key=VISONIC_TRANSLATION_KEY + "_zone_trouble",
+        value_fn=evaluate_trouble,
+        attributes_fn=device_basic_attributes,
+        friendly_name="Trouble",
     ),
     VisonicBinarySensorKey.PANEL_BATTERY: BinarySensorDefinition(
         key="panel_battery",

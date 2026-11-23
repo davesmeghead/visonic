@@ -60,8 +60,8 @@ def to_bool(val: bool | int | str | None) -> bool:
     if isinstance(val, int):
         return val != 0
     if isinstance(val, str):
-        v = val.lower()
-        return v not in ["no", "false", "0"]
+        v = val.strip().casefold()
+        return v not in {"", "no", "false", "0", "none", "null", "off"}
     _LOGGER.warning("Unable to decode boolean value %s    type is %s", val, type(val))
     return False
 

@@ -7,7 +7,7 @@ from typing import Any
 from typing_extensions import Sentinel
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import CONF_TYPE, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import (
     area_registry as ar,
@@ -58,7 +58,7 @@ from .visonic_entity_types import (
     VisonicFloatSensorKey,
     ZoneSensorData,
 )
-from .visonic_types import EmulationMode
+from .visonic_types import DeviceType, EmulationMode
 
 
 class PlatformManager:
@@ -84,6 +84,7 @@ class PlatformManager:
         self.visonic_alarm_setup_lock = asyncio.Lock()
 
         self._createdAlarmPanel = False
+        self._created_cloud_connection_sensors = False
         self.created_download_active_sensor = False
         self.panel_entity_name: dict[int, str] = {}
 
@@ -95,14 +96,14 @@ class PlatformManager:
         # Dictionary of switches that are current and valid
         self._switch_dict: dict[int, SwitchState] = {}
         # Dictionary of devices that are current and valid, e.g. fobs, sirens etc.
-        self._device_dict: dict[int, DeviceState] = {}
+        self._device_dict: dict[str, DeviceState] = {}
 
         # Dictionary of sensors that have been created (and do not need creating again)
         self._sensor_created_set : set[int] = set()
         # Dictionary of switches that have been created (and do not need creating again)
         self._switch_created_set : set[int] = set()
         # Dictionary of generic devices that have been created (and do not need creating again)
-        self._device_created_set : set[int] = set()
+        self._device_created_set : set[str] = set()
         # A set of sensor IDs that are PIR/Camera and have an image
         self._image_created_set: set[int] = set()
 
@@ -144,6 +145,15 @@ class PlatformManager:
         entry_id = self.entry.entry_id
         async_dispatcher_send(
             self.hass, f"{DOMAIN}_{entry_id}_add_{specific_domain}", data
+        )
+
+    def setup_cloud_connection_sensors(self) -> None:
+        """Create cloud and panel connection diagnostic sensors once."""
+        if self._created_cloud_connection_sensors:
+            return
+        self._created_cloud_connection_sensors = True
+        self.setup_visonic_entity(
+            "cloud_connection", getAlarmPanelUniqueIdent(self.panel_ident)
         )
 
     def set_alarm_device_information(self, model: str | Sentinel = Undefined):
@@ -209,18 +219,10 @@ class PlatformManager:
         # All entities created by this config entry
         entities = er.async_entries_for_config_entry(entity_reg, entry_id)
 
-        entity_map: dict[str, tuple[dict[int, SensorState | SwitchState | DeviceState], set[int]]] = {
-            "z": (self._sensor_dict, self._sensor_created_set),
-            "x": (self._switch_dict, self._switch_created_set),
-            "d": (self._device_dict, self._device_created_set),
-            "kf": (self._device_dict, self._device_created_set),
-            "kp": (self._device_dict, self._device_created_set),
-            "kt": (self._device_dict, self._device_created_set),
-            "du": (self._device_dict, self._device_created_set),
-        }
+        entity_types = {"z", "x", "d", "kf", "kp", "kt", "du", "rp"}
 
         etype_pattern = "|".join(
-            map(re.escape, sorted(entity_map.keys(), key=len, reverse=True))
+            map(re.escape, sorted(entity_types, key=len, reverse=True))
         )
 
         panel = rf"p{self.panel_ident}_" if self.panel_ident > 0 else ""
@@ -236,21 +238,40 @@ class PlatformManager:
             if uid and (m := _reg_pattern.fullmatch(uid)):
                 entity_type = m["etype"]
                 visonic_id = int(m["id"])
-                if entity_type in entity_map:
-                    valid_dict, created_list = entity_map[entity_type]
-                    if visonic_id not in valid_dict:
-                        self.logger.logstate_debug("Deleting entity from HA %s", uid)
-                        created_list.discard(visonic_id)
-                        device_id = entity.device_id
-                        entity_reg.async_remove(entity.entity_id)
-                        if device_id is not None:
-                            remaining = [
-                                e for e in er.async_entries_for_device(entity_reg, device_id)
-                                if e.entity_id != entity.entity_id
-                            ]
-                            if not remaining:
-                                self.logger.logstate_debug("Deleting empty device from HA %s", device_id)
-                                device_reg.async_remove_device(device_id)
+                if entity_type == "z":
+                    valid = visonic_id in self._sensor_dict
+                    if not valid:
+                        self._sensor_created_set.discard(visonic_id)
+                elif entity_type == "x":
+                    valid = visonic_id in self._switch_dict
+                    if not valid:
+                        self._switch_created_set.discard(visonic_id)
+                elif entity_type in entity_types:
+                    valid = any(
+                        device.id == visonic_id
+                        and (
+                            entity_type == "d"
+                            or self.create_device_type(device).casefold() == entity_type
+                        )
+                        for device in self._device_dict.values()
+                    )
+                else:
+                    continue
+
+                if not valid:
+                    self.logger.logstate_debug("Deleting entity from HA %s", uid)
+                    device_id = entity.device_id
+                    entity_reg.async_remove(entity.entity_id)
+                    if device_id is not None:
+                        remaining = [
+                            e for e in er.async_entries_for_device(entity_reg, device_id)
+                            if e.entity_id != entity.entity_id
+                        ]
+                        if not remaining:
+                            self.logger.logstate_debug("Deleting empty device from HA %s", device_id)
+                            device_reg.async_remove_device(device_id)
+
+        self._device_created_set.intersection_update(self._device_dict)
 
     def _delete_from_device_registry(self, identifier) -> bool:
         device_registry = dr.async_get(self.hass)
@@ -365,6 +386,7 @@ class PlatformManager:
                 self._sensor_dict[sensor.id] = sensor
                 if (
                     not self.disable_all_panel_commands
+                    and self.entry.data.get(CONF_TYPE) != DeviceType.CLOUD
                     and sensor.id not in self._image_created_set
                     and sensor.sensor_type.type == AlarmSensorType.CAMERA
                 ):
@@ -466,6 +488,8 @@ class PlatformManager:
             "fob": "KF",
             "pad1": "KP",
             "pad2": "KT",
+            "keypad": "KP",
+            "repeater": "RP",
             "siren": "S",
         }
         for needle, prefix in mapping.items():
@@ -480,9 +504,10 @@ class PlatformManager:
         """Create new Device."""
         # cannot do anything with "device" other than assign it to self._device_dict[did]
         # if not create (delete) then device does not need to be passed in
-        if device is None or device.id is None:
+        if device is None or device.id is None or not device.device_uid:
             return False
-        if device.id not in self._device_dict:
+        device_uid = device.device_uid
+        if device_uid not in self._device_dict:
             # Create
             prefix = self.create_device_type(device)
             identifier = create_device_unique_id(self.panel_ident, prefix, device.id)
@@ -505,32 +530,66 @@ class PlatformManager:
             )
             #self.logger.logstate_debug(f"Adding {device.name} {device.id}")
             self.logger.logstate_debug("Adding Device identifier %s with name %s", identifier, n)
-            self._device_dict[device.id] = device
-            if device.id not in self._device_created_set:
-                self._device_created_set.add(device.id)
-                self.setup_visonic_entity(
-                    Platform.BINARY_SENSOR,
-                    BinarySensorData(identifier=identifier, device_id=device.id, sensor_definition=VisonicBinarySensorKey.DEVICE_BATTERY, initial_state=None, timeout_type=SensorOnTimeout.NO_TIMEOUT),
-                )
-        if device.id in self._device_dict:
-            self._device_dict[device.id] = device
+            self._device_dict[device_uid] = device
+            if device_uid not in self._device_created_set:
+                self._device_created_set.add(device_uid)
+                if device.device_type.casefold() == "repeater":
+                    sensor_definitions = [
+                        VisonicBinarySensorKey.DEVICE_BATTERY,
+                        VisonicBinarySensorKey.DEVICE_PROBLEM,
+                        VisonicBinarySensorKey.DEVICE_TAMPER,
+                    ]
+                    self.setup_visonic_entity(
+                        Platform.BINARY_SENSOR,
+                        [
+                            BinarySensorData(
+                                identifier=identifier,
+                                device_id=device_uid,
+                                sensor_definition=definition,
+                                initial_state=None,
+                                timeout_type=SensorOnTimeout.NO_TIMEOUT,
+                            )
+                            for definition in sensor_definitions
+                        ],
+                    )
+                else:
+                    self.setup_visonic_entity(
+                        Platform.BINARY_SENSOR,
+                        BinarySensorData(
+                            identifier=identifier,
+                            device_id=device_uid,
+                            sensor_definition=VisonicBinarySensorKey.DEVICE_BATTERY,
+                            initial_state=None,
+                            timeout_type=SensorOnTimeout.NO_TIMEOUT,
+                        ),
+                    )
+        if device_uid in self._device_dict:
+            self._device_dict[device_uid] = device
             return True
         return False
 
     def delete_device(
         self,
-        sid: int,
+        device_uid: str | int,
     ) -> bool:
         """Delete Sensor."""
-        if sid is not None and sid in self._device_dict:
-            device = self._device_dict[sid]
+        if isinstance(device_uid, int):
+            device = next(
+                (item for item in self._device_dict.values() if item.id == device_uid),
+                None,
+            )
+            if device is None:
+                return False
+            device_uid = device.device_uid
+        if device_uid in self._device_dict:
+            device = self._device_dict[device_uid]
             unique_id = create_device_unique_id(
-                self.panel_ident, self.create_device_type(device), sid
+                self.panel_ident, self.create_device_type(device), device.id
             )
             self._delete_from_device_registry(identifier=(DOMAIN, unique_id))
-            self._device_dict.pop(sid, None)
-            self._device_created_set.discard(sid)
-            self.logger.logstate_debug("Device %s deleted", sid)
+            self._device_dict.pop(device_uid, None)
+            self._device_created_set.discard(device_uid)
+            self.logger.logstate_debug("Device %s deleted", device_uid)
             return True
         return False
 
@@ -597,6 +656,6 @@ class PlatformManager:
         """Return a dict of all the sensors as_dict."""
         return self._switch_dict
 
-    def device_state(self) -> dict[int, DeviceState]:
+    def device_state(self) -> dict[str, DeviceState]:
         """Return a dict of all the sensors as_dict."""
         return self._device_dict
