@@ -14,6 +14,8 @@ from .const import (
     PARTITION_ID_WHEN_BASE,
     PIN_REGEX,
     TEXT_DISCONNECTION_COUNT,
+    TEXT_RECONNECT_ATTEMPTS,
+    TEXT_RECONNECT_ATTEMPT_REASON,
 )
 from .coordinator_base import VisonicCoordinator
 from .direct.ha_adapter import HomeAssistantVisonicClient
@@ -333,10 +335,21 @@ class VisonicDirectCoordinator(VisonicCoordinator):
         partitions = self._client.get_partitions_in_use() or {}
         no_of_partitions = max(1, len(partitions))  # for single panels do partition 0
         indices = range(no_of_partitions)
+        connection_attributes = {
+            TEXT_RECONNECT_ATTEMPTS: getattr(
+                self._client, "reconnect_attempts", None
+            ),
+            TEXT_RECONNECT_ATTEMPT_REASON: getattr(
+                self._client, "reconnect_attempt_reason", None
+            ),
+        }
         if not self._client.is_panel_connected():
             return VisonicCoordinatorData(
                 connected=False,
-                # ident=getAlarmPanelUniqueIdent(self.panel_id)
+                statusdict={
+                    TEXT_DISCONNECTION_COUNT: self._client.panel_disconnection_counter,
+                    **connection_attributes,
+                },
             )
 
         partition_armcode = {
@@ -351,7 +364,8 @@ class VisonicDirectCoordinator(VisonicCoordinator):
             achieved_powerlink=self._client.achieved_powerlink(),
             model=self._client.get_panel_model(),
             statusdict={
-                TEXT_DISCONNECTION_COUNT: self._client.panel_disconnection_counter
+                TEXT_DISCONNECTION_COUNT: self._client.panel_disconnection_counter,
+                **connection_attributes,
             },
             panelstate=self._client.get_panel_status_dict(),
             partition_armcode=partition_armcode,

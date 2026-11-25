@@ -107,7 +107,6 @@
                 "data": {
                     "siren_sounding": "List of triggers for the siren",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
-                    "retry_connection_count": "Try this number of times to attempt a reload",
                     "retry_connection_delay": "Time delay (seconds) between reload attempts"
                 }
             },
@@ -189,7 +188,6 @@
                 "data": {
                     "siren_sounding": "List of triggers for the siren",
                     "panel_state_notifications": "List of triggers for Home Assistant Notifications",
-                    "retry_connection_count": "Try this number of times to attempt a reload",
                     "retry_connection_delay": "Time delay (seconds) between reload attempts"
                 }
             },
@@ -578,6 +576,20 @@
 			}
 		},
   	    "binary_sensor": {
+	        "connection": {
+	            "name": "Connection",
+	            "state_attributes": {
+	                "Disconnection Count": {
+	                    "name": "Disconnection Count"
+	                },
+	                "Consecutive Reconnect Failures": {
+	                    "name": "Consecutive Reconnect Failures"
+	                },
+	                "Last Reconnect Failure Reason": {
+	                    "name": "Last Reconnect Failure Reason"
+	                }
+	            }
+	        },
 	        "alarm_panel_key_panel_trouble": {
 				"state_attributes": {
 					"panel": {
@@ -1127,6 +1139,12 @@
         },
         "no_unique_number_in_config": {
             "message": "Visonic configuration does not include a {ident} number, cannot continue as it is invalid."
+        },
+        "invalid_config_entry": {
+            "message": "The Visonic config entry is missing a connection type or has an unsupported one."
+        },
+        "panel_coordinator_missing": {
+            "message": "The Visonic panel coordinator for this config entry could not be found during unload."
         },
         "no_entity_specified_in_service": {
             "message": "Visonic service {service}, entity is invalid."

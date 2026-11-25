@@ -19,7 +19,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
-from .const import DOMAIN, MANUFACTURER, VISONIC_TRANSLATION_KEY
+from .const import (
+    CONNECTION_STATUS_ATTRIBUTES,
+    DOMAIN,
+    MANUFACTURER,
+    VISONIC_TRANSLATION_KEY,
+)
 from .coordinator_base import VisonicCoordinator
 from .sensor_base_logic import VisonicBaseEntity
 from .utils import kill_asyncio_task
@@ -95,6 +100,19 @@ async def async_setup_entry(
         )
     )
 
+    @callback
+    def async_add_connection_sensor(identifier: str) -> None:
+        """Add the direct panel connection diagnostic entity."""
+        async_add_entities([VisonicConnectionBinarySensor(entry, identifier)])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"{DOMAIN}_{entry.entry_id}_add_connection",
+            async_add_connection_sensor,
+        )
+    )
+
 
 class VisonicImageDownloadBinarySensor(CoordinatorEntity[VisonicCoordinator], BinarySensorEntity):
     """Panel-level indicator: on while the panel is downloading a PIR camera image sequence.
@@ -167,6 +185,49 @@ class VisonicCloudConnectionBinarySensor(
         if self._connection == "power_manage":
             return self.coordinator.cloud_api_connected
         return self.coordinator.panel_cloud_connected
+
+
+class VisonicConnectionBinarySensor(
+    CoordinatorEntity[VisonicCoordinator], BinarySensorEntity
+):
+    """Expose direct panel connectivity and reconnect diagnostics."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "connection"
+
+    def __init__(self, entry: ConfigEntry, identifier: str) -> None:
+        """Initialize the panel connection diagnostic entity."""
+        vcd: VisonicPanelData = entry.runtime_data
+        super().__init__(coordinator=vcd.coordinator)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            manufacturer=MANUFACTURER,
+        )
+        self._attr_unique_id = slugify(f"{identifier}_connection")
+
+    @property
+    def available(self) -> bool:
+        """Remain available to report a disconnected panel and its diagnostics."""
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        """Return whether panel communication is confirmed."""
+        return self.coordinator.get_panel_and_partition_state(None).connected
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return connection retry and disconnection diagnostics."""
+        if self.coordinator.data is None:
+            return {}
+        status = self.coordinator.data.statusdict
+        return {
+            key: status[key]
+            for key in CONNECTION_STATUS_ATTRIBUTES
+            if key in status
+        }
 
 
 class VisonicBinaryEntity(VisonicBaseEntity, BinarySensorEntity):

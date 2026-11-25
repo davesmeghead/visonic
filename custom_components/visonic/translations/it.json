@@ -107,7 +107,6 @@
                 "data": {
                     "siren_sounding": "Elenco dei trigger per la sirena",
                     "panel_state_notifications": "Elenco dei trigger per le notifiche di Home Assistant",
-                    "retry_connection_count": "Numero di tentativi di riconnessione",
                     "retry_connection_delay": "Tempo di ritardo (secondi) tra i tentativi di riconnessione"
                 }
             },
@@ -189,7 +188,6 @@
                 "data": {
                     "siren_sounding": "Elenco dei trigger per la sirena",
                     "panel_state_notifications": "Elenco dei trigger per le notifiche di Home Assistant",
-                    "retry_connection_count": "Numero di tentativi di riconnessione",
                     "retry_connection_delay": "Tempo di ritardo (secondi) tra i tentativi di riconnessione"
                 }
             },
@@ -578,6 +576,20 @@
 			}
 		},
   	    "binary_sensor": {
+	        "connection": {
+	            "name": "Connessione",
+	            "state_attributes": {
+	                "Disconnection Count": {
+	                    "name": "Numero di disconnessioni"
+	                },
+	                "Consecutive Reconnect Failures": {
+	                    "name": "Errori consecutivi di riconnessione"
+	                },
+	                "Last Reconnect Failure Reason": {
+	                    "name": "Motivo dell'ultimo errore di riconnessione"
+	                }
+	            }
+	        },
 	        "alarm_panel_key_panel_trouble": {
 				"state_attributes": {
 					"panel": {
@@ -1127,6 +1139,12 @@
         },
         "no_unique_number_in_config": {
             "message": "Visonic configuration does not include a {ident} number, cannot continue as it is invalid."
+        },
+        "invalid_config_entry": {
+            "message": "La voce Visonic non include un tipo di connessione o ne contiene uno non supportato."
+        },
+        "panel_coordinator_missing": {
+            "message": "Impossibile trovare il coordinatore del pannello Visonic per questa voce durante la disconnessione."
         },
         "no_entity_specified_in_service": {
             "message": "Visonic service {service}, entity is invalid."

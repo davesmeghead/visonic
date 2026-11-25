@@ -10,8 +10,13 @@ from probatio import UNDEFINED as PROBATIO_UNDEFINED
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_DEVICE, CONF_NAME, CONF_PATH, CONF_TYPE
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryError,
+    ConfigEntryNotReady,
+)
 from homeassistant.helpers import config_validation as cv
+
 try:
     from homeassistant.helpers.typing import Undefined as TYPE_UNDEFINED
 except ImportError:
@@ -54,11 +59,13 @@ from .const import (
     TEXT_TITLE,
     TRANSLATE_EXCEPTION_AUTHORISATION_FAILURE,
     TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE,
+    TRANSLATE_EXCEPTION_INVALID_CONFIG_ENTRY,
+    TRANSLATE_EXCEPTION_PANEL_COORDINATOR_MISSING,
 )
 from .coordinator_base import VisonicCoordinator
 from .coordinator_cloud import VisonicCloudCoordinator
-from .create_schema import FormItems, build_config_items
 from .coordinator_direct import VisonicDirectCoordinator
+from .create_schema import FormItems, build_config_items
 from .exceptions import VisonicAuthException, VisonicException
 from .log_events import logEvents
 from .services import async_register_services
@@ -155,18 +162,23 @@ async def async_setup_client(
     return False
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Set up visonic from a config entry. This is the main entry point."""
 
     # This function is called with the flow data to create a hub connection to the alarm panel
     device_type: str = entry.data.get(CONF_TYPE)
     if device_type is None:
-        return False
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key=TRANSLATE_EXCEPTION_INVALID_CONFIG_ENTRY,
+        )
     try:
         device_type_enum = DeviceType(device_type)
-    except ValueError:
-        _LOGGER.error("Unsupported device type: %s", device_type)
-        return False
+    except (TypeError, ValueError):
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key=TRANSLATE_EXCEPTION_INVALID_CONFIG_ENTRY,
+        ) from None
 
     unique_id = await check_panel_is_unique(hass, entry)
 
@@ -213,16 +225,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     translation_key=TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE,
                     translation_placeholders={"panel_id": unique_id},
                 )
-            return True
-    _LOGGER.info(
-        "***************** creating connection %d to a %s device, FAILED ******************",
-        unique_id,
-        device_type_enum,
+            return
+    raise ConfigEntryError(
+        translation_domain=DOMAIN,
+        translation_key=TRANSLATE_EXCEPTION_INVALID_CONFIG_ENTRY,
     )
-    return False
 
 
-async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:  # noqa: C901
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:  # noqa: C901
     """Migrate old schema configuration entry to new."""
     # This function is called when VERSION changes in the ConfigFlow
     # If the config schema ever changes then use this function to convert from old to new config parameters
@@ -443,10 +453,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool: 
         _LOGGER.info("Migration to version %s successful", entry.version)
     else:
         _LOGGER.info("Migration. Nothing changed, version is currently %s", version)
-    return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Unload visonic entry."""
     # This function is called to terminate a hub connection to the alarm panel
 
@@ -456,44 +465,54 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # )
 
     _LOGGER.info("**************** terminating connection ****************")
-    unload_ok = True
     p = ""
 
     device_type: str = entry.data.get(CONF_TYPE)
     if device_type is None:
-        return False
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key=TRANSLATE_EXCEPTION_INVALID_CONFIG_ENTRY,
+        )
     try:
         device_type_enum = DeviceType(device_type)
-    except ValueError:
-        _LOGGER.warning("Unloading entry with unsupported device type: %s", device_type)
-        return True
+    except (TypeError, ValueError):
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key=TRANSLATE_EXCEPTION_INVALID_CONFIG_ENTRY,
+        ) from None
 
-    data: VisonicDomainData = hass.data.get(VisonicEntryKey, {PANELS: {}})
+    data: VisonicDomainData | None = hass.data.get(VisonicEntryKey)
 
     _LOGGER.info("........... async_unload_entry %s ...........", device_type_enum)
 
     if device_type_enum in (DeviceType.ETHERNET, DeviceType.SERIAL, DeviceType.CLOUD):
         # Do the opposite of async_setup_client
-        vcd: VisonicPanelData | None = data[PANELS].pop(entry.entry_id, None)
+        vcd: VisonicPanelData | None = (
+            data[PANELS].get(entry.entry_id) if data is not None else None
+        )
         _LOGGER.debug("........... Unloading Platforms")
-        unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-        if vcd:
-            _LOGGER.debug("........... Unloading Client %s", vcd.panel_id)
-            p = str(vcd.panel_id)
-            await terminate_coordinator(vcd.coordinator)
-        if not vcd or not unload_ok:
-            _LOGGER.debug("***** terminate connection fail, no hub coordinator ****")
-            unload_ok = False
-
-    else:
-        unload_ok = False
-
-    if unload_ok:
+        try:
+            await hass.config_entries.async_unload_platforms_or_raise(entry, PLATFORMS)
+        finally:
+            if vcd is not None:
+                _LOGGER.debug("........... Unloading Client %s", vcd.panel_id)
+                p = str(vcd.panel_id)
+                try:
+                    await terminate_coordinator(vcd.coordinator)
+                finally:
+                    if data is not None:
+                        data[PANELS].pop(entry.entry_id, None)
+        if vcd is None:
+            raise ConfigEntryError(
+                translation_domain=DOMAIN,
+                translation_key=TRANSLATE_EXCEPTION_PANEL_COORDINATOR_MISSING,
+            )
         _LOGGER.debug(
             "************** Connection %s terminate success ***************", p
         )
-    else:
-        _LOGGER.debug(
-            "******* Connection %s terminate success (but with problems) ******", p
-        )
-    return unload_ok
+        return
+
+    raise ConfigEntryError(
+        translation_domain=DOMAIN,
+        translation_key=TRANSLATE_EXCEPTION_INVALID_CONFIG_ENTRY,
+    )

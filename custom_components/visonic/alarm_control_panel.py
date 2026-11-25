@@ -21,7 +21,6 @@ from .const import (
     CONF_ENABLE_KEYPAD_ALARM_ENTITY,
     DOMAIN,
     TEXT_CLIENT_VERSION,
-    TEXT_DISCONNECTION_COUNT,
     TRANSLATE_EXCEPTION_DISARM_CODE_NOT_ENTERED,
 )
 from .utils import to_bool
@@ -91,7 +90,6 @@ class VisonicAlarm(
 
     _unrecorded_attributes = frozenset(
         {
-            TEXT_DISCONNECTION_COUNT,
             TEXT_CLIENT_VERSION,
         }
     )

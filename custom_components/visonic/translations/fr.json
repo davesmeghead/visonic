@@ -107,7 +107,6 @@
                 "data": {
                     "siren_sounding": "Liste des d\u00e9clencheurs de la sir\u00e8ne",
                     "panel_state_notifications": "Liste des d\u00e9clencheurs pour les notifications Home Assistant",
-                    "retry_connection_count": "Nombre d'essai de reconnexion",
                     "retry_connection_delay": "D\u00e9lai (en secondes) entre les tentatives de reconnexion"
                 }
             },
@@ -189,7 +188,6 @@
                 "data": {
                     "siren_sounding": "Liste des d\u00e9clencheurs de la Sir\u00e8ne",
                     "panel_state_notifications": "Liste des d\u00e9clencheurs pour les notifications Home Assistant",
-                    "retry_connection_count": "Nombre d'essais pour tenter la reconnexion",
                     "retry_connection_delay": "D\u00e9lai (en secondes) entre les tentatives de reconnexion"
                 }
             },
@@ -578,6 +576,20 @@
 			}
 		},
   	    "binary_sensor": {
+	        "connection": {
+	            "name": "Connexion",
+	            "state_attributes": {
+	                "Disconnection Count": {
+	                    "name": "Nombre de déconnexions"
+	                },
+	                "Consecutive Reconnect Failures": {
+	                    "name": "Échecs consécutifs de reconnexion"
+	                },
+	                "Last Reconnect Failure Reason": {
+	                    "name": "Raison du dernier échec de reconnexion"
+	                }
+	            }
+	        },
 	        "alarm_panel_key_panel_trouble": {
 				"state_attributes": {
 					"panel": {
@@ -1127,6 +1139,12 @@
         },
         "no_unique_number_in_config": {
             "message": "Visonic configuration does not include a {ident} number, cannot continue as it is invalid."
+        },
+        "invalid_config_entry": {
+            "message": "L'entrée Visonic ne contient pas de type de connexion ou en contient un qui n'est pas pris en charge."
+        },
+        "panel_coordinator_missing": {
+            "message": "Le coordinateur du panneau Visonic associé à cette entrée est introuvable lors du déchargement."
         },
         "no_entity_specified_in_service": {
             "message": "Visonic service {service}, entity is invalid."

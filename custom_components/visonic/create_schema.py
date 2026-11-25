@@ -58,7 +58,6 @@ from .const import (
     CONF_MOTION_OFF_DELAY,
     CONF_PANEL_NUMBER,
     CONF_PANEL_SERIAL,
-    CONF_RETRY_CONNECTION_COUNT,
     CONF_RETRY_CONNECTION_DELAY,
     CONF_SIREN_SOUNDING,
     CONF_USER_CODE_SLOT,
@@ -107,7 +106,7 @@ FormItems: dict[str, list[str]] = {
     FORM_POWERLINK: [CONF_DOWNLOAD_CODE, CONF_USER_CODE_SLOT, CONF_EPROM_ATTRIBUTES, CONF_ENABLE_KEYPAD_ALARM_ENTITY],
     # Supporting forms to get the config
     #     parameters in entry.options
-    FORM_PARAM10: [CONF_SIREN_SOUNDING, CONF_ALARM_NOTIFICATIONS, CONF_RETRY_CONNECTION_COUNT, CONF_RETRY_CONNECTION_DELAY],
+    FORM_PARAM10: [CONF_SIREN_SOUNDING, CONF_ALARM_NOTIFICATIONS, CONF_RETRY_CONNECTION_DELAY],
     FORM_PARAM11: [CONF_MOTION_OFF_DELAY, CONF_MAGNET_CLOSED_DELAY, CONF_EMER_OFF_DELAY],
     FORM_PARAM12: [CONF_ARM_CODE_AUTO, CONF_ARM_CODE_AUTO_KEYPAD_ENTITY, CONF_ARM_HOME_ENABLED, CONF_ARM_NIGHT_ENABLED, CONF_INSTANT_ARM_AWAY, # CONF_FORCE_KEYPAD,
                    CONF_INSTANT_ARM_HOME, CONF_ENABLE_REMOTE_ARM, CONF_ENABLE_REMOTE_DISARM, CONF_ENABLE_SENSOR_BYPASS],
@@ -309,13 +308,6 @@ def build_config_items() -> dict[str, ConfigItem]:
                     ),
                 ),
             default=[AvailableNotifications.CONNECTION.value, AvailableNotifications.SIREN.value],
-        ),
-        CONF_RETRY_CONNECTION_COUNT: ConfigItem(
-            marker=opt,
-            validator=selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=1000000, mode=selector.NumberSelectorMode.BOX)
-            ),
-            default=1,
         ),
         CONF_RETRY_CONNECTION_DELAY: ConfigItem(
             marker=opt,

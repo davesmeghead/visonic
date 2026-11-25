@@ -37,7 +37,6 @@ from ..const import (  # noqa: TID252
     CONF_ENABLE_SENSOR_BYPASS,
     CONF_EPROM_ATTRIBUTES,
     CONF_ESPHOME_ENTITY_SELECT,
-    CONF_RETRY_CONNECTION_COUNT,
     CONF_RETRY_CONNECTION_DELAY,
     CONF_USER_CODE_SLOT,
     DEFAULT_DEVICE_BAUD,
@@ -186,7 +185,6 @@ class HomeAssistantVisonicClient(PyVisonicClient):
             ),
             download_code=str(entry.data.get(CONF_DOWNLOAD_CODE, "")),
             user_code_slot=int(entry.data.get(CONF_USER_CODE_SLOT, 1)) - 1,
-            retry_count=int(entry.options.get(CONF_RETRY_CONNECTION_COUNT, 1)),
             retry_delay=float(entry.options.get(CONF_RETRY_CONNECTION_DELAY, 90)),
             panel_id=panelident if isinstance(panelident, int) else 0,
         )

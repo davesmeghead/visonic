@@ -37,6 +37,7 @@ from homeassistant.util import slugify
 from .const import (
     ATTR_BYPASS,
     ATTR_DURATION,
+    CONNECTION_STATUS_ATTRIBUTES,
     CONF_EMULATION_MODE,
     CONF_ENABLE_SENSOR_BYPASS,
     CONF_SWITCH_COMMAND,
@@ -452,8 +453,16 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         """Update the state of the entity based on device data. This is common to Alarm and Sensor Entity."""
 
         vcd: VisonicCoordinatorData = self.data
-        if not vcd or not vcd.connected:
+        if not vcd:
             return PanelStateData()
+        if not vcd.connected:
+            return PanelStateData(
+                attributes={
+                    key: value
+                    for key, value in vcd.statusdict.items()
+                    if key not in CONNECTION_STATUS_ATTRIBUTES
+                }
+            )
 
         #_armcode = AlarmPanelStatus.UNKNOWN
         #_mystate = AlarmControlPanelState.DISARMED
@@ -512,7 +521,13 @@ class VisonicCoordinator(DataUpdateCoordinator[VisonicCoordinatorData]):
         self._last_my_state = _mystate
 
         statusdict: dict[str, Any] = (
-            dict(vcd.statusdict) if partition in (None, PARTITION_ID_WHEN_BASE) else {}
+            {
+                key: value
+                for key, value in vcd.statusdict.items()
+                if key not in CONNECTION_STATUS_ATTRIBUTES
+            }
+            if partition in (None, PARTITION_ID_WHEN_BASE)
+            else {}
         )
 
         if "state" in stat and isinstance(stat["state"], AlarmPanelStatus):

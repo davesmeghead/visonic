@@ -15,6 +15,7 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+
 try:
     from homeassistant.helpers.typing import Undefined
 except ImportError:
@@ -78,6 +79,7 @@ class PlatformManager:
         self.logger = logger
         self.panel_ident = panelident
         self.image_manager = image_manager
+        self._alarm_device_id: str | None = None
 
         self.rationalised_ha_devices = False
 
@@ -85,6 +87,7 @@ class PlatformManager:
 
         self._createdAlarmPanel = False
         self._created_cloud_connection_sensors = False
+        self._created_connection_sensor = False
         self.created_download_active_sensor = False
         self.panel_entity_name: dict[int, str] = {}
 
@@ -156,16 +159,23 @@ class PlatformManager:
             "cloud_connection", getAlarmPanelUniqueIdent(self.panel_ident)
         )
 
-    def set_alarm_device_information(self, model: str | Sentinel = Undefined):
+    def set_alarm_device_information(self, model: str | Sentinel = Undefined) -> str:
         """Set the alarm panel device information in Home Assistant."""
         device_registry = dr.async_get(self.hass)
-        device_registry.async_get_or_create(
+        device = device_registry.async_get_or_create(
             config_entry_id=self.entry.entry_id,
             identifiers={(DOMAIN, getAlarmPanelUniqueIdent(self.panel_ident))},
             name=getAlarmPanelUniqueIdent(self.panel_ident),
             manufacturer=MANUFACTURER,
             model=model,
         )
+        self._alarm_device_id = device.id
+        return device.id
+
+    def _get_alarm_device_id(self) -> str:
+        if self._alarm_device_id is None:
+            return self.set_alarm_device_information()
+        return self._alarm_device_id
 
     def create_alarm_panel(self, piu: set[int] | None = None) -> AlarmPanelData:
         """On startup we create a sensor to report progress and status."""
@@ -189,6 +199,14 @@ class PlatformManager:
         async with self.visonic_alarm_setup_lock:
             if not self._createdAlarmPanel:
                 self._createdAlarmPanel = True
+                if (
+                    self.entry.data.get(CONF_TYPE) != DeviceType.CLOUD
+                    and not self._created_connection_sensor
+                ):
+                    self._created_connection_sensor = True
+                    self.setup_visonic_entity(
+                        "connection", getAlarmPanelUniqueIdent(self.panel_ident)
+                    )
                 #model = self.visonicProtocol.getPanelModel()
                 apd: AlarmPanelData = self.create_alarm_panel(piu)
                 if not self.disable_all_panel_commands:
@@ -372,6 +390,7 @@ class PlatformManager:
                     model=s.title().replace("_", " "),
                     suggested_area=suggested_area,
                     model_id=sensor.sensor_type.name,
+                    via_device_id=self._get_alarm_device_id(),
                 )
 
                 self.logger.logstate_debug("Adding Sensor identifier %s with name %s", identifier, n)
@@ -449,6 +468,7 @@ class PlatformManager:
                     model=(
                         switch.model.replace("_", " ") if switch.model is not None else "Unknown"
                     ),
+                    via_device_id=self._get_alarm_device_id(),
                 )
                 #self.logger.logstate_debug(f"Adding Switch {switch.id=}")
                 self.logger.logstate_debug("Adding Switch identifier %s with name %s", identifier, n)
@@ -527,6 +547,7 @@ class PlatformManager:
                 model=(
                     device.model.replace("_", " ") if device.model is not None else "Unknown"
                 ),
+                via_device_id=self._get_alarm_device_id(),
             )
             #self.logger.logstate_debug(f"Adding {device.name} {device.id}")
             self.logger.logstate_debug("Adding Device identifier %s with name %s", identifier, n)

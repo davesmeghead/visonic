@@ -642,8 +642,6 @@ class VisonicCloudCoordinator(VisonicCoordinator):
 
     async def async_panel_connect(self) -> bool:
         """Connect to the cloud visonic server."""
-        self.cloud_api_connected = False
-        self.panel_cloud_connected = None
         self._panel_info = None
         self._panel_info_refreshed_at = None
         self._cloud_diagnostic_data_refreshed_at = None
@@ -669,13 +667,19 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             # If authentication fails then fail to load this hub
             self._event_logger.logstate_info("panel connection failure")
         except WrongUsernameOrPasswordError as ex:
+            self.cloud_api_connected = False
+            self.panel_cloud_connected = None
             raise VisonicAuthException(
                 "Cloud Authentication Error - panel connection failure"
             ) from ex
         except Exception as ex:
+            self.cloud_api_connected = False
+            self.panel_cloud_connected = None
             raise VisonicException(
                 "Cloud Connection Error - panel connection failure"
             ) from ex
+        self.cloud_api_connected = False
+        self.panel_cloud_connected = None
         return False
 
     async def async_service_panel_reconnect(self, call: ServiceCall | None):
@@ -892,10 +896,13 @@ class VisonicCloudCoordinator(VisonicCoordinator):
             status = await self.cloud_alarm.get_status()
             response_received = status is not None
             panel_connected = status.connected if status is not None else None
-            self.cloud_api_connected = response_received
+            # A normal return means the authenticated API request succeeded, even
+            # when the panel is offline or the response has no usable status.
+            self.cloud_api_connected = True
             self.panel_cloud_connected = panel_connected
             self._event_logger.logstate_info(
-                "Updating data - cloud status: response_received=%s panel_connected=%s",
+                "Updating data - cloud status: request_succeeded=%s status_received=%s panel_connected=%s",
+                True,
                 response_received,
                 panel_connected,
             )
@@ -907,15 +914,11 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                     # not less than 60 seconds, but allow 2 tries at updating before it's considered a timeout
                     timeout = min(90, 4.5 * self.update_interval.total_seconds())
                     if delta_time > timedelta(seconds=timeout):
-                        # not less than 90 seconds, but allow 4 tries at updating before it's considered a reconnect
                         self._event_logger.logstate_info(
-                            "Updating data - re-connection to cloud server"
+                            "Updating data - panel has not reported to the cloud within the timeout"
                         )
-                        self.last_connected_timestamp = timenow
-                        self.disconnection_counter += 1
-                        await self.async_service_panel_reconnect(None)
                     self._event_logger.logstate_info(
-                        "Updating data - panel is not connected to the cloud, no access!"
+                        "Updating data - panel is not reporting to PowerManage"
                     )
                     return VisonicCoordinatorData(
                         connected=False,

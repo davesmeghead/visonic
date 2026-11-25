@@ -107,7 +107,6 @@
 				"data": {
 					"siren_sounding": "Lijst met triggers voor de sirene",
 					"panel_state_notifications": "Lijst met triggers voor Home Assistant-meldingen",
-					"retry_connection_count": "Probeer dit aantal keren om de verbinding te proberen",
 					"retry_connection_delay": "Tijdvertraging (seconden) tussen herverbindingpogingen"
 				}
 			},
@@ -189,7 +188,6 @@
 				"data": {
 					"siren_sounding": "Lijst met triggers voor de sirene",
 					"panel_state_notifications": "Lijst met triggers voor Home Assistant-meldingen",
-					"retry_connection_count": "Probeer dit aantal keren om de verbinding te maken",
 					"retry_connection_delay": "Tijdvertraging (seconden) tussen herverbindingpogingen"
 				}
 			},
@@ -578,6 +576,20 @@
 			}
 		},
 		"binary_sensor": {
+	        "connection": {
+	        	"name": "Verbinding",
+	        	"state_attributes": {
+	        		"Disconnection Count": {
+	        			"name": "Aantal verbrekingen"
+	        		},
+	        		"Consecutive Reconnect Failures": {
+	        			"name": "Opeenvolgende mislukte herverbindingen"
+	        		},
+	        		"Last Reconnect Failure Reason": {
+	        			"name": "Reden van laatste mislukte herverbinding"
+	        		}
+	        	}
+	        },
 	        "alarm_panel_key_panel_trouble": {
 				"state_attributes": {
 					"panel": {
@@ -1127,6 +1139,12 @@
         },
         "no_unique_number_in_config": {
             "message": "Visonic configuration does not include a {ident} number, cannot continue as it is invalid."
+        },
+        "invalid_config_entry": {
+            "message": "De Visonic-configuratie mist een verbindingstype of bevat een niet-ondersteund type."
+        },
+        "panel_coordinator_missing": {
+            "message": "De Visonic-paneelcoördinator voor deze configuratie kon niet worden gevonden tijdens het ontladen."
         },
         "no_entity_specified_in_service": {
             "message": "Visonic service {service}, entity is invalid."

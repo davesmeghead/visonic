@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 
 # The client version and domain information for the integration
 DOMAIN: Final = "visonic"
-CLIENT_VERSION: Final = "0.13.0.44"
+CLIENT_VERSION: Final = "0.13.1.2"
 MANUFACTURER: Final = "Visonic"
 VISONIC_UNIQUE_NAME: Final = "Visonic Alarm"
 VISONIC_PANEL: Final = "Visonic Panel"
@@ -57,6 +57,13 @@ DEFAULT_IMAGE_QUEUE_MAX: Final = 5  # requests queued behind an active download;
 # Text strings for entity attributes
 TEXT_DISCONNECTION_COUNT: Final = "Disconnection Count"
 TEXT_CLIENT_VERSION: Final = "Client Version"
+TEXT_RECONNECT_ATTEMPTS: Final = "Consecutive Reconnect Failures"
+TEXT_RECONNECT_ATTEMPT_REASON: Final = "Last Reconnect Failure Reason"
+CONNECTION_STATUS_ATTRIBUTES: Final = (
+    TEXT_DISCONNECTION_COUNT,
+    TEXT_RECONNECT_ATTEMPTS,
+    TEXT_RECONNECT_ATTEMPT_REASON,
+)
 TEXT_LAST_EVENT_NAME: Final = "lasteventname"
 TEXT_LAST_EVENT_TIME: Final = "lasteventtime"
 TEXT_LAST_EVENT_PARTITION: Final = "lasteventpartition"
@@ -89,6 +96,8 @@ TRANSLATE_EXCEPTION_NUMBER_NOT_UNIQUE: Final = "number_in_config_not_unique"
 TRANSLATE_EXCEPTION_INITIAL_CONNECTION_FAILURE: Final = "panel_initial_connection_failure"
 TRANSLATE_EXCEPTION_AUTHORISATION_FAILURE: Final = "panel_authorisation_failure"
 TRANSLATE_EXCEPTION_NO_UNIQUE_NUMBER_IN_CONFIG: Final = "no_unique_number_in_config"
+TRANSLATE_EXCEPTION_INVALID_CONFIG_ENTRY: Final = "invalid_config_entry"
+TRANSLATE_EXCEPTION_PANEL_COORDINATOR_MISSING: Final = "panel_coordinator_missing"
 TRANSLATE_EXCEPTION_SERVICE_NO_ENTITY_SPECIFIED: Final = "no_entity_specified_in_service"
 TRANSLATE_EXCEPTION_SERVICE_ENTITY_NOT_IN_DEVICE: Final = "entity_not_attached_to_device"
 TRANSLATE_EXCEPTION_SERVICE_ENTITY_NOT_IN_REGISTRY: Final = "entity_not_in_registry"
@@ -136,7 +145,6 @@ CONF_MOTION_OFF_DELAY: Final = "motion_off_delay"
 CONF_MAGNET_CLOSED_DELAY: Final = "magnet_closed_delay"
 CONF_EMER_OFF_DELAY: Final = "emergency_off_delay"
 CONF_SIREN_SOUNDING: Final = "siren_sounding"
-CONF_RETRY_CONNECTION_COUNT: Final = "retry_connection_count"
 CONF_RETRY_CONNECTION_DELAY: Final = "retry_connection_delay"
 CONF_EPROM_ATTRIBUTES: Final = "show_eeprom_attributes"  # leave as eeprom as this will change the config params in HA
 CONF_LOG_EVENT: Final = "panellog_logentry_event"
