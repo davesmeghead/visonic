@@ -579,13 +579,13 @@
 	        "connection": {
 	            "name": "Connessione",
 	            "state_attributes": {
-	                "Disconnection Count": {
+	                "disconnection_count": {
 	                    "name": "Numero di disconnessioni"
 	                },
-	                "Consecutive Reconnect Failures": {
+	                "consecutive_reconnect_failures": {
 	                    "name": "Errori consecutivi di riconnessione"
 	                },
-	                "Last Reconnect Failure Reason": {
+	                "last_reconnect_failure_reason": {
 	                    "name": "Motivo dell'ultimo errore di riconnessione"
 	                }
 	            }

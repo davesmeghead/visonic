@@ -55,10 +55,10 @@ CONF_IMAGE_QUEUE_MAX: Final = "image_queue_max"
 DEFAULT_IMAGE_QUEUE_MAX: Final = 5  # requests queued behind an active download; further presses ignored
 
 # Text strings for entity attributes
-TEXT_DISCONNECTION_COUNT: Final = "Disconnection Count"
+TEXT_DISCONNECTION_COUNT: Final = "disconnection_count"
 TEXT_CLIENT_VERSION: Final = "Client Version"
-TEXT_RECONNECT_ATTEMPTS: Final = "Consecutive Reconnect Failures"
-TEXT_RECONNECT_ATTEMPT_REASON: Final = "Last Reconnect Failure Reason"
+TEXT_RECONNECT_ATTEMPTS: Final = "consecutive_reconnect_failures"
+TEXT_RECONNECT_ATTEMPT_REASON: Final = "last_reconnect_failure_reason"
 CONNECTION_STATUS_ATTRIBUTES: Final = (
     TEXT_DISCONNECTION_COUNT,
     TEXT_RECONNECT_ATTEMPTS,

@@ -1,8 +1,8 @@
 {
   "domain": "visonic",
   "name": "Visonic Security System",
-  "codeowners": ["@davesmeghead"],
   "categories": ["security_safety.alarm_systems", "sensors.door_window"],
+  "codeowners": ["@davesmeghead"],
   "config_flow": true,
   "dependencies": ["media_source", "zeroconf", "usb"],
   "documentation": "https://github.com/davesmeghead/visonic/wiki",
