@@ -40,6 +40,8 @@ from ..const import (  # noqa: TID252
     CONF_RETRY_CONNECTION_DELAY,
     CONF_USER_CODE_SLOT,
     DEFAULT_DEVICE_BAUD,
+    DEFAULT_DEVICE_HOST,
+    DEFAULT_DEVICE_PORT,
     PE_EVENT,
     PE_NAME,
     PE_PARTITION,
@@ -167,15 +169,18 @@ class HomeAssistantVisonicClient(PyVisonicClient):
         self._select_entity_id = entry.data.get(CONF_ESPHOME_ENTITY_SELECT, "")
 
         connection_type = entry.data[CONF_TYPE]
-        library_connection_type = (
-            ConnectionType.SERIAL
-            if connection_type == "serial"
-            else ConnectionType.ETHERNET
-        )
+        if connection_type == "serial":
+            library_connection_type = ConnectionType.SERIAL
+            host = DEFAULT_DEVICE_HOST
+            port = DEFAULT_DEVICE_PORT
+        else:
+            library_connection_type = ConnectionType.ETHERNET
+            host = entry.data.get(CONF_HOST, DEFAULT_DEVICE_HOST)
+            port = int(entry.data.get(CONF_PORT, DEFAULT_DEVICE_PORT))
         settings = VisonicClientSettings(
             connection_type=library_connection_type,
-            host=entry.data.get(CONF_HOST, "127.0.0.1"),
-            port=int(entry.data.get(CONF_PORT, 30000)),
+            host=host,
+            port=port,
             path=entry.data.get(CONF_DEVICE, "/dev/ttyUSB0"),
             baud=self._serial_baud_rate,
             force_standard_mode=force_standard_mode,

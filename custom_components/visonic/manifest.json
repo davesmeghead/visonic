@@ -13,7 +13,7 @@
   "quality_scale": "bronze",
   "requirements": ["pyvisonic==4.1.5", "pyvisonicalarm==0.4.4", "serialx"],
   "single_config_entry": false,
-  "version": "0.13.1.2",
+  "version": "0.13.1.3",
   "zeroconf": [
     {
        "type": "_visonic._tcp.local.",
