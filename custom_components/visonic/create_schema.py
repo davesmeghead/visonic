@@ -449,7 +449,7 @@ class VisonicSchema:
         return {**base, **(overrides or {})}
 
     def _build_schema(self, keys: list[str], overrides: dict[str, Any] | None = None) -> pro.Schema:
-        """Build a voluptuous schema from config item definitions."""
+        """Build a probatio schema from config item definitions."""
         merged = self._merge_options(overrides)
         schema: dict[Any, Any] = {}
 

@@ -6,8 +6,8 @@ from typing import Final
 from homeassistant.const import Platform
 
 # The client version and domain information for the integration
-DOMAIN: Final = "visonic"
-CLIENT_VERSION: Final = "0.13.1.3"
+DOMAIN = "visonic"
+CLIENT_VERSION: Final = "0.13.1.4"
 MANUFACTURER: Final = "Visonic"
 VISONIC_UNIQUE_NAME: Final = "Visonic Alarm"
 VISONIC_PANEL: Final = "Visonic Panel"

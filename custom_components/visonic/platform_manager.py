@@ -509,6 +509,7 @@ class PlatformManager:
             "pad1": "KP",
             "pad2": "KT",
             "keypad": "KP",
+            "wireless_commander": "KP",
             "repeater": "RP",
             "siren": "S",
         }
@@ -554,7 +555,10 @@ class PlatformManager:
             self._device_dict[device_uid] = device
             if device_uid not in self._device_created_set:
                 self._device_created_set.add(device_uid)
-                if device.device_type.casefold() == "repeater":
+                if device.device_type.casefold() in {
+                    "repeater",
+                    "wireless_commander",
+                }:
                     sensor_definitions = [
                         VisonicBinarySensorKey.DEVICE_BATTERY,
                         VisonicBinarySensorKey.DEVICE_PROBLEM,

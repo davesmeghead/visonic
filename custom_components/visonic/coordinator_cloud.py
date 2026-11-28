@@ -28,7 +28,6 @@ from pyvisonicalarm.devices import (
     ShockDevice,
     SirenDevice,
     SmokeDevice,
-    TagDevice,
 )
 from pyvisonicalarm.exceptions import (
     Error,
@@ -1429,18 +1428,14 @@ class VisonicCloudCoordinator(VisonicCoordinator):
                             f"Sensor Device Not Enrolled {device}"
                         )
 
-                elif isinstance(device, TagDevice):
-                    tag: TagDevice = device
-                    self._event_logger.logstate_info(
-                        f"Tag Device {device.device_type} currently ignored: {tag}"
-                    )
-
                 elif isinstance(device, KeypadDevice):
-                    self._event_logger.logstate_info(
-                        "Keypad Device %s currently ignored: %s",
-                        device.device_type,
-                        device,
-                    )
+                    keypad = self._as_device_state(device)
+                    if keypad.enabled:
+                        self.platform_manager.device_update_or_create(keypad)
+                    else:
+                        self._event_logger.logstate_info(
+                            f"Keypad Device Not Enabled {device}"
+                        )
 
                 elif isinstance(device, SirenDevice):
                     siren: SirenDevice = device

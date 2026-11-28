@@ -14,8 +14,8 @@ from .const import (
     PARTITION_ID_WHEN_BASE,
     PIN_REGEX,
     TEXT_DISCONNECTION_COUNT,
-    TEXT_RECONNECT_ATTEMPTS,
     TEXT_RECONNECT_ATTEMPT_REASON,
+    TEXT_RECONNECT_ATTEMPTS,
 )
 from .coordinator_base import VisonicCoordinator
 from .direct.ha_adapter import HomeAssistantVisonicClient

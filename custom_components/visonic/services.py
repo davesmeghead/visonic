@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-import voluptuous as vol
+import probatio
 
 from homeassistant.const import ATTR_CODE, ATTR_ENTITY_ID, CONF_COMMAND
 from homeassistant.core import (
@@ -57,62 +57,62 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)  # type: ignore  # no
 #     Request an image from a Camera PIR zone sensor
 #     Request status information
 
-ALARM_SCHEMA_EVENTLOG = vol.Schema(
+ALARM_SCHEMA_EVENTLOG = probatio.Schema(
     {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Optional(ATTR_CODE, default=""): cv.string,
+        probatio.Required(ATTR_ENTITY_ID): cv.entity_id,
+        probatio.Optional(ATTR_CODE, default=""): cv.string,
     }
 )
 
-ALARM_SCHEMA_COMMAND = vol.Schema(
+ALARM_SCHEMA_COMMAND = probatio.Schema(
     {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Required(CONF_COMMAND): vol.In(
+        probatio.Required(ATTR_ENTITY_ID): cv.entity_id,
+        probatio.Required(CONF_COMMAND): probatio.In(
             AlarmPanelCommand.members()
         ),
-        vol.Optional(ATTR_CODE, default=""): cv.string,
+        probatio.Optional(ATTR_CODE, default=""): cv.string,
     }
 )
 
-ALARM_SCHEMA_SWITCH = vol.Schema(
+ALARM_SCHEMA_SWITCH = probatio.Schema(
     {
-        vol.Required(
+        probatio.Required(
             ATTR_ENTITY_ID
         ): cv.entity_ids,  # pyright: ignore[reportUnknownMemberType]
-        vol.Required(CONF_SWITCH_COMMAND): vol.In(
+        probatio.Required(CONF_SWITCH_COMMAND): probatio.In(
             AlarmSwitchCommand.members()
         ),
     }
 )
 
-ALARM_SCHEMA_RECONNECT = vol.Schema(
+ALARM_SCHEMA_RECONNECT = probatio.Schema(
     {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        probatio.Required(ATTR_ENTITY_ID): cv.entity_id,
     }
 )
 
-ALARM_SCHEMA_BYPASS = vol.Schema(
+ALARM_SCHEMA_BYPASS = probatio.Schema(
     {
-        vol.Required(
+        probatio.Required(
             ATTR_ENTITY_ID
         ): cv.entity_ids,  # pyright: ignore[reportUnknownMemberType]
-        vol.Required(ATTR_BYPASS, default=False): cv.boolean,
-        vol.Optional(ATTR_CODE, default=""): cv.string,
+        probatio.Required(ATTR_BYPASS, default=False): cv.boolean,
+        probatio.Optional(ATTR_CODE, default=""): cv.string,
     }
 )
 
-ALARM_SCHEMA_ZONE_INFO = vol.Schema(
+ALARM_SCHEMA_ZONE_INFO = probatio.Schema(
     {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        probatio.Required(ATTR_ENTITY_ID): cv.entity_id,
     }
 )
 
-ALARM_SCHEMA_IMAGE = vol.Schema(
+ALARM_SCHEMA_IMAGE = probatio.Schema(
     {
         # Accept a list as well as a single entity, so one press can ask every camera. The panel
         # serialises image transfers anyway, and the coordinator queues them.
-        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
-        vol.Required(ATTR_DURATION, default=5): cv.positive_int,
+        probatio.Required(ATTR_ENTITY_ID): cv.entity_ids,
+        probatio.Required(ATTR_DURATION, default=5): cv.positive_int,
     }
 )
 

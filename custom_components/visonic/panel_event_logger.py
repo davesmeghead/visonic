@@ -10,8 +10,7 @@ from jinja2 import Environment, FileSystemLoader, TemplateError
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.util import datetime
-from homeassistant.util import dt as dt_util
+from homeassistant.util import datetime, dt as dt_util
 
 from .const import (
     CONF_LOG_CSV_FN,
